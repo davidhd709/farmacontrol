@@ -1,0 +1,24 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: farmacia-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-farmacia_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-farmacia_dev_password_change_me}
+      POSTGRES_DB: ${DB_NAME:-farmacia_db}
+    ports:
+      - "${DB_PORT:-5434}:5432"
+    volumes:
+      - farmacia_postgres_data:/var/lib/postgresql
+      - ../docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-farmacia_user} -d ${DB_NAME:-farmacia_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+volumes:
+  farmacia_postgres_data:
+    name: farmacia_postgres_data

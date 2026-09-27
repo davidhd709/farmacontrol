@@ -1,0 +1,81 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    name: Monorepo Quality Gate
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: farmacia_ci_user
+          POSTGRES_PASSWORD: farmacia_ci_password_testing_only
+          POSTGRES_DB: farmacia_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U farmacia_ci_user -d farmacia_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://farmacia_ci_user:farmacia_ci_password_testing_only@localhost:5432/farmacia_test?schema=public
+      DATABASE_TEST_URL: postgresql://farmacia_ci_user:farmacia_ci_password_testing_only@localhost:5432/farmacia_test?schema=public
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12.5.1
+
+      - name: Setup Node.js (v22 LTS)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install dependencies (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Prisma Generate
+        run: pnpm db:generate
+
+      - name: Prisma Validate
+        run: pnpm db:validate
+
+      - name: Apply Migrations to Test Database
+        run: pnpm db:test:migrate
+
+      - name: Build Monorepo
+        run: pnpm build
+
+
+      - name: Lint Code
+        run: pnpm lint
+
+      - name: Typecheck TypeScript
+        run: pnpm typecheck
+
+      - name: Run Automated Tests
+        run: pnpm test

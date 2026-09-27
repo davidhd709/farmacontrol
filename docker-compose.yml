@@ -1,0 +1,3 @@
+# Redirige a la definición en infra/compose/docker-compose.yml
+include:
+  - path: infra/compose/docker-compose.yml

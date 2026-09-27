@@ -1,0 +1,10 @@
+{
+  "filename": "farmacia_farmacia_test_20260927_044324.dump",
+  "filepath": "/run/media/ingenierohenrydavid/0E05E2BD5C0F60A7/HENRY/PROYECTOS/Farmacia/infra/backups/farmacia_farmacia_test_20260927_044324.dump",
+  "database": "farmacia_test",
+  "createdAt": "2026-09-27T04:43:24Z",
+  "sizeBytes": 92918,
+  "sha256": "fb910231a3a3f9eec5bdf3cc0beb90a52ca20f773884766a83b4c2e4112dcd0e",
+  "verified": true,
+  "pgVersion": "pg_dump (PostgreSQL) 18.6"
+}
