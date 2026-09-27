@@ -1,0 +1,29 @@
+{
+  "name": "@farmacia/worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Worker en segundo plano para tareas asíncronas y alertas (NestJS)",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/main.js",
+    "start:dev": "nest start --watch",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@farmacia/contracts": "workspace:*",
+    "@farmacia/database": "workspace:*",
+    "@nestjs/common": "^11.0.11",
+    "@nestjs/core": "^11.0.11",
+    "@nestjs/schedule": "^12.0.2",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.5",
+    "@types/node": "^22.13.9",
+    "typescript": "^5.7.3",
+    "vitest": "^5.0.2"
+  }
+}
