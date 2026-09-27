@@ -22,6 +22,7 @@ import Inventory2Icon from '@mui/icons-material/Inventory2';
 import CompareArrowsIcon from '@mui/icons-material/CompareArrows';
 import MedicationIcon from '@mui/icons-material/Medication';
 import CategoryIcon from '@mui/icons-material/Category';
+import StraightenIcon from '@mui/icons-material/Straighten';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import ShoppingBagIcon from '@mui/icons-material/ShoppingBag';
 import StorefrontIcon from '@mui/icons-material/Storefront';
@@ -111,6 +112,12 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ open, onClose }) => {
           title: 'Categorías',
           path: '/categories',
           icon: <CategoryIcon fontSize="small" />,
+          permission: SYSTEM_PERMISSIONS.CATEGORIES_READ,
+        },
+        {
+          title: 'Unidades de Medida',
+          path: '/units-of-measure',
+          icon: <StraightenIcon fontSize="small" />,
           permission: SYSTEM_PERMISSIONS.CATEGORIES_READ,
         },
         {

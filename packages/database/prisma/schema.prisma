@@ -128,6 +128,19 @@ model Category {
   @@map("categories")
 }
 
+model UnitOfMeasure {
+  id          String   @id @default(uuid()) @db.Uuid
+  code        String   @unique @db.VarChar(20)
+  name        String   @unique @db.VarChar(100)
+  description String?  @db.VarChar(255)
+  category    String   @default("GENERAL") @db.VarChar(30)
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("units_of_measure")
+}
+
 model Product {
   id                   String   @id @default(uuid()) @db.Uuid
   categoryId           String   @map("category_id") @db.Uuid

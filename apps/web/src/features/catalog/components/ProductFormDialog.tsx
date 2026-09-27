@@ -26,6 +26,7 @@ import { Controller, useForm } from 'react-hook-form';
 import type { ProductDto } from '@farmacia/contracts';
 import { ApiError } from '../../../api/http-client';
 import { useCategories } from '../hooks/useCategories';
+import { useUnitsOfMeasure } from '../hooks/useUnitsOfMeasure';
 import { useCreateProduct, useUpdateProduct } from '../hooks/useProducts';
 import { productSchema, type ProductFormValues } from '../validation/product.schema';
 
@@ -49,6 +50,12 @@ export function ProductFormDialog({
     isActive: true,
     pageSize: 100,
   });
+
+  const { data: unitsData } = useUnitsOfMeasure({
+    isActive: true,
+    pageSize: 100,
+  });
+  const units = unitsData?.items || [];
 
   const createMutation = useCreateProduct();
   const updateMutation = useUpdateProduct();
@@ -475,17 +482,34 @@ export function ProductFormDialog({
                   name="baseUnit"
                   control={control}
                   render={({ field }) => (
-                    <TextField
-                      {...field}
-                      id="product-base-unit-input"
-                      label="Unidad base"
-                      placeholder="UNIDAD"
-                      required
-                      fullWidth
-                      disabled={isSubmitting}
-                      error={Boolean(errors.baseUnit)}
-                      helperText={errors.baseUnit?.message}
-                    />
+                    <FormControl fullWidth required error={Boolean(errors.baseUnit)}>
+                      <InputLabel id="product-base-unit-label">Unidad Mínima / Base</InputLabel>
+                      <Select
+                        {...field}
+                        labelId="product-base-unit-label"
+                        id="product-base-unit-input"
+                        label="Unidad Mínima / Base"
+                        disabled={isSubmitting}
+                      >
+                        {units.length > 0 ? (
+                          units.map((u) => (
+                            <MenuItem key={u.id} value={u.code}>
+                              {u.name} ({u.code}) — {u.category}
+                            </MenuItem>
+                          ))
+                        ) : (
+                          <MenuItem value="UNIDAD">UNIDAD (Estándar)</MenuItem>
+                        )}
+                        {field.value && !units.some((u) => u.code === field.value) && (
+                          <MenuItem value={field.value}>
+                            {field.value} (Personalizada)
+                          </MenuItem>
+                        )}
+                      </Select>
+                      <FormHelperText>
+                        {errors.baseUnit?.message || 'Unidad indivisible en la que se cuenta el stock físico (Kardex)'}
+                      </FormHelperText>
+                    </FormControl>
                   )}
                 />
               </Box>

@@ -209,6 +209,41 @@ export interface CategoryQueryFilters {
   pageSize?: number;
 }
 
+// ===== UNIDADES DE MEDIDA (Units of Measure) =====
+
+export interface UnitOfMeasureDto {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  category: string; // 'FARMACEUTICA' | 'EMPAQUE' | 'RETAIL' | 'PESO_VOLUMEN' | 'GENERAL'
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateUnitOfMeasurePayload {
+  code: string;
+  name: string;
+  description?: string | null;
+  category?: string;
+}
+
+export interface UpdateUnitOfMeasurePayload {
+  name?: string;
+  description?: string | null;
+  category?: string;
+  isActive?: boolean;
+}
+
+export interface UnitOfMeasureQueryFilters {
+  search?: string;
+  category?: string;
+  isActive?: boolean;
+  page?: number;
+  pageSize?: number;
+}
+
 export interface ProductDto {
   id: string;
   categoryId: string;

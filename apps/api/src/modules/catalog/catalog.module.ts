@@ -15,12 +15,18 @@ import { PrismaProductPresentationRepository } from './infrastructure/adapters/p
 import { ProductPresentationService } from './application/services/product-presentation.service';
 import { ProductPresentationController } from './presentation/controllers/product-presentation.controller';
 
+import { UNIT_OF_MEASURE_REPOSITORY } from './application/ports/unit-of-measure.repository.port';
+import { PrismaUnitOfMeasureRepository } from './infrastructure/adapters/prisma-unit-of-measure.repository';
+import { UnitOfMeasureService } from './application/services/unit-of-measure.service';
+import { UnitOfMeasureController } from './presentation/controllers/unit-of-measure.controller';
+
 @Module({
   imports: [IdentityModule, AuditModule],
   controllers: [
     CategoryController,
     ProductController,
     ProductPresentationController,
+    UnitOfMeasureController,
   ],
   providers: [
     {
@@ -35,9 +41,14 @@ import { ProductPresentationController } from './presentation/controllers/produc
       provide: PRODUCT_PRESENTATION_REPOSITORY_PORT,
       useClass: PrismaProductPresentationRepository,
     },
+    {
+      provide: UNIT_OF_MEASURE_REPOSITORY,
+      useClass: PrismaUnitOfMeasureRepository,
+    },
     CategoryService,
     ProductService,
     ProductPresentationService,
+    UnitOfMeasureService,
   ],
   exports: [
     CATEGORY_REPOSITORY_PORT,
@@ -46,6 +57,8 @@ import { ProductPresentationController } from './presentation/controllers/produc
     ProductService,
     PRODUCT_PRESENTATION_REPOSITORY_PORT,
     ProductPresentationService,
+    UNIT_OF_MEASURE_REPOSITORY,
+    UnitOfMeasureService,
   ],
 })
 export class CatalogModule {}

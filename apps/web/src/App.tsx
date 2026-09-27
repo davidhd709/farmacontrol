@@ -3,6 +3,7 @@ import { LoginPage } from './features/auth/pages/LoginPage';
 import { ProtectedRoute, PublicOnlyRoute } from './features/auth/routes/AuthRoutes';
 import { AuthenticatedHomePage } from './pages/AuthenticatedHomePage';
 import { CategoriesPage } from './features/catalog/pages/CategoriesPage';
+import { UnitsOfMeasurePage } from './features/catalog/pages/UnitsOfMeasurePage';
 import { ProductsPage } from './features/catalog/pages/ProductsPage';
 import { InventoryLotsPage } from './features/inventory/pages/InventoryLotsPage';
 import { InventoryMovementsPage } from './features/inventory/pages/InventoryMovementsPage';
@@ -35,6 +36,7 @@ export const App = () => {
           <Route path="/pos" element={<PosPage />} />
           <Route path="/sales" element={<SalesHistoryPage />} />
           <Route path="/categories" element={<CategoriesPage />} />
+          <Route path="/units-of-measure" element={<UnitsOfMeasurePage />} />
           <Route path="/products" element={<ProductsPage />} />
           <Route path="/inventory/lots" element={<InventoryLotsPage />} />
           <Route path="/inventory/movements" element={<InventoryMovementsPage />} />
