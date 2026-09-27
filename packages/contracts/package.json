@@ -1,0 +1,16 @@
+{
+  "name": "@farmacia/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Contratos y tipos TypeScript compartidos para el Sistema de Farmacia",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}
