@@ -357,7 +357,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ open, onClose }) => {
       {/* Pie del Sidebar: Versión e info técnica */}
       <Box sx={{ p: 2, borderTop: 1, borderColor: 'divider', bgcolor: '#FAFAFA' }}>
         <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', fontWeight: 600 }}>
-          Farmacia v1.0 • Producción
+          FarmaControl v1.0 • Producción
         </Typography>
         <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.65rem' }}>
           Sistema con motor FEFO & Kardex

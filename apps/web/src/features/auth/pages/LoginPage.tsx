@@ -125,13 +125,13 @@ export function LoginPage() {
                 color="primary.main"
                 sx={{ fontWeight: 800 }}
               >
-                Farmacia
+                FarmaControl
               </Typography>
               <Typography id="login-title" component="h1" variant="h1">
                 Iniciar sesión
               </Typography>
               <Typography color="text.secondary" sx={{ mt: 1 }}>
-                Ingresa tus credenciales para acceder al sistema.
+                Ingresa tus credenciales para acceder a FarmaControl.
               </Typography>
             </Box>
           </Stack>

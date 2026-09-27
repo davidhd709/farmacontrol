@@ -103,10 +103,10 @@ export const AppNavbar: React.FC<AppNavbarProps> = ({ onToggleSidebar }) => {
             </Box>
             <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
               <Typography variant="subtitle1" sx={{ fontWeight: 800, lineHeight: 1.1, color: 'text.primary' }}>
-                Farmacia Central
+                FarmaControl
               </Typography>
               <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
-                Sistema Operativo
+                Sistema de Gestión Farmacéutica
               </Typography>
             </Box>
           </Box>

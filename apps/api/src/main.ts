@@ -15,7 +15,7 @@ async function bootstrap() {
 
   const port = process.env.API_PORT || 3000;
   await app.listen(port);
-  console.log(`[Farmacia API] corriendo en http://localhost:${port}/api/v1`);
+  console.log(`[FarmaControl API] corriendo en http://localhost:${port}/api/v1`);
 }
 
 bootstrap();

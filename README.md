@@ -1,6 +1,6 @@
-# Sistema de Gestión Operativa para Farmacia
+# FarmaControl — Sistema de Gestión Operativa para Farmacia
 
-Sistema web integral de alta disponibilidad y trazabilidad farmacéutica para la gestión de punto de venta (POS), catálogo de medicamentos, control estricto de inventario por lotes y vencimientos (**regla regulatoria FEFO**), compras, proveedores, clientes, cuentas por cobrar/pagar, arqueo de caja, procesos en segundo plano, reportes operativos con exportación tabular y copias de seguridad automatizadas con verificación criptográfica SHA-256.
+**FarmaControl** es un sistema web integral de alta disponibilidad y trazabilidad farmacéutica para la gestión de punto de venta (POS), catálogo de medicamentos y productos de consumo, control estricto de inventario por lotes y vencimientos (**regla regulatoria FEFO**), compras, proveedores, clientes, cuentas por cobrar/pagar, arqueo de caja, procesos en segundo plano, reportes operativos con exportación tabular y copias de seguridad automatizadas con verificación criptográfica SHA-256.
 
 ---
 
