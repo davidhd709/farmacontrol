@@ -1,0 +1,35 @@
+{
+  "name": "@farmacia/database",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Capa de persistencia compartida con Prisma ORM y cliente para PostgreSQL 18",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:validate": "prisma validate",
+    "db:generate": "prisma generate",
+    "db:check": "tsx src/check.ts",
+    "db:test:check": "NODE_ENV=test tsx src/check-test.ts",
+    "db:test:migrate": "NODE_ENV=test prisma migrate deploy",
+    "db:seed:rbac": "tsx src/seed/run-rbac-seed.ts"
+  },
+  "dependencies": {
+    "@farmacia/contracts": "workspace:*",
+    "@prisma/adapter-pg": "^7.10.0",
+    "@prisma/client": "^7.10.0",
+    "pg": "^8.13.3"
+  },
+  "devDependencies": {
+    "@prisma/config": "^7.10.0",
+    "@types/pg": "^8.11.11",
+    "prisma": "^7.10.0",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3",
+    "vitest": "^3.2.7"
+  }
+}
