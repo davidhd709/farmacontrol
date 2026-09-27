@@ -21,7 +21,17 @@ import {
   DialogContent,
   DialogContentText,
   DialogActions,
+  Chip,
+  IconButton,
+  ToggleButton,
+  ToggleButtonGroup,
+  Tooltip,
 } from '@mui/material';
+import DeleteIcon from '@mui/icons-material/Delete';
+import ViewAgendaIcon from '@mui/icons-material/ViewAgenda';
+import TableRowsIcon from '@mui/icons-material/TableRows';
+import AddIcon from '@mui/icons-material/Add';
+import Inventory2Icon from '@mui/icons-material/Inventory2';
 import type {
   SupplierDto,
   ProductDto,
@@ -81,6 +91,7 @@ export const ReceivePurchasePage: React.FC = () => {
       unitCost: '0',
     },
   ]);
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
 
   // Diálogo de confirmación
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -96,7 +107,7 @@ export const ReceivePurchasePage: React.FC = () => {
         ]);
         setSuppliers(suppliersRes.items);
         setProducts(productsRes.items);
-      } catch (err) {
+      } catch {
         setErrorMsg('Error al cargar proveedores o productos.');
       } finally {
         setLoadingInitial(false);
@@ -130,7 +141,9 @@ export const ReceivePurchasePage: React.FC = () => {
       updated[index] = { ...updated[index], [field]: value };
       if (field === 'productId') {
         const prod = products.find((p) => p.id === value);
-        const defaultPres = prod?.presentations?.find((pr) => pr.isDefault);
+        const defaultPres =
+          prod?.presentations?.find((pr) => pr.isActive && (pr.purchaseEnabled ?? true) && pr.isDefaultPurchase) ||
+          prod?.presentations?.find((pr) => pr.isActive && (pr.purchaseEnabled ?? true) && pr.isDefault);
         updated[index].presentationId = defaultPres ? defaultPres.id : '';
         if (defaultPres && parseFloat(defaultPres.cost) > 0) {
           updated[index].unitCost = String(defaultPres.cost);
@@ -428,174 +441,471 @@ export const ReceivePurchasePage: React.FC = () => {
           </Box>
         </Paper>
 
-        {/* Tabla Dinámica de Productos y Lotes */}
-        <Paper sx={{ p: 3, mb: 3 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-              Productos y Lotes a Ingresar ({lines.length})
-            </Typography>
-            <Button variant="outlined" onClick={handleAddLine} sx={{ fontWeight: 'bold' }}>
-              + Agregar Producto
-            </Button>
+        {/* Sección Dinámica de Productos y Lotes a Ingresar */}
+        <Paper sx={{ p: 3, mb: 3, borderRadius: 2 }}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 2, mb: 3 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                Productos y Lotes a Ingresar
+              </Typography>
+              <Chip
+                label={`${lines.length} ${lines.length === 1 ? 'línea' : 'líneas'}`}
+                size="small"
+                color="primary"
+                variant="outlined"
+                sx={{ fontWeight: 'bold' }}
+              />
+            </Box>
+
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+              <ToggleButtonGroup
+                value={viewMode}
+                exclusive
+                size="small"
+                onChange={(_, next) => next && setViewMode(next)}
+                aria-label="Modo de visualización"
+              >
+                <ToggleButton value="cards" sx={{ px: 1.5, py: 0.5, textTransform: 'none', gap: 0.75, fontWeight: 600 }}>
+                  <ViewAgendaIcon fontSize="small" />
+                  Tarjetas (Espaciosa)
+                </ToggleButton>
+                <ToggleButton value="table" sx={{ px: 1.5, py: 0.5, textTransform: 'none', gap: 0.75, fontWeight: 600 }}>
+                  <TableRowsIcon fontSize="small" />
+                  Tabla
+                </ToggleButton>
+              </ToggleButtonGroup>
+
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={handleAddLine}
+                startIcon={<AddIcon />}
+                sx={{ fontWeight: 'bold' }}
+              >
+                Agregar Producto
+              </Button>
+            </Box>
           </Box>
 
-          <TableContainer>
-            <Table size="small">
-              <TableHead sx={{ bgcolor: 'action.hover' }}>
-                <TableRow>
-                  <TableCell sx={{ fontWeight: 'bold', width: '22%' }}>Producto *</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', width: '18%' }}>Presentación / Unidad *</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', width: '11%' }}>Lote *</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', width: '12%' }}>Vence *</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', width: '11%', textAlign: 'right' }}>Cantidad *</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', width: '12%', textAlign: 'right' }}>Costo Presentación *</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', width: '10%', textAlign: 'right' }}>Subtotal</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', width: '4%', textAlign: 'center' }}>Acción</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {lines.map((line, idx) => {
-                  const subtotal = calculateSubtotal(line);
-                  const p = products.find((prod) => prod.id === line.productId);
-                  const selectedPres = p?.presentations?.find((pr) => pr.id === line.presentationId);
-                  const factor = selectedPres ? selectedPres.conversionFactor : 1;
-                  const qtyCommercial = parseFloat(line.quantityCommercial) || 0;
-                  const totalBaseUnits = Math.round(qtyCommercial * factor);
-                  const unitCost = parseFloat(line.unitCost) || 0;
-                  const costPerBaseUnit = factor > 0 ? unitCost / factor : unitCost;
+          {viewMode === 'cards' ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+              {lines.map((line, idx) => {
+                const subtotal = calculateSubtotal(line);
+                const p = products.find((prod) => prod.id === line.productId);
+                const selectedPres = p?.presentations?.find((pr) => pr.id === line.presentationId);
+                const factor = selectedPres ? selectedPres.conversionFactor : 1;
+                const qtyCommercial = parseFloat(line.quantityCommercial) || 0;
+                const totalBaseUnits = Math.round(qtyCommercial * factor);
+                const unitCost = parseFloat(line.unitCost) || 0;
+                const costPerBaseUnit = factor > 0 ? unitCost / factor : unitCost;
 
-                  return (
-                    <TableRow key={idx}>
-                      <TableCell>
-                        <TextField
-                          select
+                return (
+                  <Paper
+                    key={idx}
+                    variant="outlined"
+                    sx={{
+                      p: 2.5,
+                      borderRadius: 2,
+                      borderColor: 'divider',
+                      bgcolor: 'background.paper',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                      transition: 'all 0.2s ease-in-out',
+                      '&:hover': {
+                        borderColor: 'primary.main',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                      },
+                    }}
+                  >
+                    {/* Encabezado de la Tarjeta */}
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', mb: 2.5, pb: 1.5, borderBottom: '1px solid', borderColor: 'divider', gap: 1 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+                        <Chip
+                          label={`#${idx + 1}`}
                           size="small"
-                          fullWidth
-                          value={line.productId}
-                          onChange={(e) => handleLineChange(idx, 'productId', e.target.value)}
-                          required
-                        >
-                          <MenuItem value="">Selecciona...</MenuItem>
-                          {products.map((prod) => (
-                            <MenuItem key={prod.id} value={prod.id}>
-                              {prod.name} ({prod.code})
-                            </MenuItem>
-                          ))}
-                        </TextField>
-                        {p && (
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                            Unidad Base: <strong>{p.baseUnit}</strong>
-                          </Typography>
-                        )}
-                      </TableCell>
-
-                      <TableCell>
-                        <TextField
-                          select
-                          size="small"
-                          fullWidth
-                          value={line.presentationId || ''}
-                          onChange={(e) => handleLineChange(idx, 'presentationId', e.target.value)}
-                          disabled={!line.productId}
-                        >
-                          <MenuItem value="">
-                            <em>Unidad Base ({p?.baseUnit || 'UNIDAD'}) — Factor 1:1</em>
-                          </MenuItem>
-                          {p?.presentations?.map((pres) => (
-                            <MenuItem key={pres.id} value={pres.id}>
-                              {pres.name} (Factor: {pres.conversionFactor} {p.baseUnit})
-                            </MenuItem>
-                          ))}
-                        </TextField>
-                        {selectedPres && (
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                            1 {selectedPres.name} = {selectedPres.conversionFactor} {p?.baseUnit}
-                          </Typography>
-                        )}
-                      </TableCell>
-
-                      <TableCell>
-                        <TextField
-                          size="small"
-                          fullWidth
-                          placeholder="LOTE-001"
-                          value={line.lotNumber}
-                          onChange={(e) => handleLineChange(idx, 'lotNumber', e.target.value)}
-                          required
+                          color="primary"
+                          sx={{ fontWeight: 'bold', borderRadius: 1 }}
                         />
-                      </TableCell>
-
-                      <TableCell>
-                        <TextField
-                          size="small"
-                          type="date"
-                          fullWidth
-                          value={line.expirationDate}
-                          onChange={(e) => handleLineChange(idx, 'expirationDate', e.target.value)}
-                          slotProps={{ inputLabel: { shrink: true } }}
-                          required
-                        />
-                      </TableCell>
-
-                      <TableCell sx={{ textAlign: 'right' }}>
-                        <TextField
-                          size="small"
-                          type="number"
-                          value={line.quantityCommercial}
-                          onChange={(e) => handleLineChange(idx, 'quantityCommercial', e.target.value)}
-                          slotProps={{ htmlInput: { min: '1', step: 'any', style: { textAlign: 'right' } } }}
-                          required
-                        />
-                        <Typography variant="caption" color="primary.main" sx={{ display: 'block', mt: 0.5, fontWeight: 'bold' }}>
-                          Ingresan: {totalBaseUnits} {p?.baseUnit || 'unidades'}
+                        <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: 'text.primary' }}>
+                          {p ? `${p.name} (${p.code})` : 'Nuevo Producto a Ingresar'}
                         </Typography>
-                      </TableCell>
-
-                      <TableCell sx={{ textAlign: 'right' }}>
-                        <TextField
-                          size="small"
-                          type="number"
-                          value={line.unitCost}
-                          onChange={(e) => handleLineChange(idx, 'unitCost', e.target.value)}
-                          slotProps={{ htmlInput: { min: '0', step: 'any', style: { textAlign: 'right' } } }}
-                          required
-                        />
-                        {factor > 1 && (
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                            ${costPerBaseUnit.toFixed(2)} / {p?.baseUnit || 'unid'}
-                          </Typography>
+                        {p && (
+                          <Chip
+                            label={`Unidad Base: ${p.baseUnit}`}
+                            size="small"
+                            variant="outlined"
+                            sx={{ fontSize: '0.75rem', fontWeight: 600, height: 24 }}
+                          />
                         )}
-                      </TableCell>
+                      </Box>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2.5 }}>
+                        <Box sx={{ textAlign: 'right' }}>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                            Subtotal Línea
+                          </Typography>
+                          <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'primary.main', lineHeight: 1.2 }}>
+                            ${subtotal.toLocaleString('es-CO')}
+                          </Typography>
+                        </Box>
+                        <Tooltip title="Eliminar este producto">
+                          <span>
+                            <IconButton
+                              color="error"
+                              size="small"
+                              onClick={() => handleRemoveLine(idx)}
+                              disabled={lines.length <= 1}
+                              sx={{ border: '1px solid', borderColor: 'error.light', borderRadius: 1.5 }}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                      </Box>
+                    </Box>
 
-                      <TableCell sx={{ textAlign: 'right', fontWeight: 'bold' }}>
-                        ${subtotal.toLocaleString()}
-                      </TableCell>
+                    {/* Fila 1: Producto y Presentación */}
+                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1.2fr 1fr' }, gap: 2.5, mb: 2 }}>
+                      <TextField
+                        select
+                        size="small"
+                        label="Producto *"
+                        fullWidth
+                        value={line.productId}
+                        onChange={(e) => handleLineChange(idx, 'productId', e.target.value)}
+                        required
+                        helperText={p ? `Código/SKU: ${p.code} | Unidad mínima: ${p.baseUnit}` : 'Seleccione el medicamento o artículo'}
+                      >
+                        <MenuItem value="">Selecciona un producto...</MenuItem>
+                        {products.map((prod) => (
+                          <MenuItem key={prod.id} value={prod.id}>
+                            {prod.name} ({prod.code}) — [{prod.baseUnit}]
+                          </MenuItem>
+                        ))}
+                      </TextField>
 
-                      <TableCell sx={{ textAlign: 'center' }}>
-                        <Button
-                          size="small"
-                          color="error"
-                          onClick={() => handleRemoveLine(idx)}
-                          disabled={lines.length <= 1}
-                        >
-                          ✕
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                      <TextField
+                        select
+                        size="small"
+                        label="Presentación / Empaque Recibido *"
+                        fullWidth
+                        value={line.presentationId || ''}
+                        onChange={(e) => handleLineChange(idx, 'presentationId', e.target.value)}
+                        disabled={!line.productId}
+                        helperText={
+                          selectedPres
+                            ? `1 ${selectedPres.name} = ${
+                                selectedPres.containedPresentationId && selectedPres.containedPresentationName
+                                  ? `${selectedPres.quantityContained} ${selectedPres.containedPresentationName} = `
+                                  : ''
+                              }${selectedPres.conversionFactor} ${p?.baseUnit}`
+                            : p
+                            ? `Ingreso directo en unidad base (${p.baseUnit})`
+                            : 'Primero elija un producto'
+                        }
+                      >
+                        <MenuItem value="">
+                          <em>[Unidad Base] {p?.baseUnit || 'UNIDAD'} (Factor 1:1)</em>
+                        </MenuItem>
+                        {p?.presentations
+                          ?.filter((pres) => pres.isActive && (pres.purchaseEnabled ?? true))
+                          .map((pres) => (
+                            <MenuItem key={pres.id} value={pres.id}>
+                              {pres.name} (x{pres.conversionFactor} {p.baseUnit})
+                            </MenuItem>
+                          ))}
+                      </TextField>
+                    </Box>
+
+                    {/* Fila 2: Lote, Vencimiento, Cantidad y Costo */}
+                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1.2fr 1.2fr 1fr 1.2fr' }, gap: 2.5 }}>
+                      <TextField
+                        size="small"
+                        label="Número de Lote *"
+                        fullWidth
+                        placeholder="Ej. LOT-2026-X"
+                        value={line.lotNumber}
+                        onChange={(e) => handleLineChange(idx, 'lotNumber', e.target.value)}
+                        helperText="Identificador del lote del fabricante"
+                        required
+                      />
+
+                      <TextField
+                        size="small"
+                        type="date"
+                        label="Fecha de Vencimiento *"
+                        fullWidth
+                        value={line.expirationDate}
+                        onChange={(e) => handleLineChange(idx, 'expirationDate', e.target.value)}
+                        slotProps={{ inputLabel: { shrink: true } }}
+                        helperText="Vencimiento sanitario (FEFO)"
+                        required
+                      />
+
+                      <TextField
+                        size="small"
+                        type="number"
+                        label={`Cantidad (${selectedPres ? selectedPres.name : p?.baseUnit || 'Unid.'}) *`}
+                        fullWidth
+                        value={line.quantityCommercial}
+                        onChange={(e) => handleLineChange(idx, 'quantityCommercial', e.target.value)}
+                        slotProps={{ htmlInput: { min: '1', step: 'any' } }}
+                        helperText="Unidades o empaques recibidos"
+                        required
+                      />
+
+                      <TextField
+                        size="small"
+                        type="number"
+                        label={`Costo por ${selectedPres ? selectedPres.name : p?.baseUnit || 'Unid.'} *`}
+                        fullWidth
+                        value={line.unitCost}
+                        onChange={(e) => handleLineChange(idx, 'unitCost', e.target.value)}
+                        slotProps={{
+                          htmlInput: { min: '0', step: 'any' },
+                          input: {
+                            startAdornment: (
+                              <Typography sx={{ mr: 0.5, color: 'text.secondary', fontWeight: 'bold' }}>$</Typography>
+                            ),
+                          },
+                        }}
+                        helperText="Precio de compra facturado"
+                        required
+                      />
+                    </Box>
+
+                    {/* Fila 3: Banner de Impacto en Inventario / Kardex */}
+                    {p && (
+                      <Box
+                        sx={{
+                          mt: 2,
+                          p: 1.5,
+                          bgcolor: 'rgba(22, 163, 74, 0.06)',
+                          border: '1px solid rgba(22, 163, 74, 0.25)',
+                          borderRadius: 1.5,
+                          display: 'flex',
+                          flexWrap: 'wrap',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          gap: 1.5,
+                        }}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                          <Inventory2Icon sx={{ color: 'success.main', fontSize: 20 }} />
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: 'success.dark' }}>
+                            Ingreso a Kardex: +{totalBaseUnits.toLocaleString('es-CO')} {p.baseUnit}
+                          </Typography>
+                          {selectedPres && (
+                            <Typography variant="caption" sx={{ color: 'text.secondary', bgcolor: 'background.paper', px: 1, py: 0.25, borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+                              {qtyCommercial} {selectedPres.name}
+                              {selectedPres.containedPresentationId && selectedPres.containedPresentationName && (
+                                <> = {(qtyCommercial * (selectedPres.quantityContained || 1)).toLocaleString('es-CO')} {selectedPres.containedPresentationName}</>
+                              )}
+                              {' '}= {totalBaseUnits.toLocaleString('es-CO')} {p.baseUnit}
+                            </Typography>
+                          )}
+                        </Box>
+                        <Box>
+                          <Typography variant="body2" color="text.secondary">
+                            Costo unitario base: <strong style={{ color: '#16a34a' }}>${costPerBaseUnit.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong> / {p.baseUnit}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    )}
+                  </Paper>
+                );
+              })}
+            </Box>
+          ) : (
+            /* Vista de Tabla Corregida con Anchos Fijos y Alineación Superior */
+            <TableContainer sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, overflowX: 'auto' }}>
+              <Table size="small" sx={{ minWidth: 1250, '& td, & th': { verticalAlign: 'top', py: 1.5 } }}>
+                <TableHead sx={{ bgcolor: 'action.hover' }}>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 'bold', minWidth: 260 }}>Producto *</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', minWidth: 220 }}>Presentación / Unidad *</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', minWidth: 140 }}>Lote *</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', minWidth: 165 }}>Vence *</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', minWidth: 140, textAlign: 'right' }}>Cantidad *</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', minWidth: 140, textAlign: 'right' }}>Costo Presentación *</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', minWidth: 120, textAlign: 'right' }}>Subtotal</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', minWidth: 60, textAlign: 'center' }}>Acción</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {lines.map((line, idx) => {
+                    const subtotal = calculateSubtotal(line);
+                    const p = products.find((prod) => prod.id === line.productId);
+                    const selectedPres = p?.presentations?.find((pr) => pr.id === line.presentationId);
+                    const factor = selectedPres ? selectedPres.conversionFactor : 1;
+                    const qtyCommercial = parseFloat(line.quantityCommercial) || 0;
+                    const totalBaseUnits = Math.round(qtyCommercial * factor);
+                    const unitCost = parseFloat(line.unitCost) || 0;
+                    const costPerBaseUnit = factor > 0 ? unitCost / factor : unitCost;
+
+                    return (
+                      <TableRow key={idx} sx={{ '&:hover': { bgcolor: 'action.hover' } }}>
+                        <TableCell sx={{ minWidth: 260 }}>
+                          <TextField
+                            select
+                            size="small"
+                            fullWidth
+                            value={line.productId}
+                            onChange={(e) => handleLineChange(idx, 'productId', e.target.value)}
+                            required
+                          >
+                            <MenuItem value="">Selecciona...</MenuItem>
+                            {products.map((prod) => (
+                              <MenuItem key={prod.id} value={prod.id}>
+                                {prod.name} ({prod.code})
+                              </MenuItem>
+                            ))}
+                          </TextField>
+                          {p && (
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+                              Unidad Base: <strong>{p.baseUnit}</strong>
+                            </Typography>
+                          )}
+                        </TableCell>
+
+                        <TableCell sx={{ minWidth: 220 }}>
+                          <TextField
+                            select
+                            size="small"
+                            fullWidth
+                            value={line.presentationId || ''}
+                            onChange={(e) => handleLineChange(idx, 'presentationId', e.target.value)}
+                            disabled={!line.productId}
+                          >
+                            <MenuItem value="">
+                              <em>[Unidad Base] {p?.baseUnit || 'UNIDAD'} (Factor 1:1)</em>
+                            </MenuItem>
+                            {p?.presentations
+                              ?.filter((pres) => pres.isActive && (pres.purchaseEnabled ?? true))
+                              .map((pres) => (
+                                <MenuItem key={pres.id} value={pres.id}>
+                                  {pres.name} (x{pres.conversionFactor} {p.baseUnit})
+                                </MenuItem>
+                              ))}
+                          </TextField>
+                          {selectedPres && (
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+                              1 {selectedPres.name} ={' '}
+                              {selectedPres.containedPresentationId && selectedPres.containedPresentationName
+                                ? `${selectedPres.quantityContained} ${selectedPres.containedPresentationName} = `
+                                : ''}
+                              {selectedPres.conversionFactor} {p?.baseUnit}
+                            </Typography>
+                          )}
+                        </TableCell>
+
+                        <TableCell sx={{ minWidth: 140 }}>
+                          <TextField
+                            size="small"
+                            fullWidth
+                            placeholder="LOTE-001"
+                            value={line.lotNumber}
+                            onChange={(e) => handleLineChange(idx, 'lotNumber', e.target.value)}
+                            required
+                          />
+                        </TableCell>
+
+                        <TableCell sx={{ minWidth: 165 }}>
+                          <TextField
+                            size="small"
+                            type="date"
+                            fullWidth
+                            value={line.expirationDate}
+                            onChange={(e) => handleLineChange(idx, 'expirationDate', e.target.value)}
+                            slotProps={{ inputLabel: { shrink: true } }}
+                            required
+                          />
+                        </TableCell>
+
+                        <TableCell sx={{ minWidth: 140, textAlign: 'right' }}>
+                          <TextField
+                            size="small"
+                            type="number"
+                            fullWidth
+                            value={line.quantityCommercial}
+                            onChange={(e) => handleLineChange(idx, 'quantityCommercial', e.target.value)}
+                            slotProps={{ htmlInput: { min: '1', step: 'any', style: { textAlign: 'right' } } }}
+                            required
+                          />
+                          <Box sx={{ mt: 0.75, textAlign: 'right' }}>
+                            {selectedPres?.containedPresentationId && selectedPres?.containedPresentationName && (
+                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                                Equivale a: {(qtyCommercial * (selectedPres.quantityContained || 1)).toLocaleString('es-CO')} {selectedPres.containedPresentationName}
+                              </Typography>
+                            )}
+                            <Typography variant="caption" color="primary.main" sx={{ display: 'block', fontWeight: 'bold' }}>
+                              Ingreso Kardex: +{totalBaseUnits.toLocaleString('es-CO')} {p?.baseUnit || 'unidades'}
+                            </Typography>
+                          </Box>
+                        </TableCell>
+
+                        <TableCell sx={{ minWidth: 140, textAlign: 'right' }}>
+                          <TextField
+                            size="small"
+                            type="number"
+                            fullWidth
+                            value={line.unitCost}
+                            onChange={(e) => handleLineChange(idx, 'unitCost', e.target.value)}
+                            slotProps={{ htmlInput: { min: '0', step: 'any', style: { textAlign: 'right' } } }}
+                            required
+                          />
+                          {factor > 1 && (
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+                              Costo base: ${costPerBaseUnit.toFixed(2)} / {p?.baseUnit || 'unid'}
+                            </Typography>
+                          )}
+                        </TableCell>
+
+                        <TableCell sx={{ minWidth: 120, textAlign: 'right', fontWeight: 'bold', pt: 2.2 }}>
+                          ${subtotal.toLocaleString('es-CO')}
+                        </TableCell>
+
+                        <TableCell sx={{ minWidth: 60, textAlign: 'center', pt: 1.5 }}>
+                          <Tooltip title="Eliminar línea">
+                            <span>
+                              <IconButton
+                                size="small"
+                                color="error"
+                                onClick={() => handleRemoveLine(idx)}
+                                disabled={lines.length <= 1}
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
 
           {/* Totalizador */}
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}>
-            <Button variant="outlined" onClick={handleAddLine}>
-              + Agregar Otra Línea
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', mt: 3, pt: 2.5, borderTop: 1, borderColor: 'divider', gap: 2 }}>
+            <Button variant="outlined" onClick={handleAddLine} startIcon={<AddIcon />}>
+              Agregar Otra Línea
             </Button>
-            <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-              Total Factura: ${calculateTotal().toLocaleString()}
-            </Typography>
+            <Box sx={{ textAlign: 'right' }}>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                Total Unidades Base a Ingresar:{' '}
+                <strong>
+                  {lines.reduce((acc, l) => {
+                    const prod = products.find((p) => p.id === l.productId);
+                    const pr = prod?.presentations?.find((pres) => pres.id === l.presentationId);
+                    const f = pr ? pr.conversionFactor : 1;
+                    return acc + Math.round((parseFloat(l.quantityCommercial) || 0) * f);
+                  }, 0).toLocaleString('es-CO')}
+                </strong>
+              </Typography>
+              <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                Total Factura: ${calculateTotal().toLocaleString('es-CO')}
+              </Typography>
+            </Box>
           </Box>
         </Paper>
 

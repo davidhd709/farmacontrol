@@ -101,7 +101,15 @@ export const PosPage: React.FC = () => {
   // Agregar ítem al carrito
   const handleAddToCart = (product: ProductDto, presentation?: ProductPresentationDto | null) => {
     setErrorMsg(null);
-    const chosenPres = presentation !== undefined ? presentation : (product.presentations?.find((p) => p.isDefault) || null);
+    const salePresentations = (product.presentations || []).filter(
+      (p) => p.isActive && (p.saleEnabled ?? true),
+    );
+    const defaultSalePres =
+      salePresentations.find((p) => p.isDefaultSale) ||
+      salePresentations.find((p) => p.isDefault) ||
+      null;
+
+    const chosenPres = presentation !== undefined ? presentation : defaultSalePres;
     const factor = chosenPres ? chosenPres.conversionFactor : 1;
     const price = Number(chosenPres ? chosenPres.price : product.basePrice);
     const presId = chosenPres ? chosenPres.id : null;
@@ -142,7 +150,7 @@ export const PosPage: React.FC = () => {
           productName: product.name,
           baseUnit: product.baseUnit,
           basePrice: Number(product.basePrice),
-          availablePresentations: product.presentations || [],
+          availablePresentations: salePresentations,
           presentationId: presId,
           presentationName: presName,
           presentationFactor: factor,

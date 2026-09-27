@@ -23,7 +23,6 @@ import {
   TableHead,
   TableRow,
   TextField,
-  Tooltip,
   Typography,
 } from '@mui/material';
 import {
@@ -116,18 +115,18 @@ export function ProductPresentationsDialog({
     }
   };
 
-  const handleSetDefault = async (pres: ProductPresentationDto) => {
+  const handleSetDefaultSale = async (pres: ProductPresentationDto) => {
     setActionError(null);
     try {
       await updateMutation.mutateAsync({
         presentationId: pres.id,
-        payload: { isDefault: true },
+        payload: { isDefault: true, isDefaultSale: true },
       });
     } catch (err) {
       if (err instanceof Error) {
         setActionError(err.message);
       } else {
-        setActionError('No fue posible marcar la presentación como principal.');
+        setActionError('No fue posible marcar la presentación como principal de venta.');
       }
     }
   };
@@ -144,26 +143,37 @@ export function ProductPresentationsDialog({
         },
       });
 
+      // Manejo seguro tanto si viene plano como si viene en response.result
+      const resData = response as any;
+      const baseUnitsValue = resData.baseUnits ?? resData.result?.baseUnits;
       const pres = presentations.find((p) => p.id === targetPresentationId);
       const presName = pres?.name || 'Presentación';
 
       if (calcDirection === 'toBase') {
-        const baseResult = (response.result as { baseUnits: number }).baseUnits;
-        setCalcResult(
-          `${calcQuantity} ${presName} = ${baseResult} ${product.baseUnit}(s)`,
-        );
+        const baseUnits = baseUnitsValue !== undefined ? baseUnitsValue : calcQuantity * (pres?.conversionFactor || 1);
+        let breakdown = `${calcQuantity} ${presName} = ${baseUnits} ${product.baseUnit}(s)`;
+        
+        // Si la presentación contiene otra presentación (jerarquía)
+        if (pres?.containedPresentationId && pres.containedPresentationName) {
+          const intermediateQty = calcQuantity * (pres.quantityContained || 1);
+          breakdown = `${calcQuantity} ${presName} = ${intermediateQty} ${pres.containedPresentationName} = ${baseUnits} ${product.baseUnit}(s)`;
+        }
+
+        setCalcResult(breakdown);
       } else {
-        const fromResult = response.result as {
-          wholePresentations: number;
-          remainderBaseUnits: number;
-        };
+        const whole = resData.wholePresentations ?? Math.floor(calcQuantity / (pres?.conversionFactor || 1));
+        const rem = resData.remainderBaseUnits ?? (calcQuantity % (pres?.conversionFactor || 1));
         setCalcResult(
-          `${calcQuantity} ${product.baseUnit}(s) = ${fromResult.wholePresentations} ${presName} + ${fromResult.remainderBaseUnits} ${product.baseUnit}(s) sueltas`,
+          `${calcQuantity.toLocaleString('es-CO')} ${product.baseUnit}(s) = ${whole.toLocaleString('es-CO')} ${presName}${
+            rem > 0 ? ` + ${rem} ${product.baseUnit}(s) sueltas` : ' (empaque exacto)'
+          }`,
         );
       }
     } catch (err) {
       if (err instanceof Error) {
-        setCalcResult(`Error: ${err.message}`);
+        setActionError(err.message);
+      } else {
+        setActionError('Ocurrió un error al calcular la equivalencia.');
       }
     }
   };
@@ -188,29 +198,28 @@ export function ProductPresentationsDialog({
             }}
           >
             <Box>
-              <Typography variant="h6" component="span" sx={{ fontWeight: 700 }}>
+              <Typography variant="h6" component="div">
                 Presentaciones Comerciales y Equivalencias
               </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
-                <Typography variant="body2" color="text.secondary" component="span">
-                  {product.name} • SKU: <strong>{product.code}</strong> • Unidad base:
-                </Typography>
+              <Typography variant="body2" component="div" color="text.secondary">
+                Producto: <strong>{product.name}</strong> • SKU: <span>{product.code}</span> • Unidad mínima Kardex:{' '}
                 <Chip
                   label={product.baseUnit}
                   size="small"
                   color="primary"
                   variant="outlined"
-                  sx={{ fontWeight: 700 }}
+                  sx={{ fontWeight: 700, textTransform: 'uppercase', ml: 0.5 }}
                 />
-              </Box>
+              </Typography>
             </Box>
 
             <PermissionGate permission={SYSTEM_PERMISSIONS.PRODUCTS_MANAGE}>
               <Button
                 variant="contained"
-                size="small"
+                color="primary"
                 onClick={handleOpenCreate}
                 data-testid="add-presentation-btn"
+                id="add-presentation-btn"
               >
                 + Agregar Presentación
               </Button>
@@ -226,43 +235,61 @@ export function ProductPresentationsDialog({
               </Alert>
             ) : null}
 
-            {isError ? (
-              <Alert severity="error">
-                {error instanceof Error
-                  ? error.message
-                  : 'No fue posible cargar las presentaciones comerciales.'}
-              </Alert>
-            ) : null}
+            {/* UNIDAD BASE DE KARDEX */}
+            <Paper
+              elevation={0}
+              sx={{
+                p: 2,
+                bgcolor: 'primary.lighter',
+                border: '1px solid',
+                borderColor: 'primary.light',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 1.5,
+              }}
+            >
+              <Box>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'primary.dark' }}>
+                  Unidad Base de Inventario (Kardex y Lotes): {product.baseUnit}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Todas las compras, existencias físicas, lotes con FEFO y movimientos se gestionan estrictamente en esta unidad mínima.
+                </Typography>
+              </Box>
+              <Chip
+                label="Factor Base = 1 (Unidad Indivisible)"
+                color="primary"
+                size="small"
+                sx={{ fontWeight: 600 }}
+              />
+            </Paper>
 
-            <Alert severity="info" variant="outlined">
-              <Typography variant="body2">
-                <strong>Control de Unidades Base:</strong> El inventario central, lotes y
-                vencimientos se gestionan en unidad base (
-                <strong>{product.baseUnit}</strong>). Las presentaciones comerciales permiten
-                vender y comprar en cajas, blísteres o frascos usando factores de conversión exactos.
-              </Typography>
-            </Alert>
-
-            {/* Tabla de presentaciones */}
+            {/* TABLA DE PRESENTACIONES COMERCIALES */}
             <Paper variant="outlined">
               <TableContainer>
-                <Table aria-label="Tabla de presentaciones comerciales">
-                  <TableHead>
+                <Table size="small">
+                  <TableHead sx={{ bgcolor: 'action.hover' }}>
                     <TableRow>
                       <TableCell sx={{ fontWeight: 700 }}>Presentación</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>Factor de Conversión</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Contiene</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Equivalencia Base</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Código de Barras</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }} align="right">
-                        Precio Venta
+                      <TableCell align="right" sx={{ fontWeight: 700 }}>
+                        Precio Comercial
                       </TableCell>
-                      <TableCell sx={{ fontWeight: 700 }} align="right">
-                        Costo Ref.
+                      <TableCell align="right" sx={{ fontWeight: 700 }}>
+                        Costo / Margen
                       </TableCell>
-                      <TableCell sx={{ fontWeight: 700 }} align="center">
-                        Principal
+                      <TableCell align="center" sx={{ fontWeight: 700 }}>
+                        Canales
+                      </TableCell>
+                      <TableCell align="center" sx={{ fontWeight: 700 }}>
+                        Predeterminada
                       </TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Estado</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }} align="right">
+                      <TableCell align="right" sx={{ fontWeight: 700 }}>
                         Acciones
                       </TableCell>
                     </TableRow>
@@ -270,22 +297,31 @@ export function ProductPresentationsDialog({
                   <TableBody>
                     {isLoading ? (
                       <TableRow>
-                        <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
+                        <TableCell colSpan={10} align="center" sx={{ py: 4 }}>
                           <CircularProgress size={28} />
                           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                             Cargando presentaciones…
                           </Typography>
                         </TableCell>
                       </TableRow>
+                    ) : isError ? (
+                      <TableRow>
+                        <TableCell colSpan={10} align="center" sx={{ py: 3 }}>
+                          <Alert severity="error">
+                            {error instanceof Error
+                              ? error.message
+                              : 'No fue posible cargar las presentaciones comerciales.'}
+                          </Alert>
+                        </TableCell>
+                      </TableRow>
                     ) : presentations.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
-                          <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                            No hay presentaciones comerciales registradas
+                        <TableCell colSpan={10} align="center" sx={{ py: 4 }}>
+                          <Typography variant="body2" color="text.secondary">
+                            Este producto aún no tiene presentaciones comerciales configuradas.
                           </Typography>
-                          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                            Agrega al menos una presentación (ej: Unidad factor 1 o Caja factor 30)
-                            para habilitar ventas.
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                            Se opera por defecto en su unidad base ({product.baseUnit}).
                           </Typography>
                         </TableCell>
                       </TableRow>
@@ -298,34 +334,44 @@ export function ProductPresentationsDialog({
                             ? (((priceNum - costNum) / priceNum) * 100).toFixed(1)
                             : '0.0';
 
+                        // Descripción de lo que contiene físicamente
+                        const containsDescription = pres.containedPresentationId && pres.containedPresentationName
+                          ? `${pres.quantityContained} ${pres.containedPresentationName}`
+                          : `${pres.quantityContained} ${product.baseUnit} (Base)`;
+
                         return (
                           <TableRow key={pres.id} hover>
                             <TableCell>
                               <Typography variant="body2" sx={{ fontWeight: 600 }}>
                                 {pres.name}
                               </Typography>
-                              {pres.isDefault ? (
+                              {pres.unitOfMeasureCode ? (
                                 <Chip
-                                  label="Por defecto"
+                                  label={pres.unitOfMeasureCode}
                                   size="small"
-                                  color="success"
-                                  variant="filled"
-                                  sx={{ fontSize: '0.7rem', height: 20, mt: 0.5 }}
+                                  variant="outlined"
+                                  sx={{ fontSize: '0.65rem', height: 18, mt: 0.2 }}
                                 />
                               ) : null}
                             </TableCell>
 
                             <TableCell>
+                              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                {containsDescription}
+                              </Typography>
+                            </TableCell>
+
+                            <TableCell>
                               <Chip
-                                label={`x ${pres.conversionFactor} ${product.baseUnit}`}
+                                label={`x ${pres.conversionFactor.toLocaleString('es-CO')} ${product.baseUnit}`}
                                 size="small"
                                 color="primary"
                                 variant="outlined"
-                                sx={{ fontWeight: 600 }}
+                                sx={{ fontWeight: 700 }}
                               />
                             </TableCell>
 
-                            <TableCell sx={{ fontFamily: 'monospace' }}>
+                            <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
                               {pres.barcode || '—'}
                             </TableCell>
 
@@ -334,6 +380,11 @@ export function ProductPresentationsDialog({
                                 minimumFractionDigits: 2,
                                 maximumFractionDigits: 2,
                               })}
+                              {pres.conversionFactor > 1 && priceNum > 0 ? (
+                                <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
+                                  ${(priceNum / pres.conversionFactor).toFixed(2)} / {product.baseUnit}
+                                </Typography>
+                              ) : null}
                             </TableCell>
 
                             <TableCell align="right" sx={{ color: 'text.secondary' }}>
@@ -347,28 +398,47 @@ export function ProductPresentationsDialog({
                             </TableCell>
 
                             <TableCell align="center">
-                              {pres.isDefault ? (
-                                <Tooltip title="Presentación principal predeterminada en punto de venta">
+                              <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
+                                {pres.purchaseEnabled ? (
+                                  <Chip label="Compra" size="small" color="info" variant="outlined" sx={{ fontSize: '0.65rem', height: 20 }} />
+                                ) : null}
+                                {pres.saleEnabled ? (
+                                  <Chip label="Venta" size="small" color="success" variant="outlined" sx={{ fontSize: '0.65rem', height: 20 }} />
+                                ) : null}
+                              </Box>
+                            </TableCell>
+
+                            <TableCell align="center">
+                              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, alignItems: 'center' }}>
+                                {pres.isDefault || pres.isDefaultSale ? (
                                   <Chip
                                     label="★ Principal"
-                                    color="success"
+                                    color="primary"
                                     size="small"
-                                    sx={{ fontWeight: 700 }}
+                                    sx={{ fontWeight: 700, fontSize: '0.7rem', height: 22 }}
                                   />
-                                </Tooltip>
-                              ) : (
-                                <PermissionGate permission={SYSTEM_PERMISSIONS.PRODUCTS_MANAGE}>
-                                  <Button
+                                ) : (
+                                  <PermissionGate permission={SYSTEM_PERMISSIONS.PRODUCTS_MANAGE}>
+                                    <Button
+                                      size="small"
+                                      variant="text"
+                                      onClick={() => handleSetDefaultSale(pres)}
+                                      disabled={!pres.isActive || !pres.saleEnabled}
+                                      sx={{ fontSize: '0.7rem', py: 0 }}
+                                    >
+                                      Fijar Venta
+                                    </Button>
+                                  </PermissionGate>
+                                )}
+                                {pres.isDefaultPurchase ? (
+                                  <Chip
+                                    label="★ Compra"
+                                    color="info"
                                     size="small"
-                                    variant="text"
-                                    onClick={() => handleSetDefault(pres)}
-                                    disabled={!pres.isActive}
-                                    sx={{ fontSize: '0.75rem' }}
-                                  >
-                                    Fijar principal
-                                  </Button>
-                                </PermissionGate>
-                              )}
+                                    sx={{ fontWeight: 700, fontSize: '0.65rem', height: 20 }}
+                                  />
+                                ) : null}
+                              </Box>
                             </TableCell>
 
                             <TableCell>
@@ -394,6 +464,7 @@ export function ProductPresentationsDialog({
                                     size="small"
                                     variant="outlined"
                                     onClick={() => handleOpenEdit(pres)}
+                                    id={`edit-pres-${pres.id}`}
                                   >
                                     Editar
                                   </Button>
@@ -402,7 +473,7 @@ export function ProductPresentationsDialog({
                                       size="small"
                                       variant="outlined"
                                       color="error"
-                                      disabled={pres.isDefault}
+                                      disabled={pres.isDefault || pres.isDefaultSale}
                                       onClick={() => handleDeactivate(pres)}
                                     >
                                       Inactivar
@@ -431,15 +502,14 @@ export function ProductPresentationsDialog({
 
             <Divider />
 
-            {/* Simulador / Calculadora de Equivalencias */}
+            {/* CALCULADORA DE EQUIVALENCIAS COMERCIALES */}
             {presentations.length > 0 ? (
               <Paper variant="outlined" sx={{ p: 2.5, bgcolor: 'background.paper' }}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
-                  Calculadora de Equivalencia Comercial
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 0.5 }}>
+                  Calculadora de Equivalencia Comercial y Sobrantes
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  Verifica cómo el motor de conversión transforma las cantidades de empaque en
-                  unidades base y calcula sobrantes enteros.
+                  Verifica en tiempo real cómo el motor calcula la transformación de empaques a unidades base del Kardex y viceversa.
                 </Typography>
 
                 <Box
@@ -482,10 +552,10 @@ export function ProductPresentationsDialog({
                       }
                     >
                       <MenuItem value="toBase">
-                        Presentación ➔ Unidad base ({product.baseUnit})
+                        Empaque ➔ Unidades Base ({product.baseUnit})
                       </MenuItem>
                       <MenuItem value="fromBase">
-                        Unidad base ({product.baseUnit}) ➔ Presentación
+                        Unidades Base ({product.baseUnit}) ➔ Empaques
                       </MenuItem>
                     </Select>
                   </FormControl>
@@ -502,11 +572,12 @@ export function ProductPresentationsDialog({
                   />
 
                   <Button
-                    variant="outlined"
+                    variant="contained"
                     color="primary"
                     onClick={handleRunConversion}
                     disabled={convertMutation.isPending}
                     data-testid="calculate-conversion-btn"
+                    id="calculate-conversion-btn"
                   >
                     {convertMutation.isPending ? 'Calculando…' : 'Calcular'}
                   </Button>
@@ -537,6 +608,7 @@ export function ProductPresentationsDialog({
         onClose={() => setIsFormOpen(false)}
         product={product}
         presentation={selectedPresentation}
+        availablePresentations={presentations}
       />
     </>
   );
