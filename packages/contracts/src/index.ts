@@ -314,35 +314,69 @@ export interface ProductQueryFilters {
 export interface ProductPresentationDto {
   id: string;
   productId: string;
+  unitOfMeasureId?: string | null;
+  unitOfMeasureCode?: string | null;
+  unitOfMeasureName?: string | null;
+  containedPresentationId?: string | null;
+  containedPresentationName?: string | null;
   name: string;
   barcode: string | null;
+  quantityContained: number;
   conversionFactor: number;
+  baseFactor: number;
   price: string;
   cost: string;
+  purchaseEnabled: boolean;
+  saleEnabled: boolean;
   isDefault: boolean;
+  isDefaultPurchase: boolean;
+  isDefaultSale: boolean;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface CreateProductPresentationPayload {
-  productId: string;
-  name: string;
+  productId?: string;
+  unitOfMeasureId?: string | null;
+  containedPresentationId?: string | null;
+  name?: string;
   barcode?: string | null;
-  conversionFactor: number;
+  quantityContained?: number;
+  conversionFactor?: number;
   price: number | string;
   cost?: number | string;
+  purchaseEnabled?: boolean;
+  saleEnabled?: boolean;
   isDefault?: boolean;
+  isDefaultPurchase?: boolean;
+  isDefaultSale?: boolean;
 }
 
 export interface UpdateProductPresentationPayload {
+  unitOfMeasureId?: string | null;
+  containedPresentationId?: string | null;
   name?: string;
   barcode?: string | null;
+  quantityContained?: number;
   conversionFactor?: number;
   price?: number | string;
   cost?: number | string;
+  purchaseEnabled?: boolean;
+  saleEnabled?: boolean;
   isDefault?: boolean;
+  isDefaultPurchase?: boolean;
+  isDefaultSale?: boolean;
   isActive?: boolean;
+}
+
+export interface PresentationConversionResultDto {
+  presentationId: string;
+  presentationName: string;
+  conversionFactor: number;
+  baseUnits: number;
+  wholePresentations?: number;
+  remainderBaseUnits?: number;
 }
 
 export interface LocationDto {

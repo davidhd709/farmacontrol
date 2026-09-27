@@ -138,6 +138,8 @@ model UnitOfMeasure {
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
+  presentations ProductPresentation[]
+
   @@map("units_of_measure")
 }
 
@@ -177,26 +179,38 @@ model Product {
 }
 
 model ProductPresentation {
-  id               String   @id @default(uuid()) @db.Uuid
-  productId        String   @map("product_id") @db.Uuid
-  name             String   @db.VarChar(100)
-  barcode          String?  @unique @db.VarChar(50)
-  conversionFactor Int      @map("conversion_factor")
-  price            Decimal  @map("price") @db.Decimal(12, 2)
-  cost             Decimal  @default(0) @map("cost") @db.Decimal(12, 2)
-  isDefault        Boolean  @default(false) @map("is_default")
-  isActive         Boolean  @default(true) @map("is_active")
-  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  id                      String                @id @default(uuid()) @db.Uuid
+  productId               String                @map("product_id") @db.Uuid
+  unitOfMeasureId         String?               @map("unit_of_measure_id") @db.Uuid
+  containedPresentationId String?               @map("contained_presentation_id") @db.Uuid
+  name                    String                @db.VarChar(100)
+  barcode                 String?               @unique @db.VarChar(50)
+  quantityContained       Int                   @default(1) @map("quantity_contained")
+  conversionFactor        Int                   @map("conversion_factor")
+  price                   Decimal               @map("price") @db.Decimal(12, 2)
+  cost                    Decimal               @default(0) @map("cost") @db.Decimal(12, 2)
+  purchaseEnabled         Boolean               @default(true) @map("purchase_enabled")
+  saleEnabled             Boolean               @default(true) @map("sale_enabled")
+  isDefault               Boolean               @default(false) @map("is_default")
+  isDefaultPurchase       Boolean               @default(false) @map("is_default_purchase")
+  isDefaultSale           Boolean               @default(false) @map("is_default_sale")
+  isActive                Boolean               @default(true) @map("is_active")
+  createdAt               DateTime              @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt               DateTime              @updatedAt @map("updated_at") @db.Timestamptz
 
-  product         Product             @relation(fields: [productId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  movements       InventoryMovement[]
-  purchaseLines   PurchaseLine[]
-  saleLines       SaleLine[]
+  product                 Product               @relation(fields: [productId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  unitOfMeasure           UnitOfMeasure?        @relation(fields: [unitOfMeasureId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  containedPresentation   ProductPresentation?  @relation("PresentationHierarchy", fields: [containedPresentationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  parentPresentations     ProductPresentation[] @relation("PresentationHierarchy")
+  movements               InventoryMovement[]
+  purchaseLines           PurchaseLine[]
+  saleLines               SaleLine[]
 
   @@unique([productId, name])
   @@index([productId])
   @@index([productId, isActive])
+  @@index([unitOfMeasureId])
+  @@index([containedPresentationId])
   @@index([barcode])
   @@map("product_presentations")
 }
@@ -322,8 +336,9 @@ model PurchaseLine {
   productId          String               @map("product_id") @db.Uuid
   presentationId     String?              @map("presentation_id") @db.Uuid
   lotId              String               @map("lot_id") @db.Uuid
-  quantityCommercial Decimal              @map("quantity_commercial") @db.Decimal(12, 4)
-  quantityBaseUnits  Int                  @map("quantity_base_units")
+  quantityCommercial           Decimal              @map("quantity_commercial") @db.Decimal(12, 4)
+  presentationFactorHistorical Int                  @default(1) @map("presentation_factor_historical")
+  quantityBaseUnits            Int                  @map("quantity_base_units")
   unitCost           Decimal              @map("unit_cost") @db.Decimal(12, 2)
   subtotal           Decimal              @map("subtotal") @db.Decimal(12, 2)
   lotNumber          String               @map("lot_number") @db.VarChar(100)
