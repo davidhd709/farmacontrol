@@ -29,6 +29,9 @@ interface CartItem {
   productId: string;
   productCode: string;
   productName: string;
+  baseUnit: string;
+  basePrice: number;
+  availablePresentations?: ProductPresentationDto[];
   presentationId?: string | null;
   presentationName?: string | null;
   presentationFactor: number;
@@ -97,10 +100,11 @@ export const PosPage: React.FC = () => {
   // Agregar ítem al carrito
   const handleAddToCart = (product: ProductDto, presentation?: ProductPresentationDto | null) => {
     setErrorMsg(null);
-    const factor = presentation ? presentation.conversionFactor : 1;
-    const price = Number(presentation ? presentation.price : product.basePrice);
-    const presId = presentation ? presentation.id : null;
-    const presName = presentation ? presentation.name : null;
+    const chosenPres = presentation !== undefined ? presentation : (product.presentations?.find((p) => p.isDefault) || null);
+    const factor = chosenPres ? chosenPres.conversionFactor : 1;
+    const price = Number(chosenPres ? chosenPres.price : product.basePrice);
+    const presId = chosenPres ? chosenPres.id : null;
+    const presName = chosenPres ? chosenPres.name : null;
 
     setCart((prev) => {
       const existingIdx = prev.findIndex(
@@ -135,6 +139,9 @@ export const PosPage: React.FC = () => {
           productId: product.id,
           productCode: product.code,
           productName: product.name,
+          baseUnit: product.baseUnit,
+          basePrice: Number(product.basePrice),
+          availablePresentations: product.presentations || [],
           presentationId: presId,
           presentationName: presName,
           presentationFactor: factor,
@@ -147,6 +154,32 @@ export const PosPage: React.FC = () => {
           total,
         },
       ];
+    });
+  };
+
+  // Cambiar presentación de un producto existente en el carrito
+  const handleChangePresentation = (index: number, newPresId: string | null) => {
+    setCart((prev) => {
+      const updated = [...prev];
+      const item = updated[index];
+      const pres = item.availablePresentations?.find((p) => p.id === newPresId) || null;
+      const factor = pres ? pres.conversionFactor : 1;
+      const unitPrice = pres ? Number(pres.price) : item.basePrice;
+      const presName = pres ? pres.name : null;
+      const subtotal = Math.max(0, item.quantityCommercial * unitPrice - item.discount);
+      const taxAmount = subtotal * (item.taxRate / 100);
+
+      updated[index] = {
+        ...item,
+        presentationId: newPresId,
+        presentationName: presName,
+        presentationFactor: factor,
+        unitPrice,
+        subtotal,
+        taxAmount,
+        total: subtotal + taxAmount,
+      };
+      return updated;
     });
   };
 
@@ -301,16 +334,28 @@ export const PosPage: React.FC = () => {
               )}
               renderOption={(props, opt) => (
                 <li {...props} key={opt.id}>
-                  <Box sx={{ width: '100%' }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Box sx={{ width: '100%', py: 0.5 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <Typography variant="body2" sx={{ fontWeight: 600 }}>{opt.name}</Typography>
                       <Typography variant="body2" sx={{ fontWeight: 700, color: 'primary.main' }}>
-                        ${Number(opt.basePrice).toLocaleString('es-CO')}
+                        ${Number(opt.basePrice).toLocaleString('es-CO')} / {opt.baseUnit}
                       </Typography>
                     </Box>
-                    <Typography variant="caption" color="text.secondary">
-                      Código: {opt.code} • Unidad: {opt.baseUnit} {opt.requiresLotControl && '• Requiere Lote (FEFO)'}
-                    </Typography>
+                    <Box sx={{ display: 'flex', gap: 0.8, alignItems: 'center', mt: 0.5, flexWrap: 'wrap' }}>
+                      <Typography variant="caption" color="text.secondary">
+                        SKU: {opt.code} • Base: {opt.baseUnit} {opt.requiresLotControl && '• FEFO'}
+                      </Typography>
+                      {opt.presentations && opt.presentations.length > 0 && opt.presentations.map((pr) => (
+                        <Chip
+                          key={pr.id}
+                          size="small"
+                          label={`${pr.name} (x${pr.conversionFactor}): $${Number(pr.price).toLocaleString('es-CO')}`}
+                          variant={pr.isDefault ? 'filled' : 'outlined'}
+                          color={pr.isDefault ? 'primary' : 'default'}
+                          sx={{ height: 18, fontSize: '0.65rem' }}
+                        />
+                      ))}
+                    </Box>
                   </Box>
                 </li>
               )}
@@ -322,7 +367,7 @@ export const PosPage: React.FC = () => {
             <Table size="small" aria-label="carrito de ventas">
               <TableHead sx={{ bgcolor: 'action.hover' }}>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 600 }}>Producto / Presentación</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Producto / Unidad de Venta</TableCell>
                   <TableCell align="center" sx={{ fontWeight: 600, width: 120 }}>Cantidad</TableCell>
                   <TableCell align="right" sx={{ fontWeight: 600 }}>Precio Unit.</TableCell>
                   <TableCell align="right" sx={{ fontWeight: 600 }}>Total</TableCell>
@@ -345,19 +390,35 @@ export const PosPage: React.FC = () => {
                         <Typography variant="body2" sx={{ fontWeight: 600 }}>
                           {item.productName}
                         </Typography>
-                        {item.presentationName ? (
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                            Presentación: {item.presentationName} (Factor x{item.presentationFactor})
-                          </Typography>
+                        {item.availablePresentations && item.availablePresentations.length > 0 ? (
+                          <Box sx={{ mt: 0.5, mb: 0.5 }}>
+                            <TextField
+                              select
+                              size="small"
+                              value={item.presentationId || ''}
+                              onChange={(e) => handleChangePresentation(idx, e.target.value || null)}
+                              sx={{ minWidth: 200 }}
+                              slotProps={{ select: { sx: { py: 0.4, fontSize: '0.8rem' } } }}
+                            >
+                              <MenuItem value="" sx={{ fontSize: '0.8rem' }}>
+                                Unidad Base ({item.baseUnit}) — ${item.basePrice.toLocaleString('es-CO')}
+                              </MenuItem>
+                              {item.availablePresentations.map((p) => (
+                                <MenuItem key={p.id} value={p.id} sx={{ fontSize: '0.8rem' }}>
+                                  {p.name} (x{p.conversionFactor} {item.baseUnit}) — ${Number(p.price).toLocaleString('es-CO')}
+                                </MenuItem>
+                              ))}
+                            </TextField>
+                          </Box>
                         ) : (
                           <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                            Unidad base individual
+                            Unidad base individual ({item.baseUnit})
                           </Typography>
                         )}
                         <Chip
-                          label="Despacho FEFO automático"
+                          label={`FEFO: descuenta ${item.quantityCommercial * item.presentationFactor} ${item.baseUnit}`}
                           size="small"
-                          color="info"
+                          color={item.presentationFactor > 1 ? 'secondary' : 'info'}
                           variant="outlined"
                           sx={{ height: 18, fontSize: '0.65rem', mt: 0.5 }}
                         />

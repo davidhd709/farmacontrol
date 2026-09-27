@@ -129,7 +129,22 @@ export const ReceivePurchasePage: React.FC = () => {
       const updated = [...prev];
       updated[index] = { ...updated[index], [field]: value };
       if (field === 'productId') {
-        updated[index].presentationId = '';
+        const prod = products.find((p) => p.id === value);
+        const defaultPres = prod?.presentations?.find((pr) => pr.isDefault);
+        updated[index].presentationId = defaultPres ? defaultPres.id : '';
+        if (defaultPres && parseFloat(defaultPres.cost) > 0) {
+          updated[index].unitCost = String(defaultPres.cost);
+        } else if (prod && parseFloat(prod.baseCost) > 0) {
+          updated[index].unitCost = String(prod.baseCost);
+        }
+      } else if (field === 'presentationId') {
+        const prod = products.find((p) => p.id === updated[index].productId);
+        const pres = prod?.presentations?.find((pr) => pr.id === value);
+        if (pres && parseFloat(pres.cost) > 0) {
+          updated[index].unitCost = String(pres.cost);
+        } else if (!value && prod && parseFloat(prod.baseCost) > 0) {
+          updated[index].unitCost = String(prod.baseCost);
+        }
       }
       return updated;
     });
@@ -428,18 +443,27 @@ export const ReceivePurchasePage: React.FC = () => {
             <Table size="small">
               <TableHead sx={{ bgcolor: 'action.hover' }}>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 'bold', width: '25%' }}>Producto *</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', width: '15%' }}>Lote *</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', width: '15%' }}>Vence *</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', width: '12%', textAlign: 'right' }}>Cantidad *</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', width: '15%', textAlign: 'right' }}>Costo Unit. *</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', width: '12%', textAlign: 'right' }}>Subtotal</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', width: '6%', textAlign: 'center' }}>Acción</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', width: '22%' }}>Producto *</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', width: '18%' }}>Presentación / Unidad *</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', width: '11%' }}>Lote *</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', width: '12%' }}>Vence *</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', width: '11%', textAlign: 'right' }}>Cantidad *</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', width: '12%', textAlign: 'right' }}>Costo Presentación *</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', width: '10%', textAlign: 'right' }}>Subtotal</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', width: '4%', textAlign: 'center' }}>Acción</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {lines.map((line, idx) => {
                   const subtotal = calculateSubtotal(line);
+                  const p = products.find((prod) => prod.id === line.productId);
+                  const selectedPres = p?.presentations?.find((pr) => pr.id === line.presentationId);
+                  const factor = selectedPres ? selectedPres.conversionFactor : 1;
+                  const qtyCommercial = parseFloat(line.quantityCommercial) || 0;
+                  const totalBaseUnits = Math.round(qtyCommercial * factor);
+                  const unitCost = parseFloat(line.unitCost) || 0;
+                  const costPerBaseUnit = factor > 0 ? unitCost / factor : unitCost;
+
                   return (
                     <TableRow key={idx}>
                       <TableCell>
@@ -452,12 +476,42 @@ export const ReceivePurchasePage: React.FC = () => {
                           required
                         >
                           <MenuItem value="">Selecciona...</MenuItem>
-                          {products.map((p) => (
-                            <MenuItem key={p.id} value={p.id}>
-                              {p.name} ({p.code})
+                          {products.map((prod) => (
+                            <MenuItem key={prod.id} value={prod.id}>
+                              {prod.name} ({prod.code})
                             </MenuItem>
                           ))}
                         </TextField>
+                        {p && (
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                            Unidad Base: <strong>{p.baseUnit}</strong>
+                          </Typography>
+                        )}
+                      </TableCell>
+
+                      <TableCell>
+                        <TextField
+                          select
+                          size="small"
+                          fullWidth
+                          value={line.presentationId || ''}
+                          onChange={(e) => handleLineChange(idx, 'presentationId', e.target.value)}
+                          disabled={!line.productId}
+                        >
+                          <MenuItem value="">
+                            <em>Unidad Base ({p?.baseUnit || 'UNIDAD'}) — Factor 1:1</em>
+                          </MenuItem>
+                          {p?.presentations?.map((pres) => (
+                            <MenuItem key={pres.id} value={pres.id}>
+                              {pres.name} (Factor: {pres.conversionFactor} {p.baseUnit})
+                            </MenuItem>
+                          ))}
+                        </TextField>
+                        {selectedPres && (
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                            1 {selectedPres.name} = {selectedPres.conversionFactor} {p?.baseUnit}
+                          </Typography>
+                        )}
                       </TableCell>
 
                       <TableCell>
@@ -492,6 +546,9 @@ export const ReceivePurchasePage: React.FC = () => {
                           slotProps={{ htmlInput: { min: '1', step: 'any', style: { textAlign: 'right' } } }}
                           required
                         />
+                        <Typography variant="caption" color="primary.main" sx={{ display: 'block', mt: 0.5, fontWeight: 'bold' }}>
+                          Ingresan: {totalBaseUnits} {p?.baseUnit || 'unidades'}
+                        </Typography>
                       </TableCell>
 
                       <TableCell sx={{ textAlign: 'right' }}>
@@ -503,6 +560,11 @@ export const ReceivePurchasePage: React.FC = () => {
                           slotProps={{ htmlInput: { min: '0', step: 'any', style: { textAlign: 'right' } } }}
                           required
                         />
+                        {factor > 1 && (
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                            ${costPerBaseUnit.toFixed(2)} / {p?.baseUnit || 'unid'}
+                          </Typography>
+                        )}
                       </TableCell>
 
                       <TableCell sx={{ textAlign: 'right', fontWeight: 'bold' }}>
@@ -562,8 +624,12 @@ export const ReceivePurchasePage: React.FC = () => {
               <div><strong>N° Factura:</strong> {invoiceNumber}</div>
               <div><strong>Fecha de Emisión:</strong> {purchaseDate}</div>
               <div><strong>Fecha de Vencimiento Factura:</strong> {dueDate}</div>
-              <div><strong>Condición de Pago:</strong> {paymentCondition === 'CONTADO' ? 'Contado' : `Crédito (${creditDays !== 'manual' ? `${creditDays} días` : 'personalizado'})`}</div>
-              <div><strong>Líneas a Ingresar:</strong> {lines.length} productos y lotes</div>
+              <div><strong>Líneas a Ingresar:</strong> {lines.length} productos / lotes ({lines.reduce((acc, l) => {
+                const prod = products.find((p) => p.id === l.productId);
+                const pr = prod?.presentations?.find((pres) => pres.id === l.presentationId);
+                const f = pr ? pr.conversionFactor : 1;
+                return acc + Math.round((parseFloat(l.quantityCommercial) || 0) * f);
+              }, 0)} unidades base a Kardex)</div>
             </Box>
             <br />
             Esta operación registrará de forma atómica:

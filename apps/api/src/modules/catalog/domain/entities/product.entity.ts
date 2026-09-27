@@ -1,4 +1,4 @@
-import type { ProductDto } from '@farmacia/contracts';
+import type { ProductDto, ProductPresentationDto } from '@farmacia/contracts';
 
 export interface CreateProductProps {
   id?: string;
@@ -18,6 +18,7 @@ export interface CreateProductProps {
   basePrice: number | string;
   baseCost?: number | string;
   isActive?: boolean;
+  presentations?: ProductPresentationDto[];
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -40,6 +41,7 @@ export interface ReconstituteProductProps {
   basePrice: string;
   baseCost: string;
   isActive: boolean;
+  presentations?: ProductPresentationDto[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -62,6 +64,7 @@ export class Product {
   private _basePrice: string;
   private _baseCost: string;
   private _isActive: boolean;
+  private _presentations?: ProductPresentationDto[];
   private readonly _createdAt: Date;
   private _updatedAt: Date;
 
@@ -83,6 +86,7 @@ export class Product {
     this._basePrice = props.basePrice;
     this._baseCost = props.baseCost;
     this._isActive = props.isActive;
+    this._presentations = props.presentations;
     this._createdAt = props.createdAt;
     this._updatedAt = props.updatedAt;
   }
@@ -114,6 +118,7 @@ export class Product {
       basePrice,
       baseCost,
       isActive: props.isActive ?? true,
+      presentations: props.presentations,
       createdAt: props.createdAt ?? now,
       updatedAt: props.updatedAt ?? now,
     });
@@ -189,6 +194,10 @@ export class Product {
 
   public get isActive(): boolean {
     return this._isActive;
+  }
+
+  public get presentations(): ProductPresentationDto[] | undefined {
+    return this._presentations;
   }
 
   public get createdAt(): Date {
@@ -347,6 +356,7 @@ export class Product {
       basePrice: this._basePrice,
       baseCost: this._baseCost,
       isActive: this._isActive,
+      presentations: this._presentations,
       createdAt: this._createdAt.toISOString(),
       updatedAt: this._updatedAt.toISOString(),
     };

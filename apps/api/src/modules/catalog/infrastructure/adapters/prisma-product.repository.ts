@@ -4,6 +4,16 @@ import type { ProductQueryFilters } from '@farmacia/contracts';
 import { Product } from '../../domain/entities/product.entity';
 import type { ProductRepositoryPort } from '../../application/ports/product.repository.port';
 
+const PRODUCT_INCLUDE = {
+  category: {
+    select: { name: true },
+  },
+  presentations: {
+    where: { isActive: true },
+    orderBy: { conversionFactor: 'asc' as const },
+  },
+};
+
 @Injectable()
 export class PrismaProductRepository implements ProductRepositoryPort {
   private readonly client: PrismaClient;
@@ -15,11 +25,7 @@ export class PrismaProductRepository implements ProductRepositoryPort {
   public async findById(id: string): Promise<Product | null> {
     const record = await this.client.product.findUnique({
       where: { id },
-      include: {
-        category: {
-          select: { name: true },
-        },
-      },
+      include: PRODUCT_INCLUDE,
     });
 
     if (!record) {
@@ -38,11 +44,7 @@ export class PrismaProductRepository implements ProductRepositoryPort {
           mode: 'insensitive',
         },
       },
-      include: {
-        category: {
-          select: { name: true },
-        },
-      },
+      include: PRODUCT_INCLUDE,
     });
 
     if (!record) {
@@ -61,11 +63,7 @@ export class PrismaProductRepository implements ProductRepositoryPort {
           mode: 'insensitive',
         },
       },
-      include: {
-        category: {
-          select: { name: true },
-        },
-      },
+      include: PRODUCT_INCLUDE,
     });
 
     if (!record) {
@@ -177,11 +175,7 @@ export class PrismaProductRepository implements ProductRepositoryPort {
         orderBy: { name: 'asc' },
         skip,
         take: pageSize,
-        include: {
-          category: {
-            select: { name: true },
-          },
-        },
+        include: PRODUCT_INCLUDE,
       }),
       this.client.product.count({ where }),
     ]);
@@ -212,6 +206,19 @@ export class PrismaProductRepository implements ProductRepositoryPort {
     createdAt: Date;
     updatedAt: Date;
     category?: { name: string } | null;
+    presentations?: Array<{
+      id: string;
+      productId: string;
+      name: string;
+      barcode: string | null;
+      conversionFactor: number;
+      price: Prisma.Decimal;
+      cost: Prisma.Decimal;
+      isDefault: boolean;
+      isActive: boolean;
+      createdAt: Date;
+      updatedAt: Date;
+    }>;
   }): Product {
     return Product.reconstitute({
       id: record.id,
@@ -231,6 +238,19 @@ export class PrismaProductRepository implements ProductRepositoryPort {
       basePrice: record.basePrice.toFixed(2),
       baseCost: record.baseCost.toFixed(2),
       isActive: record.isActive,
+      presentations: record.presentations?.map((p) => ({
+        id: p.id,
+        productId: p.productId,
+        name: p.name,
+        barcode: p.barcode,
+        conversionFactor: p.conversionFactor,
+        price: p.price.toFixed(2),
+        cost: p.cost.toFixed(2),
+        isDefault: p.isDefault,
+        isActive: p.isActive,
+        createdAt: p.createdAt.toISOString(),
+        updatedAt: p.updatedAt.toISOString(),
+      })),
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
     });

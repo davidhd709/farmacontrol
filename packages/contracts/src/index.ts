@@ -227,6 +227,7 @@ export interface ProductDto {
   basePrice: string;
   baseCost: string;
   isActive: boolean;
+  presentations?: ProductPresentationDto[];
   createdAt: string;
   updatedAt: string;
 }
