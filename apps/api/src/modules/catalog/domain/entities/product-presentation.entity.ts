@@ -1,0 +1,292 @@
+import type { ProductPresentationDto } from '@farmacia/contracts';
+
+export interface CreateProductPresentationProps {
+  id?: string;
+  productId: string;
+  name: string;
+  barcode?: string | null;
+  conversionFactor: number;
+  price: number | string;
+  cost?: number | string;
+  isDefault?: boolean;
+  isActive?: boolean;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+export interface ReconstituteProductPresentationProps {
+  id: string;
+  productId: string;
+  name: string;
+  barcode: string | null;
+  conversionFactor: number;
+  price: string;
+  cost: string;
+  isDefault: boolean;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export class ProductPresentation {
+  private readonly _id: string;
+  private readonly _productId: string;
+  private _name: string;
+  private _barcode: string | null;
+  private _conversionFactor: number;
+  private _price: string;
+  private _cost: string;
+  private _isDefault: boolean;
+  private _isActive: boolean;
+  private readonly _createdAt: Date;
+  private _updatedAt: Date;
+
+  private constructor(props: ReconstituteProductPresentationProps) {
+    this._id = props.id;
+    this._productId = props.productId;
+    this._name = props.name;
+    this._barcode = props.barcode;
+    this._conversionFactor = props.conversionFactor;
+    this._price = props.price;
+    this._cost = props.cost;
+    this._isDefault = props.isDefault;
+    this._isActive = props.isActive;
+    this._createdAt = props.createdAt;
+    this._updatedAt = props.updatedAt;
+  }
+
+  public static create(props: CreateProductPresentationProps): ProductPresentation {
+    if (!props.productId || !props.productId.trim()) {
+      throw new Error('El ID del producto asociado es requerido.');
+    }
+    const name = ProductPresentation.validateName(props.name);
+    const barcode = ProductPresentation.validateBarcode(props.barcode);
+    const conversionFactor = ProductPresentation.validateConversionFactor(props.conversionFactor);
+    const price = ProductPresentation.validatePrice(props.price, 'precio');
+    const cost = ProductPresentation.validatePrice(props.cost ?? 0, 'costo');
+
+    const now = new Date();
+    return new ProductPresentation({
+      id: props.id ?? crypto.randomUUID(),
+      productId: props.productId.trim(),
+      name,
+      barcode,
+      conversionFactor,
+      price,
+      cost,
+      isDefault: props.isDefault ?? false,
+      isActive: props.isActive ?? true,
+      createdAt: props.createdAt ?? now,
+      updatedAt: props.updatedAt ?? now,
+    });
+  }
+
+  public static reconstitute(props: ReconstituteProductPresentationProps): ProductPresentation {
+    return new ProductPresentation(props);
+  }
+
+  public get id(): string {
+    return this._id;
+  }
+
+  public get productId(): string {
+    return this._productId;
+  }
+
+  public get name(): string {
+    return this._name;
+  }
+
+  public get barcode(): string | null {
+    return this._barcode;
+  }
+
+  public get conversionFactor(): number {
+    return this._conversionFactor;
+  }
+
+  public get price(): string {
+    return this._price;
+  }
+
+  public get cost(): string {
+    return this._cost;
+  }
+
+  public get isDefault(): boolean {
+    return this._isDefault;
+  }
+
+  public get isActive(): boolean {
+    return this._isActive;
+  }
+
+  public get createdAt(): Date {
+    return this._createdAt;
+  }
+
+  public get updatedAt(): Date {
+    return this._updatedAt;
+  }
+
+  /**
+   * RN-004 / RN-AG-02: Convierte una cantidad de esta presentación a unidades base enteras.
+   * cantidad_base = cantidad_presentacion * factor_equivalencia
+   */
+  public toBaseUnits(presentationQuantity: number): number {
+    if (typeof presentationQuantity !== 'number' || isNaN(presentationQuantity)) {
+      throw new Error('La cantidad de presentación debe ser un número válido.');
+    }
+    if (presentationQuantity < 0) {
+      throw new Error('La cantidad de presentación no puede ser negativa.');
+    }
+    if (!Number.isInteger(presentationQuantity)) {
+      throw new Error('La cantidad de presentación comercial debe ser un número entero discreto.');
+    }
+    return presentationQuantity * this._conversionFactor;
+  }
+
+  /**
+   * RN-004 / RN-AG-02: Convierte una cantidad en unidades base a presentaciones enteras y residuo.
+   */
+  public fromBaseUnits(baseUnitsQuantity: number): {
+    wholePresentations: number;
+    remainderBaseUnits: number;
+  } {
+    if (typeof baseUnitsQuantity !== 'number' || isNaN(baseUnitsQuantity)) {
+      throw new Error('La cantidad en unidades base debe ser un número válido.');
+    }
+    if (baseUnitsQuantity < 0) {
+      throw new Error('La cantidad en unidades base no puede ser negativa.');
+    }
+    if (!Number.isInteger(baseUnitsQuantity)) {
+      throw new Error('La cantidad en unidades base debe ser un número entero discreto.');
+    }
+
+    const wholePresentations = Math.floor(baseUnitsQuantity / this._conversionFactor);
+    const remainderBaseUnits = baseUnitsQuantity % this._conversionFactor;
+
+    return {
+      wholePresentations,
+      remainderBaseUnits,
+    };
+  }
+
+  public update(props: {
+    name?: string;
+    barcode?: string | null;
+    conversionFactor?: number;
+    price?: number | string;
+    cost?: number | string;
+    isDefault?: boolean;
+    isActive?: boolean;
+  }): void {
+    if (props.name !== undefined) {
+      this._name = ProductPresentation.validateName(props.name);
+    }
+    if (props.barcode !== undefined) {
+      this._barcode = ProductPresentation.validateBarcode(props.barcode);
+    }
+    if (props.conversionFactor !== undefined) {
+      this._conversionFactor = ProductPresentation.validateConversionFactor(props.conversionFactor);
+    }
+    if (props.price !== undefined) {
+      this._price = ProductPresentation.validatePrice(props.price, 'precio');
+    }
+    if (props.cost !== undefined) {
+      this._cost = ProductPresentation.validatePrice(props.cost, 'costo');
+    }
+    if (props.isDefault !== undefined) {
+      this._isDefault = Boolean(props.isDefault);
+    }
+    if (props.isActive !== undefined) {
+      this._isActive = Boolean(props.isActive);
+    }
+    this._updatedAt = new Date();
+  }
+
+  public markAsDefault(): void {
+    this._isDefault = true;
+    this._updatedAt = new Date();
+  }
+
+  public unmarkAsDefault(): void {
+    this._isDefault = false;
+    this._updatedAt = new Date();
+  }
+
+  public activate(): void {
+    this._isActive = true;
+    this._updatedAt = new Date();
+  }
+
+  public deactivate(): void {
+    this._isActive = false;
+    this._updatedAt = new Date();
+  }
+
+  private static validateName(name: string): string {
+    const trimmed = name ? name.trim() : '';
+    if (!trimmed) {
+      throw new Error('El nombre de la presentación comercial es requerido.');
+    }
+    if (trimmed.length < 1 || trimmed.length > 100) {
+      throw new Error('El nombre de la presentación comercial debe tener entre 1 y 100 caracteres.');
+    }
+    return trimmed;
+  }
+
+  private static validateBarcode(barcode?: string | null): string | null {
+    if (barcode == null) {
+      return null;
+    }
+    const trimmed = barcode.trim();
+    if (!trimmed) {
+      return null;
+    }
+    if (trimmed.length < 3 || trimmed.length > 50) {
+      throw new Error('El código de barras de la presentación debe tener entre 3 y 50 caracteres.');
+    }
+    return trimmed;
+  }
+
+  private static validateConversionFactor(factor: number): number {
+    if (typeof factor !== 'number' || isNaN(factor)) {
+      throw new Error('El factor de conversión debe ser un número.');
+    }
+    if (!Number.isInteger(factor)) {
+      throw new Error('El factor de conversión a unidad base debe ser un número entero (RN-AG-02).');
+    }
+    if (factor <= 0) {
+      throw new Error('El factor de conversión debe ser estrictamente mayor a cero (RN-004).');
+    }
+    return factor;
+  }
+
+  private static validatePrice(value: number | string, fieldName: string): string {
+    const num = typeof value === 'string' ? parseFloat(value) : value;
+    if (isNaN(num)) {
+      throw new Error(`El valor para ${fieldName} no es un número válido.`);
+    }
+    if (num < 0) {
+      throw new Error(`El ${fieldName} no puede ser un valor negativo.`);
+    }
+    return num.toFixed(2);
+  }
+
+  public toDto(): ProductPresentationDto {
+    return {
+      id: this._id,
+      productId: this._productId,
+      name: this._name,
+      barcode: this._barcode,
+      conversionFactor: this._conversionFactor,
+      price: this._price,
+      cost: this._cost,
+      isDefault: this._isDefault,
+      isActive: this._isActive,
+      createdAt: this._createdAt.toISOString(),
+      updatedAt: this._updatedAt.toISOString(),
+    };
+  }
+}
