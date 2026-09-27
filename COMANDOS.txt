@@ -1,0 +1,100 @@
+================================================================================
+  SISTEMA DE GESTION PARA FARMACIA — GUIA RAPIDA DE COMANDOS DE EJECUCION
+================================================================================
+
+1. REQUISITOS PREVIOS
+--------------------------------------------------------------------------------
+- Node.js >= 20.x
+- pnpm >= 9.x / 10.x
+- Docker y Docker Compose
+
+Instalar dependencias del monorepositorio:
+  pnpm install
+
+
+2. CONFIGURACION DE VARIABLES DE ENTORNO
+--------------------------------------------------------------------------------
+Copiar el archivo de ejemplo para la raiz y las aplicaciones:
+  cp .env.example .env
+  cp .env apps/api/.env
+  cp .env apps/web/.env
+  cp .env apps/worker/.env
+
+
+3. INICIAR LA BASE DE DATOS (POSTGRESQL CON DOCKER)
+--------------------------------------------------------------------------------
+Levantar el contenedor PostgreSQL (puerto 5434 en el host):
+  pnpm db:up
+
+Verificar el estado del contenedor:
+  pnpm db:status
+
+Detener el contenedor cuando ya no se use:
+  pnpm db:down
+
+
+4. MIGRACIONES Y PREPARACION DE DATOS
+--------------------------------------------------------------------------------
+A) Generar cliente Prisma:
+  pnpm db:generate
+
+B) Aplicar migraciones a la base de datos de desarrollo (farmacia_db):
+  pnpm --filter @farmacia/database exec prisma migrate deploy
+
+C) Sembrar la matriz de permisos y roles del sistema (RBAC):
+  pnpm db:seed:rbac
+
+D) Sembrar el usuario administrador inicial (admin / AdminPassword123!):
+  pnpm --filter @farmacia/database exec tsx src/seed/seed-dev-admin.ts
+
+E) Sembrar datos de prueba (productos, presentaciones, lotes con stock, clientes y proveedores):
+  pnpm --filter @farmacia/database exec tsx src/seed/seed-demo-data.ts
+
+
+5. LEVANTAR LOS SERVICIOS DE LA APLICACION
+--------------------------------------------------------------------------------
+Opcion A: En terminales separadas (Recomendado para ver logs independientes)
+
+  Terminal 1 (Backend API - NestJS en http://localhost:3000):
+    pnpm --filter @farmacia/api start:dev
+    (o modo produccion rapido: node apps/api/dist/main.js)
+
+  Terminal 2 (Frontend Web - React/Vite en http://localhost:5173):
+    pnpm --filter @farmacia/web dev
+
+  Terminal 3 (Worker en segundo plano - NestJS Scheduler):
+    pnpm --filter @farmacia/worker start
+    (o modo observador: pnpm --filter @farmacia/worker start:dev)
+
+Opcion B: Compilacion y arranque directo
+  pnpm build
+  node apps/api/dist/main.js &
+  pnpm --filter @farmacia/web dev &
+  node apps/worker/dist/main.js &
+
+
+6. ACCESO Y CREDENCIALES
+--------------------------------------------------------------------------------
+- Aplicacion Web:  http://localhost:5173
+- Backend API:      http://localhost:3000/api/v1
+- Health Check:     http://localhost:3000/api/v1/health
+
+Credenciales de Acceso:
+  Usuario:     admin
+  Contrasena:  AdminPassword123!
+
+
+7. COMANDOS DE CALIDAD Y PRUEBAS AUTOMATIZADAS
+--------------------------------------------------------------------------------
+Ejecutar toda la suite de pruebas (345 backend + 74 frontend/database):
+  pnpm test
+
+Ejecutar linter de codigo en todo el monorepositorio:
+  pnpm lint
+
+Ejecutar chequeo estricto de tipos TypeScript:
+  pnpm typecheck
+
+Compilar todos los paquetes y aplicaciones:
+  pnpm build
+================================================================================
