@@ -53,6 +53,8 @@ describe('PurchaseService & Purchase Entities (Unit)', () => {
           productId: 'prod-1',
           name: 'Caja x 100',
           conversionFactor: 100,
+          isActive: true,
+          purchaseEnabled: true,
         })),
       },
     };

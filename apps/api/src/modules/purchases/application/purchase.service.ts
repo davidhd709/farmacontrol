@@ -89,6 +89,16 @@ export class PurchaseService {
             `La presentación "${lineInput.presentationId}" no es válida para el producto "${product.name}"`
           );
         }
+        if (!pres.isActive) {
+          throw new BadRequestException(
+            `La presentación "${pres.name}" del producto "${product.name}" está inactiva`
+          );
+        }
+        if (!pres.purchaseEnabled) {
+          throw new BadRequestException(
+            `La presentación "${pres.name}" del producto "${product.name}" no está habilitada para compras`
+          );
+        }
         conversionFactor = pres.conversionFactor;
         presentationName = pres.name;
       }

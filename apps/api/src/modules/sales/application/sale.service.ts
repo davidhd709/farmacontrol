@@ -117,6 +117,9 @@ export class SaleService {
           if (!presentation || !presentation.isActive || presentation.productId !== product.id) {
             throw new Error(`Presentación '${item.presentationId}' inválida para el producto.`);
           }
+          if (!presentation.saleEnabled) {
+            throw new Error(`La presentación '${presentation.name}' no está habilitada para ventas.`);
+          }
           factor = presentation.conversionFactor;
           unitPrice = Number(presentation.price);
           presentationName = presentation.name;

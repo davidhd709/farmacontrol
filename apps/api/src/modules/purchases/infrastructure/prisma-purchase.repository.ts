@@ -90,6 +90,11 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
           line.setLotId(lot.id);
         }
 
+        const factorHistorical =
+          line.quantityCommercial > 0
+            ? Math.round(line.quantityBaseUnits / line.quantityCommercial)
+            : 1;
+
         // Insertar línea de compra
         await tx.purchaseLine.create({
           data: {
@@ -99,6 +104,7 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
             presentationId: line.presentationId,
             lotId: lot.id,
             quantityCommercial: new Prisma.Decimal(line.quantityCommercial),
+            presentationFactorHistorical: factorHistorical,
             quantityBaseUnits: line.quantityBaseUnits,
             unitCost: new Prisma.Decimal(line.unitCost),
             subtotal: new Prisma.Decimal(line.subtotal),
@@ -109,10 +115,6 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
         });
 
         // Insertar movimiento inmutable de Kardex
-        const factorHistorical =
-          line.quantityCommercial > 0
-            ? Math.round(line.quantityBaseUnits / line.quantityCommercial)
-            : 1;
 
         await tx.inventoryMovement.create({
           data: {
@@ -240,8 +242,8 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
       })
     );
 
-    let dueDate = raw.payable?.dueDate ?? null;
-    let paymentCondition = raw.payable ? (raw.payable.status === 'PAGADA' ? 'CONTADO' : 'CREDITO') : null;
+    const dueDate = raw.payable?.dueDate ?? null;
+    const paymentCondition = raw.payable ? (raw.payable.status === 'PAGADA' ? 'CONTADO' : 'CREDITO') : null;
 
     return Purchase.reconstitute({
       id: raw.id,
