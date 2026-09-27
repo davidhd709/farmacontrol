@@ -15,6 +15,7 @@ import {
   Alert,
   Autocomplete,
   Divider,
+  MenuItem,
 } from '@mui/material';
 import type { CustomerDto, ProductDto, ProductPresentationDto, SaleDto, SalePaymentMethod } from '@farmacia/contracts';
 import { fetchDefaultCustomer } from '../../customers/api/customers.api';
