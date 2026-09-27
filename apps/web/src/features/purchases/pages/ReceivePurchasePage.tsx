@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { HomeBackButton } from '../../../components/HomeBackButton';
 import {
   Box,
   Typography,
@@ -296,16 +295,13 @@ export const ReceivePurchasePage: React.FC = () => {
   return (
     <Box sx={{ p: { xs: 2, md: 4 }, maxWidth: 1400, mx: 'auto' }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <HomeBackButton />
-          <Box>
-            <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-              Recepción de Compras e Ingreso de Lotes
-            </Typography>
-            <Typography variant="body1" color="text.secondary">
-              Registra facturas de proveedores con entrada atómica a lotes e inventario (Kardex).
-            </Typography>
-          </Box>
+        <Box>
+          <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+            Recepción de Compras e Ingreso de Lotes
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            Registra facturas de proveedores con entrada atómica a lotes e inventario (Kardex).
+          </Typography>
         </Box>
         <Button variant="outlined" component={Link} to="/purchases">
           Volver a Compras

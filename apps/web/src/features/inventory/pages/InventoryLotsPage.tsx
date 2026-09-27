@@ -138,9 +138,6 @@ export const InventoryLotsPage = () => {
       >
         <Toolbar sx={{ justifyContent: 'space-between' }}>
           <Box sx={{ display: 'flex', flexDirection: 'row', gap: 2, alignItems: 'center' }}>
-            <Button component={Link} to="/" color="inherit" sx={{ fontWeight: 700 }}>
-              ← Inicio
-            </Button>
             <Typography variant="h6" component="span" sx={{ fontWeight: 700 }}>
               Inventario / Control de Lotes
             </Typography>

@@ -25,7 +25,6 @@ import {
   Toolbar,
   Typography,
 } from '@mui/material';
-import { Link } from 'react-router-dom';
 import { SYSTEM_PERMISSIONS, type ProductDto } from '@farmacia/contracts';
 import { PermissionGate } from '../../auth/components/PermissionGate';
 import { useCategories } from '../hooks/useCategories';
@@ -107,9 +106,6 @@ export function ProductsPage() {
       >
         <Toolbar sx={{ justifyContent: 'space-between' }}>
           <Box sx={{ display: 'flex', flexDirection: 'row', gap: 2, alignItems: 'center' }}>
-            <Button component={Link} to="/" color="inherit" sx={{ fontWeight: 700 }}>
-              ← Inicio
-            </Button>
             <Typography variant="h6" component="span" sx={{ fontWeight: 700 }}>
               Catálogo / Productos
             </Typography>

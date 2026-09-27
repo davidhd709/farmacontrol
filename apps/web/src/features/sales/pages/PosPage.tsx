@@ -24,7 +24,6 @@ import { fetchProducts } from '../../catalog/api/products.api';
 import { confirmSale } from '../api/sales.api';
 import { PosPaymentDialog } from '../components/PosPaymentDialog';
 import { SaleReceiptDialog } from '../components/SaleReceiptDialog';
-import { HomeBackButton } from '../../../components/HomeBackButton';
 
 interface CartItem {
   productId: string;
@@ -269,16 +268,13 @@ export const PosPage: React.FC = () => {
     <Box sx={{ p: { xs: 2, md: 3 }, maxWidth: 1400, margin: '0 auto' }}>
       {/* Encabezado y Selector de Cliente */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 2 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <HomeBackButton />
-          <Box>
-            <Typography variant="h5" component="h1" sx={{ fontWeight: 800, color: 'text.primary' }}>
-              Punto de Venta (POS)
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Dispensación y facturación rápida con asignación automática FEFO.
-            </Typography>
-          </Box>
+        <Box>
+          <Typography variant="h5" component="h1" sx={{ fontWeight: 800, color: 'text.primary' }}>
+            Punto de Venta (POS)
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Dispensación y facturación rápida con asignación automática FEFO.
+          </Typography>
         </Box>
 
         {/* Tarjeta de Cliente Activo */}
