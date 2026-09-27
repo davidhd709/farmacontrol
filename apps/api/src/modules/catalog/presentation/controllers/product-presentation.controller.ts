@@ -101,14 +101,26 @@ export class ProductPresentationController {
   public async list(
     @Param('productId') productId: string,
     @Query('isActive') isActive?: string,
+    @Query('purchaseEnabled') purchaseEnabled?: string,
+    @Query('saleEnabled') saleEnabled?: string,
   ): Promise<ProductPresentationDto[]> {
     try {
       let parsedIsActive: boolean | undefined;
       if (isActive === 'true') parsedIsActive = true;
       if (isActive === 'false') parsedIsActive = false;
 
+      let parsedPurchaseEnabled: boolean | undefined;
+      if (purchaseEnabled === 'true') parsedPurchaseEnabled = true;
+      if (purchaseEnabled === 'false') parsedPurchaseEnabled = false;
+
+      let parsedSaleEnabled: boolean | undefined;
+      if (saleEnabled === 'true') parsedSaleEnabled = true;
+      if (saleEnabled === 'false') parsedSaleEnabled = false;
+
       return await this.presentationService.getPresentationsByProductId(productId, {
         isActive: parsedIsActive,
+        purchaseEnabled: parsedPurchaseEnabled,
+        saleEnabled: parsedSaleEnabled,
       });
     } catch (err) {
       if (err instanceof ProductNotFoundException) {

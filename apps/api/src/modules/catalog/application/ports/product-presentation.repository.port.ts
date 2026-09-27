@@ -6,7 +6,7 @@ export interface ProductPresentationRepositoryPort {
   findByBarcode(barcode: string): Promise<ProductPresentation | null>;
   listByProductId(
     productId: string,
-    options?: { isActive?: boolean },
+    options?: { isActive?: boolean; purchaseEnabled?: boolean; saleEnabled?: boolean },
   ): Promise<ProductPresentation[]>;
   save(presentation: ProductPresentation): Promise<ProductPresentation>;
   update(presentation: ProductPresentation): Promise<ProductPresentation>;

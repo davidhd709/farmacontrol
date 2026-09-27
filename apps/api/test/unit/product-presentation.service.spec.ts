@@ -8,8 +8,11 @@ import { ProductNotFoundException } from '../../src/modules/catalog/domain/excep
 import {
   CannotDeactivateDefaultPresentationException,
   ProductPresentationBarcodeAlreadyExistsException,
+  ProductPresentationCrossProductException,
+  ProductPresentationCycleException,
   ProductPresentationNameAlreadyExistsException,
   ProductPresentationNotFoundException,
+  ProductPresentationSelfReferenceException,
 } from '../../src/modules/catalog/domain/exceptions/product-presentation.exceptions';
 import type { AuditService } from '../../src/modules/audit/application/services/audit.service';
 
@@ -198,5 +201,134 @@ describe('ProductPresentationService (Application Unit)', () => {
     const fromBaseResult = await service.convertUnits('prod-123', 'pres-box30', 85, 'fromBase');
     expect(fromBaseResult.wholePresentations).toBe(2);
     expect(fromBaseResult.remainderBaseUnits).toBe(25);
+  });
+
+  it('Caso 1: debe calcular automáticamente factores acumulados en jerarquía (Blíster 10 TAB -> Caja 100 Blísteres = 1000 TAB)', async () => {
+    // 1. Blíster contiene 10 unidades base
+    const blister = ProductPresentation.create({
+      id: 'pres-blister',
+      productId: 'prod-123',
+      name: 'Blíster',
+      containedPresentationId: null,
+      quantityContained: 10,
+      conversionFactor: 10,
+      price: 1500,
+      cost: 500,
+    });
+
+    vi.mocked(presentationRepository.findById).mockImplementation((id: string) => {
+      if (id === 'pres-blister') return Promise.resolve(blister);
+      return Promise.resolve(null);
+    });
+    vi.mocked(presentationRepository.findByProductIdAndName).mockResolvedValue(null);
+    vi.mocked(presentationRepository.findByBarcode).mockResolvedValue(null);
+
+    // 2. Caja contiene 100 Blísteres
+    const boxResult = await service.createPresentation('prod-123', {
+      productId: 'prod-123',
+      name: 'Caja',
+      containedPresentationId: 'pres-blister',
+      quantityContained: 100,
+      price: 120000,
+      cost: 45000,
+    });
+
+    expect(boxResult.quantityContained).toBe(100);
+    expect(boxResult.conversionFactor).toBe(1000); // 100 * 10 = 1000 TAB
+  });
+
+  it('Caso 6: debe rechazar ciclos de empaques (Caja -> Blíster -> Caja)', async () => {
+    // Caja existente con factor 1000
+    const caja = ProductPresentation.create({
+      id: 'pres-caja',
+      productId: 'prod-123',
+      name: 'Caja',
+      containedPresentationId: null,
+      quantityContained: 1000,
+      conversionFactor: 1000,
+      price: 120000,
+    });
+
+    // Blíster existente que ahora intentará contener a Caja (cuando Caja la contenga)
+    const blister = ProductPresentation.create({
+      id: 'pres-blister',
+      productId: 'prod-123',
+      name: 'Blíster',
+      containedPresentationId: 'pres-caja', // Blíster ya apunta a Caja
+      quantityContained: 10,
+      conversionFactor: 10000,
+      price: 1500,
+    });
+
+    vi.mocked(presentationRepository.findById).mockImplementation((id: string) => {
+      if (id === 'pres-caja') return Promise.resolve(caja);
+      if (id === 'pres-blister') return Promise.resolve(blister);
+      return Promise.resolve(null);
+    });
+
+    // Intentar actualizar Caja para que contenga Blíster -> genera ciclo Caja -> Blíster -> Caja
+    await expect(
+      service.updatePresentation('prod-123', 'pres-caja', {
+        containedPresentationId: 'pres-blister',
+        quantityContained: 100,
+      }),
+    ).rejects.toThrow(ProductPresentationCycleException);
+  });
+
+  it('Caso 7: debe rechazar asignación de presentación de otro producto como empaque contenido', async () => {
+    // Presentación de otro producto
+    const otherProductPres = ProductPresentation.create({
+      id: 'pres-other-prod',
+      productId: 'prod-other-999',
+      name: 'Caja Ajena',
+      conversionFactor: 50,
+      price: 5000,
+    });
+
+    vi.mocked(presentationRepository.findById).mockResolvedValue(otherProductPres);
+
+    await expect(
+      service.createPresentation('prod-123', {
+        productId: 'prod-123',
+        name: 'Paquete Inválido',
+        containedPresentationId: 'pres-other-prod',
+        quantityContained: 2,
+        price: 10000,
+      }),
+    ).rejects.toThrow(ProductPresentationCrossProductException);
+  });
+
+  it('Caso 9: Retail (LAT base -> Six-Pack x6 -> Paca x4 Six-Pack = 24 LAT; 10 Pacas = 240 LAT)', async () => {
+    const sixPack = ProductPresentation.create({
+      id: 'pres-sixpack',
+      productId: 'prod-123',
+      name: 'Six-Pack',
+      containedPresentationId: null,
+      quantityContained: 6,
+      conversionFactor: 6,
+      price: 18000,
+      cost: 12000,
+    });
+
+    const paca = ProductPresentation.create({
+      id: 'pres-paca',
+      productId: 'prod-123',
+      name: 'Paca',
+      containedPresentationId: 'pres-sixpack',
+      quantityContained: 4,
+      conversionFactor: 24, // 4 * 6 = 24 LAT
+      price: 68000,
+      cost: 45000,
+    });
+
+    vi.mocked(presentationRepository.findById).mockImplementation((id: string) => {
+      if (id === 'pres-sixpack') return Promise.resolve(sixPack);
+      if (id === 'pres-paca') return Promise.resolve(paca);
+      return Promise.resolve(null);
+    });
+
+    // Validar conversión de 10 Pacas a unidades base
+    const conversionResult = await service.convertUnits('prod-123', 'pres-paca', 10, 'toBase');
+    expect(conversionResult.baseUnits).toBe(240); // 10 * 24 = 240 LAT
   });
 });

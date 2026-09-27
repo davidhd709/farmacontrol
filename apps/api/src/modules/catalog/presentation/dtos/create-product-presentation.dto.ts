@@ -4,13 +4,20 @@ import type { CreateProductPresentationPayload } from '@farmacia/contracts';
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export class CreateProductPresentationDto implements CreateProductPresentationPayload {
-  productId!: string;
-  name!: string;
+  productId?: string;
+  unitOfMeasureId?: string | null;
+  containedPresentationId?: string | null;
+  name?: string;
   barcode?: string | null;
-  conversionFactor!: number;
+  quantityContained?: number;
+  conversionFactor?: number;
   price!: number | string;
   cost?: number | string;
+  purchaseEnabled?: boolean;
+  saleEnabled?: boolean;
   isDefault?: boolean;
+  isDefaultPurchase?: boolean;
+  isDefaultSale?: boolean;
 }
 
 @Injectable()
@@ -22,8 +29,8 @@ export class CreateProductPresentationValidationPipe implements PipeTransform {
 
     const record = value as Record<string, unknown>;
 
-    // productId (may come from route or body)
-    let productId = '';
+    // productId (opcional en el body si viene en la ruta)
+    let productId: string | undefined;
     if (record.productId !== undefined && record.productId !== null) {
       if (typeof record.productId !== 'string' || !UUID_REGEX.test(record.productId.trim())) {
         throw new BadRequestException('El campo "productId" debe ser un UUID válido.');
@@ -31,12 +38,30 @@ export class CreateProductPresentationValidationPipe implements PipeTransform {
       productId = record.productId.trim();
     }
 
-    // name
-    if (typeof record.name !== 'string') {
-      throw new BadRequestException('El campo "name" es obligatorio y debe ser texto.');
+    // unitOfMeasureId
+    let unitOfMeasureId: string | null = null;
+    if (record.unitOfMeasureId !== undefined && record.unitOfMeasureId !== null && record.unitOfMeasureId !== '') {
+      if (typeof record.unitOfMeasureId !== 'string' || !UUID_REGEX.test(record.unitOfMeasureId.trim())) {
+        throw new BadRequestException('El campo "unitOfMeasureId" debe ser un UUID válido.');
+      }
+      unitOfMeasureId = record.unitOfMeasureId.trim();
     }
-    const name = record.name.trim();
-    if (name.length < 1 || name.length > 100) {
+
+    // containedPresentationId
+    let containedPresentationId: string | null = null;
+    if (record.containedPresentationId !== undefined && record.containedPresentationId !== null && record.containedPresentationId !== '') {
+      if (typeof record.containedPresentationId !== 'string' || !UUID_REGEX.test(record.containedPresentationId.trim())) {
+        throw new BadRequestException('El campo "containedPresentationId" debe ser un UUID válido.');
+      }
+      containedPresentationId = record.containedPresentationId.trim();
+    }
+
+    // name
+    let name = '';
+    if (record.name !== undefined && record.name !== null && typeof record.name === 'string') {
+      name = record.name.trim();
+    }
+    if (name && (name.length < 1 || name.length > 100)) {
       throw new BadRequestException('El nombre de la presentación debe tener entre 1 y 100 caracteres.');
     }
 
@@ -55,15 +80,27 @@ export class CreateProductPresentationValidationPipe implements PipeTransform {
       }
     }
 
-    // conversionFactor
-    if (record.conversionFactor === undefined || record.conversionFactor === null) {
-      throw new BadRequestException('El campo "conversionFactor" es obligatorio.');
+    // conversionFactor opcional o quantityContained
+    let quantityContained = 1;
+    let conversionFactor: number | undefined;
+
+    if (record.conversionFactor !== undefined && record.conversionFactor !== null) {
+      const factorNum = Number(record.conversionFactor);
+      if (isNaN(factorNum) || !Number.isInteger(factorNum) || factorNum <= 0) {
+        throw new BadRequestException('El factor de conversión debe ser un número entero estrictamente mayor a 0.');
+      }
+      conversionFactor = factorNum;
+      quantityContained = factorNum;
     }
-    const factorNum = Number(record.conversionFactor);
-    if (isNaN(factorNum) || !Number.isInteger(factorNum) || factorNum <= 0) {
-      throw new BadRequestException(
-        'El factor de conversión debe ser un número entero estrictamente mayor a 0 (RN-004, RN-AG-02).',
-      );
+
+    if (record.quantityContained !== undefined && record.quantityContained !== null) {
+      const qNum = Number(record.quantityContained);
+      if (isNaN(qNum) || !Number.isInteger(qNum) || qNum <= 0) {
+        throw new BadRequestException(
+          'La cantidad contenida (quantityContained) debe ser un número entero estrictamente mayor a 0.',
+        );
+      }
+      quantityContained = qNum;
     }
 
     // price
@@ -86,15 +123,26 @@ export class CreateProductPresentationValidationPipe implements PipeTransform {
     }
 
     const isDefault = record.isDefault !== undefined ? Boolean(record.isDefault) : false;
+    const isDefaultPurchase = record.isDefaultPurchase !== undefined ? Boolean(record.isDefaultPurchase) : false;
+    const isDefaultSale = record.isDefaultSale !== undefined ? Boolean(record.isDefaultSale) : isDefault;
+    const purchaseEnabled = record.purchaseEnabled !== undefined ? Boolean(record.purchaseEnabled) : true;
+    const saleEnabled = record.saleEnabled !== undefined ? Boolean(record.saleEnabled) : true;
 
     return {
       productId,
+      unitOfMeasureId,
+      containedPresentationId,
       name,
       barcode,
-      conversionFactor: factorNum,
+      quantityContained,
+      conversionFactor,
       price: priceNum,
       cost,
+      purchaseEnabled,
+      saleEnabled,
       isDefault,
+      isDefaultPurchase,
+      isDefaultSale,
     };
   }
 }

@@ -1,4 +1,5 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
+import { prisma } from '@farmacia/database';
 import type {
   CreateProductPresentationPayload,
   ProductPresentationDto,
@@ -17,8 +18,12 @@ import { ProductNotFoundException } from '../../domain/exceptions/product.except
 import {
   CannotDeactivateDefaultPresentationException,
   ProductPresentationBarcodeAlreadyExistsException,
+  ProductPresentationCrossProductException,
+  ProductPresentationCycleException,
+  ProductPresentationInvalidQuantityException,
   ProductPresentationNameAlreadyExistsException,
   ProductPresentationNotFoundException,
+  ProductPresentationSelfReferenceException,
 } from '../../domain/exceptions/product-presentation.exceptions';
 import { AuditService } from '../../../audit/application/services/audit.service';
 import type { AuditContext } from './category.service';
@@ -44,12 +49,26 @@ export class ProductPresentationService {
       throw new ProductNotFoundException(productId);
     }
 
+    // Resolver nombre si no se proporcionó pero se especificó unitOfMeasureId
+    let finalName = (payload.name || '').trim();
+    if (!finalName && payload.unitOfMeasureId) {
+      const uom = await prisma.unitOfMeasure.findUnique({
+        where: { id: payload.unitOfMeasureId },
+      });
+      if (uom) {
+        finalName = uom.name;
+      }
+    }
+    if (!finalName) {
+      finalName = 'Presentación Comercial';
+    }
+
     const existingName = await this.presentationRepository.findByProductIdAndName(
       productId,
-      payload.name,
+      finalName,
     );
     if (existingName) {
-      throw new ProductPresentationNameAlreadyExistsException(product.name, payload.name.trim());
+      throw new ProductPresentationNameAlreadyExistsException(product.name, finalName);
     }
 
     if (payload.barcode && payload.barcode.trim()) {
@@ -59,18 +78,41 @@ export class ProductPresentationService {
       }
     }
 
-    if (payload.isDefault) {
+    if (payload.quantityContained !== undefined && payload.quantityContained <= 0) {
+      throw new ProductPresentationInvalidQuantityException(payload.quantityContained);
+    }
+    if (payload.conversionFactor !== undefined && payload.conversionFactor <= 0) {
+      throw new ProductPresentationInvalidQuantityException(payload.conversionFactor);
+    }
+
+    const quantityContained = payload.quantityContained ?? payload.conversionFactor ?? 1;
+
+    // Resolver factor acumulado y validar jerarquía
+    const conversionFactor = await this.resolveBaseFactor({
+      productId,
+      containedPresentationId: payload.containedPresentationId ?? null,
+      quantityContained,
+    });
+
+    if (payload.isDefault || payload.isDefaultSale) {
       await this.presentationRepository.unsetDefaultPresentations(productId);
     }
 
     const presentation = ProductPresentation.create({
       productId,
-      name: payload.name,
+      unitOfMeasureId: payload.unitOfMeasureId ?? null,
+      containedPresentationId: payload.containedPresentationId ?? null,
+      name: finalName,
       barcode: payload.barcode,
-      conversionFactor: payload.conversionFactor,
+      quantityContained,
+      conversionFactor,
       price: payload.price,
       cost: payload.cost ?? 0,
+      purchaseEnabled: payload.purchaseEnabled ?? true,
+      saleEnabled: payload.saleEnabled ?? true,
       isDefault: payload.isDefault ?? false,
+      isDefaultPurchase: payload.isDefaultPurchase ?? false,
+      isDefaultSale: payload.isDefaultSale ?? (payload.isDefault ?? false),
     });
 
     const saved = await this.presentationRepository.save(presentation);
@@ -85,6 +127,9 @@ export class ProductPresentationService {
           productId: saved.productId,
           productName: product.name,
           name: saved.name,
+          unitOfMeasureId: saved.unitOfMeasureId,
+          containedPresentationId: saved.containedPresentationId,
+          quantityContained: saved.quantityContained,
           conversionFactor: saved.conversionFactor,
           price: saved.price,
           isDefault: saved.isDefault,
@@ -99,7 +144,7 @@ export class ProductPresentationService {
 
   public async getPresentationsByProductId(
     productId: string,
-    options?: { isActive?: boolean },
+    options?: { isActive?: boolean; purchaseEnabled?: boolean; saleEnabled?: boolean },
   ): Promise<ProductPresentationDto[]> {
     const product = await this.productRepository.findById(productId);
     if (!product) {
@@ -162,8 +207,39 @@ export class ProductPresentationService {
       await this.presentationRepository.unsetDefaultPresentations(productId, presentation.id);
     }
 
-    presentation.update(payload);
+    // Resolver nuevo factor acumulado si cambia quantityContained o containedPresentationId
+    const newContainedId = payload.containedPresentationId !== undefined
+      ? payload.containedPresentationId
+      : presentation.containedPresentationId;
+
+    if (payload.quantityContained !== undefined && payload.quantityContained <= 0) {
+      throw new ProductPresentationInvalidQuantityException(payload.quantityContained);
+    }
+
+    const newQuantity = payload.quantityContained !== undefined
+      ? payload.quantityContained
+      : presentation.quantityContained;
+
+    const newConversionFactor = await this.resolveBaseFactor({
+      productId,
+      currentPresentationId: presentation.id,
+      containedPresentationId: newContainedId,
+      quantityContained: newQuantity,
+    });
+
+    presentation.update({
+      ...payload,
+      conversionFactor: newConversionFactor,
+      quantityContained: newQuantity,
+      containedPresentationId: newContainedId,
+    });
+
     const updated = await this.presentationRepository.update(presentation);
+
+    // Propagar actualización de factores en cascada si el factor base cambió
+    if (newConversionFactor !== presentation.conversionFactor) {
+      await this.propagateFactorUpdate(productId, updated.id, newConversionFactor);
+    }
 
     if (this.auditService) {
       await this.auditService.recordEvent({
@@ -175,6 +251,7 @@ export class ProductPresentationService {
           productId: updated.productId,
           productName: product.name,
           name: updated.name,
+          quantityContained: updated.quantityContained,
           conversionFactor: updated.conversionFactor,
           price: updated.price,
           isDefault: updated.isDefault,
@@ -220,6 +297,9 @@ export class ProductPresentationService {
     return updated;
   }
 
+  /**
+   * Motor central de conversión de unidades comerciales y base.
+   */
   public async convertUnits(
     productId: string,
     presentationId: string,
@@ -229,9 +309,9 @@ export class ProductPresentationService {
     presentationId: string;
     presentationName: string;
     conversionFactor: number;
-    baseUnits?: number;
-    wholePresentations?: number;
-    remainderBaseUnits?: number;
+    baseUnits: number;
+    wholePresentations: number;
+    remainderBaseUnits: number;
   }> {
     const presentation = await this.getPresentationById(productId, presentationId);
 
@@ -242,6 +322,8 @@ export class ProductPresentationService {
         presentationName: presentation.name,
         conversionFactor: presentation.conversionFactor,
         baseUnits,
+        wholePresentations: quantity,
+        remainderBaseUnits: 0,
       };
     }
 
@@ -250,8 +332,92 @@ export class ProductPresentationService {
       presentationId: presentation.id,
       presentationName: presentation.name,
       conversionFactor: presentation.conversionFactor,
+      baseUnits: quantity,
       wholePresentations,
       remainderBaseUnits,
     };
+  }
+
+  /**
+   * Resuelve el factor base para una presentación evitando ciclos y referencias cruzadas.
+   */
+  public async resolveBaseFactor(params: {
+    productId: string;
+    currentPresentationId?: string;
+    containedPresentationId: string | null;
+    quantityContained: number;
+  }): Promise<number> {
+    const { productId, currentPresentationId, containedPresentationId, quantityContained } = params;
+
+    if (quantityContained <= 0) {
+      throw new ProductPresentationInvalidQuantityException(quantityContained);
+    }
+
+    if (!containedPresentationId) {
+      // Contiene directamente unidades base del producto
+      return quantityContained;
+    }
+
+    if (currentPresentationId && containedPresentationId === currentPresentationId) {
+      throw new ProductPresentationSelfReferenceException();
+    }
+
+    // Validar ciclo navegando la cadena de ancestros
+    let currentAncestorId: string | null = containedPresentationId;
+    const visited = new Set<string>();
+    if (currentPresentationId) {
+      visited.add(currentPresentationId);
+    }
+
+    let ancestorFactor = 1;
+
+    while (currentAncestorId) {
+      if (visited.has(currentAncestorId)) {
+        throw new ProductPresentationCycleException();
+      }
+      visited.add(currentAncestorId);
+
+      const ancestor = await this.presentationRepository.findById(currentAncestorId);
+      if (!ancestor) {
+        throw new ProductPresentationNotFoundException(currentAncestorId);
+      }
+
+      if (ancestor.productId !== productId) {
+        throw new ProductPresentationCrossProductException();
+      }
+
+      if (currentAncestorId === containedPresentationId) {
+        ancestorFactor = ancestor.conversionFactor;
+      }
+
+      currentAncestorId = ancestor.containedPresentationId;
+    }
+
+    return quantityContained * ancestorFactor;
+  }
+
+  /**
+   * Propaga el cambio de factor a todas las presentaciones dependientes de este producto.
+   */
+  private async propagateFactorUpdate(
+    productId: string,
+    parentPresentationId: string,
+    newParentFactor: number,
+  ): Promise<void> {
+    const children = await prisma.productPresentation.findMany({
+      where: {
+        productId,
+        containedPresentationId: parentPresentationId,
+      },
+    });
+
+    for (const child of children) {
+      const updatedChildFactor = child.quantityContained * newParentFactor;
+      await prisma.productPresentation.update({
+        where: { id: child.id },
+        data: { conversionFactor: updatedChildFactor },
+      });
+      await this.propagateFactorUpdate(productId, child.id, updatedChildFactor);
+    }
   }
 }

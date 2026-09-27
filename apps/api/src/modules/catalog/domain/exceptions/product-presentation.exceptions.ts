@@ -35,3 +35,35 @@ export class InvalidConversionQuantityException extends BadRequestException {
     super(message);
   }
 }
+
+export class ProductPresentationSelfReferenceException extends BadRequestException {
+  constructor() {
+    super('Una presentación no puede contenerse a sí misma.');
+  }
+}
+
+export class ProductPresentationCrossProductException extends BadRequestException {
+  constructor() {
+    super('Una presentación solo puede contener presentaciones del mismo producto.');
+  }
+}
+
+export class ProductPresentationCycleException extends BadRequestException {
+  constructor(details?: string) {
+    super(
+      details
+        ? `Se detectó un ciclo en la jerarquía de empaques: ${details}`
+        : 'La configuración de empaque genera una referencia circular no permitida.',
+    );
+  }
+}
+
+export class ProductPresentationInvalidQuantityException extends BadRequestException {
+  constructor(quantityOrMessage?: number | string) {
+    if (typeof quantityOrMessage === 'number') {
+      super(`La cantidad contenida (${quantityOrMessage}) debe ser un número entero mayor a cero.`);
+    } else {
+      super(quantityOrMessage || 'La cantidad contenida debe ser un número entero mayor a cero.');
+    }
+  }
+}

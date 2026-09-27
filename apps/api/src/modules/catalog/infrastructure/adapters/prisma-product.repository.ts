@@ -10,6 +10,10 @@ const PRODUCT_INCLUDE = {
   },
   presentations: {
     where: { isActive: true },
+    include: {
+      unitOfMeasure: true,
+      containedPresentation: true,
+    },
     orderBy: { conversionFactor: 'asc' as const },
   },
 };
@@ -209,13 +213,22 @@ export class PrismaProductRepository implements ProductRepositoryPort {
     presentations?: Array<{
       id: string;
       productId: string;
+      unitOfMeasureId?: string | null;
+      containedPresentationId?: string | null;
       name: string;
       barcode: string | null;
+      quantityContained: number;
       conversionFactor: number;
       price: Prisma.Decimal;
       cost: Prisma.Decimal;
+      purchaseEnabled: boolean;
+      saleEnabled: boolean;
       isDefault: boolean;
+      isDefaultPurchase: boolean;
+      isDefaultSale: boolean;
       isActive: boolean;
+      unitOfMeasure?: { code: string; name: string } | null;
+      containedPresentation?: { name: string } | null;
       createdAt: Date;
       updatedAt: Date;
     }>;
@@ -241,12 +254,23 @@ export class PrismaProductRepository implements ProductRepositoryPort {
       presentations: record.presentations?.map((p) => ({
         id: p.id,
         productId: p.productId,
+        unitOfMeasureId: p.unitOfMeasureId ?? null,
+        unitOfMeasureCode: p.unitOfMeasure?.code ?? null,
+        unitOfMeasureName: p.unitOfMeasure?.name ?? null,
+        containedPresentationId: p.containedPresentationId ?? null,
+        containedPresentationName: p.containedPresentation?.name ?? null,
         name: p.name,
         barcode: p.barcode,
+        quantityContained: p.quantityContained,
         conversionFactor: p.conversionFactor,
+        baseFactor: p.conversionFactor,
         price: p.price.toFixed(2),
         cost: p.cost.toFixed(2),
+        purchaseEnabled: p.purchaseEnabled,
+        saleEnabled: p.saleEnabled,
         isDefault: p.isDefault,
+        isDefaultPurchase: p.isDefaultPurchase,
+        isDefaultSale: p.isDefaultSale,
         isActive: p.isActive,
         createdAt: p.createdAt.toISOString(),
         updatedAt: p.updatedAt.toISOString(),
