@@ -25,6 +25,7 @@ import {
   PurposesPage,
   ImportAccountsPage,
 } from './features/accounting/pages/AccountingPages';
+import { TreasuryBankAccountsPage } from './features/treasury/pages/TreasuryBankAccountsPage';
 
 import { AppLayout } from './components/layout/AppLayout';
 
@@ -54,6 +55,7 @@ export const App = () => {
           <Route path="/purchases" element={<PurchasesListPage />} />
           <Route path="/purchases/receive" element={<ReceivePurchasePage />} />
           <Route path="/cash" element={<CashPage />} />
+          <Route path="/treasury/bank-accounts" element={<TreasuryBankAccountsPage />} />
           <Route path="/receivables" element={<ReceivablesPage />} />
           <Route path="/payables" element={<PayablesPage />} />
           <Route path="/accounting/accounts" element={<AccountsPage />} />

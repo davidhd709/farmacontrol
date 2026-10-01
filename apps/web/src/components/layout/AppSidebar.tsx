@@ -28,6 +28,7 @@ import ShoppingBagIcon from '@mui/icons-material/ShoppingBag';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import MonetizationOnIcon from '@mui/icons-material/MonetizationOn';
 import PaymentsIcon from '@mui/icons-material/Payments';
 import AssessmentIcon from '@mui/icons-material/Assessment';
@@ -157,6 +158,12 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ open, onClose }) => {
           path: '/cash',
           icon: <AccountBalanceWalletIcon fontSize="small" />,
           permission: SYSTEM_PERMISSIONS.CASH_READ,
+        },
+        {
+          title: 'Tesorería y Bancos',
+          path: '/treasury/bank-accounts',
+          icon: <AccountBalanceIcon fontSize="small" />,
+          permission: SYSTEM_PERMISSIONS.TREASURY_READ,
         },
         {
           title: 'Cuentas por Cobrar',

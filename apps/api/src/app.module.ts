@@ -17,12 +17,13 @@ import { AlertsModule } from './modules/alerts/alerts.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { BackupsModule } from './modules/backups/backups.module';
 import { AccountingModule } from './modules/accounting/accounting.module';
+import { TreasuryModule } from './modules/treasury/treasury.module';
 import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
 import { CorrelationIdInterceptor } from './common/interceptors/correlation-id.interceptor';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
 @Module({
-  imports: [IdentityModule, AuditModule, CatalogModule, InventoryModule, SuppliersModule, PurchasesModule, CashModule, CustomersModule, SalesModule, ReceivablesModule, PayablesModule, AlertsModule, ReportsModule, BackupsModule, AccountingModule],
+  imports: [IdentityModule, AuditModule, CatalogModule, InventoryModule, SuppliersModule, PurchasesModule, CashModule, CustomersModule, SalesModule, ReceivablesModule, PayablesModule, AlertsModule, ReportsModule, BackupsModule, AccountingModule, TreasuryModule],
   controllers: [AppController],
   providers: [
     AppService,

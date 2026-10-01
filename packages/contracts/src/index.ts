@@ -104,12 +104,17 @@ export const SYSTEM_PERMISSIONS = {
   // Configuración contable
   ACCOUNTING_READ: 'accounting:read',
   ACCOUNTING_MANAGE: 'accounting:manage',
+
+  // Tesorería y bancos
+  TREASURY_READ: 'treasury:read',
+  TREASURY_MANAGE: 'treasury:manage',
 } as const;
 
 export type SystemPermission = (typeof SYSTEM_PERMISSIONS)[keyof typeof SYSTEM_PERMISSIONS];
 
 export * from './accounting';
 export * from './product-tax-profile';
+export * from './treasury';
 
 export interface RoleDto {
   id: string;

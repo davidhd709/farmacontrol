@@ -27,6 +27,8 @@ model User {
   accountingMappingsUpdated CompanyAccountingMapping[] @relation("AccountingMappingsUpdated")
   journalEntriesCreated JournalEntry[] @relation("JournalEntriesCreated")
   taxProfilesActivated ProductTaxProfile[] @relation("ProductTaxProfilesActivated")
+  bankAccountsCreated   BankAccount[]       @relation("UserBankAccounts")
+  bankMovementsCreated  BankMovement[]      @relation("UserBankMovements")
 
   @@map("users")
 }
@@ -794,3 +796,54 @@ model ProductTaxProfile {
   @@index([activatedById])
   @@map("product_tax_profiles")
 }
+
+model BankAccount {
+  id             String         @id @default(uuid()) @db.Uuid
+  bankName       String         @map("bank_name") @db.VarChar(100)
+  accountType    String         @map("account_type") @db.VarChar(50)
+  accountNumber  String         @map("account_number") @db.VarChar(50)
+  name           String         @db.VarChar(150)
+  initialBalance Decimal        @default(0) @map("initial_balance") @db.Decimal(14, 2)
+  currentBalance Decimal        @default(0) @map("current_balance") @db.Decimal(14, 2)
+  currency       String         @default("COP") @db.VarChar(10)
+  isActive       Boolean        @default(true) @map("is_active")
+  notes          String?        @db.VarChar(500)
+  createdById    String         @map("created_by_id") @db.Uuid
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+
+  createdByUser  User           @relation("UserBankAccounts", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  movements      BankMovement[]
+
+  @@unique([bankName, accountNumber])
+  @@index([isActive])
+  @@index([bankName])
+  @@index([createdById])
+  @@map("bank_accounts")
+}
+
+model BankMovement {
+  id                    String      @id @default(uuid()) @db.Uuid
+  bankAccountId         String      @map("bank_account_id") @db.Uuid
+  movementType          String      @map("movement_type") @db.VarChar(50)
+  amount                Decimal     @db.Decimal(14, 2)
+  balanceBefore         Decimal     @map("balance_before") @db.Decimal(14, 2)
+  balanceAfter          Decimal     @map("balance_after") @db.Decimal(14, 2)
+  concept               String      @db.VarChar(255)
+  referenceDocumentType String?     @map("reference_document_type") @db.VarChar(50)
+  referenceDocumentId   String?     @map("reference_document_id") @db.VarChar(100)
+  externalReference     String?     @map("external_reference") @db.VarChar(100)
+  movementDate          DateTime    @default(now()) @map("movement_date") @db.Timestamptz
+  createdById           String      @map("created_by_id") @db.Uuid
+  createdAt             DateTime    @default(now()) @map("created_at") @db.Timestamptz
+
+  bankAccount           BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdByUser         User        @relation("UserBankMovements", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([bankAccountId, movementDate])
+  @@index([movementType])
+  @@index([referenceDocumentType, referenceDocumentId])
+  @@index([createdById])
+  @@map("bank_movements")
+}
+
