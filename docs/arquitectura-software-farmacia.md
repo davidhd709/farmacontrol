@@ -176,6 +176,7 @@ No se recomienda añadir Turborepo inicialmente. `pnpm workspaces` cubre la nece
 | Cuentas por cobrar | Obligaciones de clientes, abonos y saldos | Clientes, ventas, caja |
 | Cuentas por pagar | Obligaciones con proveedores, pagos y saldos | Proveedores, compras, caja |
 | Caja | Aperturas, movimientos, medios de pago y cierres | Ventas, cartera, pagos |
+| Contabilidad | Plan de cuentas, impuestos parametrizados, asientos, gastos y estados financieros | Ventas, compras, inventario, caja, bancos, cartera, configuración |
 | Reportes | Consultas consolidadas y exportaciones | Módulos operativos |
 | Notificaciones | Alertas de vencimiento y entregas futuras | Inventario, worker |
 | Auditoría | Registro de operaciones sensibles | Todos los módulos |
@@ -342,6 +343,11 @@ La interfaz podrá ser instalable como PWA y almacenar recursos estáticos, pero
 /payables
 /cash-sessions
 /cash-movements
+/bank-accounts
+/accounts
+/journal-entries
+/expenses
+/tax-rules
 /reports
 /alerts
 /settings
@@ -362,6 +368,9 @@ POST /api/v1/receivables/{id}/payments
 POST /api/v1/payables/{id}/payments
 POST /api/v1/cash-sessions/{id}/close
 POST /api/v1/inventory-adjustments
+POST /api/v1/accounts/import
+POST /api/v1/journal-entries/{id}/reverse
+POST /api/v1/expenses/{id}/pay
 ```
 
 Los nombres y estados definitivos dependen de la validación del flujo de negocio.
@@ -444,6 +453,18 @@ PostgreSQL 18 es la versión estable vigente a la fecha del documento ([informac
 - `cash_registers`
 - `cash_sessions`
 - `cash_movements`
+
+#### Contabilidad
+
+- `chart_of_accounts` y `accounting_periods`
+- `journal_entries` y `journal_entry_lines`
+- `bank_accounts` y `bank_movements`
+- `expenses` y `expense_categories`
+- `tax_rules`, `product_tax_profiles` y configuraciones tributarias de terceros, con vigencia
+
+Las cuentas, reglas tributarias y perfiles de producto son configurables. Los valores comerciales y contables confirmados conservarán los importes aplicados (base, impuesto, total y costo), de modo que un cambio posterior de configuración no reescriba el historial.
+
+El motor contable debe resolver propósitos estables (`CASH`, `BANK`, `CUSTOMERS`, `SUPPLIERS`, `INVENTORY`, `SALES_TAXED`, `SALES_EXCLUDED`, `COST_OF_SALES`, `VAT_OUTPUT`, `VAT_INPUT`, `VAT_INPUT_COMMON`, `SIMPLE_TAX_ADVANCE`, `SALES_RETURNS` y `SALES_DISCOUNTS`) contra cuentas reales configuradas para la empresa. Los casos de uso no deben depender de códigos contables fijos.
 
 #### Plataforma
 
@@ -951,10 +972,12 @@ No se añadirá caché distribuida antes de medir una necesidad concreta. Los sa
 - Caja.
 - Movimientos y alertas.
 
-### Fase 3 — Finanzas operativas y reportes
+### Fase 3 — Finanzas operativas, contabilidad y reportes
 
 - Cuentas por cobrar.
 - Cuentas por pagar.
+- Tesorería bancaria y gastos por causación.
+- Plan de cuentas, motor de asientos y estados financieros.
 - Reportes y exportaciones.
 - Conciliaciones.
 
@@ -986,7 +1009,7 @@ No se añadirá caché distribuida antes de medir una necesidad concreta. Los sa
 8. ¿Qué disponibilidad, RPO y RTO puede costear y necesita el negocio?
 9. ¿Qué archivos deben conservarse y por cuánto tiempo?
 10. ¿Qué proveedor tecnológico DIAN se utilizará?
-11. ¿Existen requisitos contables o integraciones externas adicionales?
+11. ¿Cuáles son las responsabilidades tributarias, tarifas, retenciones y cuentas contables aprobadas para la farmacia y sus terceros?
 12. ¿Cuál es la experiencia tecnológica del equipo que desarrollará y operará el sistema?
 
 ## 29. Resultado de la propuesta

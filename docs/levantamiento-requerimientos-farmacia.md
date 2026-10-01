@@ -1,6 +1,6 @@
 # Levantamiento de requerimientos — Sistema para farmacia
 
-**Versión:** 0.1  
+**Versión:** 0.2
 **Fuente:** información inicial suministrada por el cliente.  
 **Estado:** levantamiento preliminar sujeto a validación.
 
@@ -67,6 +67,7 @@ El alcance inicial comprende los siguientes módulos:
 15. Reportes.
 16. Copias de seguridad.
 17. Integración futura con facturación electrónica DIAN.
+18. Contabilidad automática, tesorería bancaria, gastos y estados financieros.
 
 ## 4. Actores
 
@@ -306,6 +307,64 @@ La frecuencia, conservación, ubicación y procedimiento de restauración están
 
 El alcance tributario y documental de esta integración todavía no está definido.
 
+### RF-028 — Plan de cuentas configurable
+
+**Descripción:** El sistema debe permitir administrar un plan de cuentas jerárquico y cargarlo desde un archivo Excel, además de crear cuentas manualmente.
+
+**Actor:** Administrador o usuario de contabilidad autorizado.
+**Origen:** Cliente; ampliación contable confirmada.
+
+### RF-029 — Configuración tributaria por producto y operación
+
+**Descripción:** El sistema debe separar internamente la base gravable, los impuestos y el total de las compras y ventas. Debe permitir configurar el tratamiento tributario y la tarifa aplicable por producto, sin asumir una tarifa global única.
+
+**Actor:** Usuario de contabilidad autorizado.
+**Origen:** Criterios contables suministrados por el usuario.
+
+La configuración inicial confirmada corresponde al Régimen Simple de Tributación y responsable de IVA. Los precios comerciales incluyen IVA; el sistema debe desglosarlo internamente. La clasificación tributaria se asigna por SKU o regla documentada, no solo por categoría comercial.
+
+### RF-030 — Asientos contables automáticos
+
+**Descripción:** El sistema debe generar asientos balanceados e inmutables a partir de ventas, compras, pagos, recaudos, gastos, devoluciones y ajustes autorizados, conservando el vínculo con la operación de origen.
+
+**Actor:** Sistema y usuario de contabilidad autorizado.
+**Origen:** Cliente; ampliación contable confirmada.
+
+### RF-031 — Gestión de bancos y tesorería
+
+**Descripción:** El sistema debe administrar cuentas bancarias y movimientos de tesorería separados de Caja, identificando el medio de pago y la operación de origen.
+
+**Actor:** Cajero, contabilidad y usuarios autorizados.
+**Origen:** Cliente; ampliación contable confirmada.
+
+### RF-032 — Registro de gastos por causación
+
+**Descripción:** El sistema debe registrar gastos pagados, pendientes, parcialmente pagados y anticipos, reconociendo el gasto cuando se recibe el bien o servicio y no únicamente al realizar el pago.
+
+**Actor:** Usuario de contabilidad autorizado.
+**Origen:** Criterios contables suministrados por el usuario.
+
+### RF-033 — Devoluciones financieras y de inventario
+
+**Descripción:** El sistema debe registrar devoluciones de venta y compra por línea, con sus efectos en inventario, cartera o proveedores, impuestos y asientos contables.
+
+**Actor:** Usuarios autorizados.
+**Origen:** Criterios contables suministrados por el usuario.
+
+### RF-034 — Estados y auxiliares financieros
+
+**Descripción:** El sistema debe generar Estado de Situación Financiera, Estado de Resultados, balance de comprobación y auxiliares, con filtros temporales y trazabilidad al asiento y documento de origen.
+
+**Actor:** Usuario de contabilidad autorizado.
+**Origen:** Cliente; ampliación contable confirmada.
+
+### RF-035 — Importación controlada del plan de cuentas
+
+**Descripción:** La carga desde Excel debe validar estructura, códigos únicos, jerarquía y cuentas que admiten movimientos antes de aplicar cambios; el resultado debe informar las filas rechazadas y no dejar una carga parcial.
+
+**Actor:** Administrador o usuario de contabilidad autorizado.
+**Origen:** Derivado de RF-028; requiere validación de la plantilla definitiva.
+
 ## 6. Reglas de negocio
 
 ### Confirmadas
@@ -347,6 +406,34 @@ Debe definirse si el sistema prohibirá operaciones que produzcan existencias ne
 #### RN-009 — Trazabilidad
 
 Se recomienda que todo movimiento conserve como mínimo fecha, usuario, producto, cantidad, lote cuando aplique, tipo de movimiento y documento de origen.
+
+### Reglas contables confirmadas
+
+#### RN-010 — Partida doble e inmutabilidad contable
+
+Todo asiento contable confirmado debe conservar débitos iguales a créditos. No se elimina ni se edita; cualquier corrección se realiza mediante una reversión o movimiento compensatorio trazable.
+
+#### RN-011 — Separación de impuestos e ingresos
+
+Las operaciones gravadas deben conservar por separado base gravable, impuesto y total. El impuesto generado no forma parte del ingreso y el IVA recuperable no forma parte del costo o gasto.
+
+#### RN-012 — Tratamiento tributario configurable
+
+El tratamiento tributario debe configurarse por producto y operación. El sistema no debe asumir que todos los medicamentos tienen el mismo tratamiento ni activar retenciones sin una parametrización aprobada para la empresa y el tercero.
+
+Para la configuración inicial, la retención en renta y la reteICA permanecen deshabilitadas por defecto. La reteIVA debe conservarse disponible y parametrizable. El IVA directamente atribuible a operaciones con derecho a descuento se trata de forma directa; únicamente el IVA común no imputable directamente está sujeto a prorrateo.
+
+#### RN-013 — Costo neto de adquisición
+
+Los descuentos comerciales y rebajas de compra reducen el costo de adquisición del inventario. Los descuentos otorgados en venta se conservan separados del valor bruto para determinar la venta neta.
+
+#### RN-014 — Causación y pagos posteriores
+
+Un gasto se reconoce cuando ocurre o se recibe el bien o servicio. Si queda pendiente, genera una cuenta por pagar; su pago posterior no vuelve a reconocer el gasto. Un anticipo se reconoce como activo hasta que corresponda causar el gasto.
+
+#### RN-015 — Devolución con tratamiento individual
+
+Las devoluciones de compra y venta se procesan por línea y afectan únicamente las cantidades, costo, impuesto y saldo relacionados. El retorno de medicamentos al inventario disponible depende de su condición sanitaria y queda pendiente de definición.
 
 ## 7. Requerimientos no funcionales
 
@@ -409,6 +496,11 @@ Sin definir todavía tablas físicas, los conceptos principales son:
 - Permiso.
 - Copia de seguridad.
 - Documento electrónico DIAN, en fase posterior.
+- Cuenta contable, plan de cuentas y periodo contable.
+- Asiento y línea de asiento contable.
+- Cuenta bancaria y movimiento bancario.
+- Categoría y registro de gasto.
+- Configuración tributaria de producto y operación.
 
 Relaciones generales:
 
@@ -643,9 +735,13 @@ Esta propuesta debe ajustarse después de conocer el proceso real y el presupues
 
 - Facturación electrónica DIAN.
 
+### Confirmado para el alcance ampliado
+
+- Contabilidad automática, tesorería bancaria, gastos por causación y estados financieros, conforme a los RF-028 a RF-035.
+
 ### Sin clasificar todavía
 
-Cualquier otra funcionalidad deberá evaluarse después de responder las preguntas pendientes. No se asumen módulos contables, comercio electrónico, domicilios, nómina ni aplicaciones móviles.
+Comercio electrónico, domicilios, nómina y aplicaciones móviles deberán evaluarse después de responder las preguntas pendientes.
 
 ## 18. Fuera del alcance de este levantamiento
 

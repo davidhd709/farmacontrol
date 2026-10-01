@@ -39,6 +39,7 @@ El sistema prioriza de forma no negociable:
 - **RF-023 / RF-024**: Libro inmutable de movimientos de inventario y consulta de trazabilidad.
 - **RF-025**: Reportes operativos básicos (existencias, lotes por vencer, kardex, ventas, caja).
 - **RF-026**: Copias de seguridad periódicas y procedimiento de restauración validado.
+- **RF-028 / RF-035**: Plan de cuentas manual o importable desde Excel, impuestos configurables, asientos automáticos, tesorería bancaria, gastos por causación, devoluciones y estados financieros.
 
 ### 2.2 Reglas de Negocio Confirmadas
 - **RN-001**: **Regla FEFO Estricta**: La salida de medicamentos debe consumir prioritariamente el lote disponible con la fecha de vencimiento más próxima.
@@ -49,6 +50,7 @@ El sistema prioriza de forma no negociable:
 - **RN-AG-03**: **Inmutabilidad de Inventario**: No se eliminan ni editan movimientos históricos de inventario; correcciones o anulaciones generan movimientos compensatorios inversos.
 - **RN-AG-04**: **Idempotencia**: Confirmación de ventas, pagos y operaciones críticas deben usar clave de idempotencia (`Idempotency-Key`) para prevenir duplicaciones.
 - **RN-AG-05**: **Autorización en Backend**: Los permisos se verifican de forma obligatoria en la capa de aplicación/casos de uso del backend.
+- **RN-010 / RN-015**: Partida doble e inmutabilidad contable; impuesto separado del ingreso; reglas tributarias configurables; costo neto de descuentos; causación de gastos y devoluciones por línea.
 
 ### 2.3 Decisiones Arquitectónicas Aprobadas
 - **ADR-001 (Monolito Modular)**: Un solo repositorio con `pnpm workspaces` (`apps/api`, `apps/web`, `apps/worker`, `packages/contracts`). Límites de módulo estrictos con 4 capas internas: `presentation`, `application`, `domain`, `infrastructure`. El dominio es puro (sin dependencias de NestJS, Prisma o HTTP).
@@ -80,7 +82,7 @@ El sistema prioriza de forma no negociable:
 - **Facturación Electrónica DIAN**: Pospuesta formalmente para la Fase 2 / Fase Posterior (requiere resolución tributaria, certificado digital y proveedor tecnológico habilitado).
 - **Venta Offline / Sincronización Local PWA**: La confirmación de ventas offline está fuera del alcance inicial.
 - **Comercio electrónico y domicilios**: No contemplados en el alcance operativo de farmacia.
-- **Módulos contables complejos o nómina**: El sistema gestiona finanzas operativas (caja y cartera), no contabilidad formal.
+- **Nómina, activos fijos, declaraciones tributarias y conciliación bancaria automática**: Fuera del alcance inicial de contabilidad; se evaluarán en fases posteriores.
 - **Microservicios, Redis, Kafka**: Prohibidos por arquitectura aprobada.
 
 ### 2.7 Contradicciones y Tensiones Identificadas entre Documentos
@@ -108,9 +110,15 @@ flowchart TD
     COMP --> CAJA
     CXP --> CAJA
     CXC --> CAJA
+    VENT --> CONT[11. Contabilidad, impuestos y estados financieros]
+    COMP --> CONT
+    CXP --> CONT
+    CXC --> CONT
+    CAJA --> CONT
     VENT --> REP[9. Reportes Operativos]
     INV --> REP
     CAJA --> REP
+    CONT --> REP
     INV --> NOTIF[10. Alertas & Worker]
     REP --> BKP[11. Respaldos & Recuperación]
 ```
@@ -132,6 +140,35 @@ flowchart TD
 | **EP-08** | **Procesos en Segundo Plano y Alertas de Vencimiento** | Worker programado para evaluación de lotes próximos a vencer y conciliación de saldos | **LISTA TRAS EP-03** |
 | **EP-09** | **Reportes Operativos Básicos y Exportación** | Reportes de existencias, vencimientos, kardex de inventario, ventas y arqueos | **LISTA TRAS EP-06** |
 | **EP-10** | **Copias de Seguridad, Resiliencia y Preparación de Producción** | Automatización de respaldos en PostgreSQL, verificación de restauración y hardening | **LISTA TRAS EP-09** |
+| **EP-11** | **Contabilidad, Impuestos y Estados Financieros** | Plan de cuentas, impuestos parametrizados, asientos automáticos, gastos y reportes financieros | **EN PROGRESO: Slices 11.1 y 11.2 implementados; automatizaciones pendientes de mapeos requeridos** |
+
+---
+
+### EP-11 / Slice 11.1 — Plan de cuentas y propósitos contables
+
+**Estado: IMPLEMENTADO.** Incluye administración de cuentas jerárquicas, importación de Excel con validación y vista previa antes de una confirmación transaccional, y mapeo de propósitos contables con estado pendiente cuando todavía no exista una cuenta aprobada. La configuración fiscal confirmada permanece separada de los códigos operativos por aprobar.
+
+El mapeo de `CASH`, `BANK`, `CUSTOMERS`, `SUPPLIERS`, `INVENTORY`, `SALES_TAXED`, `SALES_EXCLUDED`, `COST_OF_SALES`, `CAPITAL`, `CURRENT_YEAR_RESULT`, `VAT_INPUT_COMMON` y `VAT_NON_DEDUCTIBLE` puede continuar pendiente sin impedir este slice. No se asignan códigos sustitutos. La contabilización automática de una operación futura deberá detenerse si falta cualquier propósito obligatorio para esa operación; el motor de partida doble, los asientos y los estados financieros pertenecen a slices posteriores.
+
+El orquestador verificó API, interfaz, importación, migración en `farmacia_test`, build, typecheck, lint y pruebas antes de cerrar este slice. La Épica 11 continúa en progreso: el motor de partida doble y los asientos automáticos siguen pendientes de los mapeos obligatorios de cada operación.
+
+### EP-11 — Slices restantes y dependencias
+
+Esta secuencia es el plan de ejecución, no una declaración de funcionalidades implementadas. Cada slice requiere sus propias pruebas y revisión antes de cambiar de estado.
+
+| Slice | Entregable verificable | Estado | Dependencia principal |
+| --- | --- | --- | --- |
+| 11.2 | Libro diario interno: partida doble, origen único, inmutabilidad y reversión compensatoria | IMPLEMENTADO | Servicio interno y 12 pruebas PostgreSQL; no genera asientos operativos aún |
+| 11.3 | Reglas tributarias versionadas por SKU y operación; base, impuesto y total históricos | PENDIENTE | Clasificación y tarifa documentadas por SKU; dinero exacto |
+| 11.4 | Cuentas bancarias y movimientos de tesorería separados de Caja | PENDIENTE | Contrato de movimientos y permisos |
+| 11.5 | Gastos por causación, pendientes, pagos parciales y anticipos | PENDIENTE | Categorías y cuentas de gasto aprobadas para contabilizar |
+| 11.6 | Asientos automáticos atómicos de ventas, compras, recaudos, pagos y ajustes | BLOQUEADO | Mapeos operativos aprobados, datos tributarios y costos exactos |
+| 11.7 | Devoluciones por línea y sus efectos financieros y de inventario | BLOQUEADO | Política sanitaria de retorno al inventario y reglas tributarias |
+| 11.8 | Balance de comprobación, auxiliares, situación financiera y resultados | BLOQUEADO | Libro diario poblado, saldos iniciales y política de periodos/cierre |
+| 11.9 | Validación integral de trazabilidad, idempotencia, impuestos y estados | PENDIENTE | Integración de los slices anteriores |
+
+El archivo `docs/PUC_FARMACIA_PROPUESTA.xlsx` contiene una selección de referencia para revisión contable; no sustituye el mapeo aprobado. Sus cuentas imputables están inactivas y no asigna propósitos. Hay diferencias entre las denominaciones de `135518`, `413595`, `421005` y `417505` en la fuente consultada y los usos mencionados previamente; no se resolverán automáticamente ni se usarán para asientos hasta la validación de la contadora.
+
 
 ---
 
@@ -832,7 +869,12 @@ Fase 7: Cartera y Finanzas Operativas
 ├── HU-020: Cuentas por cobrar y registro de abonos
 └── HU-021: Cuentas por pagar a proveedores y registro de pagos
 
-Fase 8: Worker, Alertas y Resiliencia
+Fase 8: Contabilidad, Impuestos y Estados Financieros
+├── Slice 11.1 (IMPLEMENTADO): plan de cuentas, importación Excel y mapeo de propósitos con estados pendientes
+└── Slices posteriores: partida doble, asientos automáticos, gastos e informes financieros
+    (cada automatización requiere sus propósitos obligatorios mapeados antes de ejecutarse)
+
+Fase 9: Worker, Alertas y Resiliencia
 ├── HU-022: Worker asíncrono y evaluación programada de vencimientos
 ├── HU-023: Reportes operativos esenciales y exportación tabular
 └── HU-024: Copias de seguridad automatizadas y protocolo de restauración
@@ -850,3 +892,20 @@ Fase 8: Worker, Alertas y Resiliencia
   3. `docker-compose.yml` para levantar PostgreSQL 18 localmente con volumen de datos persistente.
   4. Scripts en la raíz: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm dev`.
   5. Ejecución exitosa de linters y verificación de entorno limpio.
+
+
+
+
+
+
+
+
+| Slice | Qué falta | Estado |
+| --- | --- | --- |
+| 11.3 | Reglas de impuestos por SKU y desglose histórico de base, impuesto y total | PENDIENTE |
+| 11.4 | Cuentas bancarias y movimientos separados de Caja | PENDIENTE |
+| 11.5 | Gastos, causación, anticipos y pagos parciales | PENDIENTE |
+| 11.6 | Generar asientos automáticamente desde ventas, compras, cobros, pagos y ajustes | BLOQUEADO |
+| 11.7 | Devoluciones y sus efectos en dinero, impuestos e inventario | BLOQUEADO |
+| 11.8 | Balance de comprobación, auxiliares y estados financieros | BLOQUEADO |
+| 11.9 | Pruebas integrales de todos esos flujos | PENDIENTE |
