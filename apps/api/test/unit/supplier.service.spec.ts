@@ -5,6 +5,7 @@ import { Supplier } from '../../src/modules/suppliers/domain/supplier.entity';
 import {
   SupplierNotFoundException,
   SupplierAlreadyExistsException,
+  SupplierTaxIdChangeForbiddenException,
 } from '../../src/modules/suppliers/domain/supplier.exceptions';
 
 describe('SupplierService & Supplier Entity (Unit)', () => {
@@ -47,7 +48,7 @@ describe('SupplierService & Supplier Entity (Unit)', () => {
         Supplier.create({
           taxId: '12',
           name: 'Proveedor Test',
-        })
+        }),
       ).toThrow('El NIT/identificación debe tener entre 3 y 50 caracteres');
     });
 
@@ -56,7 +57,7 @@ describe('SupplierService & Supplier Entity (Unit)', () => {
         Supplier.create({
           taxId: '900123456',
           name: '  ',
-        })
+        }),
       ).toThrow('La razón social o nombre del proveedor es obligatorio');
     });
 
@@ -66,7 +67,7 @@ describe('SupplierService & Supplier Entity (Unit)', () => {
           taxId: '900123456',
           name: 'Proveedor Test',
           email: 'correo-invalido-sin-arroba',
-        })
+        }),
       ).toThrow('El correo electrónico ingresado no tiene un formato válido');
     });
 
@@ -102,14 +103,14 @@ describe('SupplierService & Supplier Entity (Unit)', () => {
         Supplier.create({
           taxId: '800555444-2',
           name: 'Laboratorios Baxter Existente',
-        })
+        }),
       );
 
       await expect(
         service.createSupplier({
           taxId: '800555444-2',
           name: 'Otro Laboratorio',
-        })
+        }),
       ).rejects.toThrow(SupplierAlreadyExistsException);
     });
 
@@ -125,7 +126,7 @@ describe('SupplierService & Supplier Entity (Unit)', () => {
 
       vi.mocked(repository.findById).mockResolvedValueOnce(null);
       await expect(service.getSupplierById('uuid-inexistente')).rejects.toThrow(
-        SupplierNotFoundException
+        SupplierNotFoundException,
       );
     });
 
@@ -142,11 +143,11 @@ describe('SupplierService & Supplier Entity (Unit)', () => {
           id: 'otro-proveedor-id',
           taxId: '900333444-5',
           name: 'Tercer Proveedor',
-        })
+        }),
       );
 
       await expect(
-        service.updateSupplier(existing.id, { taxId: '900333444-5' })
+        service.updateSupplier(existing.id, { taxId: '900333444-5' }, { roles: ['admin'] }),
       ).rejects.toThrow(SupplierAlreadyExistsException);
 
       // Actualización exitosa de nombre y teléfono
@@ -159,6 +160,26 @@ describe('SupplierService & Supplier Entity (Unit)', () => {
       expect(updated.name).toBe('Proveedor Nombre Actualizado');
       expect(updated.phone).toBe('6014445555');
       expect(repository.save).toHaveBeenCalled();
+    });
+
+    it('debe rechazar el cambio de NIT sin rol administrador y no persistir', async () => {
+      const existing = Supplier.create({
+        taxId: '900111222-3',
+        name: 'Proveedor Original',
+      });
+      vi.mocked(repository.findById).mockResolvedValue(existing);
+
+      await expect(
+        service.updateSupplier(
+          existing.id,
+          { taxId: '900111222-4', name: 'No debe persistir' },
+          { roles: ['compras'] },
+        ),
+      ).rejects.toThrow(SupplierTaxIdChangeForbiddenException);
+
+      expect(existing.taxId).toBe('900111222-3');
+      expect(existing.name).toBe('Proveedor Original');
+      expect(repository.save).not.toHaveBeenCalled();
     });
 
     it('debe inactivar lógicamente al proveedor', async () => {

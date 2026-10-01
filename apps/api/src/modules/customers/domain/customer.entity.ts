@@ -103,6 +103,7 @@ export class Customer {
 
   public update(payload: {
     documentType?: string;
+    documentNumber?: string;
     name?: string;
     phone?: string | null;
     email?: string | null;
@@ -111,6 +112,13 @@ export class Customer {
   }): void {
     if (payload.documentType !== undefined) {
       this.props.documentType = payload.documentType.trim().toUpperCase() || 'CC';
+    }
+    if (payload.documentNumber !== undefined) {
+      const trimmed = payload.documentNumber.trim();
+      if (!trimmed) {
+        throw new Error('El número de documento del cliente no puede ser vacío');
+      }
+      this.props.documentNumber = trimmed;
     }
     if (payload.name !== undefined) {
       const trimmed = payload.name.trim();

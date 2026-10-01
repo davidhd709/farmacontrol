@@ -14,6 +14,7 @@ import {
 } from '@mui/material';
 import type { SupplierDto, CreateSupplierPayload, UpdateSupplierPayload } from '@farmacia/contracts';
 import { createSupplier, updateSupplier } from '../api/suppliers.api';
+import { usePermissions } from '../../auth/hooks/usePermissions';
 
 interface SupplierFormDialogProps {
   open: boolean;
@@ -29,6 +30,7 @@ export const SupplierFormDialog: React.FC<SupplierFormDialogProps> = ({
   supplierToEdit,
 }) => {
   const isEditing = Boolean(supplierToEdit);
+  const { isAdmin } = usePermissions();
 
   const [taxId, setTaxId] = useState('');
   const [name, setName] = useState('');
@@ -87,7 +89,7 @@ export const SupplierFormDialog: React.FC<SupplierFormDialogProps> = ({
     try {
       if (isEditing && supplierToEdit) {
         const payload: UpdateSupplierPayload = {
-          taxId: taxId.trim(),
+          ...(isAdmin ? { taxId: taxId.trim() } : {}),
           name: name.trim(),
           contactName: contactName.trim() || null,
           phone: phone.trim() || null,
@@ -144,7 +146,7 @@ export const SupplierFormDialog: React.FC<SupplierFormDialogProps> = ({
                 placeholder="Ej. 900123456-1"
                 required
                 fullWidth
-                disabled={loading}
+                disabled={loading || (isEditing && !isAdmin)}
                 autoFocus
               />
               <TextField

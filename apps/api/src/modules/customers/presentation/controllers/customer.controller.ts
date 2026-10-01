@@ -14,6 +14,7 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import {
@@ -23,14 +24,8 @@ import {
   PaginatedResponse,
 } from '@farmacia/contracts';
 import { CustomerService } from '../../application/customer.service';
-import {
-  CreateCustomerDto,
-  CreateCustomerValidationPipe,
-} from '../dtos/create-customer.dto';
-import {
-  UpdateCustomerDto,
-  UpdateCustomerValidationPipe,
-} from '../dtos/update-customer.dto';
+import { CreateCustomerDto, CreateCustomerValidationPipe } from '../dtos/create-customer.dto';
+import { UpdateCustomerDto, UpdateCustomerValidationPipe } from '../dtos/update-customer.dto';
 import { CustomerQueryValidationPipe } from '../dtos/customer-query.dto';
 import {
   SessionAuthGuard,
@@ -43,6 +38,7 @@ import {
   CustomerNotFoundException,
   CustomerAlreadyExistsException,
   CustomerCannotBeDeactivatedException,
+  CustomerDocumentChangeForbiddenException,
 } from '../../domain/customer.exceptions';
 
 @Controller('customers')
@@ -56,7 +52,7 @@ export class CustomerController {
   public async create(
     @Body(CreateCustomerValidationPipe) dto: CreateCustomerDto,
     @CurrentUser() user: AuthenticatedUserContext,
-    @Req() req: Request
+    @Req() req: Request,
   ): Promise<CustomerDto> {
     try {
       const customer = await this.customerService.createCustomer(dto, {
@@ -79,7 +75,7 @@ export class CustomerController {
   @Get()
   @RequirePermissions(SYSTEM_PERMISSIONS.CUSTOMERS_READ)
   public async findAll(
-    @Query(CustomerQueryValidationPipe) query: CustomerQueryFilters
+    @Query(CustomerQueryValidationPipe) query: CustomerQueryFilters,
   ): Promise<PaginatedResponse<CustomerDto>> {
     return this.customerService.getCustomers(query);
   }
@@ -118,11 +114,12 @@ export class CustomerController {
     @Param('id') id: string,
     @Body(UpdateCustomerValidationPipe) dto: UpdateCustomerDto,
     @CurrentUser() user: AuthenticatedUserContext,
-    @Req() req: Request
+    @Req() req: Request,
   ): Promise<CustomerDto> {
     try {
       const customer = await this.customerService.updateCustomer(id, dto, {
         userId: user.id,
+        roles: user.roles,
         ipAddress: req.ip,
         correlationId: req.headers['x-correlation-id'] as string | undefined,
       });
@@ -133,6 +130,12 @@ export class CustomerController {
       }
       if (error instanceof CustomerCannotBeDeactivatedException) {
         throw new BadRequestException(error.message);
+      }
+      if (error instanceof CustomerDocumentChangeForbiddenException) {
+        throw new ForbiddenException(error.message);
+      }
+      if (error instanceof CustomerAlreadyExistsException) {
+        throw new ConflictException(error.message);
       }
       if (error instanceof Error) {
         throw new BadRequestException(error.message);
@@ -146,7 +149,7 @@ export class CustomerController {
   public async remove(
     @Param('id') id: string,
     @CurrentUser() user: AuthenticatedUserContext,
-    @Req() req: Request
+    @Req() req: Request,
   ): Promise<CustomerDto> {
     try {
       const customer = await this.customerService.deactivateCustomer(id, {

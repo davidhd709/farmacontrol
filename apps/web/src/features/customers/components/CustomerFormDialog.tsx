@@ -13,8 +13,9 @@ import {
   MenuItem,
   CircularProgress,
 } from '@mui/material';
-import type { CustomerDto, CustomerDocumentType } from '@farmacia/contracts';
+import type { CustomerDto, CustomerDocumentType, UpdateCustomerPayload } from '@farmacia/contracts';
 import { createCustomer, updateCustomer } from '../api/customers.api';
+import { usePermissions } from '../../auth/hooks/usePermissions';
 
 interface CustomerFormDialogProps {
   open: boolean;
@@ -40,6 +41,7 @@ export const CustomerFormDialog: React.FC<CustomerFormDialogProps> = ({
   customerToEdit,
 }) => {
   const isEditing = Boolean(customerToEdit);
+  const { isAdmin } = usePermissions();
 
   const [documentType, setDocumentType] = useState<CustomerDocumentType>('CC');
   const [documentNumber, setDocumentNumber] = useState('');
@@ -92,14 +94,16 @@ export const CustomerFormDialog: React.FC<CustomerFormDialogProps> = ({
     setLoading(true);
     try {
       if (isEditing && customerToEdit) {
-        const updated = await updateCustomer(customerToEdit.id, {
+        const payload: UpdateCustomerPayload & { documentNumber?: string } = {
           documentType,
+          ...(isAdmin ? { documentNumber: docTrimmed } : {}),
           name: nameTrimmed,
           phone: phone.trim() || null,
           email: email.trim() || null,
           address: address.trim() || null,
           isActive,
-        });
+        };
+        const updated = await updateCustomer(customerToEdit.id, payload);
         if (onCustomerCreated) onCustomerCreated(updated);
       } else {
         const created = await createCustomer({
@@ -161,7 +165,7 @@ export const CustomerFormDialog: React.FC<CustomerFormDialogProps> = ({
               onChange={(e) => setDocumentNumber(e.target.value)}
               size="small"
               required
-              disabled={loading || isEditing}
+              disabled={loading || (isEditing && !isAdmin)}
               placeholder="Ej. 1020304050"
             />
           </Box>

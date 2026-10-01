@@ -26,6 +26,7 @@ export interface CreateCustomerPayload {
 
 export interface UpdateCustomerPayload {
   documentType?: CustomerDocumentType | string;
+  documentNumber?: string;
   name?: string;
   phone?: string | null;
   email?: string | null;

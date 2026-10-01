@@ -5,21 +5,21 @@ import {
   UpdateCustomerPayload,
   CustomerQueryFilters,
   PaginatedResponse,
+  SYSTEM_ROLES,
 } from '@farmacia/contracts';
-import {
-  ICustomerRepository,
-  CUSTOMER_REPOSITORY,
-} from '../domain/customer.repository';
+import { ICustomerRepository, CUSTOMER_REPOSITORY } from '../domain/customer.repository';
 import { Customer } from '../domain/customer.entity';
 import {
   CustomerNotFoundException,
   CustomerAlreadyExistsException,
   CustomerCannotBeDeactivatedException,
+  CustomerDocumentChangeForbiddenException,
 } from '../domain/customer.exceptions';
 import { AuditService } from '../../audit/application/services/audit.service';
 
 export interface AuditContext {
   userId?: string | null;
+  roles?: string[];
   ipAddress?: string | null;
   correlationId?: string | null;
 }
@@ -30,13 +30,10 @@ export class CustomerService {
     @Inject(CUSTOMER_REPOSITORY)
     private readonly customerRepository: ICustomerRepository,
     @Optional()
-    private readonly auditService?: AuditService
+    private readonly auditService?: AuditService,
   ) {}
 
-  async createCustomer(
-    input: CreateCustomerPayload,
-    auditCtx?: AuditContext
-  ): Promise<Customer> {
+  async createCustomer(input: CreateCustomerPayload, auditCtx?: AuditContext): Promise<Customer> {
     const existing = await this.customerRepository.findByDocumentNumber(input.documentNumber);
     if (existing) {
       throw new CustomerAlreadyExistsException(input.documentNumber);
@@ -77,7 +74,7 @@ export class CustomerService {
   async updateCustomer(
     id: string,
     input: UpdateCustomerPayload,
-    auditCtx?: AuditContext
+    auditCtx?: AuditContext,
   ): Promise<Customer> {
     const customer = await this.customerRepository.findById(id);
     if (!customer) {
@@ -88,8 +85,20 @@ export class CustomerService {
       throw new CustomerCannotBeDeactivatedException();
     }
 
+    const nextDocumentNumber = input.documentNumber?.trim();
+    if (nextDocumentNumber !== undefined && nextDocumentNumber !== customer.documentNumber) {
+      if (!auditCtx?.roles?.includes(SYSTEM_ROLES.ADMIN)) {
+        throw new CustomerDocumentChangeForbiddenException();
+      }
+      const duplicate = await this.customerRepository.findByDocumentNumber(nextDocumentNumber);
+      if (duplicate && duplicate.id !== id) {
+        throw new CustomerAlreadyExistsException(nextDocumentNumber);
+      }
+    }
+
     customer.update({
       documentType: input.documentType,
+      documentNumber: input.documentNumber,
       name: input.name,
       phone: input.phone,
       email: input.email,
@@ -186,9 +195,7 @@ export class CustomerService {
     return customer;
   }
 
-  async getCustomers(
-    filters: CustomerQueryFilters
-  ): Promise<PaginatedResponse<CustomerDto>> {
+  async getCustomers(filters: CustomerQueryFilters): Promise<PaginatedResponse<CustomerDto>> {
     const page = Math.max(1, filters.page ?? 1);
     const limit = Math.min(100, Math.max(1, filters.limit ?? 20));
     const { items, total } = await this.customerRepository.findAll(filters);

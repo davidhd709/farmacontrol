@@ -15,6 +15,7 @@ describe('SupplierController (Integration with PostgreSQL & RBAC)', () => {
 
   let adminCookie: string;
   let cajeroCookie: string;
+  let comprasCookie: string;
 
   beforeAll(async () => {
     await cleanTestDatabase();
@@ -69,6 +70,20 @@ describe('SupplierController (Integration with PostgreSQL & RBAC)', () => {
 
     const cajeroLogin = await authService.login('supplier_cajero', 'AdminPassword#2026');
     cajeroCookie = `${SESSION_COOKIE_NAME}=${cajeroLogin.rawToken}`;
+
+    const comprasUser = await prisma.user.create({
+      data: {
+        username: 'supplier_compras',
+        passwordHash: admin.passwordHash,
+        isActive: true,
+      },
+    });
+    const comprasRole = await prisma.role.findUniqueOrThrow({ where: { name: 'compras' } });
+    await prisma.userRole.create({
+      data: { userId: comprasUser.id, roleId: comprasRole.id },
+    });
+    const comprasLogin = await authService.login('supplier_compras', 'AdminPassword#2026');
+    comprasCookie = `${SESSION_COOKIE_NAME}=${comprasLogin.rawToken}`;
   }, 30000);
 
   afterAll(async () => {
@@ -174,6 +189,57 @@ describe('SupplierController (Integration with PostgreSQL & RBAC)', () => {
     expect(res.status).toBe(200);
     expect(res.body.name).toBe('Proveedor Nombre Corregido');
     expect(res.body.phone).toBe('6019998888');
+  });
+
+  it('PUT permite al administrador corregir el NIT sin cambiar el supplierId y rechaza duplicados', async () => {
+    const original = await prisma.supplier.create({
+      data: { taxId: '900100100-1', name: 'Proveedor original' },
+    });
+    await prisma.supplier.create({
+      data: { taxId: '900200200-2', name: 'Proveedor existente' },
+    });
+
+    const corrected = await request(app.getHttpServer())
+      .put('/api/v1/suppliers/' + original.id)
+      .set('Cookie', [adminCookie])
+      .send({ taxId: '900100100-3' });
+
+    expect(corrected.status).toBe(200);
+    expect(corrected.body.id).toBe(original.id);
+    expect(corrected.body.taxId).toBe('900100100-3');
+
+    const duplicate = await request(app.getHttpServer())
+      .put('/api/v1/suppliers/' + original.id)
+      .set('Cookie', [adminCookie])
+      .send({ taxId: '900200200-2' });
+
+    expect(duplicate.status).toBe(409);
+    const persisted = await prisma.supplier.findUniqueOrThrow({ where: { id: original.id } });
+    expect(persisted.taxId).toBe('900100100-3');
+  });
+
+  it('PUT impide a Compras cambiar el NIT pero conserva la edición ordinaria', async () => {
+    const supplier = await prisma.supplier.create({
+      data: { taxId: '900300300-3', name: 'Proveedor inicial' },
+    });
+
+    const forbidden = await request(app.getHttpServer())
+      .put('/api/v1/suppliers/' + supplier.id)
+      .set('Cookie', [comprasCookie])
+      .send({ taxId: '900300300-4', name: 'No debe persistir' });
+
+    expect(forbidden.status).toBe(403);
+    const unchanged = await prisma.supplier.findUniqueOrThrow({ where: { id: supplier.id } });
+    expect(unchanged.taxId).toBe('900300300-3');
+    expect(unchanged.name).toBe('Proveedor inicial');
+
+    const ordinary = await request(app.getHttpServer())
+      .put('/api/v1/suppliers/' + supplier.id)
+      .set('Cookie', [comprasCookie])
+      .send({ name: 'Proveedor permitido' });
+
+    expect(ordinary.status).toBe(200);
+    expect(ordinary.body.name).toBe('Proveedor permitido');
   });
 
   it('DELETE /api/v1/suppliers/:id — inactiva lógicamente al proveedor', async () => {

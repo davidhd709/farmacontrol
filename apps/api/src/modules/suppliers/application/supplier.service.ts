@@ -5,20 +5,20 @@ import {
   UpdateSupplierPayload,
   SupplierQueryFilters,
   PaginatedResponse,
+  SYSTEM_ROLES,
 } from '@farmacia/contracts';
-import {
-  ISupplierRepository,
-  SUPPLIER_REPOSITORY,
-} from '../domain/supplier.repository';
+import { ISupplierRepository, SUPPLIER_REPOSITORY } from '../domain/supplier.repository';
 import { Supplier } from '../domain/supplier.entity';
 import {
   SupplierNotFoundException,
   SupplierAlreadyExistsException,
+  SupplierTaxIdChangeForbiddenException,
 } from '../domain/supplier.exceptions';
 import { AuditService } from '../../audit/application/services/audit.service';
 
 export interface AuditContext {
   userId?: string | null;
+  roles?: string[];
   ipAddress?: string | null;
   correlationId?: string | null;
 }
@@ -29,13 +29,10 @@ export class SupplierService {
     @Inject(SUPPLIER_REPOSITORY)
     private readonly supplierRepository: ISupplierRepository,
     @Optional()
-    private readonly auditService?: AuditService
+    private readonly auditService?: AuditService,
   ) {}
 
-  async createSupplier(
-    input: CreateSupplierPayload,
-    auditCtx?: AuditContext
-  ): Promise<Supplier> {
+  async createSupplier(input: CreateSupplierPayload, auditCtx?: AuditContext): Promise<Supplier> {
     const existing = await this.supplierRepository.findByTaxId(input.taxId);
     if (existing) {
       throw new SupplierAlreadyExistsException(input.taxId);
@@ -78,9 +75,7 @@ export class SupplierService {
     return supplier;
   }
 
-  async getSuppliers(
-    filters: SupplierQueryFilters
-  ): Promise<PaginatedResponse<SupplierDto>> {
+  async getSuppliers(filters: SupplierQueryFilters): Promise<PaginatedResponse<SupplierDto>> {
     const page = Math.max(1, filters.page ?? 1);
     const pageSize = Math.min(100, Math.max(1, filters.pageSize ?? 20));
 
@@ -102,14 +97,18 @@ export class SupplierService {
   async updateSupplier(
     id: string,
     input: UpdateSupplierPayload,
-    auditCtx?: AuditContext
+    auditCtx?: AuditContext,
   ): Promise<Supplier> {
     const supplier = await this.getSupplierById(id);
 
-    if (input.taxId && input.taxId.trim() !== supplier.taxId) {
-      const duplicate = await this.supplierRepository.findByTaxId(input.taxId);
+    const nextTaxId = input.taxId?.trim();
+    if (nextTaxId !== undefined && nextTaxId !== supplier.taxId) {
+      if (!auditCtx?.roles?.includes(SYSTEM_ROLES.ADMIN)) {
+        throw new SupplierTaxIdChangeForbiddenException();
+      }
+      const duplicate = await this.supplierRepository.findByTaxId(nextTaxId);
       if (duplicate && duplicate.id !== id) {
-        throw new SupplierAlreadyExistsException(input.taxId);
+        throw new SupplierAlreadyExistsException(nextTaxId);
       }
     }
 

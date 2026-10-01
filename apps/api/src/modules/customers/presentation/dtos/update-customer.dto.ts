@@ -3,6 +3,7 @@ import { UpdateCustomerPayload, CustomerDocumentType } from '@farmacia/contracts
 
 export class UpdateCustomerDto implements UpdateCustomerPayload {
   documentType?: CustomerDocumentType | string;
+  documentNumber?: string;
   name?: string;
   phone?: string | null;
   email?: string | null;
@@ -25,6 +26,17 @@ export class UpdateCustomerValidationPipe implements PipeTransform {
         throw new BadRequestException('El campo "documentType" debe ser texto.');
       }
       dto.documentType = record.documentType.trim().toUpperCase() || 'CC';
+    }
+
+    if (record.documentNumber !== undefined) {
+      if (typeof record.documentNumber !== 'string') {
+        throw new BadRequestException('El campo "documentNumber" debe ser texto.');
+      }
+      const trimmed = record.documentNumber.trim();
+      if (trimmed.length < 3 || trimmed.length > 50) {
+        throw new BadRequestException('El número de documento debe tener entre 3 y 50 caracteres.');
+      }
+      dto.documentNumber = trimmed;
     }
 
     if (record.name !== undefined) {

@@ -18,3 +18,10 @@ export class CustomerCannotBeDeactivatedException extends Error {
     this.name = 'CustomerCannotBeDeactivatedException';
   }
 }
+
+export class CustomerDocumentChangeForbiddenException extends Error {
+  constructor() {
+    super('Solo un administrador puede cambiar el número de documento de un cliente.');
+    this.name = 'CustomerDocumentChangeForbiddenException';
+  }
+}

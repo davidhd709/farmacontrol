@@ -15,6 +15,7 @@ describe('CustomerController (Integration with PostgreSQL & RBAC)', () => {
 
   let adminCookie: string;
   let readerCookie: string;
+  let supervisorCookie: string;
 
   beforeAll(async () => {
     await cleanTestDatabase();
@@ -99,6 +100,22 @@ describe('CustomerController (Integration with PostgreSQL & RBAC)', () => {
     });
     const readerLogin = await authService.login('customer_reader', 'AdminPassword#2026');
     readerCookie = `${SESSION_COOKIE_NAME}=${readerLogin.rawToken}`;
+
+    const supervisorUser = await prisma.user.create({
+      data: {
+        username: 'customer_supervisor',
+        passwordHash: admin.passwordHash,
+        isActive: true,
+      },
+    });
+    const supervisorRole = await prisma.role.findUniqueOrThrow({
+      where: { name: 'supervisor' },
+    });
+    await prisma.userRole.create({
+      data: { userId: supervisorUser.id, roleId: supervisorRole.id },
+    });
+    const supervisorLogin = await authService.login('customer_supervisor', 'AdminPassword#2026');
+    supervisorCookie = `${SESSION_COOKIE_NAME}=${supervisorLogin.rawToken}`;
   }, 30000);
 
   afterAll(async () => {
@@ -208,6 +225,57 @@ describe('CustomerController (Integration with PostgreSQL & RBAC)', () => {
 
     const afterDelete = await prisma.customer.findUnique({ where: { id: created.id } });
     expect(afterDelete?.isActive).toBe(false);
+  });
+
+  it('PUT permite al administrador corregir el documento sin cambiar el customerId y rechaza duplicados', async () => {
+    const original = await prisma.customer.create({
+      data: { documentType: 'CC', documentNumber: '1234567890', name: 'Cliente original' },
+    });
+    await prisma.customer.create({
+      data: { documentType: 'CC', documentNumber: '9999999999', name: 'Cliente existente' },
+    });
+
+    const corrected = await request(app.getHttpServer())
+      .put('/api/v1/customers/' + original.id)
+      .set('Cookie', adminCookie)
+      .send({ documentNumber: '1234567891' });
+
+    expect(corrected.status).toBe(200);
+    expect(corrected.body.id).toBe(original.id);
+    expect(corrected.body.documentNumber).toBe('1234567891');
+
+    const duplicate = await request(app.getHttpServer())
+      .put('/api/v1/customers/' + original.id)
+      .set('Cookie', adminCookie)
+      .send({ documentNumber: '9999999999' });
+
+    expect(duplicate.status).toBe(409);
+    const persisted = await prisma.customer.findUniqueOrThrow({ where: { id: original.id } });
+    expect(persisted.documentNumber).toBe('1234567891');
+  });
+
+  it('PUT impide al supervisor cambiar el documento pero conserva la edición ordinaria', async () => {
+    const customer = await prisma.customer.create({
+      data: { documentType: 'CC', documentNumber: '5555555555', name: 'Nombre inicial' },
+    });
+
+    const forbidden = await request(app.getHttpServer())
+      .put('/api/v1/customers/' + customer.id)
+      .set('Cookie', supervisorCookie)
+      .send({ documentNumber: '5555555556', name: 'No debe persistir' });
+
+    expect(forbidden.status).toBe(403);
+    const unchanged = await prisma.customer.findUniqueOrThrow({ where: { id: customer.id } });
+    expect(unchanged.documentNumber).toBe('5555555555');
+    expect(unchanged.name).toBe('Nombre inicial');
+
+    const ordinary = await request(app.getHttpServer())
+      .put('/api/v1/customers/' + customer.id)
+      .set('Cookie', supervisorCookie)
+      .send({ name: 'Nombre permitido' });
+
+    expect(ordinary.status).toBe(200);
+    expect(ordinary.body.name).toBe('Nombre permitido');
   });
 
   it('DELETE /api/v1/customers/:id rechaza inactivar al cliente por defecto (400)', async () => {

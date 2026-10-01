@@ -11,3 +11,10 @@ export class SupplierAlreadyExistsException extends Error {
     this.name = 'SupplierAlreadyExistsException';
   }
 }
+
+export class SupplierTaxIdChangeForbiddenException extends Error {
+  constructor() {
+    super('Solo un administrador puede cambiar el NIT/identificación de un proveedor.');
+    this.name = 'SupplierTaxIdChangeForbiddenException';
+  }
+}

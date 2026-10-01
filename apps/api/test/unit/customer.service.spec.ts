@@ -6,6 +6,7 @@ import {
   CustomerNotFoundException,
   CustomerAlreadyExistsException,
   CustomerCannotBeDeactivatedException,
+  CustomerDocumentChangeForbiddenException,
 } from '../../src/modules/customers/domain/customer.exceptions';
 
 describe('CustomerService & Customer Entity (Unit)', () => {
@@ -48,14 +49,14 @@ describe('CustomerService & Customer Entity (Unit)', () => {
         Customer.create({
           documentNumber: '   ',
           name: 'Cliente Prueba',
-        })
+        }),
       ).toThrow('El número de documento del cliente es obligatorio');
 
       expect(() =>
         Customer.create({
           documentNumber: '12345',
           name: '   ',
-        })
+        }),
       ).toThrow('El nombre o razón social del cliente es obligatorio');
     });
 
@@ -67,10 +68,10 @@ describe('CustomerService & Customer Entity (Unit)', () => {
       });
 
       expect(() => defaultCustomer.deactivate()).toThrow(
-        'No se puede inactivar el cliente predeterminado'
+        'No se puede inactivar el cliente predeterminado',
       );
       expect(() => defaultCustomer.update({ isActive: false })).toThrow(
-        'No se puede desactivar el cliente predeterminado (Consumidor Final)'
+        'No se puede desactivar el cliente predeterminado (Consumidor Final)',
       );
     });
 
@@ -122,7 +123,7 @@ describe('CustomerService & Customer Entity (Unit)', () => {
         service.createCustomer({
           documentNumber: '1099887766',
           name: 'Diana Duplicada',
-        })
+        }),
       ).rejects.toThrow(CustomerAlreadyExistsException);
     });
 
@@ -130,8 +131,28 @@ describe('CustomerService & Customer Entity (Unit)', () => {
       vi.mocked(repository.findById).mockResolvedValueOnce(null);
 
       await expect(service.getCustomerById('uuid-no-existe')).rejects.toThrow(
-        CustomerNotFoundException
+        CustomerNotFoundException,
       );
+    });
+
+    it('debe rechazar el cambio de documento sin rol administrador y no persistir', async () => {
+      const existing = Customer.create({
+        documentNumber: '1099887766',
+        name: 'Cliente Original',
+      });
+      vi.mocked(repository.findById).mockResolvedValue(existing);
+
+      await expect(
+        service.updateCustomer(
+          existing.id,
+          { documentNumber: '1099887767', name: 'No debe persistir' },
+          { roles: ['supervisor'] },
+        ),
+      ).rejects.toThrow(CustomerDocumentChangeForbiddenException);
+
+      expect(existing.documentNumber).toBe('1099887766');
+      expect(existing.name).toBe('Cliente Original');
+      expect(repository.save).not.toHaveBeenCalled();
     });
 
     it('debe impedir inactivar al cliente por defecto', async () => {
@@ -143,7 +164,7 @@ describe('CustomerService & Customer Entity (Unit)', () => {
       vi.mocked(repository.findById).mockResolvedValueOnce(defaultCustomer);
 
       await expect(service.deactivateCustomer(defaultCustomer.id)).rejects.toThrow(
-        CustomerCannotBeDeactivatedException
+        CustomerCannotBeDeactivatedException,
       );
     });
 
