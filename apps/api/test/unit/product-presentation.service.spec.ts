@@ -51,6 +51,7 @@ describe('ProductPresentationService (Application Unit)', () => {
       listByProductId: vi.fn(),
       save: vi.fn((entity) => Promise.resolve(entity)),
       update: vi.fn((entity) => Promise.resolve(entity)),
+      updateAndPropagateFactors: vi.fn((entity) => Promise.resolve(entity)),
       unsetDefaultPresentations: vi.fn().mockResolvedValue(undefined),
     };
 
@@ -235,6 +236,26 @@ describe('ProductPresentationService (Application Unit)', () => {
 
     expect(boxResult.quantityContained).toBe(100);
     expect(boxResult.conversionFactor).toBe(1000); // 100 * 10 = 1000 TAB
+  });
+
+  it('debe persistir el factor actualizado y propagarlo atómicamente a sus descendientes', async () => {
+    const blister = ProductPresentation.create({
+      id: 'pres-blister-update',
+      productId: 'prod-123',
+      name: 'Blíster',
+      quantityContained: 10,
+      conversionFactor: 10,
+      price: 1500,
+    });
+    vi.mocked(presentationRepository.findById).mockResolvedValue(blister);
+
+    const updated = await service.updatePresentation('prod-123', blister.id, {
+      quantityContained: 20,
+    });
+
+    expect(updated.conversionFactor).toBe(20);
+    expect(presentationRepository.updateAndPropagateFactors).toHaveBeenCalledWith(blister);
+    expect(presentationRepository.update).not.toHaveBeenCalled();
   });
 
   it('Caso 6: debe rechazar ciclos de empaques (Caja -> Blíster -> Caja)', async () => {

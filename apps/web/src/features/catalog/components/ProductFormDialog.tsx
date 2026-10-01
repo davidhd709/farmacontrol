@@ -239,7 +239,11 @@ export function ProductFormDialog({
 
             {/* SECCIÓN 1: Identificación y Clasificación */}
             <Box>
-              <Typography variant="subtitle2" color="primary.main" sx={{ fontWeight: 700, mb: 1.5 }}>
+              <Typography
+                variant="subtitle2"
+                color="primary.main"
+                sx={{ fontWeight: 700, mb: 1.5 }}
+              >
                 1. Identificación y Clasificación
               </Typography>
               <Box
@@ -337,7 +341,11 @@ export function ProductFormDialog({
 
             {/* SECCIÓN 2: Atributos Farmacéuticos */}
             <Box>
-              <Typography variant="subtitle2" color="primary.main" sx={{ fontWeight: 700, mb: 1.5 }}>
+              <Typography
+                variant="subtitle2"
+                color="primary.main"
+                sx={{ fontWeight: 700, mb: 1.5 }}
+              >
                 2. Atributos Farmacéuticos y Regulatorios
               </Typography>
               <Box
@@ -354,7 +362,7 @@ export function ProductFormDialog({
                     <TextField
                       {...field}
                       id="product-generic-name-input"
-                      label="Principio activo (DCI)"
+                      label="Principio activo (DCI) (opcional)"
                       placeholder="Ej. Paracetamol, Amoxicilina"
                       fullWidth
                       disabled={isSubmitting}
@@ -372,7 +380,7 @@ export function ProductFormDialog({
                     <TextField
                       {...field}
                       id="product-concentration-input"
-                      label="Concentración"
+                      label="Concentración (opcional)"
                       placeholder="Ej. 500 mg, 1 g, 250 mg/5 mL"
                       fullWidth
                       disabled={isSubmitting}
@@ -390,7 +398,7 @@ export function ProductFormDialog({
                     <TextField
                       {...field}
                       id="product-sanitary-registry-input"
-                      label="Registro Sanitario / INVIMA"
+                      label="Registro Sanitario / INVIMA (opcional)"
                       placeholder="Ej. INVIMA 2021M-001234"
                       fullWidth
                       disabled={isSubmitting}
@@ -425,7 +433,11 @@ export function ProductFormDialog({
 
             {/* SECCIÓN 3: Parámetros de Precios e Inventario */}
             <Box>
-              <Typography variant="subtitle2" color="primary.main" sx={{ fontWeight: 700, mb: 1.5 }}>
+              <Typography
+                variant="subtitle2"
+                color="primary.main"
+                sx={{ fontWeight: 700, mb: 1.5 }}
+              >
                 3. Precios y Control de Inventario
               </Typography>
               <Box
@@ -501,13 +513,12 @@ export function ProductFormDialog({
                           <MenuItem value="UNIDAD">UNIDAD (Estándar)</MenuItem>
                         )}
                         {field.value && !units.some((u) => u.code === field.value) && (
-                          <MenuItem value={field.value}>
-                            {field.value} (Personalizada)
-                          </MenuItem>
+                          <MenuItem value={field.value}>{field.value} (Personalizada)</MenuItem>
                         )}
                       </Select>
                       <FormHelperText>
-                        {errors.baseUnit?.message || 'Unidad indivisible en la que se cuenta el stock físico (Kardex)'}
+                        {errors.baseUnit?.message ||
+                          'Unidad indivisible en la que se cuenta el stock físico (Kardex)'}
                       </FormHelperText>
                     </FormControl>
                   )}

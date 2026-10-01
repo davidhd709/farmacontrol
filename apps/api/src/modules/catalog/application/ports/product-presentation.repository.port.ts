@@ -10,6 +10,7 @@ export interface ProductPresentationRepositoryPort {
   ): Promise<ProductPresentation[]>;
   save(presentation: ProductPresentation): Promise<ProductPresentation>;
   update(presentation: ProductPresentation): Promise<ProductPresentation>;
+  updateAndPropagateFactors(presentation: ProductPresentation): Promise<ProductPresentation>;
   unsetDefaultPresentations(productId: string, exceptId?: string): Promise<void>;
 }
 

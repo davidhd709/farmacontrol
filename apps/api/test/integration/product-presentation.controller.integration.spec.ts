@@ -264,6 +264,86 @@ describe('ProductPresentationController (Integration with PostgreSQL & RBAC)', (
     expect(response.body.price).toBe('11500.00');
   });
 
+  it('PUT propaga factores acumulados a todos los descendientes', async () => {
+    const category = await prisma.category.create({ data: { name: 'Jerarquías' } });
+    const product = await prisma.product.create({
+      data: {
+        categoryId: category.id,
+        code: 'JER-001',
+        name: 'Producto jerárquico',
+        basePrice: new Prisma.Decimal('100.00'),
+      },
+    });
+    const blister = await prisma.productPresentation.create({
+      data: {
+        productId: product.id,
+        name: 'Blíster',
+        quantityContained: 10,
+        conversionFactor: 10,
+        price: new Prisma.Decimal('1000.00'),
+      },
+    });
+    const box = await prisma.productPresentation.create({
+      data: {
+        productId: product.id,
+        name: 'Caja',
+        containedPresentationId: blister.id,
+        quantityContained: 100,
+        conversionFactor: 1000,
+        price: new Prisma.Decimal('100000.00'),
+      },
+    });
+    const master = await prisma.productPresentation.create({
+      data: {
+        productId: product.id,
+        name: 'Master',
+        containedPresentationId: box.id,
+        quantityContained: 2,
+        conversionFactor: 2000,
+        price: new Prisma.Decimal('200000.00'),
+      },
+    });
+
+    const response = await request(app.getHttpServer())
+      .put('/api/v1/products/' + product.id + '/presentations/' + blister.id)
+      .set('Cookie', adminCookie)
+      .send({ quantityContained: 20 });
+
+    expect(response.status).toBe(200);
+    expect(response.body.conversionFactor).toBe(20);
+
+    const persisted = await prisma.productPresentation.findMany({
+      where: { id: { in: [box.id, master.id] } },
+      orderBy: { name: 'asc' },
+    });
+    expect(persisted.find((item) => item.id === box.id)?.conversionFactor).toBe(2000);
+    expect(persisted.find((item) => item.id === master.id)?.conversionFactor).toBe(4000);
+  });
+
+  it('la base de datos rechaza quantityContained no positivo', async () => {
+    const category = await prisma.category.create({ data: { name: 'Restricciones' } });
+    const product = await prisma.product.create({
+      data: {
+        categoryId: category.id,
+        code: 'CHK-001',
+        name: 'Producto constraint',
+        basePrice: new Prisma.Decimal('100.00'),
+      },
+    });
+
+    await expect(
+      prisma.productPresentation.create({
+        data: {
+          productId: product.id,
+          name: 'Inválida',
+          quantityContained: 0,
+          conversionFactor: 1,
+          price: new Prisma.Decimal('100.00'),
+        },
+      }),
+    ).rejects.toBeDefined();
+  });
+
   it('DELETE /api/v1/products/:productId/presentations/:id — debe inactivar presentación no default y rechazar default (200/400)', async () => {
     const category = await prisma.category.create({ data: { name: 'Vitaminas' } });
     const product = await prisma.product.create({

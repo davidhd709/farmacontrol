@@ -112,7 +112,7 @@ export class ProductPresentationService {
       saleEnabled: payload.saleEnabled ?? true,
       isDefault: payload.isDefault ?? false,
       isDefaultPurchase: payload.isDefaultPurchase ?? false,
-      isDefaultSale: payload.isDefaultSale ?? (payload.isDefault ?? false),
+      isDefaultSale: payload.isDefaultSale ?? payload.isDefault ?? false,
     });
 
     const saved = await this.presentationRepository.save(presentation);
@@ -208,17 +208,19 @@ export class ProductPresentationService {
     }
 
     // Resolver nuevo factor acumulado si cambia quantityContained o containedPresentationId
-    const newContainedId = payload.containedPresentationId !== undefined
-      ? payload.containedPresentationId
-      : presentation.containedPresentationId;
+    const newContainedId =
+      payload.containedPresentationId !== undefined
+        ? payload.containedPresentationId
+        : presentation.containedPresentationId;
 
     if (payload.quantityContained !== undefined && payload.quantityContained <= 0) {
       throw new ProductPresentationInvalidQuantityException(payload.quantityContained);
     }
 
-    const newQuantity = payload.quantityContained !== undefined
-      ? payload.quantityContained
-      : presentation.quantityContained;
+    const newQuantity =
+      payload.quantityContained !== undefined
+        ? payload.quantityContained
+        : presentation.quantityContained;
 
     const newConversionFactor = await this.resolveBaseFactor({
       productId,
@@ -227,6 +229,8 @@ export class ProductPresentationService {
       quantityContained: newQuantity,
     });
 
+    const previousConversionFactor = presentation.conversionFactor;
+
     presentation.update({
       ...payload,
       conversionFactor: newConversionFactor,
@@ -234,12 +238,10 @@ export class ProductPresentationService {
       containedPresentationId: newContainedId,
     });
 
-    const updated = await this.presentationRepository.update(presentation);
-
-    // Propagar actualización de factores en cascada si el factor base cambió
-    if (newConversionFactor !== presentation.conversionFactor) {
-      await this.propagateFactorUpdate(productId, updated.id, newConversionFactor);
-    }
+    const updated =
+      newConversionFactor !== previousConversionFactor
+        ? await this.presentationRepository.updateAndPropagateFactors(presentation)
+        : await this.presentationRepository.update(presentation);
 
     if (this.auditService) {
       await this.auditService.recordEvent({
@@ -394,30 +396,5 @@ export class ProductPresentationService {
     }
 
     return quantityContained * ancestorFactor;
-  }
-
-  /**
-   * Propaga el cambio de factor a todas las presentaciones dependientes de este producto.
-   */
-  private async propagateFactorUpdate(
-    productId: string,
-    parentPresentationId: string,
-    newParentFactor: number,
-  ): Promise<void> {
-    const children = await prisma.productPresentation.findMany({
-      where: {
-        productId,
-        containedPresentationId: parentPresentationId,
-      },
-    });
-
-    for (const child of children) {
-      const updatedChildFactor = child.quantityContained * newParentFactor;
-      await prisma.productPresentation.update({
-        where: { id: child.id },
-        data: { conversionFactor: updatedChildFactor },
-      });
-      await this.propagateFactorUpdate(productId, child.id, updatedChildFactor);
-    }
   }
 }

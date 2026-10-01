@@ -4,7 +4,12 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { SYSTEM_PERMISSIONS, SYSTEM_ROLES, type CategoryDto, type ProductDto } from '@farmacia/contracts';
+import {
+  SYSTEM_PERMISSIONS,
+  SYSTEM_ROLES,
+  type CategoryDto,
+  type ProductDto,
+} from '@farmacia/contracts';
 import { ApiError } from '../src/api/http-client';
 import { AuthContext, type AuthContextValue } from '../src/features/auth/context/auth-context';
 import * as categoriesApi from '../src/features/catalog/api/categories.api';
@@ -25,6 +30,14 @@ const mockCategories: CategoryDto[] = [
     id: 'cat-2',
     name: 'Antibióticos',
     description: null,
+    isActive: true,
+    createdAt: '2026-09-01T00:00:00.000Z',
+    updatedAt: '2026-09-01T00:00:00.000Z',
+  },
+  {
+    id: 'cat-home',
+    name: 'Hogar',
+    description: 'Productos no farmacéuticos para el hogar',
     isActive: true,
     createdAt: '2026-09-01T00:00:00.000Z',
     updatedAt: '2026-09-01T00:00:00.000Z',
@@ -95,11 +108,13 @@ function createMockAuthContext(permissions: string[] = []): AuthContextValue {
   };
 }
 
-function renderProductsPage(authContext = createMockAuthContext([
-  SYSTEM_PERMISSIONS.PRODUCTS_READ,
-  SYSTEM_PERMISSIONS.PRODUCTS_MANAGE,
-  SYSTEM_PERMISSIONS.CATEGORIES_READ,
-])) {
+function renderProductsPage(
+  authContext = createMockAuthContext([
+    SYSTEM_PERMISSIONS.PRODUCTS_READ,
+    SYSTEM_PERMISSIONS.PRODUCTS_MANAGE,
+    SYSTEM_PERMISSIONS.CATEGORIES_READ,
+  ]),
+) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
@@ -211,7 +226,9 @@ describe('Pantalla de Catálogo de Productos (UX-06 y UX-07)', () => {
     fireEvent.click(newBtn);
 
     const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByRole('heading', { name: 'Registrar Nuevo Producto' })).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole('heading', { name: 'Registrar Nuevo Producto' }),
+    ).toBeInTheDocument();
 
     // Llenar campos requeridos
     const nameInput = within(dialog).getByLabelText(/Nombre comercial/);
@@ -240,6 +257,74 @@ describe('Pantalla de Catálogo de Productos (UX-06 y UX-07)', () => {
           categoryId: 'cat-1',
           code: 'IBU-400',
           basePrice: 2000,
+        }),
+      );
+    });
+  });
+
+  it('registra un producto no farmacéutico sin INVIMA, principio activo ni concentración', async () => {
+    vi.spyOn(productsApi, 'fetchProducts').mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 10,
+      totalPages: 0,
+    });
+
+    const createSpy = vi.spyOn(productsApi, 'createProduct').mockResolvedValue({
+      id: 'prod-home',
+      categoryId: 'cat-home',
+      categoryName: 'Hogar',
+      code: 'CAL-20',
+      barcode: null,
+      name: 'Caldero 20 cm',
+      genericName: null,
+      concentration: null,
+      sanitaryRegistry: null,
+      manufacturer: null,
+      description: null,
+      requiresLotControl: false,
+      prescriptionRequired: false,
+      baseUnit: 'UNIDAD',
+      basePrice: '45000.00',
+      baseCost: '0.00',
+      isActive: true,
+      createdAt: '2026-09-27T00:00:00.000Z',
+      updatedAt: '2026-09-27T00:00:00.000Z',
+    });
+
+    renderProductsPage();
+
+    fireEvent.click(await screen.findByTestId('create-product-btn'));
+    const dialog = await screen.findByRole('dialog');
+
+    expect(within(dialog).getByLabelText(/Principio activo.*opcional/i)).not.toBeRequired();
+    expect(within(dialog).getByLabelText(/Concentración.*opcional/i)).not.toBeRequired();
+    expect(within(dialog).getByLabelText(/Registro Sanitario.*opcional/i)).not.toBeRequired();
+
+    await userEvent.type(within(dialog).getByLabelText(/Nombre comercial/), 'Caldero 20 cm');
+
+    fireEvent.mouseDown(within(dialog).getByLabelText(/Categoría/));
+    fireEvent.click(await screen.findByRole('option', { name: 'Hogar' }));
+
+    await userEvent.type(within(dialog).getByLabelText(/Código interno \(SKU\)/), 'CAL-20');
+
+    const priceInput = within(dialog).getByLabelText(/Precio base \(\$\)/);
+    await userEvent.clear(priceInput);
+    await userEvent.type(priceInput, '45000');
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Registrar producto' }));
+
+    await waitFor(() => {
+      expect(createSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'Caldero 20 cm',
+          categoryId: 'cat-home',
+          code: 'CAL-20',
+          genericName: null,
+          concentration: null,
+          sanitaryRegistry: null,
+          basePrice: 45000,
         }),
       );
     });
@@ -345,9 +430,7 @@ describe('Pantalla de Catálogo de Productos (UX-06 y UX-07)', () => {
     });
     fireEvent.click(inactivateBtn);
 
-    expect(
-      await screen.findByRole('heading', { name: 'Inactivar Producto' }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Inactivar Producto' })).toBeInTheDocument();
     expect(
       screen.getByText(/¿Estás seguro de que deseas inactivar el producto/),
     ).toBeInTheDocument();

@@ -156,6 +156,63 @@ export class PrismaProductPresentationRepository implements ProductPresentationR
     return this.toDomain(record);
   }
 
+  public async updateAndPropagateFactors(
+    presentation: ProductPresentation,
+  ): Promise<ProductPresentation> {
+    return this.client.$transaction(async (tx) => {
+      const record = await tx.productPresentation.update({
+        where: { id: presentation.id },
+        data: {
+          unitOfMeasureId: presentation.unitOfMeasureId,
+          containedPresentationId: presentation.containedPresentationId,
+          name: presentation.name,
+          barcode: presentation.barcode,
+          quantityContained: presentation.quantityContained,
+          conversionFactor: presentation.conversionFactor,
+          price: new Prisma.Decimal(presentation.price),
+          cost: new Prisma.Decimal(presentation.cost),
+          purchaseEnabled: presentation.purchaseEnabled,
+          saleEnabled: presentation.saleEnabled,
+          isDefault: presentation.isDefault,
+          isDefaultPurchase: presentation.isDefaultPurchase,
+          isDefaultSale: presentation.isDefaultSale,
+          isActive: presentation.isActive,
+          updatedAt: presentation.updatedAt,
+        },
+        include: presentationInclude,
+      });
+
+      await this.propagateDescendantFactors(
+        tx,
+        presentation.productId,
+        presentation.id,
+        presentation.conversionFactor,
+      );
+
+      return this.toDomain(record);
+    });
+  }
+
+  private async propagateDescendantFactors(
+    tx: Prisma.TransactionClient,
+    productId: string,
+    parentPresentationId: string,
+    parentFactor: number,
+  ): Promise<void> {
+    const children = await tx.productPresentation.findMany({
+      where: { productId, containedPresentationId: parentPresentationId },
+    });
+
+    for (const child of children) {
+      const factor = child.quantityContained * parentFactor;
+      await tx.productPresentation.update({
+        where: { id: child.id },
+        data: { conversionFactor: factor },
+      });
+      await this.propagateDescendantFactors(tx, productId, child.id, factor);
+    }
+  }
+
   public async unsetDefaultPresentations(productId: string, exceptId?: string): Promise<void> {
     await this.client.productPresentation.updateMany({
       where: {
