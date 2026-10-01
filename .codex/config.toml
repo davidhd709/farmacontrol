@@ -1,0 +1,34 @@
+[agents]
+max_threads = 3
+
+[agents.orquestador]
+description = "Coordina slices, especialistas, integración, validación y entrega final."
+config_file = "./agents/orquestador.toml"
+
+[agents.arquitecto]
+description = "Valida requerimientos, alcance, arquitectura, dependencias y decisiones pendientes."
+config_file = "./agents/arquitecto.toml"
+
+[agents.backend_fefo]
+description = "Implementa NestJS, dominio, API, transacciones, FEFO e idempotencia."
+config_file = "./agents/backend_fefo.toml"
+
+[agents.database]
+description = "Diseña y valida PostgreSQL, Prisma, migraciones, índices y concurrencia."
+config_file = "./agents/database.toml"
+
+[agents.frontend_pos]
+description = "Implementa React, POS, UX/UI, formularios, accesibilidad y consumo de API."
+config_file = "./agents/frontend_pos.toml"
+
+[agents.qa_concurrencia]
+description = "Diseña y ejecuta pruebas, regresión, idempotencia y concurrencia FEFO."
+config_file = "./agents/qa_concurrencia.toml"
+
+[agents.auditor_seguridad]
+description = "Audita en modo lectura corrección, seguridad, calidad y definición de terminado."
+config_file = "./agents/auditor_seguridad.toml"
+
+[agents.devops]
+description = "Gestiona Docker, VPS, proxy, TLS, migraciones, backups, observabilidad y release."
+config_file = "./agents/devops.toml"

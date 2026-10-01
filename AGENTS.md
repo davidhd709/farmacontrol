@@ -543,3 +543,42 @@ Problemas o decisiones todavía abiertas.
 Siguiente slice lógico.
 
 No comenzar automáticamente el siguiente slice.
+
+---
+
+## 18. Equipo multiagente
+
+El agente principal actúa como orquestador y debe seguir:
+
+- `.agents/rules/agente-orquestador.md`
+- `docs/ORQUESTACION_AGENTES.md`
+
+Los agentes personalizados ejecutables están en `.codex/agents/` y sus reglas de dominio en `.agents/rules/`.
+
+Delegar cuando existan subtareas independientes que puedan investigarse, implementarse o validarse en paralelo. Mantener el trabajo local en el agente principal cuando sea pequeño o secuencial.
+
+Reglas de coordinación:
+
+- máximo tres subagentes simultáneos;
+- un único escritor por archivo;
+- el arquitecto trabaja primero si hay alcance o reglas pendientes;
+- database precede a backend cuando cambia el esquema;
+- backend y frontend sólo trabajan en paralelo con contrato estable y archivos disjuntos;
+- QA valida después de integrar;
+- auditor_seguridad revisa en modo lectura antes del cierre;
+- devops interviene en infraestructura, despliegue, observabilidad, backups y releases;
+- el orquestador revisa el diff, consolida resultados y emite la respuesta final;
+- ningún subagente inicia automáticamente el siguiente slice.
+
+Cada delegación debe incluir objetivo, alcance, archivos permitidos, restricciones, dependencias, validaciones y resultado esperado.
+
+Cada subagente debe devolver:
+
+- estado: `PENDIENTE`, `EN PROGRESO`, `IMPLEMENTADO` o `BLOQUEADO`;
+- alcance atendido;
+- archivos leídos y modificados;
+- cambios o hallazgos con evidencia;
+- pruebas ejecutadas y resultado real;
+- decisiones tomadas;
+- pendientes y bloqueos;
+- recomendación de siguiente paso, sin ejecutarlo.
