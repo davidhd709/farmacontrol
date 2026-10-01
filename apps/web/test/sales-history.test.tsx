@@ -2,11 +2,7 @@ import { ThemeProvider } from '@mui/material';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  SYSTEM_PERMISSIONS,
-  SYSTEM_ROLES,
-  type SaleDto,
-} from '@farmacia/contracts';
+import { SYSTEM_PERMISSIONS, SYSTEM_ROLES, type SaleDto } from '@farmacia/contracts';
 import { AuthContext, type AuthContextValue } from '../src/features/auth/context/auth-context';
 import * as salesApi from '../src/features/sales/api/sales.api';
 import { SalesHistoryPage } from '../src/features/sales/pages/SalesHistoryPage';
@@ -103,7 +99,7 @@ const renderComponent = () => {
           <SalesHistoryPage />
         </AuthContext.Provider>
       </MemoryRouter>
-    </ThemeProvider>
+    </ThemeProvider>,
   );
 };
 
@@ -148,7 +144,17 @@ describe('SalesHistoryPage (Frontend Historial y Anulación UX-04 / UX-05)', () 
     fireEvent.click(receiptBtn);
 
     expect(await screen.findByText(/Comprobante N°: VEN-20260926-0001/i)).toBeInTheDocument();
-    expect(screen.getByText(/NIT: 900.123.456-7/i)).toBeInTheDocument();
+
+    const receiptDialog = screen.getByRole('dialog');
+    expect(receiptDialog).toHaveClass('sale-receipt-print');
+    expect(screen.queryByText(/NIT:/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Régimen Común/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Descuento' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Total línea' })).toBeInTheDocument();
+
+    const printSpy = vi.spyOn(window, 'print').mockImplementation(() => undefined);
+    fireEvent.click(screen.getByRole('button', { name: 'Imprimir Comprobante' }));
+    expect(printSpy).toHaveBeenCalledTimes(1);
   });
 
   it('debe permitir anular una venta completada solicitando motivo obligatorio (HU-019)', async () => {
@@ -164,20 +170,27 @@ describe('SalesHistoryPage (Frontend Historial y Anulación UX-04 / UX-05)', () 
 
     // Diálogo de confirmación con advertencia irreversible
     expect(await screen.findByTestId('cancel-sale-dialog')).toBeInTheDocument();
-    expect(screen.getByText(/Esta acción restituirá el stock automáticamente a los lotes originales/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Esta acción restituirá el stock automáticamente a los lotes originales/i),
+    ).toBeInTheDocument();
 
     const confirmCancelBtn = screen.getByTestId('confirm-cancel-sale-btn');
     expect(confirmCancelBtn).toBeDisabled();
 
     // Escribimos motivo válido
     const reasonInput = screen.getByTestId('cancel-reason-input').querySelector('textarea')!;
-    fireEvent.change(reasonInput, { target: { value: 'Devolución de cliente por medicamento incorrecto' } });
+    fireEvent.change(reasonInput, {
+      target: { value: 'Devolución de cliente por medicamento incorrecto' },
+    });
 
     expect(confirmCancelBtn).not.toBeDisabled();
     fireEvent.click(confirmCancelBtn);
 
     await waitFor(() => {
-      expect(salesApi.cancelSale).toHaveBeenCalledWith('sale-001', 'Devolución de cliente por medicamento incorrecto');
+      expect(salesApi.cancelSale).toHaveBeenCalledWith(
+        'sale-001',
+        'Devolución de cliente por medicamento incorrecto',
+      );
     });
   });
 });

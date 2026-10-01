@@ -28,3 +28,28 @@ body {
 * {
   box-sizing: border-box;
 }
+
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+
+  .sale-receipt-print,
+  .sale-receipt-print * {
+    visibility: visible !important;
+  }
+
+  .sale-receipt-print {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+  }
+
+  .sale-receipt-no-print {
+    display: none !important;
+  }
+}

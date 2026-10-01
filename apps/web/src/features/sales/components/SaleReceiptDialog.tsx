@@ -37,9 +37,19 @@ export const SaleReceiptDialog: React.FC<SaleReceiptDialogProps> = ({
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 1 }}>
-        <Typography component="span" variant="h6" sx={{ fontWeight: 700 }}>Comprobante de Venta</Typography>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="sm"
+      fullWidth
+      slotProps={{ paper: { className: 'sale-receipt-print' } }}
+    >
+      <DialogTitle
+        sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 1 }}
+      >
+        <Typography component="span" variant="h6" sx={{ fontWeight: 700 }}>
+          Comprobante de Venta
+        </Typography>
         <Chip
           label={sale.status === 'COMPLETED' ? 'Venta Confirmada' : 'Venta Anulada'}
           color={sale.status === 'COMPLETED' ? 'success' : 'error'}
@@ -50,10 +60,7 @@ export const SaleReceiptDialog: React.FC<SaleReceiptDialogProps> = ({
       <DialogContent dividers sx={{ '@media print': { p: 0 } }}>
         <Box sx={{ textAlign: 'center', mb: 2 }}>
           <Typography variant="h5" sx={{ fontWeight: 800, color: 'primary.main' }}>
-            FARMACIA CENTRAL
-          </Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-            NIT: 900.123.456-7 • Régimen Común • Facturación POS
+            Comprobante de venta
           </Typography>
           <Typography variant="subtitle2" sx={{ fontWeight: 700, mt: 1 }}>
             Comprobante N°: {sale.invoiceNumber}
@@ -82,9 +89,18 @@ export const SaleReceiptDialog: React.FC<SaleReceiptDialogProps> = ({
           <TableHead sx={{ bgcolor: 'action.hover' }}>
             <TableRow>
               <TableCell sx={{ fontWeight: 600 }}>Descripción / Lotes FEFO</TableCell>
-              <TableCell align="right" sx={{ fontWeight: 600 }}>Cant.</TableCell>
-              <TableCell align="right" sx={{ fontWeight: 600 }}>V. Unit</TableCell>
-              <TableCell align="right" sx={{ fontWeight: 600 }}>Subtotal</TableCell>
+              <TableCell align="right" sx={{ fontWeight: 600 }}>
+                Cant.
+              </TableCell>
+              <TableCell align="right" sx={{ fontWeight: 600 }}>
+                V. Unit
+              </TableCell>
+              <TableCell align="right" sx={{ fontWeight: 600 }}>
+                Descuento
+              </TableCell>
+              <TableCell align="right" sx={{ fontWeight: 600 }}>
+                Total línea
+              </TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -103,8 +119,13 @@ export const SaleReceiptDialog: React.FC<SaleReceiptDialogProps> = ({
                   {line.lotAllocations && line.lotAllocations.length > 0 && (
                     <Box sx={{ mt: 0.5 }}>
                       {line.lotAllocations.map((alloc) => (
-                        <Typography key={alloc.id} variant="caption" sx={{ display: 'block', color: 'text.secondary', fontSize: '0.75rem' }}>
-                          • Lote: <strong>{alloc.lotNumber || 'N/A'}</strong> (Vence: {alloc.expirationDate || 'N/A'}) → {alloc.quantityBaseUnits} un. base
+                        <Typography
+                          key={alloc.id}
+                          variant="caption"
+                          sx={{ display: 'block', color: 'text.secondary', fontSize: '0.75rem' }}
+                        >
+                          • Lote: <strong>{alloc.lotNumber || 'N/A'}</strong> (Vence:{' '}
+                          {alloc.expirationDate || 'N/A'}) → {alloc.quantityBaseUnits} un. base
                         </Typography>
                       ))}
                     </Box>
@@ -112,6 +133,7 @@ export const SaleReceiptDialog: React.FC<SaleReceiptDialogProps> = ({
                 </TableCell>
                 <TableCell align="right">{line.quantityCommercial}</TableCell>
                 <TableCell align="right">${line.unitPrice.toLocaleString('es-CO')}</TableCell>
+                <TableCell align="right">${line.discount.toLocaleString('es-CO')}</TableCell>
                 <TableCell align="right">${line.total.toLocaleString('es-CO')}</TableCell>
               </TableRow>
             ))}
@@ -127,9 +149,18 @@ export const SaleReceiptDialog: React.FC<SaleReceiptDialogProps> = ({
             <Typography variant="body2">${sale.subtotal.toLocaleString('es-CO')}</Typography>
           </Box>
           {sale.discountTotal > 0 && (
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '220px', color: 'error.main' }}>
+            <Box
+              sx={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                width: '220px',
+                color: 'error.main',
+              }}
+            >
               <Typography variant="body2">Descuento:</Typography>
-              <Typography variant="body2">-${sale.discountTotal.toLocaleString('es-CO')}</Typography>
+              <Typography variant="body2">
+                -${sale.discountTotal.toLocaleString('es-CO')}
+              </Typography>
             </Box>
           )}
           {sale.taxTotal > 0 && (
@@ -138,8 +169,20 @@ export const SaleReceiptDialog: React.FC<SaleReceiptDialogProps> = ({
               <Typography variant="body2">${sale.taxTotal.toLocaleString('es-CO')}</Typography>
             </Box>
           )}
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '220px', mt: 0.5, pt: 0.5, borderTop: 1, borderColor: 'divider' }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Total:</Typography>
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              width: '220px',
+              mt: 0.5,
+              pt: 0.5,
+              borderTop: 1,
+              borderColor: 'divider',
+            }}
+          >
+            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+              Total:
+            </Typography>
             <Typography variant="subtitle1" sx={{ fontWeight: 800, color: 'primary.main' }}>
               ${sale.total.toLocaleString('es-CO')}
             </Typography>
@@ -147,20 +190,33 @@ export const SaleReceiptDialog: React.FC<SaleReceiptDialogProps> = ({
 
           {sale.paymentMethod === 'EFECTIVO' && (
             <>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '220px', mt: 0.5 }}>
-                <Typography variant="caption" color="text.secondary">Recibido:</Typography>
-                <Typography variant="caption">${sale.amountPaid.toLocaleString('es-CO')}</Typography>
+              <Box
+                sx={{ display: 'flex', justifyContent: 'space-between', width: '220px', mt: 0.5 }}
+              >
+                <Typography variant="caption" color="text.secondary">
+                  Recibido:
+                </Typography>
+                <Typography variant="caption">
+                  ${sale.amountPaid.toLocaleString('es-CO')}
+                </Typography>
               </Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '220px' }}>
-                <Typography variant="caption" color="text.secondary">Cambio:</Typography>
-                <Typography variant="caption" sx={{ fontWeight: 600 }}>${sale.changeGiven.toLocaleString('es-CO')}</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Cambio:
+                </Typography>
+                <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                  ${sale.changeGiven.toLocaleString('es-CO')}
+                </Typography>
               </Box>
             </>
           )}
         </Box>
       </DialogContent>
 
-      <DialogActions sx={{ p: 2, display: 'flex', justifyContent: 'space-between' }}>
+      <DialogActions
+        className="sale-receipt-no-print"
+        sx={{ p: 2, display: 'flex', justifyContent: 'space-between' }}
+      >
         <Button variant="outlined" color="primary" onClick={handlePrint}>
           Imprimir Comprobante
         </Button>
