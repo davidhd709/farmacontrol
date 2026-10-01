@@ -100,9 +100,16 @@ export const SYSTEM_PERMISSIONS = {
 
   // Resiliencia y administración
   BACKUPS_MANAGE: 'backups:manage',
+
+  // Configuración contable
+  ACCOUNTING_READ: 'accounting:read',
+  ACCOUNTING_MANAGE: 'accounting:manage',
 } as const;
 
 export type SystemPermission = (typeof SYSTEM_PERMISSIONS)[keyof typeof SYSTEM_PERMISSIONS];
+
+export * from './accounting';
+export * from './product-tax-profile';
 
 export interface RoleDto {
   id: string;
@@ -946,4 +953,3 @@ export interface VerifyBackupResultDto {
   sha256Match: boolean;
   message: string;
 }
-

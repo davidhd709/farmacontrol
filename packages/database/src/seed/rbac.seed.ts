@@ -72,6 +72,8 @@ export const BASE_PERMISSIONS: PermissionDefinition[] = [
 
   // Resiliencia y administración
   { name: SYSTEM_PERMISSIONS.BACKUPS_MANAGE, description: 'Gestionar y ejecutar copias de seguridad' },
+  { name: SYSTEM_PERMISSIONS.ACCOUNTING_READ, description: 'Consultar plan de cuentas y propósitos contables' },
+  { name: SYSTEM_PERMISSIONS.ACCOUNTING_MANAGE, description: 'Administrar cuentas, mapeos e importaciones contables' },
 ];
 
 export const BASE_ROLES: RoleDefinition[] = [

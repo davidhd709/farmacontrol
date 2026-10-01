@@ -17,7 +17,6 @@ import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import MonetizationOnIcon from '@mui/icons-material/MonetizationOn';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
-import ManageAccountsIcon from '@mui/icons-material/ManageAccounts';
 import { SYSTEM_PERMISSIONS } from '@farmacia/contracts';
 import { useAuth } from '../features/auth/hooks/useAuth';
 import { usePermissions } from '../features/auth/hooks/usePermissions';
@@ -59,7 +58,7 @@ export function AuthenticatedHomePage() {
 
   const totalReceivablesBalance = (receivablesQuery.data?.items ?? []).reduce(
     (acc, curr) => acc + (curr.status === 'PENDIENTE' ? Number(curr.balance) : 0),
-    0
+    0,
   );
 
   const todayFormatted = new Intl.DateTimeFormat('es-CO', {
@@ -112,16 +111,23 @@ export function AuthenticatedHomePage() {
                     ¡Bienvenido, {user?.username}!
                   </Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 0.2 }}>
-                    Tu sesión está activa con {permissions.length} permisos habilitados en la plataforma.
+                    Tu sesión está activa con {permissions.length} permisos habilitados en la
+                    plataforma.
                   </Typography>
-                  <Typography variant="caption" sx={{ color: 'text.disabled', textTransform: 'capitalize' }}>
+                  <Typography
+                    variant="caption"
+                    sx={{ color: 'text.disabled', textTransform: 'capitalize' }}
+                  >
                     📅 {todayFormatted}
                   </Typography>
                 </Box>
               </Box>
 
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
-                <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', mr: 0.5 }}>
+                <Typography
+                  variant="caption"
+                  sx={{ fontWeight: 700, color: 'text.secondary', mr: 0.5 }}
+                >
                   ROLES:
                 </Typography>
                 {roles.length > 0 ? (
@@ -143,7 +149,10 @@ export function AuthenticatedHomePage() {
 
           {/* Tarjetas de Métricas en Tiempo Real (KPIs del Negocio) */}
           <Box>
-            <Typography variant="subtitle2" sx={{ fontWeight: 800, color: 'text.secondary', mb: 1.5, letterSpacing: '0.05em' }}>
+            <Typography
+              variant="subtitle2"
+              sx={{ fontWeight: 800, color: 'text.secondary', mb: 1.5, letterSpacing: '0.05em' }}
+            >
               MÉTRICAS Y ESTADO OPERATIVO EN TIEMPO REAL
             </Typography>
 
@@ -155,23 +164,45 @@ export function AuthenticatedHomePage() {
               }}
             >
               {/* KPI 1: Facturación y Punto de Venta */}
-              <PermissionGate anyOf={[SYSTEM_PERMISSIONS.SALES_CREATE, SYSTEM_PERMISSIONS.SALES_READ]}>
+              <PermissionGate
+                anyOf={[SYSTEM_PERMISSIONS.SALES_CREATE, SYSTEM_PERMISSIONS.SALES_READ]}
+              >
                 <Card
                   variant="outlined"
                   sx={{
                     borderRadius: 3,
                     bgcolor: '#FFFFFF',
                     transition: 'all 0.2s ease',
-                    '&:hover': { boxShadow: '0 4px 12px rgba(15, 118, 110, 0.1)', borderColor: 'primary.main' },
+                    '&:hover': {
+                      boxShadow: '0 4px 12px rgba(15, 118, 110, 0.1)',
+                      borderColor: 'primary.main',
+                    },
                   }}
                 >
                   <CardContent sx={{ p: 2.5 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'flex-start',
+                        mb: 1.5,
+                      }}
+                    >
                       <Box>
-                        <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase' }}>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            fontWeight: 700,
+                            color: 'text.secondary',
+                            textTransform: 'uppercase',
+                          }}
+                        >
                           Punto de Venta (POS)
                         </Typography>
-                        <Typography variant="h6" sx={{ fontWeight: 800, mt: 0.5, color: 'text.primary' }}>
+                        <Typography
+                          variant="h6"
+                          sx={{ fontWeight: 800, mt: 0.5, color: 'text.primary' }}
+                        >
                           Dispensación FEFO
                         </Typography>
                       </Box>
@@ -190,7 +221,11 @@ export function AuthenticatedHomePage() {
                         <PointOfSaleIcon />
                       </Box>
                     </Box>
-                    <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem', mb: 2 }}>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ fontSize: '0.8rem', mb: 2 }}
+                    >
                       Facturación ágil con salida atómica e inmutable en inventario.
                     </Typography>
                     <PermissionGate permission={SYSTEM_PERMISSIONS.SALES_CREATE}>
@@ -218,19 +253,39 @@ export function AuthenticatedHomePage() {
                     borderRadius: 3,
                     bgcolor: '#FFFFFF',
                     transition: 'all 0.2s ease',
-                    '&:hover': { boxShadow: '0 4px 12px rgba(16, 185, 129, 0.12)', borderColor: 'success.main' },
+                    '&:hover': {
+                      boxShadow: '0 4px 12px rgba(16, 185, 129, 0.12)',
+                      borderColor: 'success.main',
+                    },
                   }}
                 >
                   <CardContent sx={{ p: 2.5 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'flex-start',
+                        mb: 1.5,
+                      }}
+                    >
                       <Box>
-                        <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase' }}>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            fontWeight: 700,
+                            color: 'text.secondary',
+                            textTransform: 'uppercase',
+                          }}
+                        >
                           Efectivo en Caja
                         </Typography>
                         {cashQuery.isLoading ? (
                           <Skeleton width={100} height={32} />
                         ) : (
-                          <Typography variant="h5" sx={{ fontWeight: 800, mt: 0.5, color: 'success.dark' }}>
+                          <Typography
+                            variant="h5"
+                            sx={{ fontWeight: 800, mt: 0.5, color: 'success.dark' }}
+                          >
                             ${cashBalance.toLocaleString('es-CO', { minimumFractionDigits: 2 })}
                           </Typography>
                         )}
@@ -250,7 +305,11 @@ export function AuthenticatedHomePage() {
                         <AccountBalanceWalletIcon />
                       </Box>
                     </Box>
-                    <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem', mb: 2 }}>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ fontSize: '0.8rem', mb: 2 }}
+                    >
                       Saldo en caja disponible para operaciones y devoluciones.
                     </Typography>
                     <Button
@@ -280,9 +339,23 @@ export function AuthenticatedHomePage() {
                   }}
                 >
                   <CardContent sx={{ p: 2.5 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'flex-start',
+                        mb: 1.5,
+                      }}
+                    >
                       <Box>
-                        <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase' }}>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            fontWeight: 700,
+                            color: 'text.secondary',
+                            textTransform: 'uppercase',
+                          }}
+                        >
                           Lotes en Riesgo
                         </Typography>
                         {alertsQuery.isLoading ? (
@@ -297,7 +370,11 @@ export function AuthenticatedHomePage() {
                             }}
                           >
                             {criticalCount}{' '}
-                            <Typography component="span" variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
+                            <Typography
+                              component="span"
+                              variant="caption"
+                              sx={{ color: 'text.secondary', fontWeight: 600 }}
+                            >
                               lotes
                             </Typography>
                           </Typography>
@@ -308,7 +385,10 @@ export function AuthenticatedHomePage() {
                           width: 42,
                           height: 42,
                           borderRadius: 2.5,
-                          bgcolor: criticalCount > 0 ? 'rgba(239, 68, 68, 0.1)' : 'rgba(245, 158, 11, 0.1)',
+                          bgcolor:
+                            criticalCount > 0
+                              ? 'rgba(239, 68, 68, 0.1)'
+                              : 'rgba(245, 158, 11, 0.1)',
                           color: criticalCount > 0 ? 'error.main' : '#F59E0B',
                           display: 'flex',
                           alignItems: 'center',
@@ -318,7 +398,11 @@ export function AuthenticatedHomePage() {
                         <WarningAmberIcon />
                       </Box>
                     </Box>
-                    <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem', mb: 2 }}>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ fontSize: '0.8rem', mb: 2 }}
+                    >
                       {alerts?.vencidos ?? 0} vencidos • {alerts?.criticos ?? 0} críticos (&lt;30d).
                     </Typography>
                     <Button
@@ -343,20 +427,43 @@ export function AuthenticatedHomePage() {
                     borderRadius: 3,
                     bgcolor: '#FFFFFF',
                     transition: 'all 0.2s ease',
-                    '&:hover': { boxShadow: '0 4px 12px rgba(14, 165, 233, 0.12)', borderColor: 'info.main' },
+                    '&:hover': {
+                      boxShadow: '0 4px 12px rgba(14, 165, 233, 0.12)',
+                      borderColor: 'info.main',
+                    },
                   }}
                 >
                   <CardContent sx={{ p: 2.5 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'flex-start',
+                        mb: 1.5,
+                      }}
+                    >
                       <Box>
-                        <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase' }}>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            fontWeight: 700,
+                            color: 'text.secondary',
+                            textTransform: 'uppercase',
+                          }}
+                        >
                           Cartera de Clientes
                         </Typography>
                         {receivablesQuery.isLoading ? (
                           <Skeleton width={100} height={32} />
                         ) : (
-                          <Typography variant="h5" sx={{ fontWeight: 800, mt: 0.5, color: 'text.primary' }}>
-                            ${totalReceivablesBalance.toLocaleString('es-CO', { minimumFractionDigits: 2 })}
+                          <Typography
+                            variant="h5"
+                            sx={{ fontWeight: 800, mt: 0.5, color: 'text.primary' }}
+                          >
+                            $
+                            {totalReceivablesBalance.toLocaleString('es-CO', {
+                              minimumFractionDigits: 2,
+                            })}
                           </Typography>
                         )}
                       </Box>
@@ -375,7 +482,11 @@ export function AuthenticatedHomePage() {
                         <MonetizationOnIcon />
                       </Box>
                     </Box>
-                    <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem', mb: 2 }}>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ fontSize: '0.8rem', mb: 2 }}
+                    >
                       Créditos comerciales pendientes de recaudo y abonos.
                     </Typography>
                     <Button
@@ -387,60 +498,6 @@ export function AuthenticatedHomePage() {
                       sx={{ textTransform: 'none', fontWeight: 600 }}
                     >
                       Ver Cuentas por Cobrar
-                    </Button>
-                  </CardContent>
-                </Card>
-              </PermissionGate>
-
-              {/* KPI 5: Administración / Gestión de Usuarios (Solo con permiso) */}
-              <PermissionGate permission={SYSTEM_PERMISSIONS.USERS_READ}>
-                <Card
-                  variant="outlined"
-                  sx={{
-                    borderRadius: 3,
-                    bgcolor: '#FFFFFF',
-                    transition: 'all 0.2s ease',
-                    '&:hover': { boxShadow: '0 4px 12px rgba(236, 72, 153, 0.12)', borderColor: 'secondary.main' },
-                  }}
-                >
-                  <CardContent sx={{ p: 2.5 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
-                      <Box>
-                        <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase' }}>
-                          Administración
-                        </Typography>
-                        <Typography variant="h6" sx={{ fontWeight: 800, mt: 0.5, color: 'text.primary' }}>
-                          Gestión de Usuarios
-                        </Typography>
-                      </Box>
-                      <Box
-                        sx={{
-                          width: 42,
-                          height: 42,
-                          borderRadius: 2.5,
-                          bgcolor: 'rgba(236, 72, 153, 0.1)',
-                          color: '#EC4899',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                      >
-                        <ManageAccountsIcon />
-                      </Box>
-                    </Box>
-                    <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem', mb: 2 }}>
-                      Control de accesos, roles y activación de cuentas.
-                    </Typography>
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      color="inherit"
-                      fullWidth
-                      onClick={() => navigate('/users')}
-                      data-testid="users-nav-btn"
-                      sx={{ textTransform: 'none', fontWeight: 600 }}
-                    >
-                      Administrar Usuarios
                     </Button>
                   </CardContent>
                 </Card>
@@ -464,20 +521,38 @@ export function AuthenticatedHomePage() {
               </Typography>
             </Box>
             <Stack spacing={1.5}>
-              <Box sx={{ p: 2, borderRadius: 2, bgcolor: '#F8FAFC', border: 1, borderColor: 'divider' }}>
+              <Box
+                sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  bgcolor: '#F8FAFC',
+                  border: 1,
+                  borderColor: 'divider',
+                }}
+              >
                 <Typography variant="body2" sx={{ fontWeight: 700, color: 'text.primary' }}>
                   🎯 Motor de Dispensación FEFO Activo:
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                  Toda venta reserva automáticamente los lotes con fecha de vencimiento más próxima de forma inmutable, garantizando cero pérdidas de producto vencido.
+                  Toda venta reserva automáticamente los lotes con fecha de vencimiento más próxima
+                  de forma inmutable, garantizando cero pérdidas de producto vencido.
                 </Typography>
               </Box>
-              <Box sx={{ p: 2, borderRadius: 2, bgcolor: '#F8FAFC', border: 1, borderColor: 'divider' }}>
+              <Box
+                sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  bgcolor: '#F8FAFC',
+                  border: 1,
+                  borderColor: 'divider',
+                }}
+              >
                 <Typography variant="body2" sx={{ fontWeight: 700, color: 'text.primary' }}>
                   🛡️ Navegación Centralizada:
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                  Utiliza el menú lateral izquierdo para acceder rápidamente a Ventas, Inventario, Contabilidad, Reportes y Configuración de acuerdo a tus roles asignados.
+                  Utiliza el menú lateral izquierdo para acceder rápidamente a Ventas, Inventario,
+                  Contabilidad, Reportes y Configuración de acuerdo a tus roles asignados.
                 </Typography>
               </Box>
             </Stack>

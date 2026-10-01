@@ -24,6 +24,9 @@ model User {
   idempotencyKeys       IdempotencyKey[]    @relation("UserIdempotencyKeys")
   receivablePayments    ReceivablePayment[]
   payablePayments       PayablePayment[]
+  accountingMappingsUpdated CompanyAccountingMapping[] @relation("AccountingMappingsUpdated")
+  journalEntriesCreated JournalEntry[] @relation("JournalEntriesCreated")
+  taxProfilesActivated ProductTaxProfile[] @relation("ProductTaxProfilesActivated")
 
   @@map("users")
 }
@@ -170,6 +173,7 @@ model Product {
   purchaseLines        PurchaseLine[]
   saleLines            SaleLine[]
   alerts               InventoryAlert[]
+  taxProfiles          ProductTaxProfile[]
 
   @@index([categoryId])
   @@index([name])
@@ -624,3 +628,169 @@ model BackgroundJob {
   @@map("background_jobs")
 }
 
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  INCOME
+  EXPENSE
+  COST
+}
+
+enum AccountingPurpose {
+  CASH
+  BANK
+  CUSTOMERS
+  SUPPLIERS
+  INVENTORY
+  SALES_TAXED
+  SALES_EXCLUDED
+  COST_OF_SALES
+  VAT_OUTPUT
+  VAT_INPUT
+  VAT_INPUT_COMMON
+  VAT_NON_DEDUCTIBLE
+  SIMPLE_TAX_ADVANCE
+  SALES_RETURNS
+  SALES_DISCOUNTS
+  CAPITAL
+  CURRENT_YEAR_RESULT
+}
+
+enum AccountingMappingStatus {
+  PENDING_MAPPING
+  ACTIVE
+  INACTIVE
+}
+
+model Account {
+  id             String      @id @default(uuid()) @db.Uuid
+  code           String      @unique @db.VarChar(32)
+  name           String      @db.VarChar(255)
+  type           AccountType
+  parentId       String?     @map("parent_id") @db.Uuid
+  level          Int
+  allowsMovement Boolean     @default(false) @map("allows_movement")
+  isActive       Boolean     @default(true) @map("is_active")
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime    @updatedAt @map("updated_at") @db.Timestamptz
+
+  parent   Account?                   @relation("AccountHierarchy", fields: [parentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  children Account[]                  @relation("AccountHierarchy")
+  mappings CompanyAccountingMapping[]
+  journalEntryLines JournalEntryLine[]
+
+  @@index([parentId])
+  @@index([name])
+  @@index([type, isActive])
+  @@map("accounts")
+}
+
+model CompanyAccountingMapping {
+  id            String                  @id @default(uuid()) @db.Uuid
+  purpose       AccountingPurpose
+  accountId     String?                 @map("account_id") @db.Uuid
+  status        AccountingMappingStatus @default(PENDING_MAPPING)
+  effectiveFrom DateTime                @default(now()) @map("effective_from") @db.Date
+  effectiveTo   DateTime?               @map("effective_to") @db.Date
+  createdAt     DateTime                @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime                @updatedAt @map("updated_at") @db.Timestamptz
+  updatedById   String?                 @map("updated_by_id") @db.Uuid
+
+  account   Account? @relation(fields: [accountId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  updatedBy User?    @relation("AccountingMappingsUpdated", fields: [updatedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([accountId])
+  @@index([updatedById])
+  @@index([purpose, status, effectiveFrom])
+  @@map("company_accounting_mappings")
+}
+
+
+enum JournalEntryStatus {
+  DRAFT
+  POSTED
+}
+
+model JournalEntry {
+  id             String             @id @default(uuid()) @db.Uuid
+  entryDate      DateTime           @map("entry_date") @db.Date
+  description    String             @db.VarChar(500)
+  sourceType     String             @map("source_type") @db.VarChar(64)
+  sourceId       String             @map("source_id") @db.VarChar(128)
+  status         JournalEntryStatus @default(DRAFT)
+  createdById    String?            @map("created_by_id") @db.Uuid
+  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz
+  postedAt       DateTime?          @map("posted_at") @db.Timestamptz
+  reversalOfId   String?            @unique @map("reversal_of_id") @db.Uuid
+  reversalReason String?            @map("reversal_reason") @db.VarChar(500)
+
+  createdBy      User?              @relation("JournalEntriesCreated", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  reversalOf     JournalEntry?      @relation("JournalEntryReversal", fields: [reversalOfId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  reversal       JournalEntry?      @relation("JournalEntryReversal")
+  lines          JournalEntryLine[]
+
+  @@unique([sourceType, sourceId])
+  @@index([entryDate, id])
+  @@index([createdById])
+  @@map("journal_entries")
+}
+
+model JournalEntryLine {
+  id             String       @id @default(uuid()) @db.Uuid
+  journalEntryId String       @map("journal_entry_id") @db.Uuid
+  position       Int
+  accountId      String       @map("account_id") @db.Uuid
+  purpose        AccountingPurpose?
+  description    String?      @db.VarChar(500)
+  debit          Decimal      @db.Decimal(20, 2)
+  credit         Decimal      @db.Decimal(20, 2)
+
+  journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  account        Account      @relation(fields: [accountId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([journalEntryId, position])
+  @@index([accountId])
+  @@map("journal_entry_lines")
+}
+
+enum TaxProfileOperation {
+  SALE
+  PURCHASE
+}
+
+enum TaxTreatment {
+  GRAVADO
+  EXENTO
+  EXCLUIDO
+  NO_APLICA
+}
+
+enum TaxProfileStatus {
+  DRAFT
+  ACTIVE
+}
+
+model ProductTaxProfile {
+  id                String              @id @default(uuid()) @db.Uuid
+  productId         String              @map("product_id") @db.Uuid
+  operation         TaxProfileOperation
+  treatment         TaxTreatment
+  ratePct           Decimal?            @map("rate_pct") @db.Decimal(7, 4)
+  status            TaxProfileStatus    @default(DRAFT)
+  effectiveFrom     DateTime            @map("effective_from") @db.Date
+  effectiveTo       DateTime?           @map("effective_to") @db.Date
+  documentReference String?             @map("document_reference") @db.VarChar(500)
+  activatedById     String?             @map("activated_by_id") @db.Uuid
+  activatedAt       DateTime?           @map("activated_at") @db.Timestamptz
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime            @updatedAt @map("updated_at") @db.Timestamptz
+
+  product           Product             @relation(fields: [productId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  activatedBy       User?               @relation("ProductTaxProfilesActivated", fields: [activatedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([productId, operation, status, effectiveFrom])
+  @@index([activatedById])
+  @@map("product_tax_profiles")
+}

@@ -20,6 +20,11 @@ import { ExpirationAlertsPage } from './features/alerts/pages/ExpirationAlertsPa
 import { ReportsPage } from './features/reports/pages/ReportsPage';
 import { BackupManagementPage } from './features/backups/pages/BackupManagementPage';
 import { UsersPage } from './features/users/pages/UsersPage';
+import {
+  AccountsPage,
+  PurposesPage,
+  ImportAccountsPage,
+} from './features/accounting/pages/AccountingPages';
 
 import { AppLayout } from './components/layout/AppLayout';
 
@@ -51,6 +56,9 @@ export const App = () => {
           <Route path="/cash" element={<CashPage />} />
           <Route path="/receivables" element={<ReceivablesPage />} />
           <Route path="/payables" element={<PayablesPage />} />
+          <Route path="/accounting/accounts" element={<AccountsPage />} />
+          <Route path="/accounting/purposes" element={<PurposesPage />} />
+          <Route path="/accounting/import" element={<ImportAccountsPage />} />
         </Route>
       </Route>
 

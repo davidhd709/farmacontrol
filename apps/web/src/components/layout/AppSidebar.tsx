@@ -33,6 +33,9 @@ import PaymentsIcon from '@mui/icons-material/Payments';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import ManageAccountsIcon from '@mui/icons-material/ManageAccounts';
 import CloudSyncIcon from '@mui/icons-material/CloudSync';
+import AccountTreeIcon from '@mui/icons-material/AccountTree';
+import RuleIcon from '@mui/icons-material/Rule';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { usePermissions } from '../../features/auth/hooks/usePermissions';
 import { SYSTEM_PERMISSIONS } from '@farmacia/contracts';
 
@@ -197,6 +200,29 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ open, onClose }) => {
         },
       ],
     },
+    {
+      category: 'CONFIGURACIÓN CONTABLE',
+      items: [
+        {
+          title: 'Plan de Cuentas',
+          path: '/accounting/accounts',
+          icon: <AccountTreeIcon fontSize="small" />,
+          permission: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
+        },
+        {
+          title: 'Propósitos Contables',
+          path: '/accounting/purposes',
+          icon: <RuleIcon fontSize="small" />,
+          permission: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
+        },
+        {
+          title: 'Importar Plan de Cuentas',
+          path: '/accounting/import',
+          icon: <UploadFileIcon fontSize="small" />,
+          permission: SYSTEM_PERMISSIONS.ACCOUNTING_MANAGE,
+        },
+      ],
+    },
   ];
 
   const handleNavigate = (path: string) => {
@@ -227,8 +253,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ open, onClose }) => {
             px: 2,
             bgcolor: location.pathname === '/' ? 'primary.main' : 'background.paper',
             color: location.pathname === '/' ? '#FFFFFF' : 'text.primary',
-            boxShadow:
-              location.pathname === '/' ? '0 3px 8px rgba(15, 118, 110, 0.3)' : 'none',
+            boxShadow: location.pathname === '/' ? '0 3px 8px rgba(15, 118, 110, 0.3)' : 'none',
             '&:hover': {
               bgcolor: location.pathname === '/' ? 'primary.dark' : 'action.hover',
             },
@@ -251,9 +276,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ open, onClose }) => {
           </ListItemIcon>
           <ListItemText
             primary={
-              <Typography sx={{ fontWeight: 800, fontSize: '0.9rem' }}>
-                Panel Principal
-              </Typography>
+              <Typography sx={{ fontWeight: 800, fontSize: '0.9rem' }}>Panel Principal</Typography>
             }
           />
         </ListItemButton>
@@ -356,7 +379,10 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ open, onClose }) => {
 
       {/* Pie del Sidebar: Versión e info técnica */}
       <Box sx={{ p: 2, borderTop: 1, borderColor: 'divider', bgcolor: '#FAFAFA' }}>
-        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', fontWeight: 600 }}>
+        <Typography
+          variant="caption"
+          sx={{ color: 'text.secondary', display: 'block', fontWeight: 600 }}
+        >
           FarmaControl v1.0 • Producción
         </Typography>
         <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '0.65rem' }}>

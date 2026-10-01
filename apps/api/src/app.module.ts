@@ -16,12 +16,13 @@ import { PayablesModule } from './modules/payables/payables.module';
 import { AlertsModule } from './modules/alerts/alerts.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { BackupsModule } from './modules/backups/backups.module';
+import { AccountingModule } from './modules/accounting/accounting.module';
 import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
 import { CorrelationIdInterceptor } from './common/interceptors/correlation-id.interceptor';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
 @Module({
-  imports: [IdentityModule, AuditModule, CatalogModule, InventoryModule, SuppliersModule, PurchasesModule, CashModule, CustomersModule, SalesModule, ReceivablesModule, PayablesModule, AlertsModule, ReportsModule, BackupsModule],
+  imports: [IdentityModule, AuditModule, CatalogModule, InventoryModule, SuppliersModule, PurchasesModule, CashModule, CustomersModule, SalesModule, ReceivablesModule, PayablesModule, AlertsModule, ReportsModule, BackupsModule, AccountingModule],
   controllers: [AppController],
   providers: [
     AppService,

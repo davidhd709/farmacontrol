@@ -41,8 +41,15 @@ function renderWithContext(ui: React.ReactElement, authValue: AuthContextValue) 
 
 // Componente auxiliar para probar el hook usePermissions
 function HookConsumer() {
-  const { hasPermission, hasAnyPermission, hasAllPermissions, hasRole, isAdmin, roles, permissions } =
-    usePermissions();
+  const {
+    hasPermission,
+    hasAnyPermission,
+    hasAllPermissions,
+    hasRole,
+    isAdmin,
+    roles,
+    permissions,
+  } = usePermissions();
 
   return (
     <div>
@@ -205,7 +212,7 @@ describe('RBAC Frontend — usePermissions y PermissionGate (Slice 003.3)', () =
       expect(screen.queryByText('Gestión de Usuarios')).not.toBeInTheDocument();
     });
 
-    it('muestra el módulo de Administración / Gestión de Usuarios para un usuario con permiso users:read', () => {
+    it('mantiene Gestión de Usuarios fuera del Dashboard incluso con permiso users:read', () => {
       const authValue = createMockAuthContextValue({
         id: 'u-admin',
         username: 'admin_general',
@@ -221,8 +228,8 @@ describe('RBAC Frontend — usePermissions y PermissionGate (Slice 003.3)', () =
       renderWithContext(<AuthenticatedHomePage />, authValue);
 
       expect(screen.getByText('Punto de Venta (POS)')).toBeInTheDocument();
-      expect(screen.getByText('Gestión de Usuarios')).toBeInTheDocument();
-      expect(screen.getByTestId('users-nav-btn')).toBeInTheDocument();
+      expect(screen.queryByText('Gestión de Usuarios')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('users-nav-btn')).not.toBeInTheDocument();
     });
   });
 });
