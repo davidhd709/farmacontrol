@@ -195,7 +195,7 @@ export class ReportsService {
 
   async getSalesReport(filter: ReportDateFilter = {}): Promise<SalesReportDto> {
     const where: any = {
-      status: { not: 'ANULADA' },
+      status: { not: 'CANCELLED' },
     };
 
     if (filter.fromDate || filter.toDate) {
