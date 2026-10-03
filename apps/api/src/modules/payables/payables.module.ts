@@ -3,9 +3,10 @@ import { PayablesService } from './application/payables.service';
 import { PayablesController } from './presentation/payables.controller';
 import { CashModule } from '../cash/cash.module';
 import { IdentityModule } from '../identity/identity.module';
+import { AccountingModule } from '../accounting/accounting.module';
 
 @Module({
-  imports: [CashModule, IdentityModule],
+  imports: [CashModule, IdentityModule, AccountingModule],
   controllers: [PayablesController],
   providers: [PayablesService],
   exports: [PayablesService],

@@ -14,6 +14,7 @@ import {
   ExpiredLotDateException,
 } from '../domain/purchase.exceptions';
 import { AuditService } from '../../audit/application/services/audit.service';
+import { AccountingEngineService } from '../../accounting/application/accounting-engine.service';
 
 export interface AuditContext {
   userId?: string | null;
@@ -30,7 +31,8 @@ export class PurchaseService {
     private readonly purchaseRepository: IPurchaseRepository,
     @Optional()
     private readonly auditService?: AuditService,
-    @Optional() customClient?: PrismaClient
+    @Optional() customClient?: PrismaClient,
+    @Optional() private readonly accountingEngine?: AccountingEngineService,
   ) {
     this.client = customClient ?? prisma;
   }
@@ -172,7 +174,22 @@ export class PurchaseService {
     const savedPurchase = await this.purchaseRepository.saveTransactional(
       purchase,
       locationId,
-      auditCtx?.userId ?? null
+      auditCtx?.userId ?? null,
+      async (tx, p) => {
+        if (this.accountingEngine) {
+          await this.accountingEngine.handlePurchaseReceived(
+            {
+              id: p.id,
+              invoiceNumber: p.invoiceNumber,
+              supplierName: p.supplierName,
+              totalAmount: p.totalAmount,
+              purchaseDate: p.purchaseDate,
+              receivedByUserId: p.receivedByUserId,
+            },
+            tx,
+          );
+        }
+      },
     );
 
     // 6. Registrar Auditoría

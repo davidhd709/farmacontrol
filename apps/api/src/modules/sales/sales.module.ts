@@ -7,9 +7,10 @@ import { IdempotencyService } from './infrastructure/idempotency.service';
 import { AuditModule } from '../audit/audit.module';
 import { IdentityModule } from '../identity/identity.module';
 import { CustomersModule } from '../customers/customers.module';
+import { AccountingModule } from '../accounting/accounting.module';
 
 @Module({
-  imports: [IdentityModule, AuditModule, CustomersModule],
+  imports: [IdentityModule, AuditModule, CustomersModule, AccountingModule],
   controllers: [SaleController],
   providers: [
     SaleService,

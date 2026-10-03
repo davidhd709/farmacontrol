@@ -118,3 +118,45 @@ export async function confirmAccountImport(
   const response = await fileRequest('accounts/import/confirm', { method: 'POST', body: form });
   return response.json() as Promise<{ importedCount: number }>;
 }
+
+import type {
+  JournalEntryDto,
+  JournalEntryQueryFilters,
+  ReverseJournalEntryPayload,
+  TrialBalanceReportDto,
+  GeneralLedgerReportDto,
+  PaginatedResponse,
+} from '@farmacia/contracts';
+
+export const fetchJournalEntries = (filters: JournalEntryQueryFilters = {}) => {
+  const params = new URLSearchParams();
+  if (filters.fromDate) params.append('fromDate', filters.fromDate);
+  if (filters.toDate) params.append('toDate', filters.toDate);
+  if (filters.sourceType) params.append('sourceType', filters.sourceType);
+  if (filters.status) params.append('status', filters.status);
+  if (filters.search) params.append('search', filters.search);
+  if (filters.page) params.append('page', String(filters.page));
+  if (filters.pageSize) params.append('pageSize', String(filters.pageSize));
+  const query = params.toString() ? `?${params.toString()}` : '';
+  return apiRequest<PaginatedResponse<JournalEntryDto>>(`journal-entries${query}`);
+};
+
+export const fetchJournalEntryById = (id: string) =>
+  apiRequest<JournalEntryDto>(`journal-entries/${encodeURIComponent(id)}`);
+
+export const reverseJournalEntry = (id: string, payload: ReverseJournalEntryPayload) =>
+  apiRequest<JournalEntryDto>(`journal-entries/${encodeURIComponent(id)}/reverse`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+export const fetchTrialBalance = (fromDate: string, toDate: string) =>
+  apiRequest<TrialBalanceReportDto>(
+    `accounting/reports/trial-balance?fromDate=${encodeURIComponent(fromDate)}&toDate=${encodeURIComponent(toDate)}`,
+  );
+
+export const fetchGeneralLedger = (accountId: string, fromDate: string, toDate: string) =>
+  apiRequest<GeneralLedgerReportDto>(
+    `accounting/reports/general-ledger?accountId=${encodeURIComponent(accountId)}&fromDate=${encodeURIComponent(fromDate)}&toDate=${encodeURIComponent(toDate)}`,
+  );
+

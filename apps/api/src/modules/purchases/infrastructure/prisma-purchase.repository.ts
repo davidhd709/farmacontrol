@@ -15,7 +15,8 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
   async saveTransactional(
     purchase: Purchase,
     defaultLocationId: string,
-    actorUserId: string | null
+    actorUserId: string | null,
+    afterSaveTx?: (tx: any, savedPurchase: Purchase) => Promise<void>,
   ): Promise<Purchase> {
     return await this.client.$transaction(async (tx) => {
       // 1. Crear registro de la Compra
@@ -139,6 +140,11 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
       if (!result) {
         throw new Error('Error al recargar la compra recién registrada');
       }
+
+      if (afterSaveTx) {
+        await afterSaveTx(tx, result);
+      }
+
       return result;
     });
   }

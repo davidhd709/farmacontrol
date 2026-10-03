@@ -78,3 +78,100 @@ export interface AccountImportPreviewDto {
   warningCount: number;
   rows: AccountImportRowDto[];
 }
+
+// ===== ASflight/PARTIDA DOBLE (LIBRO DIARIO) =====
+
+export type JournalEntryStatus = 'DRAFT' | 'POSTED';
+
+export interface JournalEntryLineDto {
+  id: string;
+  position: number;
+  accountId: string;
+  accountCode?: string;
+  accountName?: string;
+  purpose?: AccountingPurpose | null;
+  description?: string | null;
+  debit: string;
+  credit: string;
+}
+
+export interface JournalEntryDto {
+  id: string;
+  entryDate: string;
+  description: string;
+  sourceType: string;
+  sourceId: string;
+  status: JournalEntryStatus;
+  createdById?: string | null;
+  createdByName?: string | null;
+  createdAt: string;
+  postedAt?: string | null;
+  reversalOfId?: string | null;
+  reversalReason?: string | null;
+  lines: JournalEntryLineDto[];
+  totalDebit: string;
+  totalCredit: string;
+}
+
+export interface JournalEntryQueryFilters {
+  fromDate?: string;
+  toDate?: string;
+  sourceType?: string;
+  status?: JournalEntryStatus;
+  search?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface ReverseJournalEntryPayload {
+  entryDate?: string;
+  reason: string;
+}
+
+// ===== REPORTES CONTABLES (BALANCE DE COMPROBACIÓN Y LIBRO MAYOR) =====
+
+export interface TrialBalanceRowDto {
+  accountId: string;
+  accountCode: string;
+  accountName: string;
+  accountType: AccountType;
+  initialBalance: string;
+  totalDebit: string;
+  totalCredit: string;
+  finalBalance: string;
+}
+
+export interface TrialBalanceReportDto {
+  fromDate: string;
+  toDate: string;
+  generatedAt: string;
+  rows: TrialBalanceRowDto[];
+  totalDebit: string;
+  totalCredit: string;
+  isBalanced: boolean;
+}
+
+export interface GeneralLedgerMovementDto {
+  journalEntryId: string;
+  date: string;
+  description: string;
+  sourceType: string;
+  sourceId: string;
+  debit: string;
+  credit: string;
+  balanceAfter: string;
+}
+
+export interface GeneralLedgerReportDto {
+  accountId: string;
+  accountCode: string;
+  accountName: string;
+  fromDate: string;
+  toDate: string;
+  initialBalance: string;
+  finalBalance: string;
+  totalDebit: string;
+  totalCredit: string;
+  movements: GeneralLedgerMovementDto[];
+}
+

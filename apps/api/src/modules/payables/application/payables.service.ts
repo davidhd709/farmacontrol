@@ -17,10 +17,15 @@ import {
   requirePaymentBankAccountId,
   savePaymentRetry,
 } from '../../treasury/application/payment-idempotency';
+import { Optional } from '@nestjs/common';
+import { AccountingEngineService } from '../../accounting/application/accounting-engine.service';
 
 @Injectable()
 export class PayablesService {
-  constructor(private readonly cashService: CashService) {}
+  constructor(
+    private readonly cashService: CashService,
+    @Optional() private readonly accountingEngine?: AccountingEngineService,
+  ) {}
 
   // ------------------------------------------------------------------ //
   //  Mapping
@@ -268,6 +273,22 @@ export class PayablesService {
         });
       }
 
+      // 5.1. Asiento contable automático
+      if (this.accountingEngine) {
+        await this.accountingEngine.handleSupplierPayment(
+          {
+            id: payment.id,
+            payableId,
+            amount: payment.amount,
+            paymentMethod: method,
+            createdByUserId: userId,
+            supplierName: updated.supplier?.name,
+            invoiceNumber: updated.purchase?.invoiceNumber,
+          },
+          tx,
+        );
+      }
+
       // Leer pagos actualizados para retornar
       const payments = await (tx as any).payablePayment.findMany({
         where: { payableId },
@@ -470,6 +491,16 @@ export class PayablesService {
           referenceDocumentId: payment.id,
           createdByUserId: userId,
         });
+      }
+
+      // Reversión contable automática
+      if (this.accountingEngine) {
+        await this.accountingEngine.handleSupplierPaymentReversed(
+          payment.id,
+          trimmedReason,
+          userId,
+          tx,
+        );
       }
 
       // 6. Auditoría

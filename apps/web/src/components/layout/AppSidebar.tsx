@@ -37,6 +37,8 @@ import CloudSyncIcon from '@mui/icons-material/CloudSync';
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
 import RuleIcon from '@mui/icons-material/Rule';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
+import MenuBookIcon from '@mui/icons-material/MenuBook';
+import BalanceIcon from '@mui/icons-material/Balance';
 import { usePermissions } from '../../features/auth/hooks/usePermissions';
 import { SYSTEM_PERMISSIONS } from '@farmacia/contracts';
 
@@ -176,6 +178,18 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ open, onClose }) => {
           path: '/payables',
           icon: <PaymentsIcon fontSize="small" />,
           permission: SYSTEM_PERMISSIONS.PAYABLES_READ,
+        },
+        {
+          title: 'Libro Diario',
+          path: '/accounting/journal',
+          icon: <MenuBookIcon fontSize="small" />,
+          permission: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
+        },
+        {
+          title: 'Balance de Comprobación',
+          path: '/accounting/trial-balance',
+          icon: <BalanceIcon fontSize="small" />,
+          permission: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
         },
       ],
     },

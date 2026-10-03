@@ -22,6 +22,7 @@ import {
   calculateNewCashBalanceCents,
   centsToMoneyString,
 } from '../../cash/domain/cash-rules';
+import { AccountingEngineService } from '../../accounting/application/accounting-engine.service';
 
 export interface AuditContext {
   userId?: string | null;
@@ -39,6 +40,7 @@ export class SaleService {
     private readonly idempotencyService: IdempotencyService,
     @Optional() customClient?: PrismaClient,
     @Optional() private readonly auditService?: AuditService,
+    @Optional() private readonly accountingEngine?: AccountingEngineService,
   ) {
     this.client = customClient ?? prisma;
   }
@@ -327,6 +329,33 @@ export class SaleService {
         });
       }
 
+      // 2.6.1. Contabilidad automática de partida doble (asiento automático)
+      if (this.accountingEngine) {
+        await this.accountingEngine.handleSaleConfirmed(
+          {
+            id: sale.id,
+            invoiceNumber: sale.invoiceNumber,
+            total: sale.total,
+            subtotal: sale.subtotal,
+            taxTotal: sale.taxTotal,
+            paymentMethod: sale.paymentMethod,
+            createdById: sale.createdById,
+            createdAt: sale.createdAt,
+            lines: sale.lines.map((l) => ({
+              productId: l.productId,
+              quantityCommercial: l.quantityCommercial,
+              quantityBaseUnits: l.quantityBaseUnits,
+              presentationFactorHistorical: l.presentationFactorHistorical,
+              lotAllocations: l.lotAllocations.map((a) => ({
+                lotId: a.lotId,
+                quantityBaseUnits: a.quantityBaseUnits,
+              })),
+            })),
+          },
+          tx,
+        );
+      }
+
       const dto = sale.toDto();
 
       // 2.7. Guardar registro de Idempotencia dentro de la transacción
@@ -510,6 +539,16 @@ export class SaleService {
           referenceDocumentId: sale.invoiceNumber,
           createdById: auditCtx.userId || '00000000-0000-0000-0000-000000000000',
         });
+      }
+
+      // Reversión contable automática
+      if (this.accountingEngine) {
+        await this.accountingEngine.handleSaleCancelled(
+          sale.id,
+          trimmedReason,
+          auditCtx.userId || undefined,
+          tx,
+        );
       }
 
       return sale.toDto();

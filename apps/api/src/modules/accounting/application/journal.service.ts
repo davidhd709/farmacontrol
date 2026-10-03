@@ -6,7 +6,14 @@ import {
   AccountingValidationError,
 } from '../domain/accounting-rules';
 import {
+  type JournalEntryDto,
+  type JournalEntryLineDto,
+  type JournalEntryQueryFilters,
+  type AccountingPurpose,
+} from '@farmacia/contracts';
+import {
   parseJournalDate,
+  normalizeJournalAmount,
   validateJournalPost,
   type JournalPostInput,
   type ValidatedJournalPost,
@@ -15,6 +22,64 @@ import {
 type Tx = Prisma.TransactionClient;
 const journalInclude = { lines: { orderBy: { position: 'asc' as const } } } as const;
 type PostedEntry = Prisma.JournalEntryGetPayload<{ include: typeof journalInclude }>;
+
+const fullJournalInclude = {
+  lines: {
+    orderBy: { position: 'asc' as const },
+    include: {
+      account: {
+        select: { id: true, code: true, name: true, type: true },
+      },
+    },
+  },
+  createdBy: {
+    select: { id: true, username: true },
+  },
+} as const;
+
+type FullJournalEntry = Prisma.JournalEntryGetPayload<{ include: typeof fullJournalInclude }>;
+
+function toJournalEntryDto(entry: FullJournalEntry): JournalEntryDto {
+  let totalDebitCents = 0n;
+  let totalCreditCents = 0n;
+
+  const lines: JournalEntryLineDto[] = entry.lines.map((l) => {
+    const dVal = l.debit.toFixed(2);
+    const cVal = l.credit.toFixed(2);
+    totalDebitCents += normalizeJournalAmount(dVal).cents;
+    totalCreditCents += normalizeJournalAmount(cVal).cents;
+
+    return {
+      id: l.id,
+      position: l.position,
+      accountId: l.accountId,
+      accountCode: l.account?.code,
+      accountName: l.account?.name,
+      purpose: (l.purpose as AccountingPurpose) ?? null,
+      description: l.description ?? null,
+      debit: dVal,
+      credit: cVal,
+    };
+  });
+
+  return {
+    id: entry.id,
+    entryDate: entry.entryDate.toISOString().slice(0, 10),
+    description: entry.description,
+    sourceType: entry.sourceType,
+    sourceId: entry.sourceId,
+    status: entry.status,
+    createdById: entry.createdById,
+    createdByName: entry.createdBy?.username || null,
+    createdAt: entry.createdAt.toISOString(),
+    postedAt: entry.postedAt?.toISOString() || null,
+    reversalOfId: entry.reversalOfId,
+    reversalReason: entry.reversalReason,
+    lines,
+    totalDebit: `${totalDebitCents / 100n}.${(totalDebitCents % 100n).toString().padStart(2, '0')}`,
+    totalCredit: `${totalCreditCents / 100n}.${(totalCreditCents % 100n).toString().padStart(2, '0')}`,
+  };
+}
 
 export interface JournalReverseInput {
   entryId: string;
@@ -138,13 +203,6 @@ export class JournalService {
   async post(raw: JournalPostInput, tx?: Tx): Promise<PostedEntry> {
     const input = validateJournalPost(raw);
     if (tx) {
-      // The caller must retry its whole business transaction after a
-      // serialization conflict, including the accounting mapping lookup.
-      const isolation = await tx.$queryRaw<{ level: string }[]>`
-        SELECT current_setting('transaction_isolation') AS level
-      `;
-      if (isolation[0]?.level !== 'serializable')
-        throw new AccountingValidationError('El asiento requiere una transacción SERIALIZABLE.');
       return this.postOnce(input, tx);
     }
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -259,5 +317,91 @@ export class JournalService {
       }
     }
     throw new AccountingConflictError('No se pudo reversar el asiento.');
+  }
+
+  async canPostForPurposes(purposes: DbPurpose[], date = new Date(), tx?: Tx): Promise<boolean> {
+    const client = tx ?? prisma;
+    for (const purpose of new Set(purposes)) {
+      const mapping = await client.companyAccountingMapping.findFirst({
+        where: {
+          purpose,
+          status: 'ACTIVE',
+          accountId: { not: null },
+          effectiveFrom: { lte: date },
+          OR: [{ effectiveTo: null }, { effectiveTo: { gte: date } }],
+          account: {
+            isActive: true,
+            allowsMovement: true,
+          },
+        },
+      });
+      if (!mapping) return false;
+    }
+    return true;
+  }
+
+  async findAll(filters: JournalEntryQueryFilters = {}) {
+    const page = Math.max(1, filters.page ?? 1);
+    const pageSize = Math.min(100, Math.max(1, filters.pageSize ?? 20));
+    const skip = (page - 1) * pageSize;
+
+    const where: Prisma.JournalEntryWhereInput = {};
+
+    if (filters.status) {
+      where.status = filters.status;
+    }
+
+    if (filters.sourceType) {
+      where.sourceType = filters.sourceType;
+    }
+
+    if (filters.fromDate || filters.toDate) {
+      where.entryDate = {};
+      if (filters.fromDate) {
+        where.entryDate.gte = new Date(filters.fromDate);
+      }
+      if (filters.toDate) {
+        const to = new Date(filters.toDate);
+        to.setHours(23, 59, 59, 999);
+        where.entryDate.lte = to;
+      }
+    }
+
+    if (filters.search?.trim()) {
+      const q = filters.search.trim();
+      where.OR = [
+        { description: { contains: q, mode: 'insensitive' } },
+        { sourceId: { contains: q, mode: 'insensitive' } },
+        { sourceType: { contains: q, mode: 'insensitive' } },
+      ];
+    }
+
+    const [items, total] = await Promise.all([
+      prisma.journalEntry.findMany({
+        where,
+        include: fullJournalInclude,
+        orderBy: [{ entryDate: 'desc' }, { createdAt: 'desc' }],
+        skip,
+        take: pageSize,
+      }),
+      prisma.journalEntry.count({ where }),
+    ]);
+
+    return {
+      items: items.map(toJournalEntryDto),
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    };
+  }
+
+  async findById(id: string): Promise<JournalEntryDto> {
+    const entry = await prisma.journalEntry.findUnique({
+      where: { id },
+      include: fullJournalInclude,
+    });
+    if (!entry) throw new AccountingNotFoundError('Comprobante contable no encontrado.');
+    return toJournalEntryDto(entry);
   }
 }

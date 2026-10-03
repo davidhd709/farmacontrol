@@ -25,6 +25,8 @@ import {
   PurposesPage,
   ImportAccountsPage,
 } from './features/accounting/pages/AccountingPages';
+import { JournalEntriesPage } from './features/accounting/pages/JournalEntriesPage';
+import { TrialBalancePage } from './features/accounting/pages/TrialBalancePage';
 import { TreasuryBankAccountsPage } from './features/treasury/pages/TreasuryBankAccountsPage';
 
 import { AppLayout } from './components/layout/AppLayout';
@@ -61,6 +63,8 @@ export const App = () => {
           <Route path="/accounting/accounts" element={<AccountsPage />} />
           <Route path="/accounting/purposes" element={<PurposesPage />} />
           <Route path="/accounting/import" element={<ImportAccountsPage />} />
+          <Route path="/accounting/journal" element={<JournalEntriesPage />} />
+          <Route path="/accounting/trial-balance" element={<TrialBalancePage />} />
         </Route>
       </Route>
 
