@@ -1,14 +1,13 @@
 import { PipeTransform, Injectable, BadRequestException } from '@nestjs/common';
 import {
   CashMovementType,
-  PaymentMethod,
   CreateCashMovementPayload,
 } from '@farmacia/contracts';
 
 export class CreateCashMovementDto implements CreateCashMovementPayload {
   movementType!: CashMovementType;
   amount!: number;
-  paymentMethod?: PaymentMethod;
+  paymentMethod?: 'EFECTIVO';
   reason!: string;
   referenceDocumentType?: string;
   referenceDocumentId?: string;
@@ -48,30 +47,18 @@ export class CreateCashMovementValidationPipe implements PipeTransform {
       throw new BadRequestException('El campo "reason" (motivo) es obligatorio.');
     }
 
-    const validPaymentMethods: PaymentMethod[] = [
-      'EFECTIVO',
-      'TRANSFERENCIA',
-      'TARJETA_DEBITO',
-      'TARJETA_CREDITO',
-    ];
-
-    let paymentMethod: PaymentMethod = 'EFECTIVO';
     if (record.paymentMethod !== undefined) {
-      if (
-        typeof record.paymentMethod !== 'string' ||
-        !validPaymentMethods.includes(record.paymentMethod as PaymentMethod)
-      ) {
+      if (record.paymentMethod !== 'EFECTIVO') {
         throw new BadRequestException(
-          `El medio de pago debe ser uno de: ${validPaymentMethods.join(', ')}`
+          'Caja solo admite movimientos en efectivo. Use Bancos para otros medios de pago.'
         );
       }
-      paymentMethod = record.paymentMethod as PaymentMethod;
     }
 
     return {
       movementType: record.movementType as CashMovementType,
       amount: Number(amount.toFixed(2)),
-      paymentMethod,
+      paymentMethod: 'EFECTIVO',
       reason: record.reason.trim(),
       referenceDocumentType:
         typeof record.referenceDocumentType === 'string'

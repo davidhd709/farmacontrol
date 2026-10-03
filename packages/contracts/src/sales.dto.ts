@@ -41,6 +41,7 @@ export interface SaleDto {
   customerDocument?: string;
   status: SaleStatus;
   paymentMethod: SalePaymentMethod;
+  bankAccountId?: string | null;
   subtotal: number;
   taxTotal: number;
   discountTotal: number;
@@ -65,6 +66,7 @@ export interface ConfirmSaleLineItemPayload {
 export interface ConfirmSalePayload {
   customerId?: string; // Opcional: si se omite, se asigna el cliente predeterminado (Consumidor Final)
   paymentMethod: SalePaymentMethod;
+  bankAccountId?: string; // Obligatoria para TRANSFERENCIA.
   amountPaid?: number; // Requerido para cálculo de cambio si es efectivo
   notes?: string;
   items: ConfirmSaleLineItemPayload[];

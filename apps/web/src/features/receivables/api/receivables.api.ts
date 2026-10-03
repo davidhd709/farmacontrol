@@ -32,9 +32,11 @@ export async function fetchReceivableById(id: string): Promise<ReceivableDto> {
 export async function registerReceivablePayment(
   id: string,
   payload: RegisterReceivablePaymentPayload,
+  idempotencyKey: string,
 ): Promise<ReceivableDto> {
   return apiRequest<ReceivableDto>(`receivables/${id}/payments`, {
     method: 'POST',
+    headers: { 'Idempotency-Key': idempotencyKey },
     body: JSON.stringify(payload),
   });
 }

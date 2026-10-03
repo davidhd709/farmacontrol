@@ -1,9 +1,14 @@
 import { PipeTransform, Injectable, BadRequestException } from '@nestjs/common';
-import { ConfirmSalePayload, ConfirmSaleLineItemPayload, SalePaymentMethod } from '@farmacia/contracts';
+import {
+  ConfirmSalePayload,
+  ConfirmSaleLineItemPayload,
+  SalePaymentMethod,
+} from '@farmacia/contracts';
 
 export class ConfirmSaleDto implements ConfirmSalePayload {
   customerId?: string;
   paymentMethod!: SalePaymentMethod;
+  bankAccountId?: string;
   amountPaid?: number;
   notes?: string;
   items!: ConfirmSaleLineItemPayload[];
@@ -28,8 +33,29 @@ export class ConfirmSaleValidationPipe implements PipeTransform {
     const paymentMethod = record.paymentMethod as SalePaymentMethod;
     if (!paymentMethod || !validMethods.includes(paymentMethod)) {
       throw new BadRequestException(
-        `El medio de pago '${record.paymentMethod}' es inválido. Valores permitidos: ${validMethods.join(', ')}`
+        `El medio de pago '${record.paymentMethod}' es inválido. Valores permitidos: ${validMethods.join(', ')}`,
       );
+    }
+    if (paymentMethod === 'TARJETA_DEBITO' || paymentMethod === 'TARJETA_CREDITO') {
+      throw new BadRequestException(
+        'El pago con tarjeta requiere una política de liquidación aprobada.',
+      );
+    }
+    let bankAccountId: string | undefined;
+    if (paymentMethod === 'TRANSFERENCIA') {
+      if (
+        typeof record.bankAccountId !== 'string' ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          record.bankAccountId,
+        )
+      ) {
+        throw new BadRequestException(
+          'bankAccountId es obligatorio y debe ser UUID para TRANSFERENCIA.',
+        );
+      }
+      bankAccountId = record.bankAccountId;
+    } else if (record.bankAccountId !== undefined && record.bankAccountId !== null) {
+      throw new BadRequestException('bankAccountId solo corresponde a TRANSFERENCIA.');
     }
 
     // Customer ID (opcional)
@@ -58,13 +84,17 @@ export class ConfirmSaleValidationPipe implements PipeTransform {
 
       const qty = Number(item.quantityCommercial);
       if (isNaN(qty) || qty <= 0) {
-        throw new BadRequestException(`La cantidad del ítem ${index} debe ser un número mayor a cero.`);
+        throw new BadRequestException(
+          `La cantidad del ítem ${index} debe ser un número mayor a cero.`,
+        );
       }
 
       let presentationId: string | null = null;
       if (item.presentationId !== undefined && item.presentationId !== null) {
         if (typeof item.presentationId !== 'string' || !item.presentationId.trim()) {
-          throw new BadRequestException(`El campo "presentationId" del ítem ${index} debe ser texto.`);
+          throw new BadRequestException(
+            `El campo "presentationId" del ítem ${index} debe ser texto.`,
+          );
         }
         presentationId = item.presentationId.trim();
       }
@@ -73,7 +103,8 @@ export class ConfirmSaleValidationPipe implements PipeTransform {
         productId: item.productId.trim(),
         presentationId,
         quantityCommercial: qty,
-        unitPriceOverride: item.unitPriceOverride !== undefined ? Number(item.unitPriceOverride) : undefined,
+        unitPriceOverride:
+          item.unitPriceOverride !== undefined ? Number(item.unitPriceOverride) : undefined,
         discount: item.discount !== undefined ? Number(item.discount) : undefined,
       };
     });
@@ -82,7 +113,9 @@ export class ConfirmSaleValidationPipe implements PipeTransform {
     if (record.amountPaid !== undefined && record.amountPaid !== null) {
       const parsedAmount = Number(record.amountPaid);
       if (isNaN(parsedAmount) || parsedAmount < 0) {
-        throw new BadRequestException('El campo "amountPaid" debe ser un número mayor o igual a cero.');
+        throw new BadRequestException(
+          'El campo "amountPaid" debe ser un número mayor o igual a cero.',
+        );
       }
       amountPaid = parsedAmount;
     }
@@ -95,6 +128,7 @@ export class ConfirmSaleValidationPipe implements PipeTransform {
     return {
       customerId,
       paymentMethod,
+      bankAccountId,
       amountPaid,
       notes,
       items,

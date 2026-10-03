@@ -10,7 +10,10 @@ import {
   CashBalanceDto,
   PaymentMethod,
 } from '@farmacia/contracts';
-import { InsufficientCashBalanceException } from '../domain/cash.exceptions';
+import {
+  InsufficientCashBalanceException,
+  InvalidCashPaymentMethodException,
+} from '../domain/cash.exceptions';
 
 @Injectable()
 export class PrismaCashMovementRepository implements ICashMovementRepository {
@@ -24,6 +27,9 @@ export class PrismaCashMovementRepository implements ICashMovementRepository {
     data: CreateCashMovementData,
     externalTx?: any
   ): Promise<CashMovement> {
+    if (data.paymentMethod !== 'EFECTIVO') {
+      throw new InvalidCashPaymentMethodException();
+    }
     const executeInTransaction = async (tx: any) => {
       // 1. Obtener el último movimiento para calcular balanceAfter
       const lastMovement = await tx.cashMovement.findFirst({

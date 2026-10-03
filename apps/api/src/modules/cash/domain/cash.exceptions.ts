@@ -12,6 +12,13 @@ export class InvalidCashMovementTypeException extends Error {
   }
 }
 
+export class InvalidCashPaymentMethodException extends Error {
+  constructor() {
+    super('Caja solo admite movimientos en efectivo. Use Bancos para otros medios de pago.');
+    this.name = 'InvalidCashPaymentMethodException';
+  }
+}
+
 export class InsufficientCashBalanceException extends Error {
   constructor(currentBalance: number, requestedAmount: number) {
     super(

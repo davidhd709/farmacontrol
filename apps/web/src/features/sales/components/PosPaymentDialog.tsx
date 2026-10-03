@@ -13,14 +13,19 @@ import {
   Radio,
   Alert,
   CircularProgress,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
 } from '@mui/material';
 import type { SalePaymentMethod } from '@farmacia/contracts';
+import { useBankAccountOptions } from '../../treasury/hooks/useTreasury';
 
 interface PosPaymentDialogProps {
   open: boolean;
   total: number;
   onClose: () => void;
-  onConfirm: (paymentMethod: SalePaymentMethod, amountPaid: number, notes?: string) => Promise<void>;
+  onConfirm: (paymentMethod: SalePaymentMethod, amountPaid: number, notes?: string, bankAccountId?: string) => Promise<void>;
   loading: boolean;
 }
 
@@ -34,13 +39,16 @@ export const PosPaymentDialog: React.FC<PosPaymentDialogProps> = ({
   const [paymentMethod, setPaymentMethod] = useState<SalePaymentMethod>('EFECTIVO');
   const [amountPaidStr, setAmountPaidStr] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
+  const [bankAccountId, setBankAccountId] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const bankAccounts = useBankAccountOptions(open && paymentMethod === 'TRANSFERENCIA');
 
   useEffect(() => {
     if (open) {
       setPaymentMethod('EFECTIVO');
       setAmountPaidStr(String(total));
       setNotes('');
+      setBankAccountId('');
       setErrorMsg(null);
     }
   }, [open, total]);
@@ -58,9 +66,13 @@ export const PosPaymentDialog: React.FC<PosPaymentDialogProps> = ({
         return;
       }
     }
+    if (paymentMethod === 'TRANSFERENCIA' && !bankAccountId) {
+      setErrorMsg('Selecciona la cuenta bancaria que recibió la transferencia.');
+      return;
+    }
 
     try {
-      await onConfirm(paymentMethod, amountPaidNum, notes.trim() || undefined);
+      await onConfirm(paymentMethod, amountPaidNum, notes.trim() || undefined, bankAccountId || undefined);
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Error al procesar el pago.');
     }
@@ -99,9 +111,25 @@ export const PosPaymentDialog: React.FC<PosPaymentDialogProps> = ({
           >
             <FormControlLabel value="EFECTIVO" control={<Radio size="small" />} label="Efectivo" />
             <FormControlLabel value="TRANSFERENCIA" control={<Radio size="small" />} label="Transferencia" />
-            <FormControlLabel value="TARJETA_DEBITO" control={<Radio size="small" />} label="T. Débito" />
-            <FormControlLabel value="TARJETA_CREDITO" control={<Radio size="small" />} label="T. Crédito" />
           </RadioGroup>
+
+          {paymentMethod === 'TRANSFERENCIA' && (
+            <FormControl fullWidth size="small" sx={{ mb: 2 }} required error={bankAccounts.isError}>
+              <InputLabel id="sale-bank-account-label">Cuenta que recibe</InputLabel>
+              <Select
+                labelId="sale-bank-account-label"
+                label="Cuenta que recibe"
+                value={bankAccountId}
+                onChange={(event) => setBankAccountId(event.target.value)}
+                disabled={loading || bankAccounts.isPending || bankAccounts.isError}
+              >
+                {(bankAccounts.data ?? []).map((account) => (
+                  <MenuItem key={account.id} value={account.id}>{account.name} · {account.bankName}{account.accountNumberLast4 ? ` ···${account.accountNumberLast4}` : ''}</MenuItem>
+                ))}
+              </Select>
+              {bankAccounts.isError && <Alert severity="error">No se pudieron consultar las cuentas bancarias.</Alert>}
+            </FormControl>
+          )}
 
           {paymentMethod === 'EFECTIVO' && (
             <Box sx={{ mb: 2 }}>

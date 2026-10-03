@@ -32,9 +32,11 @@ export async function fetchPayableById(id: string): Promise<PayableDto> {
 export async function registerPayablePayment(
   id: string,
   payload: RegisterPayablePaymentPayload,
+  idempotencyKey: string,
 ): Promise<PayableDto> {
   return apiRequest<PayableDto>(`payables/${id}/payments`, {
     method: 'POST',
+    headers: { 'Idempotency-Key': idempotencyKey },
     body: JSON.stringify(payload),
   });
 }

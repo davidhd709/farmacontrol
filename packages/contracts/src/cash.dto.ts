@@ -35,7 +35,7 @@ export interface CashBalanceDto {
 export interface CreateCashMovementPayload {
   movementType: CashMovementType;
   amount: number;
-  paymentMethod?: PaymentMethod;
+  paymentMethod?: 'EFECTIVO';
   reason: string;
   referenceDocumentType?: string;
   referenceDocumentId?: string;

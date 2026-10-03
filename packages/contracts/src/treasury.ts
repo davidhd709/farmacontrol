@@ -27,6 +27,13 @@ export interface BankAccountDto {
   updatedAt: string;
 }
 
+export interface BankAccountOptionDto {
+  id: string;
+  name: string;
+  bankName: string;
+  accountNumberLast4: string;
+}
+
 export interface CreateBankAccountDto {
   bankName: string;
   accountType: BankAccountType;

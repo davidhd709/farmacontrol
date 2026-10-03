@@ -16,6 +16,7 @@ import {
 import { SYSTEM_PERMISSIONS } from '@farmacia/contracts';
 import type {
   BankAccountDto,
+  BankAccountOptionDto,
   BankAccountsSummaryDto,
   BankMovementDto,
   CreateBankAccountDto,
@@ -53,6 +54,12 @@ function toHttpException(error: unknown): never {
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 export class TreasuryController {
   constructor(private readonly treasuryService: TreasuryService) {}
+
+  @Get('bank-accounts/options')
+  @RequirePermissions(SYSTEM_PERMISSIONS.TREASURY_ACCOUNTS_SELECT)
+  async listAccountOptions(): Promise<BankAccountOptionDto[]> {
+    return this.treasuryService.listAccountOptions();
+  }
 
   @Get('bank-accounts')
   @RequirePermissions(SYSTEM_PERMISSIONS.TREASURY_READ)

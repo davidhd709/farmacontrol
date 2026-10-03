@@ -6,10 +6,6 @@ import {
   DialogActions,
   TextField,
   Button,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Alert,
   Box,
   Typography,
@@ -21,7 +17,6 @@ import {
 } from '@mui/material';
 import type {
   CashMovementType,
-  PaymentMethod,
   CreateCashMovementPayload,
 } from '@farmacia/contracts';
 import { createCashMovement } from '../api/cash.api';
@@ -41,7 +36,6 @@ export const CreateCashMovementDialog: React.FC<CreateCashMovementDialogProps> =
 }) => {
   const [movementType, setMovementType] = useState<CashMovementType>('INGRESO_MANUAL');
   const [amountStr, setAmountStr] = useState<string>('');
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('EFECTIVO');
   const [reason, setReason] = useState<string>('');
 
   const [loading, setLoading] = useState(false);
@@ -49,18 +43,16 @@ export const CreateCashMovementDialog: React.FC<CreateCashMovementDialogProps> =
 
   const amountNum = parseFloat(amountStr) || 0;
   const isIncome = movementType === 'INGRESO_MANUAL';
-  const isCash = paymentMethod === 'EFECTIVO';
 
   const projectedBalance = isIncome
     ? currentBalance + amountNum
     : currentBalance - amountNum;
 
-  const isInsufficient = !isIncome && isCash && amountNum > currentBalance;
+  const isInsufficient = !isIncome && amountNum > currentBalance;
 
   const handleReset = () => {
     setMovementType('INGRESO_MANUAL');
     setAmountStr('');
-    setPaymentMethod('EFECTIVO');
     setReason('');
     setErrorMsg(null);
     setLoading(false);
@@ -97,7 +89,7 @@ export const CreateCashMovementDialog: React.FC<CreateCashMovementDialogProps> =
       const payload: CreateCashMovementPayload = {
         movementType,
         amount: amountNum,
-        paymentMethod,
+        paymentMethod: 'EFECTIVO',
         reason: reason.trim(),
       };
 
@@ -154,7 +146,10 @@ export const CreateCashMovementDialog: React.FC<CreateCashMovementDialogProps> =
             </RadioGroup>
           </Box>
 
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mb: 2 }}>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            Caja registra solo efectivo físico. Las transferencias se registran en Bancos.
+          </Alert>
+          <Box sx={{ mb: 2 }}>
             <TextField
               label="Monto ($)"
               type="number"
@@ -162,25 +157,11 @@ export const CreateCashMovementDialog: React.FC<CreateCashMovementDialogProps> =
               required
               value={amountStr}
               onChange={(e) => setAmountStr(e.target.value)}
-              slotProps={{ htmlInput: { min: 0, step: '100' } }}
+              slotProps={{ htmlInput: { min: 0.01, step: '0.01' } }}
               placeholder="Ej: 50000"
               autoFocus
             />
 
-            <FormControl fullWidth>
-              <InputLabel id="payment-method-label">Medio de Pago</InputLabel>
-              <Select
-                labelId="payment-method-label"
-                value={paymentMethod}
-                label="Medio de Pago"
-                onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-              >
-                <MenuItem value="EFECTIVO">Efectivo</MenuItem>
-                <MenuItem value="TRANSFERENCIA">Transferencia</MenuItem>
-                <MenuItem value="TARJETA_DEBITO">Tarjeta Débito</MenuItem>
-                <MenuItem value="TARJETA_CREDITO">Tarjeta Crédito</MenuItem>
-              </Select>
-            </FormControl>
           </Box>
 
           <TextField

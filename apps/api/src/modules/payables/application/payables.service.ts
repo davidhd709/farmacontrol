@@ -1,9 +1,5 @@
-import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-} from '@nestjs/common';
-import { prisma } from '@farmacia/database';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { prisma, Prisma } from '@farmacia/database';
 import { CashService } from '../../cash/application/cash.service';
 import {
   PayableDto,
@@ -11,13 +7,19 @@ import {
   RegisterPayablePaymentPayload,
   PaginatedResponse,
 } from '@farmacia/contracts';
-import { Payable } from '../domain/payable.entity';
+import { centsToMoneyString, parseMoneyToCents } from '../../treasury/domain/treasury-rules';
+import { recordSourceBankMovement } from '../../treasury/application/record-source-bank-movement';
+import {
+  findPaymentRetry,
+  parsePaymentAmount,
+  paymentRequestHash,
+  requirePaymentBankAccountId,
+  savePaymentRetry,
+} from '../../treasury/application/payment-idempotency';
 
 @Injectable()
 export class PayablesService {
-  constructor(
-    private readonly cashService: CashService,
-  ) {}
+  constructor(private readonly cashService: CashService) {}
 
   // ------------------------------------------------------------------ //
   //  Mapping
@@ -39,23 +41,17 @@ export class PayablesService {
           ? row.dueDate.toISOString().split('T')[0]
           : String(row.dueDate).split('T')[0],
       notes: row.notes ?? null,
-      createdAt:
-        row.createdAt instanceof Date
-          ? row.createdAt.toISOString()
-          : row.createdAt,
-      updatedAt:
-        row.updatedAt instanceof Date
-          ? row.updatedAt.toISOString()
-          : row.updatedAt,
+      createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : row.createdAt,
+      updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : row.updatedAt,
       payments: payments?.map((p) => ({
         id: p.id,
         payableId: p.payableId,
         amount: p.amount.toString(),
         paymentMethod: p.paymentMethod,
+        bankAccountId: p.bankAccountId ?? null,
         notes: p.notes ?? null,
         createdByUserId: p.createdByUserId,
-        createdAt:
-          p.createdAt instanceof Date ? p.createdAt.toISOString() : p.createdAt,
+        createdAt: p.createdAt instanceof Date ? p.createdAt.toISOString() : p.createdAt,
       })),
     };
   }
@@ -64,9 +60,7 @@ export class PayablesService {
   //  Queries
   // ------------------------------------------------------------------ //
 
-  async findAll(
-    filters: PayableQueryFilters,
-  ): Promise<PaginatedResponse<PayableDto>> {
+  async findAll(filters: PayableQueryFilters): Promise<PaginatedResponse<PayableDto>> {
     const page = Math.max(filters.page ?? 1, 1);
     const pageSize = Math.min(filters.pageSize ?? 20, 100);
     const skip = (page - 1) * pageSize;
@@ -137,13 +131,31 @@ export class PayablesService {
     payableId: string,
     payload: RegisterPayablePaymentPayload,
     userId: string,
+    idempotencyKey?: string,
   ): Promise<PayableDto> {
-    const amount = Number(payload.amount);
-    if (isNaN(amount) || amount <= 0) {
+    const amountCents = parsePaymentAmount(payload.amount, 'Monto del pago');
+    if (amountCents <= 0n) {
       throw new BadRequestException('El monto del pago debe ser mayor a cero');
     }
+    const method = payload.paymentMethod ?? 'EFECTIVO';
+    if (method !== 'EFECTIVO' && method !== 'TRANSFERENCIA') {
+      throw new BadRequestException(
+        'El pago con tarjeta requiere una política de liquidación aprobada; use EFECTIVO o TRANSFERENCIA.',
+      );
+    }
+    if (method === 'TRANSFERENCIA') {
+      requirePaymentBankAccountId(payload.bankAccountId);
+      if (!idempotencyKey)
+        throw new BadRequestException('Idempotency-Key es obligatorio para transferencias.');
+    } else if (payload.bankAccountId) {
+      throw new BadRequestException('Una cuenta bancaria solo corresponde a TRANSFERENCIA.');
+    }
+    const endpoint = `/api/v1/payables/${payableId}/payments`;
+    const requestHash = paymentRequestHash(endpoint, userId, payload);
 
     return prisma.$transaction(async (tx: any) => {
+      const cached = await findPaymentRetry<PayableDto>(tx, idempotencyKey, requestHash);
+      if (cached) return cached;
       // 1. Bloqueo pesimista
       const rows = await tx.$queryRaw<any[]>`
         SELECT
@@ -164,40 +176,28 @@ export class PayablesService {
       `;
 
       if (!rows.length) {
-        throw new NotFoundException(
-          `Cuenta por pagar "${payableId}" no encontrada`,
-        );
+        throw new NotFoundException(`Cuenta por pagar "${payableId}" no encontrada`);
       }
 
       const raw = rows[0];
-      const payable = new Payable(
-        raw.id,
-        raw.purchaseId,
-        raw.supplierId,
-        Number(raw.totalAmount),
-        Number(raw.amountPaid),
-        Number(raw.balance),
-        raw.status,
-        raw.dueDate,
-        raw.notes,
-        raw.createdAt,
-        raw.updatedAt,
-      );
-
-      // 2. Aplicar pago (valida reglas de negocio)
-      try {
-        payable.applyPayment(amount);
-      } catch (err: any) {
-        throw new BadRequestException(err.message);
+      if (raw.status !== 'PENDIENTE') {
+        throw new BadRequestException(`No se puede pagar una cuenta en estado "${raw.status}"`);
       }
+      const balanceCents = parseMoneyToCents(raw.balance.toString(), 'Saldo pendiente');
+      if (amountCents > balanceCents) {
+        throw new BadRequestException('El monto del pago supera el saldo pendiente.');
+      }
+      const amountPaidCents = parseMoneyToCents(raw.amountPaid.toString(), 'Total pagado');
+      const newBalanceCents = balanceCents - amountCents;
+      const amount = centsToMoneyString(amountCents);
 
       // 3. Persistir cambios en payable
       const updated = await (tx as any).payable.update({
         where: { id: payableId },
         data: {
-          amountPaid: payable.amountPaid,
-          balance: payable.balance,
-          status: payable.status,
+          amountPaid: new Prisma.Decimal(centsToMoneyString(amountPaidCents + amountCents)),
+          balance: new Prisma.Decimal(centsToMoneyString(newBalanceCents)),
+          status: newBalanceCents === 0n ? 'PAGADA' : 'PENDIENTE',
         },
         include: {
           supplier: { select: { name: true } },
@@ -207,26 +207,39 @@ export class PayablesService {
       });
 
       // 4. Registrar pago
-      await (tx as any).payablePayment.create({
+      const payment = await (tx as any).payablePayment.create({
         data: {
           payableId,
-          amount: amount,
-          paymentMethod: payload.paymentMethod ?? 'EFECTIVO',
+          amount: new Prisma.Decimal(amount),
+          paymentMethod: method,
+          bankAccountId: method === 'TRANSFERENCIA' ? payload.bankAccountId : null,
           notes: payload.notes ?? null,
           createdByUserId: userId,
         },
       });
 
       // 5. Egreso de caja (dentro de la misma transacción)
-      await this.cashService.recordMovementInTransaction(tx, {
-        movementType: 'EGRESO_PAGO_PROVEEDOR',
-        amount,
-        paymentMethod: payload.paymentMethod ?? 'EFECTIVO',
-        reason: `Pago proveedor - Factura ${updated.purchase?.invoiceNumber ?? payableId}`,
-        referenceDocumentType: 'PAYABLE',
-        referenceDocumentId: payableId,
-        createdByUserId: userId,
-      });
+      if (method === 'TRANSFERENCIA') {
+        await recordSourceBankMovement(tx, {
+          bankAccountId: payload.bankAccountId!,
+          movementType: 'WITHDRAWAL',
+          amount,
+          concept: `Pago proveedor - Factura ${updated.purchase?.invoiceNumber ?? payableId}`,
+          referenceDocumentType: 'PAYABLE_PAYMENT',
+          referenceDocumentId: payment.id,
+          createdById: userId,
+        });
+      } else {
+        await this.cashService.recordMovementInTransaction(tx, {
+          movementType: 'EGRESO_PAGO_PROVEEDOR',
+          amount: Number(amount),
+          paymentMethod: 'EFECTIVO',
+          reason: `Pago proveedor - Factura ${updated.purchase?.invoiceNumber ?? payableId}`,
+          referenceDocumentType: 'PAYABLE',
+          referenceDocumentId: payableId,
+          createdByUserId: userId,
+        });
+      }
 
       // Leer pagos actualizados para retornar
       const payments = await (tx as any).payablePayment.findMany({
@@ -234,7 +247,15 @@ export class PayablesService {
         orderBy: { createdAt: 'asc' },
       });
 
-      return this.toDto(updated, payments);
+      const result = this.toDto(updated, payments);
+      await savePaymentRetry(tx, {
+        key: idempotencyKey,
+        endpoint,
+        hash: requestHash,
+        userId,
+        responseBody: result,
+      });
+      return result;
     });
   }
 }

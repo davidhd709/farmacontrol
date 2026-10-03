@@ -129,18 +129,18 @@ flowchart TD
 
 | Épica | Nombre | Objetivo | Estado |
 |---|---|---|---|
-| **EP-00** | **Fundaciones del Repositorio y Arquitectura Base** | Configurar el monorepo, entornos, contratos, pipeline de CI y calidad técnica base | **LISTA PARA EJECUCIÓN** |
-| **EP-01** | **Identidad, Control de Acceso y Auditoría** | Autenticación basada en sesiones seguras, control de permisos en backend y registro inmutable de auditoría | **LISTA TRAS EP-00** |
-| **EP-02** | **Catálogo: Categorías, Productos y Presentaciones** | Gestión de productos con atributos farmacéuticos y factores de equivalencia en unidades base | **LISTA TRAS EP-01** |
+| **EP-00** | **Fundaciones del Repositorio y Arquitectura Base** | Configurar el monorepo, entornos, contratos, pipeline de CI y calidad técnica base | **IMPLEMENTADA** |
+| **EP-01** | **Identidad, Control de Acceso y Auditoría** | Autenticación basada en sesiones seguras, control de permisos en backend y registro inmutable de auditoría | **IMPLEMENTADA** |
+| **EP-02** | **Catálogo: Categorías, Productos y Presentaciones** | Gestión de productos con atributos farmacéuticos y factores de equivalencia en unidades base | **IMPLEMENTADA** |
 | **EP-03** | **Inventario: Lotes, Movimientos y Asignación FEFO** | Control de existencias por lote, libro mayor inmutable y motor transaccional FEFO con bloqueo de concurrencia | **IMPLEMENTADA** |
 | **EP-04** | **Abastecimiento: Proveedores y Recepción de Compras** | Gestión de proveedores e ingreso de mercancía con asignación de lotes y fechas de vencimiento | **IMPLEMENTADA** |
-| **EP-05** | **Operación de Caja** | Control de caja, balance de efectivo y trazabilidad de ingresos y egresos | **IMPLEMENTADA (HU-014 activa, HU-015 bloqueada)** |
-| **EP-06** | **Ventas y Punto de Venta (POS)** | Registro de ventas de alta velocidad con asignación FEFO automática, idempotencia y comprobantes | **IMPLEMENTADA** |
-| **EP-07** | **Finanzas Operativas: Cartera y Cuentas por Pagar** | Gestión de cuentas por cobrar a clientes y cuentas por pagar a proveedores con abonos parciales | **PARCIALMENTE BLOQUEADA** |
-| **EP-08** | **Procesos en Segundo Plano y Alertas de Vencimiento** | Worker programado para evaluación de lotes próximos a vencer y conciliación de saldos | **LISTA TRAS EP-03** |
-| **EP-09** | **Reportes Operativos Básicos y Exportación** | Reportes de existencias, vencimientos, kardex de inventario, ventas y arqueos | **LISTA TRAS EP-06** |
-| **EP-10** | **Copias de Seguridad, Resiliencia y Preparación de Producción** | Automatización de respaldos en PostgreSQL, verificación de restauración y hardening | **LISTA TRAS EP-09** |
-| **EP-11** | **Contabilidad, Impuestos y Estados Financieros** | Plan de cuentas, impuestos parametrizados, asientos automáticos, gastos y reportes financieros | **EN PROGRESO: Slices 11.1 y 11.2 implementados; automatizaciones pendientes de mapeos requeridos** |
+| **EP-05** | **Operación de Caja** | Control de caja, balance de efectivo y trazabilidad de ingresos y egresos | **EN PROGRESO: HU-014 operativa; HU-015 bloqueada; precisión y conciliación pendientes** |
+| **EP-06** | **Ventas y Punto de Venta (POS)** | Registro de ventas de alta velocidad con asignación FEFO automática, idempotencia y comprobantes | **EN PROGRESO: flujo base operativo; integración bancaria/fiscal incompleta** |
+| **EP-07** | **Finanzas Operativas: Cartera y Cuentas por Pagar** | Gestión de cuentas por cobrar a clientes y cuentas por pagar a proveedores con abonos parciales | **EN PROGRESO: base operativa; validación de pagos por medio pendiente** |
+| **EP-08** | **Procesos en Segundo Plano y Alertas de Vencimiento** | Worker programado para evaluación de lotes próximos a vencer y conciliación de saldos | **EN PROGRESO: worker y pruebas existen; cierre de alcance no revalidado** |
+| **EP-09** | **Reportes Operativos Básicos y Exportación** | Reportes de existencias, vencimientos, kardex de inventario, ventas y arqueos | **EN PROGRESO: API y pruebas existen; cierre de alcance no revalidado** |
+| **EP-10** | **Copias de Seguridad, Resiliencia y Preparación de Producción** | Automatización de respaldos en PostgreSQL, verificación de restauración y hardening | **EN PROGRESO: módulo de copias y pruebas existen; preparación productiva no revalidada** |
+| **EP-11** | **Contabilidad, Impuestos y Estados Financieros** | Plan de cuentas, impuestos parametrizados, asientos automáticos, gastos y reportes financieros | **EN PROGRESO: 11.1 y 11.2 implementados; 11.3 y 11.4 parciales; automatizaciones y estados pendientes** |
 
 ---
 
@@ -152,6 +152,19 @@ El mapeo de `CASH`, `BANK`, `CUSTOMERS`, `SUPPLIERS`, `INVENTORY`, `SALES_TAXED`
 
 El orquestador verificó API, interfaz, importación, migración en `farmacia_test`, build, typecheck, lint y pruebas antes de cerrar este slice. La Épica 11 continúa en progreso: el motor de partida doble y los asientos automáticos siguen pendientes de los mapeos obligatorios de cada operación.
 
+### EP-11 — Estado real por fase del módulo contable
+
+Las fases de esta tabla corresponden al orden del módulo contable en `MODULO_CONTABILIDAD_FARMACIA.md`, sección 47; no sustituyen el roadmap técnico general de la sección 8. `IMPLEMENTADO` exige el flujo completo y pruebas, no solo tablas o pantallas.
+
+| Fase | Alcance | Estado real | Falta principal |
+| --- | --- | --- | --- |
+| 1. Tesorería | Caja, Banco, cuentas bancarias, medios de pago y movimientos | **EN PROGRESO** | Validar integración completa de transferencias, reversión e idempotencia; eliminar aritmética flotante restante de Caja; conciliar históricos no efectivos; arqueo/cierre bloqueado por política de cajas y turnos. |
+| 2. Cartera | Cuentas por cobrar/pagar y abonos | **EN PROGRESO** | Enrutamiento de pagos por medio, trazabilidad bancaria y validación integral. |
+| 3. Contabilidad | Plan, libro y motor de asientos | **EN PROGRESO** | Plan y libro internos disponibles; asientos automáticos bloqueados por mapeo operativo y datos tributarios. |
+| 4. Gastos | Categorías, causación y pagos | **PENDIENTE** | Reglas y cuentas de gasto aprobadas. |
+| 5. Estados financieros | Balance, resultados y auxiliares | **BLOQUEADO** | Asientos operativos, saldos iniciales y política de periodos/cierre. |
+| 6. Pruebas integrales | Flujos cruzados y conciliación | **PENDIENTE** | Integración de las fases previas. |
+
 ### EP-11 — Slices restantes y dependencias
 
 Esta secuencia es el plan de ejecución, no una declaración de funcionalidades implementadas. Cada slice requiere sus propias pruebas y revisión antes de cambiar de estado.
@@ -159,8 +172,8 @@ Esta secuencia es el plan de ejecución, no una declaración de funcionalidades 
 | Slice | Entregable verificable | Estado | Dependencia principal |
 | --- | --- | --- | --- |
 | 11.2 | Libro diario interno: partida doble, origen único, inmutabilidad y reversión compensatoria | IMPLEMENTADO | Servicio interno y 12 pruebas PostgreSQL; no genera asientos operativos aún |
-| 11.3 | Reglas tributarias versionadas por SKU y operación; base, impuesto y total históricos | PENDIENTE | Clasificación y tarifa documentadas por SKU; dinero exacto |
-| 11.4 | Cuentas bancarias y movimientos de tesorería separados de Caja | PENDIENTE | Contrato de movimientos y permisos |
+| 11.3 | Reglas tributarias versionadas por SKU y operación; base, impuesto y total históricos | EN PROGRESO | API/perfiles y calculadora aislada existen; falta matriz concreta, integración histórica y pruebas de venta/compra |
+| 11.4 | Cuentas bancarias y movimientos de tesorería separados de Caja | EN PROGRESO | Catálogo, movimientos manuales, API, UI y pruebas existen; la integración con operaciones y reversión requiere verificación integral, y Caja conserva deuda de precisión e históricos |
 | 11.5 | Gastos por causación, pendientes, pagos parciales y anticipos | PENDIENTE | Categorías y cuentas de gasto aprobadas para contabilizar |
 | 11.6 | Asientos automáticos atómicos de ventas, compras, recaudos, pagos y ajustes | BLOQUEADO | Mapeos operativos aprobados, datos tributarios y costos exactos |
 | 11.7 | Devoluciones por línea y sus efectos financieros y de inventario | BLOQUEADO | Política sanitaria de retorno al inventario y reglas tributarias |
@@ -892,20 +905,3 @@ Fase 9: Worker, Alertas y Resiliencia
   3. `docker-compose.yml` para levantar PostgreSQL 18 localmente con volumen de datos persistente.
   4. Scripts en la raíz: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm dev`.
   5. Ejecución exitosa de linters y verificación de entorno limpio.
-
-
-
-
-
-
-
-
-| Slice | Qué falta | Estado |
-| --- | --- | --- |
-| 11.3 | Reglas de impuestos por SKU y desglose histórico de base, impuesto y total | PENDIENTE |
-| 11.4 | Cuentas bancarias y movimientos separados de Caja | PENDIENTE |
-| 11.5 | Gastos, causación, anticipos y pagos parciales | PENDIENTE |
-| 11.6 | Generar asientos automáticamente desde ventas, compras, cobros, pagos y ajustes | BLOQUEADO |
-| 11.7 | Devoluciones y sus efectos en dinero, impuestos e inventario | BLOQUEADO |
-| 11.8 | Balance de comprobación, auxiliares y estados financieros | BLOQUEADO |
-| 11.9 | Pruebas integrales de todos esos flujos | PENDIENTE |

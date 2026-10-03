@@ -1,4 +1,4 @@
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Optional } from '@nestjs/common';
 import { prisma, PrismaClient, Prisma } from '@farmacia/database';
 import {
   SaleDto,
@@ -15,6 +15,9 @@ import {
 } from '../domain/sale.exceptions';
 import { IdempotencyService } from '../infrastructure/idempotency.service';
 import { AuditService } from '../../audit/application/services/audit.service';
+import { recordSourceBankMovement } from '../../treasury/application/record-source-bank-movement';
+import { requirePaymentBankAccountId } from '../../treasury/application/payment-idempotency';
+import { parseMoneyToCents } from '../../treasury/domain/treasury-rules';
 
 export interface AuditContext {
   userId?: string | null;
@@ -31,7 +34,7 @@ export class SaleService {
     private readonly saleRepository: ISaleRepository,
     private readonly idempotencyService: IdempotencyService,
     @Optional() customClient?: PrismaClient,
-    @Optional() private readonly auditService?: AuditService
+    @Optional() private readonly auditService?: AuditService,
   ) {
     this.client = customClient ?? prisma;
   }
@@ -39,10 +42,22 @@ export class SaleService {
   public async confirmSale(
     payload: ConfirmSalePayload,
     auditCtx: AuditContext,
-    idempotencyKey?: string
+    idempotencyKey?: string,
   ): Promise<SaleDto> {
     if (!payload.items || payload.items.length === 0) {
       throw new Error('La venta debe incluir al menos un producto.');
+    }
+    if (payload.paymentMethod === 'TRANSFERENCIA') {
+      requirePaymentBankAccountId(payload.bankAccountId);
+      if (!idempotencyKey?.trim()) {
+        throw new BadRequestException('Idempotency-Key es obligatorio para transferencias.');
+      }
+    } else if (payload.paymentMethod !== 'EFECTIVO') {
+      throw new BadRequestException(
+        'El pago con tarjeta requiere una política de liquidación aprobada.',
+      );
+    } else if (payload.bankAccountId) {
+      throw new BadRequestException('bankAccountId solo corresponde a TRANSFERENCIA.');
     }
 
     // 1. Verificación de Idempotencia
@@ -118,7 +133,9 @@ export class SaleService {
             throw new Error(`Presentación '${item.presentationId}' inválida para el producto.`);
           }
           if (!presentation.saleEnabled) {
-            throw new Error(`La presentación '${presentation.name}' no está habilitada para ventas.`);
+            throw new Error(
+              `La presentación '${presentation.name}' no está habilitada para ventas.`,
+            );
           }
           factor = presentation.conversionFactor;
           unitPrice = Number(presentation.price);
@@ -136,12 +153,14 @@ export class SaleService {
         // Asignación FEFO con bloqueo concurrente
         if (product.requiresLotControl) {
           // Bloquear lotes disponibles ordenados por vencimiento ascendente
-          const availableLots = await tx.$queryRaw<Array<{
-            id: string;
-            lot_number: string;
-            expiration_date: Date;
-            current_quantity: number;
-          }>>`
+          const availableLots = await tx.$queryRaw<
+            Array<{
+              id: string;
+              lot_number: string;
+              expiration_date: Date;
+              current_quantity: number;
+            }>
+          >`
             SELECT id, lot_number, expiration_date, current_quantity
             FROM inventory_lots
             WHERE product_id = ${product.id}::uuid
@@ -232,6 +251,7 @@ export class SaleService {
         customerName,
         customerDocument: customerDoc,
         paymentMethod: payload.paymentMethod,
+        bankAccountId: payload.paymentMethod === 'TRANSFERENCIA' ? payload.bankAccountId : null,
         lines: saleLines,
         amountPaid: payload.amountPaid,
         notes: payload.notes,
@@ -240,6 +260,27 @@ export class SaleService {
 
       // 2.5. Persistir Venta y Asignaciones
       await this.saleRepository.save(sale, tx);
+
+      if (payload.paymentMethod === 'TRANSFERENCIA') {
+        if (
+          payload.amountPaid !== undefined &&
+          parseMoneyToCents(String(payload.amountPaid), 'Monto recibido') !==
+            parseMoneyToCents(new Prisma.Decimal(sale.total).toFixed(2), 'Total de venta')
+        ) {
+          throw new Error(
+            'En una transferencia, el monto recibido debe coincidir con el total de la venta.',
+          );
+        }
+        await recordSourceBankMovement(tx, {
+          bankAccountId: payload.bankAccountId!,
+          movementType: 'DEPOSIT',
+          amount: new Prisma.Decimal(sale.total).toFixed(2),
+          concept: `Venta mostrador comprobante ${sale.invoiceNumber}`,
+          referenceDocumentType: 'SALE',
+          referenceDocumentId: sale.invoiceNumber,
+          createdById: auditCtx.userId || '00000000-0000-0000-0000-000000000000',
+        });
+      }
 
       // 2.6. Movimiento de Caja si es Efectivo
       if (payload.paymentMethod === 'EFECTIVO') {
@@ -282,7 +323,7 @@ export class SaleService {
             responseBody: dto,
             ttlHours: 24,
           },
-          tx
+          tx,
         );
       }
 
@@ -332,11 +373,7 @@ export class SaleService {
     };
   }
 
-  public async cancelSale(
-    id: string,
-    reason: string,
-    auditCtx: AuditContext
-  ): Promise<SaleDto> {
+  public async cancelSale(id: string, reason: string, auditCtx: AuditContext): Promise<SaleDto> {
     const trimmedReason = reason?.trim();
     if (!trimmedReason) {
       throw new Error('El motivo de anulación es obligatorio');
@@ -352,6 +389,13 @@ export class SaleService {
 
     // Transacción ACID de reversión
     const cancelledDto = await this.client.$transaction(async (tx) => {
+      const lockedSales = await tx.$queryRaw<Array<{ status: string }>>`
+        SELECT status FROM sales WHERE id = ${id}::uuid FOR UPDATE
+      `;
+      if (!lockedSales.length) throw new SaleNotFoundException(id);
+      if (lockedSales[0].status === 'CANCELLED') {
+        throw new SaleAlreadyCancelledException(sale.invoiceNumber);
+      }
       sale.cancel();
       await this.saleRepository.save(sale, tx);
 
@@ -420,6 +464,19 @@ export class SaleService {
             balanceAfter: new Prisma.Decimal(newBalance),
             createdByUserId: auditCtx.userId || '00000000-0000-0000-0000-000000000000',
           },
+        });
+      }
+      if (sale.paymentMethod === 'TRANSFERENCIA') {
+        if (!sale.bankAccountId)
+          throw new Error('La venta por transferencia no conserva una cuenta bancaria.');
+        await recordSourceBankMovement(tx, {
+          bankAccountId: sale.bankAccountId,
+          movementType: 'WITHDRAWAL',
+          amount: new Prisma.Decimal(sale.total).toFixed(2),
+          concept: `Reversión por anulación de venta ${sale.invoiceNumber}: ${trimmedReason}`,
+          referenceDocumentType: 'SALE_CANCEL',
+          referenceDocumentId: sale.invoiceNumber,
+          createdById: auditCtx.userId || '00000000-0000-0000-0000-000000000000',
         });
       }
 

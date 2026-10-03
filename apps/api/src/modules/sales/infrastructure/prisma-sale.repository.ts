@@ -40,6 +40,7 @@ export class PrismaSaleRepository implements ISaleRepository {
         customerId: sale.customerId,
         status: sale.status,
         paymentMethod: sale.paymentMethod,
+        bankAccountId: sale.bankAccountId,
         subtotal: new Prisma.Decimal(sale.subtotal),
         taxTotal: new Prisma.Decimal(sale.taxTotal),
         discountTotal: new Prisma.Decimal(sale.discountTotal),
@@ -216,7 +217,7 @@ export class PrismaSaleRepository implements ISaleRepository {
             ? new Date(a.lot.expirationDate).toISOString().split('T')[0]
             : undefined,
           createdAt: a.createdAt,
-        })
+        }),
       );
 
       return SaleLine.reconstitute({
@@ -249,6 +250,7 @@ export class PrismaSaleRepository implements ISaleRepository {
       customerDocument: raw.customer?.documentNumber,
       status: raw.status as any,
       paymentMethod: raw.paymentMethod as any,
+      bankAccountId: raw.bankAccountId,
       subtotal: Number(raw.subtotal),
       taxTotal: Number(raw.taxTotal),
       discountTotal: Number(raw.discountTotal),

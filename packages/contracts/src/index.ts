@@ -106,6 +106,7 @@ export const SYSTEM_PERMISSIONS = {
   ACCOUNTING_MANAGE: 'accounting:manage',
 
   // Tesorería y bancos
+  TREASURY_ACCOUNTS_SELECT: 'treasury:accounts:select',
   TREASURY_READ: 'treasury:read',
   TREASURY_MANAGE: 'treasury:manage',
 } as const;
@@ -666,6 +667,7 @@ export interface ReceivablePaymentDto {
   receivableId: string;
   amount: string;
   paymentMethod: string;
+  bankAccountId?: string | null;
   notes: string | null;
   createdByUserId: string;
   createdAt: string;
@@ -691,6 +693,7 @@ export interface ReceivableDto {
 export interface RegisterReceivablePaymentPayload {
   amount: number | string;
   paymentMethod?: string;
+  bankAccountId?: string;
   notes?: string | null;
 }
 
@@ -713,6 +716,7 @@ export interface PayablePaymentDto {
   payableId: string;
   amount: string;
   paymentMethod: string;
+  bankAccountId?: string | null;
   notes: string | null;
   createdByUserId: string;
   createdAt: string;
@@ -738,6 +742,7 @@ export interface PayableDto {
 export interface RegisterPayablePaymentPayload {
   amount: number | string;
   paymentMethod?: string;
+  bankAccountId?: string;
   notes?: string | null;
 }
 

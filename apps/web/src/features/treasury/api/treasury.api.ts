@@ -1,5 +1,6 @@
 import type {
   BankAccountDto,
+  BankAccountOptionDto,
   BankAccountsSummaryDto,
   BankMovementDto,
   CreateBankAccountDto,
@@ -20,6 +21,10 @@ export interface MovementFilterParams {
 export async function getBankAccounts(includeInactive = false): Promise<BankAccountDto[]> {
   const query = includeInactive ? '?includeInactive=true' : '';
   return apiRequest<BankAccountDto[]>(`treasury/bank-accounts${query}`);
+}
+
+export async function getBankAccountOptions(): Promise<BankAccountOptionDto[]> {
+  return apiRequest<BankAccountOptionDto[]>('treasury/bank-accounts/options');
 }
 
 export async function getBankAccountSummary(): Promise<BankAccountsSummaryDto> {

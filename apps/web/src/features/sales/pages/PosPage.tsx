@@ -228,7 +228,8 @@ export const PosPage: React.FC = () => {
   const handleConfirmSale = async (
     paymentMethod: SalePaymentMethod,
     amountPaid: number,
-    notes?: string
+    notes?: string,
+    bankAccountId?: string
   ) => {
     if (cart.length === 0) {
       throw new Error('El carrito de venta está vacío.');
@@ -241,6 +242,7 @@ export const PosPage: React.FC = () => {
       const payload = {
         customerId: selectedCustomer?.id,
         paymentMethod,
+        bankAccountId,
         amountPaid,
         notes,
         items: cart.map((item) => ({

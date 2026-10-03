@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma, prisma, type BankAccount, type BankMovement } from '@farmacia/database';
 import type {
   BankAccountDto,
+  BankAccountOptionDto,
   BankAccountsSummaryDto,
   BankMovementDto,
   CreateBankAccountDto,
@@ -70,6 +71,20 @@ function mapMovementToDto(movement: BankMovement): BankMovementDto {
 
 @Injectable()
 export class TreasuryService {
+  async listAccountOptions(): Promise<BankAccountOptionDto[]> {
+    const accounts = await prisma.bankAccount.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, bankName: true, accountNumber: true },
+      orderBy: [{ bankName: 'asc' }, { name: 'asc' }],
+    });
+    return accounts.map((account) => ({
+      id: account.id,
+      name: account.name,
+      bankName: account.bankName,
+      accountNumberLast4: account.accountNumber.length >= 8 ? account.accountNumber.slice(-4) : '',
+    }));
+  }
+
   async createAccount(dto: CreateBankAccountDto, userId: string): Promise<BankAccountDto> {
     const bankName = validateBankName(dto.bankName);
     const accountType = validateAccountType(dto.accountType);
@@ -264,7 +279,7 @@ export class TreasuryService {
     return prisma.$transaction(
       async (tx) => {
         // Obtenemos la cuenta con bloqueo exclusivo a nivel de fila
-        const rows = await tx.$queryRaw<Array<{ id: string; current_balance: string; is_active: boolean }>>`
+        const rows = await tx.$queryRaw<Array<{ id: string; current_balance: Prisma.Decimal; is_active: boolean }>>`
           SELECT id, current_balance, is_active
           FROM bank_accounts
           WHERE id = ${accountId}::uuid
@@ -280,7 +295,7 @@ export class TreasuryService {
         }
 
         const currentBalanceCents = parseMoneyToCents(
-          parseFloat(locked.current_balance).toFixed(2),
+          locked.current_balance.toString(),
           'Saldo actual',
         );
 

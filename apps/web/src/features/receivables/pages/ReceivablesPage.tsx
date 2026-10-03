@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -37,6 +37,7 @@ import {
   registerReceivablePayment,
 } from '../api/receivables.api';
 import { HomeBackButton } from '../../../components/HomeBackButton';
+import { useBankAccountOptions } from '../../treasury/hooks/useTreasury';
 
 // ============================================================
 // Schema de validación para el formulario de abono
@@ -47,8 +48,12 @@ const paymentSchema = z.object({
     .string()
     .min(1, 'Ingresa el monto')
     .refine((v) => !isNaN(Number(v)) && Number(v) > 0, 'El monto debe ser mayor a cero'),
-  paymentMethod: z.enum(['EFECTIVO', 'TRANSFERENCIA', 'TARJETA_DEBITO', 'TARJETA_CREDITO']),
+  paymentMethod: z.enum(['EFECTIVO', 'TRANSFERENCIA']),
+  bankAccountId: z.string().optional(),
   notes: z.string().optional(),
+}).refine((data) => data.paymentMethod !== 'TRANSFERENCIA' || Boolean(data.bankAccountId), {
+  path: ['bankAccountId'],
+  message: 'Selecciona la cuenta que recibe la transferencia',
 });
 
 type PaymentFormData = z.infer<typeof paymentSchema>;
@@ -81,6 +86,7 @@ interface PaymentModalProps {
 
 function PaymentModal({ receivable, onClose, onSuccess }: PaymentModalProps) {
   const queryClient = useQueryClient();
+  const retry = useRef<{ fingerprint: string; key: string } | null>(null);
 
   const { data: detail } = useQuery({
     queryKey: ['receivable-detail', receivable.id],
@@ -92,20 +98,28 @@ function PaymentModal({ receivable, onClose, onSuccess }: PaymentModalProps) {
     control,
     handleSubmit,
     reset,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<PaymentFormData>({
     resolver: zodResolver(paymentSchema),
-    defaultValues: { amount: '', paymentMethod: 'EFECTIVO', notes: '' },
+    defaultValues: { amount: '', paymentMethod: 'EFECTIVO', bankAccountId: '', notes: '' },
   });
+  const paymentMethod = watch('paymentMethod');
+  const bankAccounts = useBankAccountOptions(paymentMethod === 'TRANSFERENCIA');
 
   const mutation = useMutation({
-    mutationFn: (data: PaymentFormData) =>
-      registerReceivablePayment(receivable.id, {
-        amount: Number(data.amount),
+    mutationFn: (data: PaymentFormData) => {
+      const fingerprint = JSON.stringify(data);
+      if (retry.current?.fingerprint !== fingerprint) retry.current = { fingerprint, key: crypto.randomUUID() };
+      return registerReceivablePayment(receivable.id, {
+        amount: data.amount,
         paymentMethod: data.paymentMethod,
+        bankAccountId: data.paymentMethod === 'TRANSFERENCIA' ? data.bankAccountId : undefined,
         notes: data.notes || null,
-      }),
+      }, retry.current.key);
+    },
     onSuccess: () => {
+      retry.current = null;
       queryClient.invalidateQueries({ queryKey: ['receivables'] });
       queryClient.invalidateQueries({ queryKey: ['receivable-detail', receivable.id] });
       reset();
@@ -318,12 +332,30 @@ function PaymentModal({ receivable, onClose, onSuccess }: PaymentModalProps) {
                     <Select {...field} label="Método de pago">
                       <MenuItem value="EFECTIVO">Efectivo</MenuItem>
                       <MenuItem value="TRANSFERENCIA">Transferencia</MenuItem>
-                      <MenuItem value="TARJETA_DEBITO">Tarjeta Débito</MenuItem>
-                      <MenuItem value="TARJETA_CREDITO">Tarjeta Crédito</MenuItem>
                     </Select>
                   </FormControl>
                 )}
               />
+
+              {paymentMethod === 'TRANSFERENCIA' && (
+                <Controller
+                  name="bankAccountId"
+                  control={control}
+                  render={({ field }) => (
+                    <FormControl size="small" required error={!!errors.bankAccountId || bankAccounts.isError}>
+                      <InputLabel id="receivable-bank-account-label">Cuenta que recibe</InputLabel>
+                      <Select {...field} labelId="receivable-bank-account-label" label="Cuenta que recibe" disabled={bankAccounts.isPending || bankAccounts.isError}>
+                        {(bankAccounts.data ?? []).map((account) => (
+                          <MenuItem key={account.id} value={account.id}>{account.name} · {account.bankName}{account.accountNumberLast4 ? ` ···${account.accountNumberLast4}` : ''}</MenuItem>
+                        ))}
+                      </Select>
+                      {(errors.bankAccountId || bankAccounts.isError) && (
+                        <Alert severity="error">{errors.bankAccountId?.message ?? 'No se pudieron consultar las cuentas bancarias.'}</Alert>
+                      )}
+                    </FormControl>
+                  )}
+                />
+              )}
 
               <Controller
                 name="notes"

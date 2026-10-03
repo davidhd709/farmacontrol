@@ -412,6 +412,7 @@ model Sale {
   customerId    String   @map("customer_id") @db.Uuid
   status        String   @default("COMPLETED") @db.VarChar(20)
   paymentMethod String   @default("EFECTIVO") @map("payment_method") @db.VarChar(50)
+  bankAccountId String?  @map("bank_account_id") @db.Uuid
   subtotal      Decimal  @db.Decimal(12, 2)
   taxTotal      Decimal  @default(0) @map("tax_total") @db.Decimal(12, 2)
   discountTotal Decimal  @default(0) @map("discount_total") @db.Decimal(12, 2)
@@ -425,6 +426,7 @@ model Sale {
 
   customer       Customer            @relation(fields: [customerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   createdByUser  User                @relation("SalesCreated", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  bankAccount    BankAccount?        @relation(fields: [bankAccountId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   lines          SaleLine[]
   lotAllocations SaleLotAllocation[]
   receivable     Receivable?
@@ -434,6 +436,7 @@ model Sale {
   @@index([status])
   @@index([createdAt])
   @@index([createdById])
+  @@index([bankAccountId])
   @@map("sales")
 }
 
@@ -531,15 +534,18 @@ model ReceivablePayment {
   receivableId    String   @map("receivable_id") @db.Uuid
   amount          Decimal  @db.Decimal(12, 2)
   paymentMethod   String   @default("EFECTIVO") @map("payment_method") @db.VarChar(50)
+  bankAccountId   String?  @map("bank_account_id") @db.Uuid
   notes           String?  @db.VarChar(500)
   createdByUserId String   @map("created_by_user_id") @db.Uuid
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   receivable    Receivable @relation(fields: [receivableId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   createdByUser User       @relation(fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  bankAccount   BankAccount? @relation(fields: [bankAccountId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
   @@index([receivableId])
   @@index([createdAt])
+  @@index([bankAccountId])
   @@map("receivable_payments")
 }
 
@@ -571,15 +577,18 @@ model PayablePayment {
   payableId       String   @map("payable_id") @db.Uuid
   amount          Decimal  @db.Decimal(12, 2)
   paymentMethod   String   @default("EFECTIVO") @map("payment_method") @db.VarChar(50)
+  bankAccountId   String?  @map("bank_account_id") @db.Uuid
   notes           String?  @db.VarChar(500)
   createdByUserId String   @map("created_by_user_id") @db.Uuid
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   payable       Payable  @relation(fields: [payableId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   createdByUser User     @relation(fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  bankAccount   BankAccount? @relation(fields: [bankAccountId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
   @@index([payableId])
   @@index([createdAt])
+  @@index([bankAccountId])
   @@map("payable_payments")
 }
 
@@ -814,6 +823,9 @@ model BankAccount {
 
   createdByUser  User           @relation("UserBankAccounts", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
   movements      BankMovement[]
+  sales          Sale[]
+  receivablePayments ReceivablePayment[]
+  payablePayments PayablePayment[]
 
   @@unique([bankName, accountNumber])
   @@index([isActive])
@@ -846,4 +858,3 @@ model BankMovement {
   @@index([createdById])
   @@map("bank_movements")
 }
-

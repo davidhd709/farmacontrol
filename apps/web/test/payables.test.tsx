@@ -129,9 +129,9 @@ describe('PayablesPage (Frontend Cuentas por Pagar — UX-23)', () => {
 
     await waitFor(() => {
       expect(registerPaymentSpy).toHaveBeenCalledWith('pay-1', expect.objectContaining({
-        amount: 150000,
+        amount: '150000',
         paymentMethod: 'EFECTIVO',
-      }));
+      }), expect.any(String));
     });
   });
 });

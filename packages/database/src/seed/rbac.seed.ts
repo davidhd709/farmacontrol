@@ -76,6 +76,7 @@ export const BASE_PERMISSIONS: PermissionDefinition[] = [
   { name: SYSTEM_PERMISSIONS.ACCOUNTING_MANAGE, description: 'Administrar cuentas, mapeos e importaciones contables' },
 
   // Tesorería y bancos
+  { name: SYSTEM_PERMISSIONS.TREASURY_ACCOUNTS_SELECT, description: 'Seleccionar cuenta activa en cobros y pagos sin consultar saldos' },
   { name: SYSTEM_PERMISSIONS.TREASURY_READ, description: 'Consultar cuentas bancarias y movimientos de tesorería' },
   { name: SYSTEM_PERMISSIONS.TREASURY_MANAGE, description: 'Gestionar cuentas bancarias y registrar movimientos de tesorería' },
 ];
@@ -123,6 +124,7 @@ export const BASE_ROLES: RoleDefinition[] = [
       SYSTEM_PERMISSIONS.REPORTS_READ,
       SYSTEM_PERMISSIONS.AUDIT_READ,
       SYSTEM_PERMISSIONS.TREASURY_READ,
+      SYSTEM_PERMISSIONS.TREASURY_ACCOUNTS_SELECT,
     ],
   },
   {
@@ -140,6 +142,7 @@ export const BASE_ROLES: RoleDefinition[] = [
       SYSTEM_PERMISSIONS.CASH_MOVEMENTS,
       SYSTEM_PERMISSIONS.CUSTOMERS_READ,
       SYSTEM_PERMISSIONS.CUSTOMERS_MANAGE,
+      SYSTEM_PERMISSIONS.TREASURY_ACCOUNTS_SELECT,
     ],
   },
   {
@@ -170,6 +173,7 @@ export const BASE_ROLES: RoleDefinition[] = [
       SYSTEM_PERMISSIONS.SUPPLIERS_MANAGE,
       SYSTEM_PERMISSIONS.PAYABLES_READ,
       SYSTEM_PERMISSIONS.PAYABLES_MANAGE,
+      SYSTEM_PERMISSIONS.TREASURY_ACCOUNTS_SELECT,
       SYSTEM_PERMISSIONS.PRODUCTS_READ,
       SYSTEM_PERMISSIONS.CATEGORIES_READ,
       SYSTEM_PERMISSIONS.INVENTORY_READ,
@@ -183,6 +187,7 @@ export const BASE_ROLES: RoleDefinition[] = [
       SYSTEM_PERMISSIONS.CUSTOMERS_MANAGE,
       SYSTEM_PERMISSIONS.RECEIVABLES_READ,
       SYSTEM_PERMISSIONS.RECEIVABLES_MANAGE,
+      SYSTEM_PERMISSIONS.TREASURY_ACCOUNTS_SELECT,
       SYSTEM_PERMISSIONS.SALES_READ,
     ],
   },

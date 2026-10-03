@@ -284,6 +284,15 @@ describe('ReceivablesController & PayablesController (Integration)', () => {
 
     it('cierra la cuenta al pagar el saldo completo', async () => {
       const adminUser = await prisma.user.findFirst({ where: { username: 'admin_test' } });
+      const bank = await prisma.bankAccount.create({
+        data: {
+          bankName: 'Banco cartera',
+          accountType: 'AHORROS',
+          accountNumber: 'CAR-001',
+          name: 'Recaudos',
+          createdById: adminUser!.id,
+        },
+      });
 
       await prisma.cashMovement.create({
         data: {
@@ -321,11 +330,32 @@ describe('ReceivablesController & PayablesController (Integration)', () => {
       const res = await request(app.getHttpServer())
         .post(`/api/v1/receivables/${receivable.id}/payments`)
         .set('Cookie', carteraCookie)
-        .send({ amount: 20000, paymentMethod: 'TRANSFERENCIA' });
+        .set('Idempotency-Key', 'cartera-transfer-001')
+        .send({ amount: '20000.00', paymentMethod: 'TRANSFERENCIA', bankAccountId: bank.id });
 
       expect(res.status).toBe(201);
       expect(res.body.data.status).toBe('PAGADA');
       expect(parseFloat(res.body.data.balance)).toBeCloseTo(0, 0);
+      expect(res.body.data.payments[0].bankAccountId).toBe(bank.id);
+      const movement = await prisma.bankMovement.findFirst({
+        where: {
+          referenceDocumentType: 'RECEIVABLE_PAYMENT',
+          referenceDocumentId: res.body.data.payments[0].id,
+        },
+      });
+      expect(movement?.amount.toString()).toBe('20000');
+      expect(
+        (
+          await prisma.bankAccount.findUniqueOrThrow({ where: { id: bank.id } })
+        ).currentBalance.toString(),
+      ).toBe('20000');
+      const retry = await request(app.getHttpServer())
+        .post(`/api/v1/receivables/${receivable.id}/payments`)
+        .set('Cookie', carteraCookie)
+        .set('Idempotency-Key', 'cartera-transfer-001')
+        .send({ amount: '20000.00', paymentMethod: 'TRANSFERENCIA', bankAccountId: bank.id });
+      expect(retry.status).toBe(201);
+      expect(await prisma.bankMovement.count({ where: { bankAccountId: bank.id } })).toBe(1);
     });
 
     it('rechaza abono mayor al saldo', async () => {
@@ -370,7 +400,7 @@ describe('ReceivablesController & PayablesController (Integration)', () => {
     it('retorna lista vacía cuando no hay cuentas', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/v1/payables')
-        .set('Cookie', carteraCookie);
+        .set('Cookie', adminCookie);
 
       expect(res.status).toBe(200);
       expect(res.body.data.items).toHaveLength(0);
@@ -380,13 +410,20 @@ describe('ReceivablesController & PayablesController (Integration)', () => {
       const res = await request(app.getHttpServer()).get('/api/v1/payables');
       expect(res.status).toBe(401);
     });
+
+    it('rechaza el rol cartera sin permiso de cuentas por pagar', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/payables')
+        .set('Cookie', carteraCookie);
+      expect(res.status).toBe(403);
+    });
   });
 
   describe('GET /api/v1/payables/:id', () => {
     it('retorna 404 para ID inexistente', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/v1/payables/00000000-0000-0000-0000-000000000000')
-        .set('Cookie', carteraCookie);
+        .set('Cookie', adminCookie);
 
       expect(res.status).toBe(404);
     });
@@ -395,6 +432,17 @@ describe('ReceivablesController & PayablesController (Integration)', () => {
   describe('POST /api/v1/payables/:id/payments', () => {
     it('aplica un pago parcial a cuentas por pagar', async () => {
       const adminUser = await prisma.user.findFirst({ where: { username: 'admin_test' } });
+      const bank = await prisma.bankAccount.create({
+        data: {
+          bankName: 'Banco proveedores',
+          accountType: 'CORRIENTE',
+          accountNumber: 'PROV-001',
+          name: 'Pagos',
+          initialBalance: '100000.00',
+          currentBalance: '100000.00',
+          createdById: adminUser!.id,
+        },
+      });
 
       // Saldo inicial de caja positivo
       await prisma.cashMovement.create({
@@ -432,13 +480,30 @@ describe('ReceivablesController & PayablesController (Integration)', () => {
 
       const res = await request(app.getHttpServer())
         .post(`/api/v1/payables/${payable.id}/payments`)
-        .set('Cookie', carteraCookie)
-        .send({ amount: 80000, paymentMethod: 'TRANSFERENCIA' });
+        .set('Cookie', adminCookie)
+        .set('Idempotency-Key', 'proveedores-transfer-001')
+        .send({ amount: '80000.00', paymentMethod: 'TRANSFERENCIA', bankAccountId: bank.id });
 
       expect(res.status).toBe(201);
       expect(res.body.data.status).toBe('PENDIENTE');
       expect(parseFloat(res.body.data.amountPaid)).toBeCloseTo(80000, 0);
       expect(parseFloat(res.body.data.balance)).toBeCloseTo(120000, 0);
+      expect(res.body.data.payments[0].bankAccountId).toBe(bank.id);
+      const movement = await prisma.bankMovement.findFirst({
+        where: {
+          referenceDocumentType: 'PAYABLE_PAYMENT',
+          referenceDocumentId: res.body.data.payments[0].id,
+        },
+      });
+      expect(movement?.amount.toString()).toBe('80000');
+      expect(movement?.balanceAfter.toString()).toBe('20000');
+      const retry = await request(app.getHttpServer())
+        .post(`/api/v1/payables/${payable.id}/payments`)
+        .set('Cookie', adminCookie)
+        .set('Idempotency-Key', 'proveedores-transfer-001')
+        .send({ amount: '80000.00', paymentMethod: 'TRANSFERENCIA', bankAccountId: bank.id });
+      expect(retry.status).toBe(201);
+      expect(await prisma.bankMovement.count({ where: { bankAccountId: bank.id } })).toBe(1);
     });
 
     it('cierra la cuenta al pagar el monto total', async () => {
@@ -479,7 +544,7 @@ describe('ReceivablesController & PayablesController (Integration)', () => {
 
       const res = await request(app.getHttpServer())
         .post(`/api/v1/payables/${payable.id}/payments`)
-        .set('Cookie', carteraCookie)
+        .set('Cookie', adminCookie)
         .send({ amount: 50000 });
 
       expect(res.status).toBe(201);
@@ -521,7 +586,7 @@ describe('ReceivablesController & PayablesController (Integration)', () => {
 
       const res = await request(app.getHttpServer())
         .post(`/api/v1/payables/${payable.id}/payments`)
-        .set('Cookie', carteraCookie)
+        .set('Cookie', adminCookie)
         .send({ amount: 99999 });
 
       expect(res.status).toBe(400);

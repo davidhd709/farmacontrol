@@ -9,6 +9,7 @@ import {
   createBankMovement,
   getBankAccount,
   getBankAccounts,
+  getBankAccountOptions,
   getBankAccountSummary,
   getBankMovements,
   updateBankAccount,
@@ -18,6 +19,7 @@ import {
 export const TREASURY_KEYS = {
   all: ['treasury'] as const,
   accounts: (includeInactive = false) => ['treasury', 'accounts', { includeInactive }] as const,
+  accountOptions: () => ['treasury', 'account-options'] as const,
   account: (id: string) => ['treasury', 'account', id] as const,
   summary: () => ['treasury', 'summary'] as const,
   movements: (accountId: string, params?: MovementFilterParams) =>
@@ -28,6 +30,14 @@ export function useBankAccounts(includeInactive = false) {
   return useQuery({
     queryKey: TREASURY_KEYS.accounts(includeInactive),
     queryFn: () => getBankAccounts(includeInactive),
+  });
+}
+
+export function useBankAccountOptions(enabled = true) {
+  return useQuery({
+    queryKey: TREASURY_KEYS.accountOptions(),
+    queryFn: getBankAccountOptions,
+    enabled,
   });
 }
 

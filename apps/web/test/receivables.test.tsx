@@ -129,9 +129,9 @@ describe('ReceivablesPage (Frontend Cuentas por Cobrar — UX-21)', () => {
 
     await waitFor(() => {
       expect(registerPaymentSpy).toHaveBeenCalledWith('rec-1', expect.objectContaining({
-        amount: 50000,
+        amount: '50000',
         paymentMethod: 'EFECTIVO',
-      }));
+      }), expect.any(String));
     });
   });
 });

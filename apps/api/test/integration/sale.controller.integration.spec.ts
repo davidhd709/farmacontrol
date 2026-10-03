@@ -247,8 +247,19 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
 
   it('POST /api/v1/sales/confirm respeta la cabecera idempotency-key y no duplica transacciones', async () => {
     const idempotencyKey = 'idem-unique-uuid-999';
+    const owner = await prisma.user.findFirstOrThrow({ where: { username: 'pos_admin' } });
+    const bank = await prisma.bankAccount.create({
+      data: {
+        bankName: 'Banco POS',
+        accountType: 'AHORROS',
+        accountNumber: 'POS-001',
+        name: 'Recaudos POS',
+        createdById: owner.id,
+      },
+    });
     const payload = {
       paymentMethod: 'TRANSFERENCIA',
+      bankAccountId: bank.id,
       items: [
         {
           productId,
@@ -281,10 +292,82 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
 
     expect(secondRes.status).toBe(201);
     expect(secondRes.body.invoiceNumber).toBe(invoiceNumber);
+    expect(secondRes.body.bankAccountId).toBe(bank.id);
+    expect(
+      await prisma.bankMovement.count({
+        where: { bankAccountId: bank.id, referenceDocumentId: invoiceNumber },
+      }),
+    ).toBe(1);
+    expect(
+      (
+        await prisma.bankAccount.findUniqueOrThrow({ where: { id: bank.id } })
+      ).currentBalance.toString(),
+    ).toBe('4800');
 
     // El inventario NO debe haberse descontado dos veces
     const lot1AfterSecond = await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lot1Id } });
     expect(lot1AfterSecond.currentQuantity).toBe(0);
+  });
+
+  it('rechaza transferencia a cuenta inactiva sin afectar FEFO ni crear venta', async () => {
+    const owner = await prisma.user.findFirstOrThrow({ where: { username: 'pos_admin' } });
+    const bank = await prisma.bankAccount.create({
+      data: {
+        bankName: 'Banco inactivo',
+        accountType: 'AHORROS',
+        accountNumber: 'POS-002',
+        name: 'Cerrada',
+        isActive: false,
+        createdById: owner.id,
+      },
+    });
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/sales/confirm')
+      .set('Cookie', cajeroCookie)
+      .set('Idempotency-Key', 'inactive-bank-sale')
+      .send({
+        paymentMethod: 'TRANSFERENCIA',
+        bankAccountId: bank.id,
+        items: [{ productId, presentationId, quantityCommercial: 1 }],
+      });
+    expect(res.status).toBe(400);
+    expect(await prisma.sale.count()).toBe(0);
+    expect(
+      (await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lot1Id } })).currentQuantity,
+    ).toBe(10);
+    expect(await prisma.bankMovement.count()).toBe(0);
+  });
+
+  it('compara monto de transferencia en centavos aun con sumas decimales 0.10 + 0.20', async () => {
+    const owner = await prisma.user.findFirstOrThrow({ where: { username: 'pos_admin' } });
+    const bank = await prisma.bankAccount.create({
+      data: {
+        bankName: 'Banco centavos',
+        accountType: 'AHORROS',
+        accountNumber: 'POS-005',
+        name: 'Centavos',
+        createdById: owner.id,
+      },
+    });
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/sales/confirm')
+      .set('Cookie', cajeroCookie)
+      .set('Idempotency-Key', 'decimal-bank-sale')
+      .send({
+        paymentMethod: 'TRANSFERENCIA',
+        bankAccountId: bank.id,
+        amountPaid: 0.3,
+        items: [
+          { productId, quantityCommercial: 1, unitPriceOverride: 0.1 },
+          { productId, quantityCommercial: 1, unitPriceOverride: 0.2 },
+        ],
+      });
+    expect(res.status).toBe(201);
+    expect(
+      (
+        await prisma.bankAccount.findUniqueOrThrow({ where: { id: bank.id } })
+      ).currentBalance.toString(),
+    ).toBe('0.3');
   });
 
   it('POST /api/v1/sales/confirm rechaza la venta si las existencias son insuficientes (400)', async () => {
@@ -347,6 +430,111 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
     expect(lastCash?.movementType).toBe('EGRESO_MANUAL');
     expect(lastCash?.reason).toContain('Reversión por anulación');
     expect(Number(lastCash?.amount)).toBe(4800);
+  });
+
+  it('anulación de transferencia revierte banco; si no hay fondos conserva venta y lotes', async () => {
+    const owner = await prisma.user.findFirstOrThrow({ where: { username: 'pos_admin' } });
+    const bank = await prisma.bankAccount.create({
+      data: {
+        bankName: 'Banco devoluciones',
+        accountType: 'AHORROS',
+        accountNumber: 'POS-003',
+        name: 'Devoluciones',
+        createdById: owner.id,
+      },
+    });
+    const saleRes = await request(app.getHttpServer())
+      .post('/api/v1/sales/confirm')
+      .set('Cookie', cajeroCookie)
+      .set('Idempotency-Key', 'cancel-bank-sale')
+      .send({
+        paymentMethod: 'TRANSFERENCIA',
+        bankAccountId: bank.id,
+        items: [{ productId, presentationId, quantityCommercial: 1 }],
+      });
+    expect(saleRes.status).toBe(201);
+    expect(
+      (
+        await prisma.bankAccount.findUniqueOrThrow({ where: { id: bank.id } })
+      ).currentBalance.toString(),
+    ).toBe('4800');
+
+    await prisma.bankAccount.update({ where: { id: bank.id }, data: { currentBalance: '0.00' } });
+    const rejected = await request(app.getHttpServer())
+      .post(`/api/v1/sales/${saleRes.body.id}/cancel`)
+      .set('Cookie', supervisorCookie)
+      .send({ reason: 'Sin fondos para devolver' });
+    expect(rejected.status).toBe(400);
+    expect((await prisma.sale.findUniqueOrThrow({ where: { id: saleRes.body.id } })).status).toBe(
+      'COMPLETED',
+    );
+    expect(
+      (await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lot1Id } })).currentQuantity,
+    ).toBe(0);
+    expect(await prisma.bankMovement.count({ where: { bankAccountId: bank.id } })).toBe(1);
+
+    await prisma.bankAccount.update({
+      where: { id: bank.id },
+      data: { currentBalance: '4800.00' },
+    });
+    const cancelled = await request(app.getHttpServer())
+      .post(`/api/v1/sales/${saleRes.body.id}/cancel`)
+      .set('Cookie', supervisorCookie)
+      .send({ reason: 'Devolución aprobada' });
+    expect(cancelled.status).toBe(200);
+    expect(
+      (
+        await prisma.bankAccount.findUniqueOrThrow({ where: { id: bank.id } })
+      ).currentBalance.toString(),
+    ).toBe('0');
+    expect(await prisma.bankMovement.count({ where: { bankAccountId: bank.id } })).toBe(2);
+  });
+
+  it('dos anulaciones concurrentes solo restauran FEFO y revierten banco una vez', async () => {
+    const owner = await prisma.user.findFirstOrThrow({ where: { username: 'pos_admin' } });
+    const bank = await prisma.bankAccount.create({
+      data: {
+        bankName: 'Banco concurrencia',
+        accountType: 'AHORROS',
+        accountNumber: 'POS-004',
+        name: 'Recaudos',
+        createdById: owner.id,
+      },
+    });
+    const saleRes = await request(app.getHttpServer())
+      .post('/api/v1/sales/confirm')
+      .set('Cookie', cajeroCookie)
+      .set('Idempotency-Key', 'concurrent-cancel-sale')
+      .send({
+        paymentMethod: 'TRANSFERENCIA',
+        bankAccountId: bank.id,
+        items: [{ productId, presentationId, quantityCommercial: 1 }],
+      });
+    expect(saleRes.status).toBe(201);
+    const path = `/api/v1/sales/${saleRes.body.id}/cancel`;
+    const [first, second] = await Promise.all([
+      request(app.getHttpServer())
+        .post(path)
+        .set('Cookie', supervisorCookie)
+        .send({ reason: 'Anulación simultánea A' }),
+      request(app.getHttpServer())
+        .post(path)
+        .set('Cookie', supervisorCookie)
+        .send({ reason: 'Anulación simultánea B' }),
+    ]);
+    expect([first.status, second.status].sort()).toEqual([200, 400]);
+    expect((await prisma.sale.findUniqueOrThrow({ where: { id: saleRes.body.id } })).status).toBe(
+      'CANCELLED',
+    );
+    expect(
+      (await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lot1Id } })).currentQuantity,
+    ).toBe(10);
+    expect(await prisma.bankMovement.count({ where: { bankAccountId: bank.id } })).toBe(2);
+    expect(
+      (
+        await prisma.bankAccount.findUniqueOrThrow({ where: { id: bank.id } })
+      ).currentBalance.toString(),
+    ).toBe('0');
   });
 
   it('rechaza operaciones si el usuario carece de los permisos correspondientes (403)', async () => {

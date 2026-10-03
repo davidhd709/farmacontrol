@@ -4,6 +4,7 @@ import {
   Post,
   Param,
   Body,
+  Headers,
   Query,
   ParseUUIDPipe,
   HttpCode,
@@ -14,15 +15,18 @@ import { PayablesService } from '../application/payables.service';
 import {
   RegisterPayablePaymentPayload,
   ApiResponse,
+  SYSTEM_PERMISSIONS,
 } from '@farmacia/contracts';
 import {
   SessionAuthGuard,
   AuthenticatedUserContext,
 } from '../../identity/presentation/guards/session-auth.guard';
 import { CurrentUser } from '../../identity/presentation/decorators/current-user.decorator';
+import { PermissionsGuard } from '../../identity/presentation/guards/permissions.guard';
+import { RequirePermissions } from '../../identity/presentation/decorators/require-permissions.decorator';
 
 @Controller('payables')
-@UseGuards(SessionAuthGuard)
+@UseGuards(SessionAuthGuard, PermissionsGuard)
 export class PayablesController {
   constructor(private readonly svc: PayablesService) {}
 
@@ -31,6 +35,7 @@ export class PayablesController {
    * Lista cuentas por pagar con filtros opcionales.
    */
   @Get()
+  @RequirePermissions(SYSTEM_PERMISSIONS.PAYABLES_READ)
   async findAll(@Query() query: Record<string, string>): Promise<ApiResponse<any>> {
     const data = await this.svc.findAll({
       supplierId: query['supplierId'],
@@ -49,9 +54,8 @@ export class PayablesController {
    * Detalle de una cuenta por pagar con historial de pagos.
    */
   @Get(':id')
-  async findById(
-    @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<ApiResponse<any>> {
+  @RequirePermissions(SYSTEM_PERMISSIONS.PAYABLES_READ)
+  async findById(@Param('id', ParseUUIDPipe) id: string): Promise<ApiResponse<any>> {
     const data = await this.svc.findById(id);
     return { success: true, data };
   }
@@ -62,13 +66,15 @@ export class PayablesController {
    * HU-021 CA-2
    */
   @Post(':id/payments')
+  @RequirePermissions(SYSTEM_PERMISSIONS.PAYABLES_MANAGE)
   @HttpCode(HttpStatus.CREATED)
   async registerPayment(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() payload: RegisterPayablePaymentPayload,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
     @CurrentUser() user: AuthenticatedUserContext,
   ): Promise<ApiResponse<any>> {
-    const data = await this.svc.registerPayment(id, payload, user.id);
+    const data = await this.svc.registerPayment(id, payload, user.id, idempotencyKey);
     return { success: true, data };
   }
 }

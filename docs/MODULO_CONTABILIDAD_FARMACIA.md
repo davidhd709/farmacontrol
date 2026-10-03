@@ -1576,6 +1576,8 @@ Tesorería:
 - medios de pago;
 - movimientos.
 
+**Estado de ejecución: EN PROGRESO.** Existen Caja y cuentas/movimientos bancarios manuales, pero el cierre de la fase exige enrutar ventas y pagos por transferencia a la cuenta seleccionada sin alterar Caja, comprobar idempotencia y definir reversión. La apertura, arqueo y cierre de turnos siguen bloqueados hasta confirmar si habrá una caja general o cajas por cajero y su política de diferencias. Los movimientos históricos no efectivos que pudieran constar en Caja requieren conciliación explícita; no se reescriben automáticamente. El detalle actualizado de estados está en `PLAN_DESARROLLO.md`.
+
 ### Fase 2
 Cartera:
 - cuentas por cobrar;

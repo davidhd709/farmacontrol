@@ -20,6 +20,7 @@ import { CashMovement } from '../domain/cash-movement.entity';
 import {
   InvalidCashAmountException,
   InvalidCashMovementTypeException,
+  InvalidCashPaymentMethodException,
   InsufficientCashBalanceException,
   CashMovementNotFoundException,
 } from '../domain/cash.exceptions';
@@ -49,11 +50,16 @@ export class CashService {
       throw new BadRequestException('El usuario que registra el movimiento es requerido');
     }
 
+    const paymentMethod = payload.paymentMethod === undefined ? 'EFECTIVO' : payload.paymentMethod;
+    if (paymentMethod !== 'EFECTIVO') {
+      throw new BadRequestException(new InvalidCashPaymentMethodException().message);
+    }
+
     try {
       const savedMovement = await this.cashRepository.saveTransactional({
         movementType: payload.movementType,
         amount: payload.amount,
-        paymentMethod: payload.paymentMethod || 'EFECTIVO',
+        paymentMethod,
         reason: payload.reason,
         referenceDocumentType: payload.referenceDocumentType,
         referenceDocumentId: payload.referenceDocumentId,
@@ -140,11 +146,15 @@ export class CashService {
       createdByUserId: string;
     }
   ): Promise<void> {
+    const paymentMethod = payload.paymentMethod === undefined ? 'EFECTIVO' : payload.paymentMethod;
+    if (paymentMethod !== 'EFECTIVO') {
+      throw new BadRequestException(new InvalidCashPaymentMethodException().message);
+    }
     await this.cashRepository.saveTransactional(
       {
         movementType: payload.movementType as any,
         amount: payload.amount,
-        paymentMethod: (payload.paymentMethod ?? 'EFECTIVO') as any,
+        paymentMethod,
         reason: payload.reason,
         referenceDocumentType: payload.referenceDocumentType,
         referenceDocumentId: payload.referenceDocumentId,

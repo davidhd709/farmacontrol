@@ -66,6 +66,32 @@ describe('Treasury & Bank Accounts (Slice 11.4 Integration with PostgreSQL)', ()
 
   const root = '/api/v1/treasury/bank-accounts';
 
+  it('permite al cajero seleccionar cuentas activas sin exponer saldo ni número completo', async () => {
+    const created = await request(app.getHttpServer())
+      .post(root)
+      .set('Cookie', adminCookie)
+      .send({ bankName: 'Banco Operativo', accountType: 'AHORROS', accountNumber: '1234567890', name: 'Recaudos' });
+    expect(created.status).toBe(201);
+
+    const shortNumber = await request(app.getHttpServer())
+      .post(root)
+      .set('Cookie', adminCookie)
+      .send({ bankName: 'Medio Corto', accountType: 'DIGITAL', accountNumber: '123', name: 'Billetera' });
+    expect(shortNumber.status).toBe(201);
+
+    const res = await request(app.getHttpServer())
+      .get(`${root}/options`)
+      .set('Cookie', cashierCookie);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([
+      { id: created.body.id, name: 'Recaudos', bankName: 'Banco Operativo', accountNumberLast4: '7890' },
+      { id: shortNumber.body.id, name: 'Billetera', bankName: 'Medio Corto', accountNumberLast4: '' },
+    ]);
+    expect(JSON.stringify(res.body)).not.toContain('1234567890');
+    expect(JSON.stringify(res.body)).not.toContain('"123"');
+    expect(JSON.stringify(res.body)).not.toContain('currentBalance');
+  });
+
   it('rechaza 401 si no hay sesión autenticada', async () => {
     const res = await request(app.getHttpServer()).get(root);
     expect(res.status).toBe(401);
@@ -246,6 +272,37 @@ describe('Treasury & Bank Accounts (Slice 11.4 Integration with PostgreSQL)', ()
 
     // El saldo exacto debe ser 50.000.00
     expect(finalAcc.body.currentBalance).toBe('50000.00');
+  });
+
+  it('conserva los centavos exactos en saldos bancarios grandes sin convertirlos a float', async () => {
+    const account = await request(app.getHttpServer())
+      .post(root)
+      .set('Cookie', adminCookie)
+      .send({
+        bankName: 'Banco Precisión',
+        accountType: 'AHORROS',
+        accountNumber: '990000001',
+        name: 'Cuenta de prueba de precisión',
+        initialBalance: '999999999999.98',
+      });
+    expect(account.status).toBe(201);
+
+    const movement = await request(app.getHttpServer())
+      .post(`${root}/${account.body.id}/movements`)
+      .set('Cookie', adminCookie)
+      .send({
+        movementType: 'DEPOSIT',
+        amount: '0.01',
+        concept: 'Verificación de centavos',
+      });
+    expect(movement.status).toBe(201);
+    expect(movement.body.balanceBefore).toBe('999999999999.98');
+    expect(movement.body.balanceAfter).toBe('999999999999.99');
+
+    const persisted = await prisma.bankAccount.findUniqueOrThrow({
+      where: { id: account.body.id },
+    });
+    expect(persisted.currentBalance.toString()).toBe('999999999999.99');
   });
 
   it('retorna el resumen global de tesorería con saldos acumulados', async () => {

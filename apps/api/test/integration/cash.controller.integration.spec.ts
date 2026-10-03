@@ -166,6 +166,64 @@ describe('CashController (Integration with PostgreSQL & RBAC)', () => {
     expect(res.body.message).toContain('Saldo insuficiente en caja');
   });
 
+  it.each([
+    'TRANSFERENCIA',
+    'TARJETA_DEBITO',
+    'TARJETA_CREDITO',
+    null,
+    123,
+    '',
+  ])('rechaza el medio no efectivo o mal formado %s sin alterar Caja', async (paymentMethod) => {
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/cash-movements')
+      .set('Cookie', cajeroCookie)
+      .send({
+        movementType: 'INGRESO_MANUAL',
+        amount: 10000,
+        paymentMethod,
+        reason: 'Intento de movimiento no efectivo',
+      })
+      .expect(400);
+
+    expect(response.body.message).toContain('Caja solo admite movimientos en efectivo');
+    expect(await prisma.cashMovement.count()).toBe(0);
+
+    const balance = await request(app.getHttpServer())
+      .get('/api/v1/cash-movements/balance')
+      .set('Cookie', cajeroCookie)
+      .expect(200);
+    expect(balance.body.currentBalance).toBe(0);
+  });
+
+  it('acepta un medio omitido como EFECTIVO y no cambia la lectura de históricos no efectivos', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/cash-movements')
+      .set('Cookie', cajeroCookie)
+      .send({
+        movementType: 'INGRESO_MANUAL',
+        amount: 10000,
+        reason: 'Ingreso físico sin medio explícito',
+      })
+      .expect(201);
+    expect(response.body.paymentMethod).toBe('EFECTIVO');
+
+    const historical = await prisma.cashMovement.create({
+      data: {
+        movementType: 'INGRESO_MANUAL',
+        amount: '1000.00',
+        paymentMethod: 'TRANSFERENCIA',
+        reason: 'Histórico anterior a la separación Caja/Bancos',
+        balanceAfter: '11000.00',
+        createdByUserId: response.body.createdByUserId,
+      },
+    });
+    const read = await request(app.getHttpServer())
+      .get(`/api/v1/cash-movements/${historical.id}`)
+      .set('Cookie', cajeroCookie)
+      .expect(200);
+    expect(read.body.paymentMethod).toBe('TRANSFERENCIA');
+  });
+
   it('rechaza con 403 Forbidden a usuarios que no poseen el permiso requerido', async () => {
     await request(app.getHttpServer())
       .post('/api/v1/cash-movements')

@@ -1,4 +1,10 @@
-import { SaleStatus, SalePaymentMethod, SaleDto, SaleLineDto, SaleLotAllocationDto } from '@farmacia/contracts';
+import {
+  SaleStatus,
+  SalePaymentMethod,
+  SaleDto,
+  SaleLineDto,
+  SaleLotAllocationDto,
+} from '@farmacia/contracts';
 
 export interface SaleLotAllocationProps {
   id: string;
@@ -39,13 +45,27 @@ export class SaleLotAllocation {
     });
   }
 
-  public get id(): string { return this.props.id; }
-  public get saleId(): string { return this.props.saleId; }
-  public get saleLineId(): string { return this.props.saleLineId; }
-  public get lotId(): string { return this.props.lotId; }
-  public get quantityBaseUnits(): number { return this.props.quantityBaseUnits; }
-  public get lotNumber(): string | undefined { return this.props.lotNumber; }
-  public get expirationDate(): string | undefined { return this.props.expirationDate; }
+  public get id(): string {
+    return this.props.id;
+  }
+  public get saleId(): string {
+    return this.props.saleId;
+  }
+  public get saleLineId(): string {
+    return this.props.saleLineId;
+  }
+  public get lotId(): string {
+    return this.props.lotId;
+  }
+  public get quantityBaseUnits(): number {
+    return this.props.quantityBaseUnits;
+  }
+  public get lotNumber(): string | undefined {
+    return this.props.lotNumber;
+  }
+  public get expirationDate(): string | undefined {
+    return this.props.expirationDate;
+  }
 
   public toDto(): SaleLotAllocationDto {
     return {
@@ -110,7 +130,7 @@ export class SaleLine {
     const discount = payload.discount ?? 0;
     const subtotal = Math.max(0, payload.quantityCommercial * payload.unitPrice - discount);
     const taxRate = payload.taxRate ?? 0;
-    const taxAmount = Math.round((subtotal * (taxRate / 100)) * 100) / 100;
+    const taxAmount = Math.round(subtotal * (taxRate / 100) * 100) / 100;
     const total = subtotal + taxAmount;
 
     return new SaleLine({
@@ -139,23 +159,57 @@ export class SaleLine {
     return new SaleLine(props);
   }
 
-  public get id(): string { return this.props.id; }
-  public get saleId(): string { return this.props.saleId; }
-  public get productId(): string { return this.props.productId; }
-  public get productCode(): string | undefined { return this.props.productCode; }
-  public get productName(): string | undefined { return this.props.productName; }
-  public get presentationId(): string | null | undefined { return this.props.presentationId; }
-  public get presentationName(): string | null | undefined { return this.props.presentationName; }
-  public get presentationFactorHistorical(): number { return this.props.presentationFactorHistorical; }
-  public get quantityCommercial(): number { return this.props.quantityCommercial; }
-  public get quantityBaseUnits(): number { return this.props.quantityBaseUnits; }
-  public get unitPrice(): number { return this.props.unitPrice; }
-  public get discount(): number { return this.props.discount; }
-  public get subtotal(): number { return this.props.subtotal; }
-  public get taxRate(): number { return this.props.taxRate; }
-  public get taxAmount(): number { return this.props.taxAmount; }
-  public get total(): number { return this.props.total; }
-  public get lotAllocations(): SaleLotAllocation[] { return this.props.lotAllocations ?? []; }
+  public get id(): string {
+    return this.props.id;
+  }
+  public get saleId(): string {
+    return this.props.saleId;
+  }
+  public get productId(): string {
+    return this.props.productId;
+  }
+  public get productCode(): string | undefined {
+    return this.props.productCode;
+  }
+  public get productName(): string | undefined {
+    return this.props.productName;
+  }
+  public get presentationId(): string | null | undefined {
+    return this.props.presentationId;
+  }
+  public get presentationName(): string | null | undefined {
+    return this.props.presentationName;
+  }
+  public get presentationFactorHistorical(): number {
+    return this.props.presentationFactorHistorical;
+  }
+  public get quantityCommercial(): number {
+    return this.props.quantityCommercial;
+  }
+  public get quantityBaseUnits(): number {
+    return this.props.quantityBaseUnits;
+  }
+  public get unitPrice(): number {
+    return this.props.unitPrice;
+  }
+  public get discount(): number {
+    return this.props.discount;
+  }
+  public get subtotal(): number {
+    return this.props.subtotal;
+  }
+  public get taxRate(): number {
+    return this.props.taxRate;
+  }
+  public get taxAmount(): number {
+    return this.props.taxAmount;
+  }
+  public get total(): number {
+    return this.props.total;
+  }
+  public get lotAllocations(): SaleLotAllocation[] {
+    return this.props.lotAllocations ?? [];
+  }
 
   public setLotAllocations(allocations: SaleLotAllocation[]): void {
     this.props.lotAllocations = allocations;
@@ -191,6 +245,7 @@ export interface SaleProperties {
   customerDocument?: string;
   status: SaleStatus;
   paymentMethod: SalePaymentMethod;
+  bankAccountId?: string | null;
   subtotal: number;
   taxTotal: number;
   discountTotal: number;
@@ -215,6 +270,7 @@ export class Sale {
     customerName?: string;
     customerDocument?: string;
     paymentMethod: SalePaymentMethod;
+    bankAccountId?: string | null;
     lines: SaleLine[];
     amountPaid?: number;
     notes?: string | null;
@@ -232,7 +288,9 @@ export class Sale {
 
     const amountPaid = payload.amountPaid !== undefined ? payload.amountPaid : total;
     if (payload.paymentMethod === 'EFECTIVO' && amountPaid < total) {
-      throw new Error(`El monto recibido ($${amountPaid}) no cubre el valor total de la venta ($${total})`);
+      throw new Error(
+        `El monto recibido ($${amountPaid}) no cubre el valor total de la venta ($${total})`,
+      );
     }
     const changeGiven = payload.paymentMethod === 'EFECTIVO' ? Math.max(0, amountPaid - total) : 0;
 
@@ -245,6 +303,7 @@ export class Sale {
       customerDocument: payload.customerDocument,
       status: 'COMPLETED',
       paymentMethod: payload.paymentMethod,
+      bankAccountId: payload.bankAccountId ?? null,
       subtotal,
       taxTotal,
       discountTotal,
@@ -264,25 +323,66 @@ export class Sale {
     return new Sale(props);
   }
 
-  public get id(): string { return this.props.id; }
-  public get invoiceNumber(): string { return this.props.invoiceNumber; }
-  public get customerId(): string { return this.props.customerId; }
-  public get customerName(): string | undefined { return this.props.customerName; }
-  public get customerDocument(): string | undefined { return this.props.customerDocument; }
-  public get status(): SaleStatus { return this.props.status; }
-  public get paymentMethod(): SalePaymentMethod { return this.props.paymentMethod; }
-  public get subtotal(): number { return this.props.subtotal; }
-  public get taxTotal(): number { return this.props.taxTotal; }
-  public get discountTotal(): number { return this.props.discountTotal; }
-  public get total(): number { return this.props.total; }
-  public get amountPaid(): number { return this.props.amountPaid; }
-  public get changeGiven(): number { return this.props.changeGiven; }
-  public get notes(): string | null | undefined { return this.props.notes; }
-  public get createdById(): string { return this.props.createdById; }
-  public get createdByUsername(): string | undefined { return this.props.createdByUsername; }
-  public get lines(): SaleLine[] { return this.props.lines; }
-  public get createdAt(): Date { return this.props.createdAt; }
-  public get updatedAt(): Date { return this.props.updatedAt; }
+  public get id(): string {
+    return this.props.id;
+  }
+  public get invoiceNumber(): string {
+    return this.props.invoiceNumber;
+  }
+  public get customerId(): string {
+    return this.props.customerId;
+  }
+  public get customerName(): string | undefined {
+    return this.props.customerName;
+  }
+  public get customerDocument(): string | undefined {
+    return this.props.customerDocument;
+  }
+  public get status(): SaleStatus {
+    return this.props.status;
+  }
+  public get paymentMethod(): SalePaymentMethod {
+    return this.props.paymentMethod;
+  }
+  public get bankAccountId(): string | null | undefined {
+    return this.props.bankAccountId;
+  }
+  public get subtotal(): number {
+    return this.props.subtotal;
+  }
+  public get taxTotal(): number {
+    return this.props.taxTotal;
+  }
+  public get discountTotal(): number {
+    return this.props.discountTotal;
+  }
+  public get total(): number {
+    return this.props.total;
+  }
+  public get amountPaid(): number {
+    return this.props.amountPaid;
+  }
+  public get changeGiven(): number {
+    return this.props.changeGiven;
+  }
+  public get notes(): string | null | undefined {
+    return this.props.notes;
+  }
+  public get createdById(): string {
+    return this.props.createdById;
+  }
+  public get createdByUsername(): string | undefined {
+    return this.props.createdByUsername;
+  }
+  public get lines(): SaleLine[] {
+    return this.props.lines;
+  }
+  public get createdAt(): Date {
+    return this.props.createdAt;
+  }
+  public get updatedAt(): Date {
+    return this.props.updatedAt;
+  }
 
   public cancel(): void {
     if (this.props.status === 'CANCELLED') {
@@ -301,6 +401,7 @@ export class Sale {
       customerDocument: this.props.customerDocument,
       status: this.props.status,
       paymentMethod: this.props.paymentMethod,
+      bankAccountId: this.props.bankAccountId,
       subtotal: this.props.subtotal,
       taxTotal: this.props.taxTotal,
       discountTotal: this.props.discountTotal,
