@@ -2,7 +2,8 @@ import { ACCOUNTING_PURPOSES, type AccountingPurpose } from '@farmacia/contracts
 import { AccountingValidationError } from './accounting-rules';
 
 export interface JournalLineInput {
-  purpose: AccountingPurpose;
+  purpose?: AccountingPurpose;
+  accountId?: string;
   debit: string;
   credit: string;
   description?: string;
@@ -75,8 +76,15 @@ export function validateJournalPost(input: JournalPostInput): ValidatedJournalPo
   let debitTotal = 0n;
   let creditTotal = 0n;
   const lines = input.lines.map((line) => {
-    if (!line || typeof line !== 'object' || !ACCOUNTING_PURPOSES.includes(line.purpose))
+    if (!line || typeof line !== 'object') {
+      throw new AccountingValidationError('Línea contable inválida.');
+    }
+    if (!line.purpose && !line.accountId) {
+      throw new AccountingValidationError('Cada línea debe especificar un propósito o una cuenta contable.');
+    }
+    if (line.purpose && !ACCOUNTING_PURPOSES.includes(line.purpose)) {
       throw new AccountingValidationError('Propósito contable inválido.');
+    }
     if (
       line.description !== undefined &&
       (typeof line.description !== 'string' || line.description.trim().length > 500)
@@ -90,6 +98,7 @@ export function validateJournalPost(input: JournalPostInput): ValidatedJournalPo
     creditTotal += credit.cents;
     return {
       purpose: line.purpose,
+      accountId: line.accountId,
       debit: debit.value,
       credit: credit.value,
       description: line.description?.trim() || undefined,

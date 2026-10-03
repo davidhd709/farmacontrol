@@ -79,6 +79,10 @@ export const BASE_PERMISSIONS: PermissionDefinition[] = [
   { name: SYSTEM_PERMISSIONS.TREASURY_ACCOUNTS_SELECT, description: 'Seleccionar cuenta activa en cobros y pagos sin consultar saldos' },
   { name: SYSTEM_PERMISSIONS.TREASURY_READ, description: 'Consultar cuentas bancarias y movimientos de tesorería' },
   { name: SYSTEM_PERMISSIONS.TREASURY_MANAGE, description: 'Gestionar cuentas bancarias y registrar movimientos de tesorería' },
+
+  // Gastos
+  { name: SYSTEM_PERMISSIONS.EXPENSES_READ, description: 'Consultar categorías y registros de gastos operativos' },
+  { name: SYSTEM_PERMISSIONS.EXPENSES_MANAGE, description: 'Registrar, pagar y anular gastos y categorías de gasto' },
 ];
 
 export const BASE_ROLES: RoleDefinition[] = [
@@ -125,6 +129,8 @@ export const BASE_ROLES: RoleDefinition[] = [
       SYSTEM_PERMISSIONS.AUDIT_READ,
       SYSTEM_PERMISSIONS.TREASURY_READ,
       SYSTEM_PERMISSIONS.TREASURY_ACCOUNTS_SELECT,
+      SYSTEM_PERMISSIONS.EXPENSES_READ,
+      SYSTEM_PERMISSIONS.EXPENSES_MANAGE,
     ],
   },
   {

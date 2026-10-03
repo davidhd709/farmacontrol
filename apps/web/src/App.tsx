@@ -28,6 +28,7 @@ import {
 import { JournalEntriesPage } from './features/accounting/pages/JournalEntriesPage';
 import { TrialBalancePage } from './features/accounting/pages/TrialBalancePage';
 import { TreasuryBankAccountsPage } from './features/treasury/pages/TreasuryBankAccountsPage';
+import { ExpensesPage } from './features/expenses/pages/ExpensesPage';
 
 import { AppLayout } from './components/layout/AppLayout';
 
@@ -60,6 +61,7 @@ export const App = () => {
           <Route path="/treasury/bank-accounts" element={<TreasuryBankAccountsPage />} />
           <Route path="/receivables" element={<ReceivablesPage />} />
           <Route path="/payables" element={<PayablesPage />} />
+          <Route path="/expenses" element={<ExpensesPage />} />
           <Route path="/accounting/accounts" element={<AccountsPage />} />
           <Route path="/accounting/purposes" element={<PurposesPage />} />
           <Route path="/accounting/import" element={<ImportAccountsPage />} />

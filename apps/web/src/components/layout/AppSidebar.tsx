@@ -180,6 +180,12 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ open, onClose }) => {
           permission: SYSTEM_PERMISSIONS.PAYABLES_READ,
         },
         {
+          title: 'Gastos Operativos',
+          path: '/expenses',
+          icon: <ReceiptLongIcon fontSize="small" />,
+          permission: SYSTEM_PERMISSIONS.EXPENSES_READ,
+        },
+        {
           title: 'Libro Diario',
           path: '/accounting/journal',
           icon: <MenuBookIcon fontSize="small" />,

@@ -56,6 +56,32 @@ export interface PayablePaymentEventInput {
   invoiceNumber?: string;
 }
 
+export interface ExpenseEventInput {
+  id: string;
+  categoryId: string;
+  categoryAccountId: string;
+  description: string;
+  beneficiary: string;
+  documentNumber?: string | null;
+  amount: number | string | Prisma.Decimal;
+  paymentMethod: string;
+  status: string;
+  expenseDate: Date | string;
+  createdById?: string | null;
+}
+
+export interface ExpensePaymentEventInput {
+  id: string;
+  expenseId: string;
+  amount: number | string | Prisma.Decimal;
+  paymentMethod: string;
+  beneficiary?: string;
+  description?: string;
+  documentNumber?: string | null;
+  createdById?: string | null;
+  paymentDate: Date | string;
+}
+
 @Injectable()
 export class AccountingEngineService {
   private readonly logger = new Logger(AccountingEngineService.name);
@@ -435,6 +461,172 @@ export class AccountingEngineService {
     const client = tx ?? prisma;
     const existing = await client.journalEntry.findUnique({
       where: { sourceType_sourceId: { sourceType: 'PAYABLE_PAYMENT', sourceId: paymentId } },
+    });
+    if (!existing || existing.status !== 'POSTED') return null;
+
+    const alreadyReversed = await client.journalEntry.findFirst({
+      where: { reversalOfId: existing.id },
+    });
+    if (alreadyReversed) return alreadyReversed;
+
+    return this.journalService.reverse(
+      {
+        entryId: existing.id,
+        entryDate: new Date().toISOString().slice(0, 10),
+        reason,
+        createdById: userId,
+      },
+      tx,
+    );
+  }
+
+  // ------------------------------------------------------------------ //
+  //  Gastos Operativos (Bloque 4 / Fase 4)
+  // ------------------------------------------------------------------ //
+
+  /**
+   * Contabiliza el registro de un gasto operativo (de contado o a crédito).
+   */
+  async handleExpenseCreated(expense: ExpenseEventInput, tx?: Tx) {
+    const date = new Date(expense.expenseDate);
+    const amountCents = parseMoneyToCents(expense.amount.toString(), 'Monto de gasto');
+    if (amountCents <= 0n) return null;
+    const amountStr = centsToMoneyString(amountCents);
+
+    const isPaid = expense.status === 'PAGADO';
+    const isBank = expense.paymentMethod === 'TRANSFERENCIA';
+    const contraPurpose = isPaid
+      ? isBank
+        ? DbPurpose.BANK
+        : DbPurpose.CASH
+      : DbPurpose.SUPPLIERS;
+
+    // Verificar si se puede postear con la contrapartida requerida
+    const canPost = await this.journalService.canPostForPurposes([contraPurpose], date, tx);
+    if (!canPost) {
+      this.logger.warn(
+        `[Contabilidad Automática] Asiento de gasto omitido por falta de mapeo contable activo para ${contraPurpose}.`,
+      );
+      return null;
+    }
+
+    const lines: JournalLineInput[] = [
+      {
+        accountId: expense.categoryAccountId,
+        debit: amountStr,
+        credit: '0.00',
+        description: `Gasto: ${expense.description}`,
+      },
+      {
+        purpose: contraPurpose,
+        debit: '0.00',
+        credit: amountStr,
+        description: isPaid
+          ? `Desembolso gasto: ${expense.beneficiary}`
+          : `Causación pasivo por pagar: ${expense.beneficiary}`,
+      },
+    ];
+
+    return this.journalService.post(
+      {
+        entryDate: date.toISOString().slice(0, 10),
+        description: `Gasto - ${expense.beneficiary}: ${expense.description}`,
+        sourceType: 'EXPENSE',
+        sourceId: expense.id,
+        createdById: expense.createdById ?? undefined,
+        lines,
+      },
+      tx,
+    );
+  }
+
+  /**
+   * Reversa el asiento contable de un gasto cancelado / anulado.
+   */
+  async handleExpenseCancelled(expenseId: string, reason: string, userId?: string, tx?: Tx) {
+    const client = tx ?? prisma;
+    const existing = await client.journalEntry.findUnique({
+      where: { sourceType_sourceId: { sourceType: 'EXPENSE', sourceId: expenseId } },
+    });
+    if (!existing || existing.status !== 'POSTED') return null;
+
+    const alreadyReversed = await client.journalEntry.findFirst({
+      where: { reversalOfId: existing.id },
+    });
+    if (alreadyReversed) return alreadyReversed;
+
+    return this.journalService.reverse(
+      {
+        entryId: existing.id,
+        entryDate: new Date().toISOString().slice(0, 10),
+        reason,
+        createdById: userId,
+      },
+      tx,
+    );
+  }
+
+  /**
+   * Contabiliza el pago posterior de un gasto pendiente.
+   * Regla contable: cancela el pasivo (SUPPLIERS) contra tesorería (CASH/BANK).
+   * ¡No duplica el gasto!
+   */
+  async handleExpensePayment(payment: ExpensePaymentEventInput, tx?: Tx) {
+    const date = new Date(payment.paymentDate);
+    const amountCents = parseMoneyToCents(payment.amount.toString(), 'Monto de pago de gasto');
+    if (amountCents <= 0n) return null;
+    const amountStr = centsToMoneyString(amountCents);
+
+    const isBank = payment.paymentMethod === 'TRANSFERENCIA';
+    const paymentPurpose = isBank ? DbPurpose.BANK : DbPurpose.CASH;
+
+    const canPost = await this.journalService.canPostForPurposes(
+      [DbPurpose.SUPPLIERS, paymentPurpose],
+      date,
+      tx,
+    );
+    if (!canPost) {
+      this.logger.warn(
+        `[Contabilidad Automática] Asiento de pago de gasto omitido por falta de mapeo contable activo para SUPPLIERS o ${paymentPurpose}.`,
+      );
+      return null;
+    }
+
+    const lines: JournalLineInput[] = [
+      {
+        purpose: DbPurpose.SUPPLIERS,
+        debit: amountStr,
+        credit: '0.00',
+        description: `Cancelación pasivo gasto: ${payment.beneficiary || payment.expenseId}`,
+      },
+      {
+        purpose: paymentPurpose,
+        debit: '0.00',
+        credit: amountStr,
+        description: `Egreso tesorería pago gasto (${payment.paymentMethod}): ${payment.beneficiary || payment.expenseId}`,
+      },
+    ];
+
+    return this.journalService.post(
+      {
+        entryDate: date.toISOString().slice(0, 10),
+        description: `Pago gasto a ${payment.beneficiary || ''} (${payment.paymentMethod})${payment.documentNumber ? ' doc ' + payment.documentNumber : ''}`,
+        sourceType: 'EXPENSE_PAYMENT',
+        sourceId: payment.id,
+        createdById: payment.createdById ?? undefined,
+        lines,
+      },
+      tx,
+    );
+  }
+
+  /**
+   * Reversa el asiento contable al revertir un pago de gasto.
+   */
+  async handleExpensePaymentReversed(paymentId: string, reason: string, userId?: string, tx?: Tx) {
+    const client = tx ?? prisma;
+    const existing = await client.journalEntry.findUnique({
+      where: { sourceType_sourceId: { sourceType: 'EXPENSE_PAYMENT', sourceId: paymentId } },
     });
     if (!existing || existing.status !== 'POSTED') return null;
 

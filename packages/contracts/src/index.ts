@@ -109,6 +109,10 @@ export const SYSTEM_PERMISSIONS = {
   TREASURY_ACCOUNTS_SELECT: 'treasury:accounts:select',
   TREASURY_READ: 'treasury:read',
   TREASURY_MANAGE: 'treasury:manage',
+
+  // Gastos
+  EXPENSES_READ: 'expenses:read',
+  EXPENSES_MANAGE: 'expenses:manage',
 } as const;
 
 export type SystemPermission = (typeof SYSTEM_PERMISSIONS)[keyof typeof SYSTEM_PERMISSIONS];
@@ -116,6 +120,7 @@ export type SystemPermission = (typeof SYSTEM_PERMISSIONS)[keyof typeof SYSTEM_P
 export * from './accounting';
 export * from './product-tax-profile';
 export * from './treasury';
+export * from './expenses';
 
 export interface RoleDto {
   id: string;

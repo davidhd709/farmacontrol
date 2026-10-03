@@ -102,9 +102,12 @@ function samePost(existing: PostedEntry, requested: ValidatedJournalPost): boole
     existing.lines.length === requested.lines.length &&
     existing.lines.every((line, index) => {
       const wanted = requested.lines[index];
+      const matchPurposeOrAccount = wanted.purpose
+        ? line.purpose === wanted.purpose
+        : line.accountId === wanted.accountId;
       return (
         line.position === index + 1 &&
-        line.purpose === wanted.purpose &&
+        matchPurposeOrAccount &&
         (line.description ?? undefined) === wanted.description &&
         line.debit.toFixed(2) === wanted.debit &&
         line.credit.toFixed(2) === wanted.credit
@@ -152,7 +155,12 @@ export class JournalService {
 
     const date = parseJournalDate(input.entryDate);
     const accounts = new Map<DbPurpose, string>();
-    for (const purpose of new Set(input.lines.map((line) => line.purpose as DbPurpose))) {
+    const purposesToLookup = new Set<DbPurpose>();
+    for (const line of input.lines) {
+      if (line.purpose) purposesToLookup.add(line.purpose as DbPurpose);
+    }
+
+    for (const purpose of purposesToLookup) {
       const mappings = await tx.companyAccountingMapping.findMany({
         where: {
           purpose,
@@ -173,6 +181,17 @@ export class JournalService {
       accounts.set(purpose, mappings[0].account.id);
     }
 
+    for (const line of input.lines) {
+      if (line.accountId) {
+        const acc = await tx.account.findUnique({ where: { id: line.accountId } });
+        if (!acc || !acc.isActive || !acc.allowsMovement) {
+          throw new AccountingValidationError(
+            `La cuenta contable ${line.accountId} no es válida, no está activa o no es imputable.`,
+          );
+        }
+      }
+    }
+
     const entry = await tx.journalEntry.create({
       data: {
         entryDate: date,
@@ -186,8 +205,8 @@ export class JournalService {
       data: input.lines.map((line, index) => ({
         journalEntryId: entry.id,
         position: index + 1,
-        accountId: accounts.get(line.purpose as DbPurpose)!,
-        purpose: line.purpose as DbPurpose,
+        accountId: line.accountId || accounts.get(line.purpose as DbPurpose)!,
+        purpose: (line.purpose as DbPurpose) || null,
         description: line.description ?? null,
         debit: new Prisma.Decimal(line.debit),
         credit: new Prisma.Decimal(line.credit),
