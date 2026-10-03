@@ -3,6 +3,8 @@ import type {
   PayableQueryFilters,
   RegisterPayablePaymentPayload,
   PaginatedResponse,
+  AgingSummaryDto,
+  ReversePaymentPayload,
 } from '@farmacia/contracts';
 import { apiRequest } from '../../../api/http-client';
 
@@ -29,6 +31,10 @@ export async function fetchPayableById(id: string): Promise<PayableDto> {
   return apiRequest<PayableDto>(`payables/${id}`, { method: 'GET' });
 }
 
+export async function fetchPayablesAgingSummary(): Promise<AgingSummaryDto> {
+  return apiRequest<AgingSummaryDto>('payables/aging-summary', { method: 'GET' });
+}
+
 export async function registerPayablePayment(
   id: string,
   payload: RegisterPayablePaymentPayload,
@@ -40,3 +46,15 @@ export async function registerPayablePayment(
     body: JSON.stringify(payload),
   });
 }
+
+export async function revertPayablePayment(
+  payableId: string,
+  paymentId: string,
+  payload: ReversePaymentPayload,
+): Promise<PayableDto> {
+  return apiRequest<PayableDto>(`payables/${payableId}/payments/${paymentId}/reverse`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+

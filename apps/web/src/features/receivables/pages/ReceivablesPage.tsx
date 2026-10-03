@@ -30,11 +30,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import type { ReceivableDto, ReceivableStatus } from '@farmacia/contracts';
+import type { ReceivableDto, ReceivableStatus, ReceivablePaymentDto } from '@farmacia/contracts';
 import {
   fetchReceivables,
   fetchReceivableById,
+  fetchReceivablesAgingSummary,
   registerReceivablePayment,
+  revertReceivablePayment,
 } from '../api/receivables.api';
 import { HomeBackButton } from '../../../components/HomeBackButton';
 import { useBankAccountOptions } from '../../treasury/hooks/useTreasury';
@@ -94,12 +96,16 @@ function PaymentModal({ receivable, onClose, onSuccess }: PaymentModalProps) {
     initialData: receivable,
   });
 
+  const [reversalTarget, setReversalTarget] = useState<ReceivablePaymentDto | null>(null);
+  const [reversalReason, setReversalReason] = useState('');
+  const [reversalError, setReversalError] = useState<string | null>(null);
+
   const {
     control,
     handleSubmit,
     reset,
     watch,
-    formState: { errors, isSubmitting },
+    formState: { errors },
   } = useForm<PaymentFormData>({
     resolver: zodResolver(paymentSchema),
     defaultValues: { amount: '', paymentMethod: 'EFECTIVO', bankAccountId: '', notes: '' },
@@ -122,8 +128,27 @@ function PaymentModal({ receivable, onClose, onSuccess }: PaymentModalProps) {
       retry.current = null;
       queryClient.invalidateQueries({ queryKey: ['receivables'] });
       queryClient.invalidateQueries({ queryKey: ['receivable-detail', receivable.id] });
+      queryClient.invalidateQueries({ queryKey: ['receivables-aging'] });
       reset();
       onSuccess();
+    },
+  });
+
+  const reverseMutation = useMutation({
+    mutationFn: () => {
+      if (!reversalTarget) throw new Error('No se seleccionó abono para revertir');
+      return revertReceivablePayment(receivable.id, reversalTarget.id, { reason: reversalReason });
+    },
+    onSuccess: () => {
+      setReversalTarget(null);
+      setReversalReason('');
+      setReversalError(null);
+      queryClient.invalidateQueries({ queryKey: ['receivables'] });
+      queryClient.invalidateQueries({ queryKey: ['receivable-detail', receivable.id] });
+      queryClient.invalidateQueries({ queryKey: ['receivables-aging'] });
+    },
+    onError: (err: Error) => {
+      setReversalError(err.message || 'Error al revertir el abono.');
     },
   });
 
@@ -234,6 +259,7 @@ function PaymentModal({ receivable, onClose, onSuccess }: PaymentModalProps) {
                     <TableCell align="right" sx={{ fontWeight: 700 }}>Valor Abonado</TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>Método</TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>Observaciones</TableCell>
+                    <TableCell align="center" sx={{ fontWeight: 700 }}>Estado / Acción</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -252,7 +278,15 @@ function PaymentModal({ receivable, onClose, onSuccess }: PaymentModalProps) {
                         <TableCell sx={{ fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
                           {formattedDate}
                         </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 700, color: 'success.main', fontSize: '0.9rem' }}>
+                        <TableCell
+                          align="right"
+                          sx={{
+                            fontWeight: 700,
+                            color: p.isReversed ? 'text.disabled' : 'success.main',
+                            fontSize: '0.9rem',
+                            textDecoration: p.isReversed ? 'line-through' : 'none',
+                          }}
+                        >
                           +${Number(p.amount).toLocaleString('es-CO', { minimumFractionDigits: 2 })}
                         </TableCell>
                         <TableCell>
@@ -266,6 +300,32 @@ function PaymentModal({ receivable, onClose, onSuccess }: PaymentModalProps) {
                         </TableCell>
                         <TableCell sx={{ fontSize: '0.8rem', color: 'text.secondary' }}>
                           {p.notes || '—'}
+                        </TableCell>
+                        <TableCell align="center">
+                          {p.isReversed ? (
+                            <Box>
+                              <Chip label="Revertido" size="small" color="error" variant="outlined" />
+                              {p.reversalReason && (
+                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                                  {p.reversalReason}
+                                </Typography>
+                              )}
+                            </Box>
+                          ) : (
+                            <Button
+                              size="small"
+                              color="error"
+                              variant="text"
+                              sx={{ textTransform: 'none', fontSize: '0.75rem' }}
+                              onClick={() => {
+                                setReversalTarget(p);
+                                setReversalReason('');
+                                setReversalError(null);
+                              }}
+                            >
+                              Revertir
+                            </Button>
+                          )}
                         </TableCell>
                       </TableRow>
                     );
@@ -385,7 +445,7 @@ function PaymentModal({ receivable, onClose, onSuccess }: PaymentModalProps) {
       </DialogContent>
 
       <DialogActions sx={{ px: 3, py: 2 }}>
-        <Button onClick={onClose} disabled={isSubmitting} variant="outlined" color="inherit">
+        <Button onClick={onClose} disabled={mutation.isPending} variant="outlined" color="inherit">
           Cerrar
         </Button>
         {canPay && (
@@ -393,13 +453,72 @@ function PaymentModal({ receivable, onClose, onSuccess }: PaymentModalProps) {
             type="submit"
             form="payment-form"
             variant="contained"
-            disabled={isSubmitting || mutation.isPending}
+            disabled={mutation.isPending}
             sx={{ fontWeight: 600, px: 3 }}
           >
             {mutation.isPending ? 'Registrando Abono…' : 'Registrar Abono'}
           </Button>
         )}
       </DialogActions>
+
+      {/* Diálogo de Confirmación de Reversión */}
+      <Dialog
+        open={Boolean(reversalTarget)}
+        onClose={() => !reverseMutation.isPending && setReversalTarget(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Revertir Abono de Cliente</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            ¿Estás seguro de anular el abono por{' '}
+            <strong>
+              ${Number(reversalTarget?.amount ?? 0).toLocaleString('es-CO', { minimumFractionDigits: 2 })}
+            </strong>{' '}
+            ({reversalTarget?.paymentMethod})? El saldo de la cuenta por cobrar aumentará nuevamente y se registrará un egreso compensatorio en caja o bancos.
+          </Typography>
+
+          <TextField
+            label="Motivo de la anulación"
+            placeholder="Ej: Error en valor digitado, cheque rechazado, etc."
+            fullWidth
+            size="small"
+            required
+            multiline
+            rows={2}
+            value={reversalReason}
+            onChange={(e) => setReversalReason(e.target.value)}
+            error={reversalReason.trim().length > 0 && reversalReason.trim().length < 5}
+            helperText={
+              reversalReason.trim().length > 0 && reversalReason.trim().length < 5
+                ? 'El motivo debe tener al menos 5 caracteres'
+                : 'Mínimo 5 caracteres'
+            }
+          />
+
+          {reversalError && (
+            <Alert severity="error" sx={{ mt: 2 }}>
+              {reversalError}
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setReversalTarget(null)}
+            disabled={reverseMutation.isPending}
+          >
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={() => reverseMutation.mutate()}
+            disabled={reverseMutation.isPending || reversalReason.trim().length < 5}
+          >
+            {reverseMutation.isPending ? 'Anulando…' : 'Confirmar Anulación'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Dialog>
   );
 }
@@ -414,14 +533,23 @@ export function ReceivablesPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<ReceivableStatus | ''>('');
   const [overdueOnly, setOverdueOnly] = useState(false);
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
   const [selectedReceivable, setSelectedReceivable] = useState<ReceivableDto | null>(null);
 
+  const { data: agingData } = useQuery({
+    queryKey: ['receivables-aging'],
+    queryFn: () => fetchReceivablesAgingSummary(),
+  });
+
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['receivables', page, statusFilter, overdueOnly],
+    queryKey: ['receivables', page, statusFilter, overdueOnly, fromDate, toDate],
     queryFn: () =>
       fetchReceivables({
         status: statusFilter || undefined,
         overdueOnly: overdueOnly || undefined,
+        fromDate: fromDate || undefined,
+        toDate: toDate || undefined,
         page: page + 1,
         pageSize,
       }),
@@ -441,6 +569,10 @@ export function ReceivablesPage() {
     );
   });
 
+  const hasActiveFilters = Boolean(
+    search || statusFilter || overdueOnly || fromDate || toDate,
+  );
+
   return (
     <Box sx={{ p: 3 }}>
       {/* Header */}
@@ -456,19 +588,89 @@ export function ReceivablesPage() {
         </Box>
       </Box>
 
+      {/* Aging KPI Cards */}
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(5, 1fr)' },
+          gap: 2,
+          mb: 3,
+        }}
+      >
+        <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: 'background.paper' }}>
+          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+            Total en Cartera
+          </Typography>
+          <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5, color: 'text.primary' }}>
+            ${Number(agingData?.totalPending ?? 0).toLocaleString('es-CO', { minimumFractionDigits: 2 })}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            Saldo acumulado ({agingData?.totalCount ?? 0} créditos)
+          </Typography>
+        </Paper>
+
+        <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: 'success.50', borderColor: 'success.200' }}>
+          <Typography variant="caption" color="success.dark" sx={{ fontWeight: 600 }}>
+            Al Día / Corriente
+          </Typography>
+          <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5, color: 'success.dark' }}>
+            ${Number(agingData?.current.amount ?? 0).toLocaleString('es-CO', { minimumFractionDigits: 2 })}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {agingData?.current.count ?? 0} crédito(s)
+          </Typography>
+        </Paper>
+
+        <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: 'warning.50', borderColor: 'warning.200' }}>
+          <Typography variant="caption" color="warning.dark" sx={{ fontWeight: 600 }}>
+            Vencidas 1 - 30 Días
+          </Typography>
+          <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5, color: 'warning.dark' }}>
+            ${Number(agingData?.days1To30.amount ?? 0).toLocaleString('es-CO', { minimumFractionDigits: 2 })}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {agingData?.days1To30.count ?? 0} crédito(s)
+          </Typography>
+        </Paper>
+
+        <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: 'warning.100', borderColor: 'warning.300' }}>
+          <Typography variant="caption" color="warning.dark" sx={{ fontWeight: 600 }}>
+            Vencidas 31 - 60 Días
+          </Typography>
+          <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5, color: 'warning.dark' }}>
+            ${Number(agingData?.days31To60.amount ?? 0).toLocaleString('es-CO', { minimumFractionDigits: 2 })}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {agingData?.days31To60.count ?? 0} crédito(s)
+          </Typography>
+        </Paper>
+
+        <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: 'error.50', borderColor: 'error.200' }}>
+          <Typography variant="caption" color="error.dark" sx={{ fontWeight: 600 }}>
+            Vencidas &gt; 60 Días
+          </Typography>
+          <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5, color: 'error.dark' }}>
+            ${(Number(agingData?.days61To90.amount ?? 0) + Number(agingData?.daysOver90.amount ?? 0)).toLocaleString('es-CO', { minimumFractionDigits: 2 })}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {(agingData?.days61To90.count ?? 0) + (agingData?.daysOver90.count ?? 0)} crédito(s)
+          </Typography>
+        </Paper>
+      </Box>
+
       {/* Filtros */}
       <Paper variant="outlined" sx={{ p: 2, mb: 2, borderRadius: 2 }}>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ alignItems: { sm: 'center' }, flexWrap: 'wrap' }}>
           <TextField
             id="receivables-search"
             placeholder="Buscar cliente o factura…"
             size="small"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            sx={{ minWidth: 240 }}
+            sx={{ minWidth: 220 }}
           />
 
-          <FormControl size="small" sx={{ minWidth: 160 }}>
+          <FormControl size="small" sx={{ minWidth: 140 }}>
             <InputLabel id="receivables-status-label">Estado</InputLabel>
             <Select
               labelId="receivables-status-label"
@@ -487,6 +689,34 @@ export function ReceivablesPage() {
             </Select>
           </FormControl>
 
+          <TextField
+            id="receivables-from-date"
+            label="Desde"
+            type="date"
+            size="small"
+            value={fromDate}
+            onChange={(e) => {
+              setFromDate(e.target.value);
+              setPage(0);
+            }}
+            slotProps={{ inputLabel: { shrink: true } }}
+            sx={{ minWidth: 140 }}
+          />
+
+          <TextField
+            id="receivables-to-date"
+            label="Hasta"
+            type="date"
+            size="small"
+            value={toDate}
+            onChange={(e) => {
+              setToDate(e.target.value);
+              setPage(0);
+            }}
+            slotProps={{ inputLabel: { shrink: true } }}
+            sx={{ minWidth: 140 }}
+          />
+
           <Button
             variant={overdueOnly ? 'contained' : 'outlined'}
             color="warning"
@@ -498,6 +728,23 @@ export function ReceivablesPage() {
           >
             Solo vencidas
           </Button>
+
+          {hasActiveFilters && (
+            <Button
+              size="small"
+              color="inherit"
+              onClick={() => {
+                setFromDate('');
+                setToDate('');
+                setStatusFilter('');
+                setOverdueOnly(false);
+                setSearch('');
+                setPage(0);
+              }}
+            >
+              Limpiar filtros
+            </Button>
+          )}
         </Stack>
       </Paper>
 

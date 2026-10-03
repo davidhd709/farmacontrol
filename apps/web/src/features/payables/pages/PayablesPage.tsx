@@ -35,7 +35,9 @@ import type { PayableDto, PayableStatus } from '@farmacia/contracts';
 import {
   fetchPayables,
   fetchPayableById,
+  fetchPayablesAgingSummary,
   registerPayablePayment,
+  revertPayablePayment,
 } from '../api/payables.api';
 import { HomeBackButton } from '../../../components/HomeBackButton';
 import { useBankAccountOptions } from '../../treasury/hooks/useTreasury';
@@ -84,6 +86,9 @@ interface PaymentModalProps {
 
 function PaymentModal({ payable, onClose, onSuccess }: PaymentModalProps) {
   const [showPayments, setShowPayments] = useState(false);
+  const [reversalTarget, setReversalTarget] = useState<any | null>(null);
+  const [reversalReason, setReversalReason] = useState('');
+  const [reversalError, setReversalError] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const retry = useRef<{ fingerprint: string; key: string } | null>(null);
 
@@ -121,8 +126,27 @@ function PaymentModal({ payable, onClose, onSuccess }: PaymentModalProps) {
       retry.current = null;
       queryClient.invalidateQueries({ queryKey: ['payables'] });
       queryClient.invalidateQueries({ queryKey: ['payable-detail', payable.id] });
+      queryClient.invalidateQueries({ queryKey: ['payables-aging'] });
       reset();
       onSuccess();
+    },
+  });
+
+  const reverseMutation = useMutation({
+    mutationFn: () => {
+      if (!reversalTarget) throw new Error('No se seleccionó pago para revertir');
+      return revertPayablePayment(payable.id, reversalTarget.id, { reason: reversalReason });
+    },
+    onSuccess: () => {
+      setReversalTarget(null);
+      setReversalReason('');
+      setReversalError(null);
+      queryClient.invalidateQueries({ queryKey: ['payables'] });
+      queryClient.invalidateQueries({ queryKey: ['payable-detail', payable.id] });
+      queryClient.invalidateQueries({ queryKey: ['payables-aging'] });
+    },
+    onError: (err: Error) => {
+      setReversalError(err.message || 'Error al revertir el pago.');
     },
   });
 
@@ -191,7 +215,7 @@ function PaymentModal({ payable, onClose, onSuccess }: PaymentModalProps) {
 
         <Divider sx={{ my: 2 }} />
 
-        {/* Historial */}
+        {/* Historial de Pagos con soporte de Reversión */}
         {(detail?.payments?.length ?? 0) > 0 && (
           <Box sx={{ mb: 2 }}>
             <Button
@@ -209,6 +233,7 @@ function PaymentModal({ payable, onClose, onSuccess }: PaymentModalProps) {
                       <TableCell>Fecha</TableCell>
                       <TableCell align="right">Monto</TableCell>
                       <TableCell>Método</TableCell>
+                      <TableCell align="center">Estado / Acción</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -217,10 +242,43 @@ function PaymentModal({ payable, onClose, onSuccess }: PaymentModalProps) {
                         <TableCell>
                           {new Date(p.createdAt).toLocaleDateString('es-CO')}
                         </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 600, color: 'error.main' }}>
+                        <TableCell
+                          align="right"
+                          sx={{
+                            fontWeight: 600,
+                            color: p.isReversed ? 'text.disabled' : 'error.main',
+                            textDecoration: p.isReversed ? 'line-through' : 'none',
+                          }}
+                        >
                           -${Number(p.amount).toLocaleString('es-CO', { minimumFractionDigits: 2 })}
                         </TableCell>
                         <TableCell>{p.paymentMethod}</TableCell>
+                        <TableCell align="center">
+                          {p.isReversed ? (
+                            <Box>
+                              <Chip label="Revertido" size="small" color="error" variant="outlined" />
+                              {p.reversalReason && (
+                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                                  {p.reversalReason}
+                                </Typography>
+                              )}
+                            </Box>
+                          ) : (
+                            <Button
+                              size="small"
+                              color="error"
+                              variant="text"
+                              sx={{ textTransform: 'none' }}
+                              onClick={() => {
+                                setReversalTarget(p);
+                                setReversalReason('');
+                                setReversalError(null);
+                              }}
+                            >
+                              Revertir
+                            </Button>
+                          )}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -229,6 +287,51 @@ function PaymentModal({ payable, onClose, onSuccess }: PaymentModalProps) {
             </Collapse>
           </Box>
         )}
+
+        {/* Diálogo de Confirmación de Reversión */}
+        <Dialog
+          open={Boolean(reversalTarget)}
+          onClose={() => !reverseMutation.isPending && setReversalTarget(null)}
+          maxWidth="xs"
+          fullWidth
+        >
+          <DialogTitle>Revertir Pago al Proveedor</DialogTitle>
+          <DialogContent>
+            <Typography variant="body2" sx={{ mb: 2 }}>
+              Esta acción restituirá el saldo pendiente de la obligación y registrará una operación compensatoria en {reversalTarget?.paymentMethod === 'TRANSFERENCIA' ? 'el banco' : 'la caja'}.
+            </Typography>
+            {reversalError && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {reversalError}
+              </Alert>
+            )}
+            <TextField
+              autoFocus
+              fullWidth
+              size="small"
+              label="Motivo de la reversión"
+              value={reversalReason}
+              onChange={(e) => setReversalReason(e.target.value)}
+              placeholder="Ej: Monto ingresado por error / Factura equivocada"
+              multiline
+              rows={2}
+              required
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setReversalTarget(null)} disabled={reverseMutation.isPending}>
+              Cancelar
+            </Button>
+            <Button
+              variant="contained"
+              color="error"
+              onClick={() => reverseMutation.mutate()}
+              disabled={!reversalReason.trim() || reverseMutation.isPending}
+            >
+              {reverseMutation.isPending ? 'Revirtiendo…' : 'Confirmar Reversión'}
+            </Button>
+          </DialogActions>
+        </Dialog>
 
         {/* Formulario */}
         {canPay && (
@@ -361,14 +464,23 @@ export function PayablesPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<PayableStatus | ''>('');
   const [overdueOnly, setOverdueOnly] = useState(false);
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
   const [selectedPayable, setSelectedPayable] = useState<PayableDto | null>(null);
 
+  const { data: agingData } = useQuery({
+    queryKey: ['payables-aging'],
+    queryFn: () => fetchPayablesAgingSummary(),
+  });
+
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['payables', page, statusFilter, overdueOnly],
+    queryKey: ['payables', page, statusFilter, overdueOnly, fromDate, toDate],
     queryFn: () =>
       fetchPayables({
         status: statusFilter || undefined,
         overdueOnly: overdueOnly || undefined,
+        fromDate: fromDate || undefined,
+        toDate: toDate || undefined,
         page: page + 1,
         pageSize,
       }),
@@ -386,6 +498,10 @@ export function PayablesPage() {
     );
   });
 
+  const hasActiveFilters = Boolean(
+    search || statusFilter || overdueOnly || fromDate || toDate,
+  );
+
   return (
     <Box sx={{ p: 3 }}>
       {/* Header */}
@@ -401,19 +517,89 @@ export function PayablesPage() {
         </Box>
       </Box>
 
+      {/* Aging KPI Cards */}
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(5, 1fr)' },
+          gap: 2,
+          mb: 3,
+        }}
+      >
+        <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: 'background.paper' }}>
+          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+            Total Pendiente
+          </Typography>
+          <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5, color: 'text.primary' }}>
+            ${Number(agingData?.totalPending ?? 0).toLocaleString('es-CO', { minimumFractionDigits: 2 })}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            Saldo acumulado ({agingData?.totalCount ?? 0} facturas)
+          </Typography>
+        </Paper>
+
+        <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: 'success.50', borderColor: 'success.200' }}>
+          <Typography variant="caption" color="success.dark" sx={{ fontWeight: 600 }}>
+            Al Día / Corriente
+          </Typography>
+          <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5, color: 'success.dark' }}>
+            ${Number(agingData?.current.amount ?? 0).toLocaleString('es-CO', { minimumFractionDigits: 2 })}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {agingData?.current.count ?? 0} factura(s)
+          </Typography>
+        </Paper>
+
+        <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: 'warning.50', borderColor: 'warning.200' }}>
+          <Typography variant="caption" color="warning.dark" sx={{ fontWeight: 600 }}>
+            Vencidas 1 - 30 Días
+          </Typography>
+          <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5, color: 'warning.dark' }}>
+            ${Number(agingData?.days1To30.amount ?? 0).toLocaleString('es-CO', { minimumFractionDigits: 2 })}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {agingData?.days1To30.count ?? 0} factura(s)
+          </Typography>
+        </Paper>
+
+        <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: 'warning.100', borderColor: 'warning.300' }}>
+          <Typography variant="caption" color="warning.dark" sx={{ fontWeight: 600 }}>
+            Vencidas 31 - 60 Días
+          </Typography>
+          <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5, color: 'warning.dark' }}>
+            ${Number(agingData?.days31To60.amount ?? 0).toLocaleString('es-CO', { minimumFractionDigits: 2 })}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {agingData?.days31To60.count ?? 0} factura(s)
+          </Typography>
+        </Paper>
+
+        <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: 'error.50', borderColor: 'error.200' }}>
+          <Typography variant="caption" color="error.dark" sx={{ fontWeight: 600 }}>
+            Vencidas &gt; 60 Días
+          </Typography>
+          <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5, color: 'error.dark' }}>
+            ${(Number(agingData?.days61To90.amount ?? 0) + Number(agingData?.daysOver90.amount ?? 0)).toLocaleString('es-CO', { minimumFractionDigits: 2 })}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {(agingData?.days61To90.count ?? 0) + (agingData?.daysOver90.count ?? 0)} factura(s)
+          </Typography>
+        </Paper>
+      </Box>
+
       {/* Filtros */}
       <Paper variant="outlined" sx={{ p: 2, mb: 2, borderRadius: 2 }}>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ alignItems: { sm: 'center' }, flexWrap: 'wrap' }}>
           <TextField
             id="payables-search"
             placeholder="Buscar proveedor o factura…"
             size="small"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            sx={{ minWidth: 240 }}
+            sx={{ minWidth: 220 }}
           />
 
-          <FormControl size="small" sx={{ minWidth: 160 }}>
+          <FormControl size="small" sx={{ minWidth: 140 }}>
             <InputLabel id="payables-status-label">Estado</InputLabel>
             <Select
               labelId="payables-status-label"
@@ -432,6 +618,34 @@ export function PayablesPage() {
             </Select>
           </FormControl>
 
+          <TextField
+            id="payables-from-date"
+            label="Desde"
+            type="date"
+            size="small"
+            value={fromDate}
+            onChange={(e) => {
+              setFromDate(e.target.value);
+              setPage(0);
+            }}
+            slotProps={{ inputLabel: { shrink: true } }}
+            sx={{ minWidth: 140 }}
+          />
+
+          <TextField
+            id="payables-to-date"
+            label="Hasta"
+            type="date"
+            size="small"
+            value={toDate}
+            onChange={(e) => {
+              setToDate(e.target.value);
+              setPage(0);
+            }}
+            slotProps={{ inputLabel: { shrink: true } }}
+            sx={{ minWidth: 140 }}
+          />
+
           <Button
             variant={overdueOnly ? 'contained' : 'outlined'}
             color="error"
@@ -443,6 +657,23 @@ export function PayablesPage() {
           >
             Solo vencidas
           </Button>
+
+          {hasActiveFilters && (
+            <Button
+              size="small"
+              color="inherit"
+              onClick={() => {
+                setFromDate('');
+                setToDate('');
+                setStatusFilter('');
+                setOverdueOnly(false);
+                setSearch('');
+                setPage(0);
+              }}
+            >
+              Limpiar filtros
+            </Button>
+          )}
         </Stack>
       </Paper>
 
@@ -454,6 +685,7 @@ export function PayablesPage() {
               <TableRow sx={{ bgcolor: 'grey.50' }}>
                 <TableCell sx={{ fontWeight: 700 }}>Factura</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>Proveedor</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Condición</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>Total</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>Pagado</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>Saldo</TableCell>
@@ -465,21 +697,21 @@ export function PayablesPage() {
             <TableBody>
               {isLoading && (
                 <TableRow>
-                  <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
+                  <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
                     Cargando…
                   </TableCell>
                 </TableRow>
               )}
               {isError && (
                 <TableRow>
-                  <TableCell colSpan={8}>
+                  <TableCell colSpan={9}>
                     <Alert severity="error">Error al cargar las cuentas por pagar</Alert>
                   </TableCell>
                 </TableRow>
               )}
               {!isLoading && filteredItems.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={8} align="center" sx={{ py: 4, color: 'text.secondary' }}>
+                  <TableCell colSpan={9} align="center" sx={{ py: 4, color: 'text.secondary' }}>
                     No se encontraron cuentas por pagar
                   </TableCell>
                 </TableRow>
@@ -498,6 +730,15 @@ export function PayablesPage() {
                       {p.invoiceNumber ?? '—'}
                     </TableCell>
                     <TableCell>{p.supplierName ?? '—'}</TableCell>
+                    <TableCell>
+                      <Chip
+                        size="small"
+                        label={p.paymentCondition ?? 'CRÉDITO'}
+                        variant="outlined"
+                        color={p.paymentCondition === 'CONTADO' ? 'info' : 'default'}
+                        sx={{ fontSize: '0.75rem', height: 22 }}
+                      />
+                    </TableCell>
                     <TableCell>
                       ${Number(p.totalAmount).toLocaleString('es-CO', { minimumFractionDigits: 2 })}
                     </TableCell>

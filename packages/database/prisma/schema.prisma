@@ -538,6 +538,10 @@ model ReceivablePayment {
   notes           String?  @db.VarChar(500)
   createdByUserId String   @map("created_by_user_id") @db.Uuid
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  isReversed      Boolean  @default(false) @map("is_reversed")
+  reversedAt      DateTime? @map("reversed_at") @db.Timestamptz
+  reversalReason  String?  @map("reversal_reason") @db.VarChar(500)
+  reversedByUserId String? @map("reversed_by_user_id") @db.Uuid
 
   receivable    Receivable @relation(fields: [receivableId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   createdByUser User       @relation(fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
@@ -546,6 +550,7 @@ model ReceivablePayment {
   @@index([receivableId])
   @@index([createdAt])
   @@index([bankAccountId])
+  @@index([isReversed])
   @@map("receivable_payments")
 }
 
@@ -581,6 +586,10 @@ model PayablePayment {
   notes           String?  @db.VarChar(500)
   createdByUserId String   @map("created_by_user_id") @db.Uuid
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  isReversed      Boolean  @default(false) @map("is_reversed")
+  reversedAt      DateTime? @map("reversed_at") @db.Timestamptz
+  reversalReason  String?  @map("reversal_reason") @db.VarChar(500)
+  reversedByUserId String? @map("reversed_by_user_id") @db.Uuid
 
   payable       Payable  @relation(fields: [payableId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   createdByUser User     @relation(fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
@@ -589,6 +598,7 @@ model PayablePayment {
   @@index([payableId])
   @@index([createdAt])
   @@index([bankAccountId])
+  @@index([isReversed])
   @@map("payable_payments")
 }
 

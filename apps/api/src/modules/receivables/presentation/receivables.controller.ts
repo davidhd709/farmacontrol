@@ -50,6 +50,17 @@ export class ReceivablesController {
   }
 
   /**
+   * GET /api/v1/receivables/aging-summary
+   * Resumen de cartera por edades de vencimiento.
+   */
+  @Get('aging-summary')
+  @RequirePermissions(SYSTEM_PERMISSIONS.RECEIVABLES_READ)
+  async getAgingSummary(): Promise<ApiResponse<any>> {
+    const data = await this.svc.getAgingSummary();
+    return { success: true, data };
+  }
+
+  /**
    * GET /api/v1/receivables/:id
    * Detalle de una cuenta por cobrar con historial de pagos.
    */
@@ -75,6 +86,23 @@ export class ReceivablesController {
     @CurrentUser() user: AuthenticatedUserContext,
   ): Promise<ApiResponse<any>> {
     const data = await this.svc.registerPayment(id, payload, user.id, idempotencyKey);
+    return { success: true, data };
+  }
+
+  /**
+   * POST /api/v1/receivables/:id/payments/:paymentId/reverse
+   * Revierte de forma controlada un abono registrado previamente.
+   */
+  @Post(':id/payments/:paymentId/reverse')
+  @RequirePermissions(SYSTEM_PERMISSIONS.RECEIVABLES_MANAGE)
+  @HttpCode(HttpStatus.OK)
+  async revertPayment(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('paymentId', ParseUUIDPipe) paymentId: string,
+    @Body('reason') reason: string,
+    @CurrentUser() user: AuthenticatedUserContext,
+  ): Promise<ApiResponse<any>> {
+    const data = await this.svc.revertPayment(id, paymentId, reason, user.id);
     return { success: true, data };
   }
 }

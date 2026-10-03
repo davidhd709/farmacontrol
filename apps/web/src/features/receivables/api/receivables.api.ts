@@ -3,6 +3,8 @@ import type {
   ReceivableQueryFilters,
   RegisterReceivablePaymentPayload,
   PaginatedResponse,
+  AgingSummaryDto,
+  ReversePaymentPayload,
 } from '@farmacia/contracts';
 import { apiRequest } from '../../../api/http-client';
 
@@ -29,6 +31,10 @@ export async function fetchReceivableById(id: string): Promise<ReceivableDto> {
   return apiRequest<ReceivableDto>(`receivables/${id}`, { method: 'GET' });
 }
 
+export async function fetchReceivablesAgingSummary(): Promise<AgingSummaryDto> {
+  return apiRequest<AgingSummaryDto>('receivables/aging-summary', { method: 'GET' });
+}
+
 export async function registerReceivablePayment(
   id: string,
   payload: RegisterReceivablePaymentPayload,
@@ -40,3 +46,15 @@ export async function registerReceivablePayment(
     body: JSON.stringify(payload),
   });
 }
+
+export async function revertReceivablePayment(
+  receivableId: string,
+  paymentId: string,
+  payload: ReversePaymentPayload,
+): Promise<ReceivableDto> {
+  return apiRequest<ReceivableDto>(`receivables/${receivableId}/payments/${paymentId}/reverse`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+

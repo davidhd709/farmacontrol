@@ -671,6 +671,9 @@ export interface ReceivablePaymentDto {
   notes: string | null;
   createdByUserId: string;
   createdAt: string;
+  isReversed?: boolean;
+  reversedAt?: string | null;
+  reversalReason?: string | null;
 }
 
 export interface ReceivableDto {
@@ -720,6 +723,9 @@ export interface PayablePaymentDto {
   notes: string | null;
   createdByUserId: string;
   createdAt: string;
+  isReversed?: boolean;
+  reversedAt?: string | null;
+  reversalReason?: string | null;
 }
 
 export interface PayableDto {
@@ -732,6 +738,7 @@ export interface PayableDto {
   amountPaid: string;
   balance: string;
   status: PayableStatus;
+  paymentCondition?: string | null;
   dueDate: string;
   notes: string | null;
   createdAt: string;
@@ -744,6 +751,25 @@ export interface RegisterPayablePaymentPayload {
   paymentMethod?: string;
   bankAccountId?: string;
   notes?: string | null;
+}
+
+export interface ReversePaymentPayload {
+  reason: string;
+}
+
+export interface AgingBucketDto {
+  amount: string;
+  count: number;
+}
+
+export interface AgingSummaryDto {
+  current: AgingBucketDto;
+  days1To30: AgingBucketDto;
+  days31To60: AgingBucketDto;
+  days61To90: AgingBucketDto;
+  daysOver90: AgingBucketDto;
+  totalPending: string;
+  totalCount: number;
 }
 
 export interface PayableQueryFilters {

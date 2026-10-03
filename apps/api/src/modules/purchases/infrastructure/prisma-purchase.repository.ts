@@ -35,16 +35,17 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
       });
 
       // Crear cuenta por pagar (Payable) vinculada a la factura de compra
+      // Conforme a MODULO_CONTABILIDAD_FARMACIA.md: registrar la compra y pagarla son eventos distintos.
+      // Toda compra causa una obligación en estado PENDIENTE. Si es CONTADO, vence en la misma fecha de compra.
       const payableDueDate = purchase.dueDate || purchase.purchaseDate;
-      const isContado = purchase.paymentCondition === 'CONTADO';
       await tx.payable.create({
         data: {
           purchaseId: purchase.id,
           supplierId: purchase.supplierId,
           totalAmount: new Prisma.Decimal(purchase.totalAmount),
-          amountPaid: new Prisma.Decimal(isContado ? purchase.totalAmount : 0),
-          balance: new Prisma.Decimal(isContado ? 0 : purchase.totalAmount),
-          status: isContado ? 'PAGADA' : 'PENDIENTE',
+          amountPaid: new Prisma.Decimal(0),
+          balance: new Prisma.Decimal(purchase.totalAmount),
+          status: 'PENDIENTE',
           dueDate: payableDueDate,
           notes: purchase.notes,
         },
@@ -243,7 +244,18 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
     );
 
     const dueDate = raw.payable?.dueDate ?? null;
-    const paymentCondition = raw.payable ? (raw.payable.status === 'PAGADA' ? 'CONTADO' : 'CREDITO') : null;
+    let paymentCondition: string | null = null;
+    if (raw.notes && raw.notes.includes('Condición: Contado')) {
+      paymentCondition = 'CONTADO';
+    } else if (raw.notes && raw.notes.includes('Condición: Crédito')) {
+      paymentCondition = 'CREDITO';
+    } else if (dueDate && raw.purchaseDate && new Date(dueDate).getTime() <= new Date(raw.purchaseDate).getTime()) {
+      paymentCondition = 'CONTADO';
+    } else if (dueDate && raw.purchaseDate && new Date(dueDate).getTime() > new Date(raw.purchaseDate).getTime()) {
+      paymentCondition = 'CREDITO';
+    } else if (raw.payable) {
+      paymentCondition = raw.payable.status === 'PAGADA' ? 'CONTADO' : 'CREDITO';
+    }
 
     return Purchase.reconstitute({
       id: raw.id,
