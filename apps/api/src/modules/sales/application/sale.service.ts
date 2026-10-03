@@ -18,6 +18,10 @@ import { AuditService } from '../../audit/application/services/audit.service';
 import { recordSourceBankMovement } from '../../treasury/application/record-source-bank-movement';
 import { requirePaymentBankAccountId } from '../../treasury/application/payment-idempotency';
 import { parseMoneyToCents } from '../../treasury/domain/treasury-rules';
+import {
+  calculateNewCashBalanceCents,
+  centsToMoneyString,
+} from '../../cash/domain/cash-rules';
 
 export interface AuditContext {
   userId?: string | null;
@@ -284,26 +288,40 @@ export class SaleService {
 
       // 2.6. Movimiento de Caja si es Efectivo
       if (payload.paymentMethod === 'EFECTIVO') {
-        const lastRows = await tx.$queryRaw<Array<{ balance_after: any }>>`
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(742189321)`;
+
+        const lastRows = await tx.$queryRaw<Array<{ balance_after: Prisma.Decimal }>>`
           SELECT balance_after
           FROM cash_movements
           ORDER BY created_at DESC
           LIMIT 1
-          FOR UPDATE
         `;
 
-        const currentBalance = lastRows.length > 0 ? Number(lastRows[0].balance_after) : 0;
-        const newBalance = currentBalance + sale.total;
+        const currentBalanceCents =
+          lastRows.length > 0
+            ? parseMoneyToCents(lastRows[0].balance_after.toString(), 'Saldo de caja')
+            : 0n;
+
+        const saleAmountCents = parseMoneyToCents(
+          new Prisma.Decimal(sale.total).toFixed(2),
+          'Total de venta',
+        );
+
+        const { balanceAfter } = calculateNewCashBalanceCents(
+          currentBalanceCents,
+          'INGRESO_VENTA',
+          saleAmountCents,
+        );
 
         await tx.cashMovement.create({
           data: {
             movementType: 'INGRESO_VENTA',
-            amount: new Prisma.Decimal(sale.total),
+            amount: new Prisma.Decimal(centsToMoneyString(saleAmountCents)),
             paymentMethod: 'EFECTIVO',
             reason: `Venta mostrador comprobante ${sale.invoiceNumber}`,
             referenceDocumentType: 'SALE',
             referenceDocumentId: sale.invoiceNumber,
-            balanceAfter: new Prisma.Decimal(newBalance),
+            balanceAfter: new Prisma.Decimal(centsToMoneyString(balanceAfter)),
             createdByUserId: auditCtx.userId || '00000000-0000-0000-0000-000000000000',
           },
         });
@@ -442,26 +460,40 @@ export class SaleService {
 
       // Revertir en caja si fue en efectivo
       if (sale.paymentMethod === 'EFECTIVO') {
-        const lastRows = await tx.$queryRaw<Array<{ balance_after: any }>>`
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(742189321)`;
+
+        const lastRows = await tx.$queryRaw<Array<{ balance_after: Prisma.Decimal }>>`
           SELECT balance_after
           FROM cash_movements
           ORDER BY created_at DESC
           LIMIT 1
-          FOR UPDATE
         `;
 
-        const currentBalance = lastRows.length > 0 ? Number(lastRows[0].balance_after) : 0;
-        const newBalance = Math.max(0, currentBalance - sale.total);
+        const currentBalanceCents =
+          lastRows.length > 0
+            ? parseMoneyToCents(lastRows[0].balance_after.toString(), 'Saldo de caja')
+            : 0n;
+
+        const saleAmountCents = parseMoneyToCents(
+          new Prisma.Decimal(sale.total).toFixed(2),
+          'Total de venta',
+        );
+
+        const { balanceAfter } = calculateNewCashBalanceCents(
+          currentBalanceCents,
+          'EGRESO_MANUAL',
+          saleAmountCents,
+        );
 
         await tx.cashMovement.create({
           data: {
             movementType: 'EGRESO_MANUAL',
-            amount: new Prisma.Decimal(sale.total),
+            amount: new Prisma.Decimal(centsToMoneyString(saleAmountCents)),
             paymentMethod: 'EFECTIVO',
             reason: `Reversión por anulación de venta ${sale.invoiceNumber}: ${trimmedReason}`,
             referenceDocumentType: 'SALE_CANCEL',
             referenceDocumentId: sale.invoiceNumber,
-            balanceAfter: new Prisma.Decimal(newBalance),
+            balanceAfter: new Prisma.Decimal(centsToMoneyString(balanceAfter)),
             createdByUserId: auditCtx.userId || '00000000-0000-0000-0000-000000000000',
           },
         });

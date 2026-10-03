@@ -20,12 +20,12 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  TextField,
 } from '@mui/material';
 import type {
   CashMovementDto,
   CashBalanceDto,
   CashMovementType,
-  PaymentMethod,
 } from '@farmacia/contracts';
 import { fetchCashBalance, fetchCashMovements } from '../api/cash.api';
 import { CreateCashMovementDialog } from '../components/CreateCashMovementDialog';
@@ -47,7 +47,8 @@ export const CashPage: React.FC = () => {
   const [pageSize, setPageSize] = useState(15);
 
   const [selectedType, setSelectedType] = useState<string>('');
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
 
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -63,7 +64,8 @@ export const CashPage: React.FC = () => {
         fetchCashBalance(),
         fetchCashMovements({
           movementType: selectedType ? (selectedType as CashMovementType) : undefined,
-          paymentMethod: selectedPaymentMethod ? (selectedPaymentMethod as PaymentMethod) : undefined,
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
           page: page + 1,
           limit: pageSize,
         }),
@@ -77,7 +79,7 @@ export const CashPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedType, selectedPaymentMethod, page, pageSize]);
+  }, [selectedType, startDate, endDate, page, pageSize]);
 
   useEffect(() => {
     loadData();
@@ -237,24 +239,46 @@ export const CashPage: React.FC = () => {
             </Select>
           </FormControl>
 
-          <FormControl size="small" sx={{ minWidth: 180 }}>
-            <InputLabel id="filter-payment-label">Medio de Pago</InputLabel>
-            <Select
-              labelId="filter-payment-label"
-              value={selectedPaymentMethod}
-              label="Medio de Pago"
-              onChange={(e) => {
-                setSelectedPaymentMethod(e.target.value);
+          <TextField
+            label="Desde"
+            type="date"
+            size="small"
+            value={startDate}
+            onChange={(e) => {
+              setStartDate(e.target.value);
+              setPage(0);
+            }}
+            slotProps={{ inputLabel: { shrink: true } }}
+            sx={{ minWidth: 160 }}
+          />
+
+          <TextField
+            label="Hasta"
+            type="date"
+            size="small"
+            value={endDate}
+            onChange={(e) => {
+              setEndDate(e.target.value);
+              setPage(0);
+            }}
+            slotProps={{ inputLabel: { shrink: true } }}
+            sx={{ minWidth: 160 }}
+          />
+
+          {(selectedType || startDate || endDate) && (
+            <Button
+              variant="text"
+              size="small"
+              onClick={() => {
+                setSelectedType('');
+                setStartDate('');
+                setEndDate('');
                 setPage(0);
               }}
             >
-              <MenuItem value="">Todos los medios</MenuItem>
-              <MenuItem value="EFECTIVO">Efectivo</MenuItem>
-              <MenuItem value="TRANSFERENCIA">Transferencia</MenuItem>
-              <MenuItem value="TARJETA_DEBITO">Tarjeta Débito</MenuItem>
-              <MenuItem value="TARJETA_CREDITO">Tarjeta Crédito</MenuItem>
-            </Select>
-          </FormControl>
+              Limpiar Filtros
+            </Button>
+          )}
         </Box>
       </Card>
 

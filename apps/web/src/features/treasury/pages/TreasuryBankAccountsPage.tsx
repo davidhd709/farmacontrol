@@ -63,6 +63,8 @@ export function TreasuryBankAccountsPage() {
   // Filter state for movements
   const [movementTypeFilter, setMovementTypeFilter] = useState('');
   const [searchFilter, setSearchFilter] = useState('');
+  const [fromDateFilter, setFromDateFilter] = useState('');
+  const [toDateFilter, setToDateFilter] = useState('');
 
   // Queries & Mutations
   const { data: accounts = [], isLoading: isLoadingAccounts } = useBankAccounts(includeInactive);
@@ -74,6 +76,8 @@ export function TreasuryBankAccountsPage() {
   const { data: movementsData, isLoading: isLoadingMovements } = useBankMovements(activeAccountId, {
     movementType: movementTypeFilter || undefined,
     search: searchFilter || undefined,
+    fromDate: fromDateFilter || undefined,
+    toDate: toDateFilter || undefined,
   });
 
   const createAccountMutation = useCreateBankAccount();
@@ -327,7 +331,24 @@ export function TreasuryBankAccountsPage() {
             </Box>
 
             {/* Filtros de movimientos */}
-            <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+            <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+              <TextField
+                size="small"
+                type="date"
+                label="Desde"
+                slotProps={{ inputLabel: { shrink: true } }}
+                value={fromDateFilter}
+                onChange={(e) => setFromDateFilter(e.target.value)}
+              />
+              <TextField
+                size="small"
+                type="date"
+                label="Hasta"
+                slotProps={{ inputLabel: { shrink: true } }}
+                value={toDateFilter}
+                onChange={(e) => setToDateFilter(e.target.value)}
+              />
+
               <FormControl size="small" sx={{ minWidth: 160 }}>
                 <InputLabel id="filter-type-label">Tipo de Movimiento</InputLabel>
                 <Select

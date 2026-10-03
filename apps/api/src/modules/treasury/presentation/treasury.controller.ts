@@ -161,4 +161,23 @@ export class TreasuryController {
       toHttpException(error);
     }
   }
+
+  @Post('bank-accounts/:id/movements/:movementId/reverse')
+  @RequirePermissions(SYSTEM_PERMISSIONS.TREASURY_MANAGE)
+  @HttpCode(HttpStatus.OK)
+  async revertMovement(
+    @Param('id') id: string,
+    @Param('movementId') movementId: string,
+    @Body('reason') reason: string,
+    @CurrentUser() user: AuthenticatedUserContext,
+  ): Promise<BankMovementDto> {
+    try {
+      if (!reason || typeof reason !== 'string' || !reason.trim()) {
+        throw new BadRequestException('El motivo de la reversión es obligatorio.');
+      }
+      return await this.treasuryService.revertMovement(id, movementId, reason.trim(), user.id);
+    } catch (error) {
+      toHttpException(error);
+    }
+  }
 }

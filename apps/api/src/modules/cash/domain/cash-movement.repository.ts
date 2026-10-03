@@ -8,7 +8,7 @@ import {
 
 export interface CreateCashMovementData {
   movementType: CashMovementType;
-  amount: number;
+  amount: number | string;
   paymentMethod: PaymentMethod;
   reason: string;
   referenceDocumentType?: string | null;

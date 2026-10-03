@@ -138,7 +138,7 @@ export class CashService {
     tx: any,
     payload: {
       movementType: string;
-      amount: number;
+      amount: number | string;
       paymentMethod?: string;
       reason: string;
       referenceDocumentType?: string;

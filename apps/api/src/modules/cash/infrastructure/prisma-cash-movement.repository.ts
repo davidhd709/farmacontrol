@@ -11,9 +11,13 @@ import {
   PaymentMethod,
 } from '@farmacia/contracts';
 import {
-  InsufficientCashBalanceException,
   InvalidCashPaymentMethodException,
 } from '../domain/cash.exceptions';
+import {
+  calculateNewCashBalanceCents,
+  centsToMoneyString,
+  parseMoneyToCents,
+} from '../domain/cash-rules';
 
 @Injectable()
 export class PrismaCashMovementRepository implements ICashMovementRepository {
@@ -31,39 +35,42 @@ export class PrismaCashMovementRepository implements ICashMovementRepository {
       throw new InvalidCashPaymentMethodException();
     }
     const executeInTransaction = async (tx: any) => {
-      // 1. Obtener el último movimiento para calcular balanceAfter
-      const lastMovement = await tx.cashMovement.findFirst({
-        orderBy: { createdAt: 'desc' },
-      });
+      // 0. Cerrojo transaccional determinista para serializar el cálculo del saldo de caja
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(742189321)`;
 
-      const previousBalance = lastMovement
-        ? Number(lastMovement.balanceAfter)
-        : 0;
+      // 1. Obtener el último movimiento para conocer el saldo anterior
+      const lastRows = await tx.$queryRaw<Array<{ balance_after: Prisma.Decimal }>>`
+        SELECT balance_after
+        FROM cash_movements
+        ORDER BY created_at DESC
+        LIMIT 1
+      `;
 
-      const isIncome =
-        data.movementType === 'INGRESO_VENTA' ||
-        data.movementType === 'INGRESO_MANUAL';
+      const previousBalanceCents =
+        lastRows.length > 0
+          ? parseMoneyToCents(lastRows[0].balance_after.toString(), 'Saldo anterior')
+          : 0n;
 
-      let newBalance: number;
-      if (isIncome) {
-        newBalance = Number((previousBalance + data.amount).toFixed(2));
-      } else {
-        newBalance = Number((previousBalance - data.amount).toFixed(2));
-        if (newBalance < 0) {
-          throw new InsufficientCashBalanceException(previousBalance, data.amount);
-        }
-      }
+      const amountCents = parseMoneyToCents(data.amount, 'Monto del movimiento');
+      const { balanceAfter } = calculateNewCashBalanceCents(
+        previousBalanceCents,
+        data.movementType,
+        amountCents,
+      );
+
+      const amountDecimal = new Prisma.Decimal(centsToMoneyString(amountCents));
+      const balanceAfterDecimal = new Prisma.Decimal(centsToMoneyString(balanceAfter));
 
       // 2. Crear el movimiento inmutable
       const created = await tx.cashMovement.create({
         data: {
           movementType: data.movementType,
-          amount: new Prisma.Decimal(data.amount.toFixed(2)),
+          amount: amountDecimal,
           paymentMethod: data.paymentMethod,
           reason: data.reason.trim(),
           referenceDocumentType: data.referenceDocumentType || null,
           referenceDocumentId: data.referenceDocumentId || null,
-          balanceAfter: new Prisma.Decimal(newBalance.toFixed(2)),
+          balanceAfter: balanceAfterDecimal,
           createdByUserId: data.createdByUserId,
         },
         include: {
@@ -101,9 +108,9 @@ export class PrismaCashMovementRepository implements ICashMovementRepository {
       orderBy: { createdAt: 'desc' },
     });
 
-    const currentBalance = lastMovement
-      ? Number(lastMovement.balanceAfter)
-      : 0;
+    const currentBalanceCents = lastMovement
+      ? parseMoneyToCents(lastMovement.balanceAfter.toString(), 'Saldo de caja')
+      : 0n;
 
     // 2. Calcular límites para hoy (00:00:00 hasta 23:59:59)
     const now = new Date();
@@ -118,25 +125,25 @@ export class PrismaCashMovementRepository implements ICashMovementRepository {
       where: todayWhere,
     });
 
-    let totalIncomeToday = 0;
-    let totalExpenseToday = 0;
+    let totalIncomeTodayCents = 0n;
+    let totalExpenseTodayCents = 0n;
 
     for (const mov of todayMovements) {
-      const amount = Number(mov.amount);
+      const amountCents = parseMoneyToCents(mov.amount.toString(), 'Monto');
       if (
         mov.movementType === 'INGRESO_VENTA' ||
         mov.movementType === 'INGRESO_MANUAL'
       ) {
-        totalIncomeToday += amount;
+        totalIncomeTodayCents += amountCents;
       } else {
-        totalExpenseToday += amount;
+        totalExpenseTodayCents += amountCents;
       }
     }
 
     return {
-      currentBalance,
-      totalIncomeToday: Number(totalIncomeToday.toFixed(2)),
-      totalExpenseToday: Number(totalExpenseToday.toFixed(2)),
+      currentBalance: Number(centsToMoneyString(currentBalanceCents)),
+      totalIncomeToday: Number(centsToMoneyString(totalIncomeTodayCents)),
+      totalExpenseToday: Number(centsToMoneyString(totalExpenseTodayCents)),
       movementsCountToday: todayMovements.length,
       lastMovementAt: lastMovement?.createdAt ? lastMovement.createdAt.toISOString() : null,
     };
@@ -155,14 +162,20 @@ export class PrismaCashMovementRepository implements ICashMovementRepository {
       where.paymentMethod = filters.paymentMethod;
     }
 
-    if (filters.startDate || filters.endDate) {
+    const startDate = filters.startDate || (filters as any).fromDate;
+    const endDate = filters.endDate || (filters as any).toDate;
+
+    if (startDate || endDate) {
       where.createdAt = {};
-      if (filters.startDate) {
-        where.createdAt.gte = new Date(filters.startDate);
+      if (startDate) {
+        const start = new Date(startDate);
+        where.createdAt.gte = start;
       }
-      if (filters.endDate) {
-        const end = new Date(filters.endDate);
-        end.setHours(23, 59, 59, 999);
+      if (endDate) {
+        const end = new Date(endDate);
+        if (typeof endDate === 'string' && endDate.length === 10) {
+          end.setHours(23, 59, 59, 999);
+        }
         where.createdAt.lte = end;
       }
     }

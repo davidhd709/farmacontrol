@@ -1,13 +1,21 @@
 export class InvalidCashAmountException extends Error {
-  constructor(amount: number) {
-    super(`El monto del movimiento de caja debe ser estrictamente positivo. Recibido: ${amount}`);
+  constructor(amount?: number | string) {
+    super(
+      amount !== undefined
+        ? `El monto del movimiento de caja debe ser estrictamente positivo. Recibido: ${amount}`
+        : 'El monto del movimiento de caja debe ser estrictamente positivo.'
+    );
     this.name = 'InvalidCashAmountException';
   }
 }
 
 export class InvalidCashMovementTypeException extends Error {
-  constructor(type: string) {
-    super(`El tipo de movimiento de caja "${type}" no es válido`);
+  constructor(type?: string) {
+    super(
+      type !== undefined
+        ? `El tipo de movimiento de caja "${type}" no es válido`
+        : 'El tipo de movimiento de caja no es válido'
+    );
     this.name = 'InvalidCashMovementTypeException';
   }
 }
