@@ -181,6 +181,10 @@ export interface UpdateSystemUserRolesDto {
 export interface AuditEventDto {
   id: string;
   userId: string | null;
+  user?: {
+    id: string;
+    username: string;
+  } | null;
   action: string;
   entity: string;
   entityId: string | null;
@@ -188,6 +192,24 @@ export interface AuditEventDto {
   ipAddress: string | null;
   correlationId: string | null;
   createdAt: string;
+}
+
+export interface AuditQueryFilters {
+  page?: number;
+  pageSize?: number;
+  userId?: string;
+  action?: string;
+  entity?: string;
+  entityId?: string;
+  correlationId?: string;
+  fromDate?: string;
+  toDate?: string;
+  search?: string;
+}
+
+export interface AuditMetadataDto {
+  entities: string[];
+  actions: string[];
 }
 
 export interface RecordAuditEventPayload {

@@ -40,6 +40,7 @@ import UploadFileIcon from '@mui/icons-material/UploadFile';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import BalanceIcon from '@mui/icons-material/Balance';
 import DateRangeIcon from '@mui/icons-material/DateRange';
+import HistoryIcon from '@mui/icons-material/History';
 import { usePermissions } from '../../features/auth/hooks/usePermissions';
 import { SYSTEM_PERMISSIONS } from '@farmacia/contracts';
 
@@ -243,6 +244,12 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ open, onClose }) => {
           path: '/backups',
           icon: <CloudSyncIcon fontSize="small" />,
           permission: SYSTEM_PERMISSIONS.BACKUPS_MANAGE,
+        },
+        {
+          title: 'Auditoría y Trazabilidad',
+          path: '/audit',
+          icon: <HistoryIcon fontSize="small" />,
+          permission: SYSTEM_PERMISSIONS.AUDIT_READ,
         },
       ],
     },

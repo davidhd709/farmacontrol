@@ -99,10 +99,11 @@ export class AuditEvent {
     return new AuditEvent(props);
   }
 
-  public toDto(): AuditEventDto {
+  public toDto(user?: { id: string; username: string } | null): AuditEventDto {
     return {
       id: this.id,
       userId: this.userId,
+      user: user ?? null,
       action: this.action,
       entity: this.entity,
       entityId: this.entityId,

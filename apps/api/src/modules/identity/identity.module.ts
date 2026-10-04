@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { PASSWORD_HASHER_PORT } from './application/ports/password-hasher.port';
 import { USER_REPOSITORY_PORT } from './application/ports/user.repository.port';
 import { SESSION_TOKEN_PORT } from './application/ports/session-token.port';
@@ -21,7 +21,7 @@ import { UsersController } from './presentation/controllers/users.controller';
 import { AuditModule } from '../audit/audit.module';
 
 @Module({
-  imports: [AuditModule],
+  imports: [forwardRef(() => AuditModule)],
   controllers: [AuthController, UsersController],
   providers: [
     {

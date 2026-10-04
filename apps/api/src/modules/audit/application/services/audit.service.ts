@@ -1,5 +1,11 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { RecordAuditEventPayload } from '@farmacia/contracts';
+import {
+  RecordAuditEventPayload,
+  AuditEventDto,
+  AuditMetadataDto,
+  AuditQueryFilters,
+  PaginatedResponse,
+} from '@farmacia/contracts';
 import {
   AUDIT_EVENT_REPOSITORY_PORT,
   AuditEventRepositoryPort,
@@ -54,5 +60,19 @@ export class AuditService {
 
   public async findRecent(filters?: AuditFindFilters): Promise<AuditEvent[]> {
     return this.auditRepository.findRecent(filters);
+  }
+
+  public async findPaginated(
+    filters: AuditQueryFilters,
+  ): Promise<PaginatedResponse<AuditEventDto>> {
+    return this.auditRepository.findPaginated(filters);
+  }
+
+  public async findByIdWithUser(id: string): Promise<AuditEventDto | null> {
+    return this.auditRepository.findByIdWithUser(id);
+  }
+
+  public async getMetadata(): Promise<AuditMetadataDto> {
+    return this.auditRepository.getDistinctMetadata();
   }
 }
