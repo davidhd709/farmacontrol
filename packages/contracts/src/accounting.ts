@@ -258,3 +258,42 @@ export interface BalanceSheetReportDto {
   difference: string;
 }
 
+// ===== PERIODOS CONTABLES Y CIERRE FISCAL =====
+
+export type FiscalPeriodStatus = 'OPEN' | 'CLOSED';
+
+export interface FiscalPeriodDto {
+  id: string;
+  year: number;
+  month: number;
+  name: string;
+  startDate: string;
+  endDate: string;
+  status: FiscalPeriodStatus;
+  closedAt: string | null;
+  closedById: string | null;
+  closedByName: string | null;
+  reopenedAt: string | null;
+  reopenedById: string | null;
+  reopenedByName: string | null;
+  reopenReason: string | null;
+  closingEntryId: string | null;
+  notes: string | null;
+  entriesCount: number;
+  totalDebits: string;
+  totalCredits: string;
+}
+
+export interface GenerateFiscalPeriodsPayload {
+  year: number;
+}
+
+export interface CloseFiscalPeriodPayload {
+  notes?: string;
+  generateClosingEntry?: boolean;
+}
+
+export interface ReopenFiscalPeriodPayload {
+  reason: string;
+}
+

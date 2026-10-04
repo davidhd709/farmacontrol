@@ -154,6 +154,20 @@ export class JournalService {
     }
 
     const date = parseJournalDate(input.entryDate);
+
+    const closedPeriod = await tx.fiscalPeriod.findFirst({
+      where: {
+        status: 'CLOSED',
+        startDate: { lte: date },
+        endDate: { gte: date },
+      },
+    });
+    if (closedPeriod) {
+      throw new AccountingValidationError(
+        `No es posible registrar asientos en el período cerrado ${closedPeriod.name} (${closedPeriod.year}-${String(closedPeriod.month).padStart(2, '0')}).`,
+      );
+    }
+
     const accounts = new Map<DbPurpose, string>();
     const purposesToLookup = new Set<DbPurpose>();
     for (const line of input.lines) {
@@ -273,6 +287,20 @@ export class JournalService {
         throw new AccountingConflictError('El asiento ya fue reversado con datos diferentes.');
       return existing;
     }
+
+    const closedPeriod = await tx.fiscalPeriod.findFirst({
+      where: {
+        status: 'CLOSED',
+        startDate: { lte: date },
+        endDate: { gte: date },
+      },
+    });
+    if (closedPeriod) {
+      throw new AccountingValidationError(
+        `No es posible reversar asientos en el período cerrado ${closedPeriod.name} (${closedPeriod.year}-${String(closedPeriod.month).padStart(2, '0')}).`,
+      );
+    }
+
     const entry = await tx.journalEntry.create({
       data: {
         entryDate: date,

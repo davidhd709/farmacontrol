@@ -33,6 +33,8 @@ model User {
   expensesCancelled     Expense[]           @relation("ExpensesCancelled")
   expensePaymentsCreated ExpensePayment[]   @relation("ExpensePaymentsCreated")
   expensePaymentsReversed ExpensePayment[]  @relation("ExpensePaymentsReversed")
+  fiscalPeriodsClosed   FiscalPeriod[]      @relation("FiscalPeriodsClosed")
+  fiscalPeriodsReopened FiscalPeriod[]      @relation("FiscalPeriodsReopened")
 
   @@map("users")
 }
@@ -756,6 +758,7 @@ model JournalEntry {
   reversalOf     JournalEntry?      @relation("JournalEntryReversal", fields: [reversalOfId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   reversal       JournalEntry?      @relation("JournalEntryReversal")
   lines          JournalEntryLine[]
+  fiscalPeriodClosing FiscalPeriod[] @relation("FiscalPeriodClosingEntry")
 
   @@unique([sourceType, sourceId])
   @@index([entryDate, id])
@@ -779,6 +782,40 @@ model JournalEntryLine {
   @@unique([journalEntryId, position])
   @@index([accountId])
   @@map("journal_entry_lines")
+}
+
+enum FiscalPeriodStatus {
+  OPEN
+  CLOSED
+}
+
+model FiscalPeriod {
+  id             String             @id @default(uuid()) @db.Uuid
+  year           Int
+  month          Int
+  name           String             @db.VarChar(50)
+  startDate      DateTime           @map("start_date") @db.Date
+  endDate        DateTime           @map("end_date") @db.Date
+  status         FiscalPeriodStatus @default(OPEN)
+  closedAt       DateTime?          @map("closed_at") @db.Timestamptz
+  closedById     String?            @map("closed_by_id") @db.Uuid
+  reopenedAt     DateTime?          @map("reopened_at") @db.Timestamptz
+  reopenedById   String?            @map("reopened_by_id") @db.Uuid
+  reopenReason   String?            @map("reopen_reason") @db.VarChar(500)
+  closingEntryId String?            @map("closing_entry_id") @db.Uuid
+  notes          String?            @db.VarChar(500)
+  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime           @updatedAt @map("updated_at") @db.Timestamptz
+
+  closedBy       User?              @relation("FiscalPeriodsClosed", fields: [closedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  reopenedBy     User?              @relation("FiscalPeriodsReopened", fields: [reopenedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  closingEntry   JournalEntry?      @relation("FiscalPeriodClosingEntry", fields: [closingEntryId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([year, month])
+  @@index([year])
+  @@index([status])
+  @@index([startDate, endDate])
+  @@map("fiscal_periods")
 }
 
 enum TaxProfileOperation {

@@ -220,3 +220,69 @@ export async function exportBalanceSheetExcel(asOfDate: string): Promise<void> {
   URL.revokeObjectURL(url);
 }
 
+// ===== PERÍODOS CONTABLES Y CIERRE FISCAL =====
+
+export type FiscalPeriodStatus = 'OPEN' | 'CLOSED';
+
+export interface FiscalPeriodDto {
+  id: string;
+  year: number;
+  month: number;
+  name: string;
+  startDate: string;
+  endDate: string;
+  status: FiscalPeriodStatus;
+  closedAt: string | null;
+  closedById: string | null;
+  closedByName: string | null;
+  reopenedAt: string | null;
+  reopenedById: string | null;
+  reopenedByName: string | null;
+  reopenReason: string | null;
+  closingEntryId: string | null;
+  notes: string | null;
+  entriesCount: number;
+  totalDebits: string;
+  totalCredits: string;
+}
+
+export interface GenerateFiscalPeriodsPayload {
+  year: number;
+}
+
+export interface CloseFiscalPeriodPayload {
+  notes?: string;
+  generateClosingEntry?: boolean;
+}
+
+export interface ReopenFiscalPeriodPayload {
+  reason: string;
+}
+
+export const fetchFiscalPeriods = (year?: number, status?: FiscalPeriodStatus) => {
+  const params = new URLSearchParams();
+  if (year) params.append('year', String(year));
+  if (status) params.append('status', status);
+  const q = params.toString();
+  return apiRequest<FiscalPeriodDto[]>(`accounting/periods${q ? `?${q}` : ''}`);
+};
+
+export const generateFiscalPeriods = (payload: GenerateFiscalPeriodsPayload) =>
+  apiRequest<FiscalPeriodDto[]>('accounting/periods/generate', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+export const closeFiscalPeriod = (id: string, payload: CloseFiscalPeriodPayload) =>
+  apiRequest<FiscalPeriodDto>(`accounting/periods/${encodeURIComponent(id)}/close`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+export const reopenFiscalPeriod = (id: string, payload: ReopenFiscalPeriodPayload) =>
+  apiRequest<FiscalPeriodDto>(`accounting/periods/${encodeURIComponent(id)}/reopen`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+

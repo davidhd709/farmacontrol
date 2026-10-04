@@ -34,6 +34,7 @@ const JournalEntriesPage = lazy(() => import('./features/accounting/pages/Journa
 const TrialBalancePage = lazy(() => import('./features/accounting/pages/TrialBalancePage').then((m) => ({ default: m.TrialBalancePage })));
 const IncomeStatementPage = lazy(() => import('./features/accounting/pages/IncomeStatementPage').then((m) => ({ default: m.IncomeStatementPage })));
 const BalanceSheetPage = lazy(() => import('./features/accounting/pages/BalanceSheetPage').then((m) => ({ default: m.BalanceSheetPage })));
+const FiscalPeriodsPage = lazy(() => import('./features/accounting/pages/FiscalPeriodsPage').then((m) => ({ default: m.FiscalPeriodsPage })));
 
 const RouteLoadingFallback = () => (
   <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh' }}>
@@ -79,6 +80,7 @@ export const App = () => {
             <Route path="/accounting/trial-balance" element={<TrialBalancePage />} />
             <Route path="/accounting/income-statement" element={<IncomeStatementPage />} />
             <Route path="/accounting/balance-sheet" element={<BalanceSheetPage />} />
+            <Route path="/accounting/periods" element={<FiscalPeriodsPage />} />
           </Route>
         </Route>
 

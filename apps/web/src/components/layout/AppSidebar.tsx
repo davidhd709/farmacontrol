@@ -39,6 +39,7 @@ import RuleIcon from '@mui/icons-material/Rule';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import MenuBookIcon from '@mui/icons-material/MenuBook';
 import BalanceIcon from '@mui/icons-material/Balance';
+import DateRangeIcon from '@mui/icons-material/DateRange';
 import { usePermissions } from '../../features/auth/hooks/usePermissions';
 import { SYSTEM_PERMISSIONS } from '@farmacia/contracts';
 
@@ -207,6 +208,12 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ open, onClose }) => {
           title: 'Balance General',
           path: '/accounting/balance-sheet',
           icon: <AccountBalanceIcon fontSize="small" />,
+          permission: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
+        },
+        {
+          title: 'Períodos y Cierre Fiscal',
+          path: '/accounting/periods',
+          icon: <DateRangeIcon fontSize="small" />,
           permission: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
         },
       ],

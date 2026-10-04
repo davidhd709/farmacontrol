@@ -13,6 +13,8 @@ import {
 import { ProductTaxProfileController } from './presentation/product-tax-profile.controller';
 import { JournalController } from './presentation/journal.controller';
 import { AccountingReportsController } from './presentation/reports.controller';
+import { FiscalPeriodsService } from './application/fiscal-periods.service';
+import { FiscalPeriodsController } from './presentation/fiscal-periods.controller';
 
 @Module({
   imports: [IdentityModule],
@@ -22,6 +24,7 @@ import { AccountingReportsController } from './presentation/reports.controller';
     ProductTaxProfileController,
     JournalController,
     AccountingReportsController,
+    FiscalPeriodsController,
   ],
   providers: [
     AccountingService,
@@ -30,6 +33,7 @@ import { AccountingReportsController } from './presentation/reports.controller';
     ProductTaxProfileService,
     AccountingEngineService,
     AccountingReportsService,
+    FiscalPeriodsService,
   ],
   exports: [
     AccountingService,
@@ -37,6 +41,7 @@ import { AccountingReportsController } from './presentation/reports.controller';
     ProductTaxProfileService,
     AccountingEngineService,
     AccountingReportsService,
+    FiscalPeriodsService,
   ],
 })
 export class AccountingModule {}
