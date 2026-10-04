@@ -14,6 +14,7 @@ import { UserProvisioningService } from './application/services/user-provisionin
 import { SessionService } from './application/services/session.service';
 import { AuthService } from './application/services/auth.service';
 import { UserManagementService } from './application/services/user-management.service';
+import { RateLimiterService } from '../../common/services/rate-limiter.service';
 import { SessionAuthGuard } from './presentation/guards/session-auth.guard';
 import { PermissionsGuard } from './presentation/guards/permissions.guard';
 import { AuthController } from './presentation/controllers/auth.controller';
@@ -49,6 +50,7 @@ import { AuditModule } from '../audit/audit.module';
     UserManagementService,
     SessionService,
     AuthService,
+    RateLimiterService,
     SessionAuthGuard,
     PermissionsGuard,
   ],
@@ -62,6 +64,7 @@ import { AuditModule } from '../audit/audit.module';
     UserProvisioningService,
     SessionService,
     AuthService,
+    RateLimiterService,
     SessionAuthGuard,
     PermissionsGuard,
   ],

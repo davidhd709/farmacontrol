@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { getCorsConfig } from './common/config/cors.config';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -7,11 +8,8 @@ async function bootstrap() {
   // Prefijo global de API según arquitectura
   app.setGlobalPrefix('api/v1');
 
-  // Habilitar CORS para desarrollo local
-  app.enableCors({
-    origin: true,
-    credentials: true,
-  });
+  // Habilitar política de CORS endurecida con lista blanca
+  app.enableCors(getCorsConfig());
 
   const port = process.env.API_PORT || 3000;
   await app.listen(port);

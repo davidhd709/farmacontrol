@@ -9,6 +9,7 @@ import {
   HttpCode,
   HttpStatus,
   UnauthorizedException,
+  HttpException,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { AuthService } from '../../application/services/auth.service';
@@ -31,13 +32,15 @@ import { InvalidCredentialsException } from '../../domain/exceptions/identity.ex
 import { Optional } from '@nestjs/common';
 import { AuditService } from '../../../audit/application/services/audit.service';
 import { SessionService } from '../../application/services/session.service';
+import { RateLimiterService } from '../../../../common/services/rate-limiter.service';
 
 @Controller('auth')
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
     @Optional() private readonly auditService?: AuditService,
-    @Optional() private readonly sessionService?: SessionService
+    @Optional() private readonly sessionService?: SessionService,
+    @Optional() private readonly rateLimiterService?: RateLimiterService
   ) {}
 
   /**
@@ -51,11 +54,44 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response
   ): Promise<LoginResponseDto> {
+    const clientIp = req.ip || req.socket?.remoteAddress || 'unknown-ip';
+    const ipKey = `auth:ip:${clientIp}`;
+    const userKey = `auth:user:${loginDto.username.toLowerCase().trim()}`;
+    const maxAttempts = Number(process.env.AUTH_RATE_LIMIT_MAX_ATTEMPTS) || 5;
+    const windowMs = Number(process.env.AUTH_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000;
+
+    // 1. Verificación previa de bloqueo por intentos fallidos excesivos
+    if (this.rateLimiterService) {
+      const ipStatus = this.rateLimiterService.checkLimit(ipKey);
+      if (ipStatus.blocked) {
+        res.setHeader('Retry-After', ipStatus.retryAfterSeconds);
+        throw new HttpException(
+          `Demasiados intentos fallidos desde esta dirección IP. Intente de nuevo en ${ipStatus.retryAfterSeconds} segundos.`,
+          HttpStatus.TOO_MANY_REQUESTS
+        );
+      }
+
+      const userStatus = this.rateLimiterService.checkLimit(userKey);
+      if (userStatus.blocked) {
+        res.setHeader('Retry-After', userStatus.retryAfterSeconds);
+        throw new HttpException(
+          `Demasiados intentos fallidos para la cuenta '${loginDto.username}'. Intente de nuevo en ${userStatus.retryAfterSeconds} segundos.`,
+          HttpStatus.TOO_MANY_REQUESTS
+        );
+      }
+    }
+
     try {
       const { user, rawToken, roles, permissions } = await this.authService.login(
         loginDto.username,
         loginDto.password
       );
+
+      // Restablecer contadores de intentos fallidos tras login exitoso
+      if (this.rateLimiterService) {
+        this.rateLimiterService.reset(ipKey);
+        this.rateLimiterService.reset(userKey);
+      }
 
       // Establecer cookie HttpOnly segura con el rawToken
       res.cookie(
@@ -88,20 +124,43 @@ export class AuthController {
       };
     } catch (err) {
       if (err instanceof InvalidCredentialsException) {
+        let isBlocked = false;
+        let retryAfter = 0;
+
+        if (this.rateLimiterService) {
+          const ipResult = this.rateLimiterService.recordAttempt(ipKey, maxAttempts, windowMs);
+          const userResult = this.rateLimiterService.recordAttempt(userKey, maxAttempts, windowMs);
+
+          if (ipResult.blocked || userResult.blocked) {
+            isBlocked = true;
+            retryAfter = Math.max(ipResult.retryAfterSeconds, userResult.retryAfterSeconds);
+            res.setHeader('Retry-After', retryAfter);
+          }
+        }
+
         if (this.auditService) {
           await this.auditService.recordEvent({
             userId: null,
-            action: 'auth:login_failure',
+            action: isBlocked ? 'auth:brute_force_blocked' : 'auth:login_failure',
             entity: 'Auth',
             entityId: null,
             details: {
               attemptedUsername: loginDto.username,
-              reason: 'invalid_credentials',
+              reason: isBlocked ? 'rate_limit_exceeded' : 'invalid_credentials',
+              retryAfterSeconds: isBlocked ? retryAfter : undefined,
             },
             ipAddress: req?.ip || null,
             correlationId: req?.correlationId || null,
           });
         }
+
+        if (isBlocked) {
+          throw new HttpException(
+            `Demasiados intentos fallidos de inicio de sesión. Bloqueo temporal activado por ${retryAfter} segundos.`,
+            HttpStatus.TOO_MANY_REQUESTS
+          );
+        }
+
         throw new UnauthorizedException('Nombre de usuario o contraseña incorrectos.');
       }
       throw err;

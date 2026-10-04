@@ -45,8 +45,13 @@ export class HttpExceptionFilter implements ExceptionFilter {
         details = body.details;
       }
     } else if (exception instanceof Error) {
-      message = exception.message;
-      errorName = exception.name;
+      if (process.env.NODE_ENV === 'production') {
+        message = 'Error interno del servidor.';
+        errorName = 'InternalServerError';
+      } else {
+        message = exception.message;
+        errorName = exception.name;
+      }
     }
 
     this.logger.error(
