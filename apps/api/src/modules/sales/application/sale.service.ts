@@ -30,6 +30,65 @@ export interface AuditContext {
   correlationId?: string | null;
 }
 
+/**
+ * Detecta si un error es un conflicto de concurrencia o serialización recuperable en PostgreSQL/Prisma.
+ */
+function isRetryableConcurrencyError(error: unknown): boolean {
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    if (error.code === 'P2034' || error.code === 'P2002' || error.code === 'P2028') {
+      return true;
+    }
+    if (error.code === 'P2010') {
+      const meta = error.meta as { code?: string; message?: string } | undefined;
+      const code = meta?.code;
+      if (code === '40001' || code === '40P01') {
+        return true;
+      }
+    }
+  }
+  if (error && typeof error === 'object' && 'message' in error) {
+    const msg = String((error as Error).message || '').toLowerCase();
+    if (
+      msg.includes('40001') ||
+      msg.includes('40p01') ||
+      msg.includes('could not serialize access') ||
+      msg.includes('deadlock detected') ||
+      msg.includes('write conflict')
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Ejecuta una operación transaccional reintentando automáticamente en caso de
+ * conflictos de serialización (P2034 / SQLSTATE 40001), colisiones de consecutivo (P2002)
+ * o deadlocks transitorios concurrentes.
+ */
+async function executeWithRetry<T>(
+  operation: () => Promise<T>,
+  maxRetries = 10,
+  baseDelayMs = 30,
+): Promise<T> {
+  let attempt = 0;
+  while (true) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (isRetryableConcurrencyError(error) && attempt < maxRetries) {
+        attempt++;
+        const jitter = Math.floor(Math.random() * 50);
+        const delay = Math.min(baseDelayMs * Math.pow(1.5, attempt) + jitter, 1000);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        continue;
+      }
+      throw error;
+    }
+  }
+}
+
+
 @Injectable()
 export class SaleService {
   private readonly client: PrismaClient;
@@ -80,9 +139,10 @@ export class SaleService {
       }
     }
 
-    // 2. Transacción ACID completa en PostgreSQL
-    const saleResult = await this.client.$transaction(async (tx) => {
-      // 2.1. Resolver Cliente
+    // 2. Transacción ACID completa en PostgreSQL con reintentos ante conflictos de serialización
+    const saleResult = await executeWithRetry(async () => {
+      return this.client.$transaction(async (tx) => {
+        // 2.1. Resolver Cliente
       let customerId = payload.customerId;
       let customerName = 'Consumidor Final (Cuantías Menores)';
       let customerDoc = '222222222222';
@@ -400,6 +460,7 @@ export class SaleService {
     }, {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
     });
+  });
 
     // 3. Auditoría asíncrona fuera de la transacción
     if (this.auditService) {
@@ -458,9 +519,10 @@ export class SaleService {
       throw new SaleAlreadyCancelledException(sale.invoiceNumber);
     }
 
-    // Transacción ACID de reversión
-    const cancelledDto = await this.client.$transaction(async (tx) => {
-      const lockedSales = await tx.$queryRaw<Array<{ status: string }>>`
+    // Transacción ACID de reversión con reintentos ante conflictos de concurrencia
+    const cancelledDto = await executeWithRetry(async () => {
+      return this.client.$transaction(async (tx) => {
+        const lockedSales = await tx.$queryRaw<Array<{ status: string }>>`
         SELECT status FROM sales WHERE id = ${id}::uuid FOR UPDATE
       `;
       if (!lockedSales.length) throw new SaleNotFoundException(id);
@@ -585,6 +647,7 @@ export class SaleService {
     }, {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
     });
+  });
 
     if (this.auditService) {
       await this.auditService.recordEvent({
