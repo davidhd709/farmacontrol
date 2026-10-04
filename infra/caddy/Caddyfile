@@ -1,0 +1,37 @@
+{
+	# Opciones globales de Caddy
+	# admin off deshabilita la API de administración local si no es requerida
+	admin off
+}
+
+{$DOMAIN:localhost} {
+	# Compresión moderna para optimizar ancho de banda
+	encode zstd gzip
+
+	# Registro estructurado en JSON para observabilidad e ingestión de logs
+	log {
+		output stdout
+		format json
+		level INFO
+	}
+
+	# Enrutamiento prioritario hacia la API REST
+	handle /api/* {
+		reverse_proxy api:3000 {
+			header_up Host {host}
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+		}
+	}
+
+	# Enrutamiento hacia la SPA Web (Nginx estático)
+	handle {
+		reverse_proxy web:80 {
+			header_up Host {host}
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+		}
+	}
+}

@@ -32,3 +32,10 @@ Thumbs.db
 
 # Docker data local
 .docker-data/
+
+# Copias de seguridad locales
+infra/backups/*.dump
+infra/backups/*.sha256
+infra/backups/*.meta.json
+infra/backups/latest_backup.json
+!infra/backups/.gitkeep

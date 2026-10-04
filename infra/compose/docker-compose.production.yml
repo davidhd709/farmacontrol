@@ -1,6 +1,26 @@
 name: farmacontrol
 
 services:
+  caddy:
+    image: caddy:2.9-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    volumes:
+      - ../caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - farmacontrol_caddy_data:/data
+      - farmacontrol_caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_started
+    networks:
+      - frontend
+
   postgres:
     image: postgres:18-alpine
     restart: unless-stopped
@@ -53,12 +73,19 @@ services:
       API_PORT: 3000
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}?schema=public
       SESSION_SECRET: ${SESSION_SECRET}
+      CORS_ALLOWED_ORIGINS: https://${DOMAIN:-localhost},http://${DOMAIN:-localhost}
+      PGHOST: postgres
+      PGPORT: 5432
+      PGUSER: ${DB_USER}
+      PGPASSWORD: ${DB_PASSWORD}
+      PGDATABASE: ${DB_NAME}
     depends_on:
       postgres:
         condition: service_healthy
-    ports:
-      - '127.0.0.1:3102:3000'
+    volumes:
+      - farmacontrol_backups:/app/infra/backups
     networks:
+      - frontend
       - backend
     healthcheck:
       test:
@@ -82,9 +109,16 @@ services:
     environment:
       NODE_ENV: production
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}?schema=public
+      PGHOST: postgres
+      PGPORT: 5432
+      PGUSER: ${DB_USER}
+      PGPASSWORD: ${DB_PASSWORD}
+      PGDATABASE: ${DB_NAME}
     depends_on:
       postgres:
         condition: service_healthy
+    volumes:
+      - farmacontrol_backups:/app/infra/backups
     networks:
       - backend
 
@@ -94,10 +128,31 @@ services:
       dockerfile: infra/docker/Dockerfile
       target: web
     restart: unless-stopped
-    ports:
-      - '127.0.0.1:3101:80'
     networks:
       - frontend
+
+  backup-job:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile
+      target: api
+    environment:
+      NODE_ENV: production
+      PGHOST: postgres
+      PGPORT: 5432
+      PGUSER: ${DB_USER}
+      PGPASSWORD: ${DB_PASSWORD}
+      PGDATABASE: ${DB_NAME}
+      RETENTION_DAYS: ${RETENTION_DAYS:-30}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - farmacontrol_backups:/app/infra/backups
+    networks:
+      - backend
+    command: ['/app/infra/scripts/backup.sh']
+    profiles: ['backup']
 
 networks:
   frontend:
@@ -105,3 +160,6 @@ networks:
 
 volumes:
   farmacontrol_postgres_data:
+  farmacontrol_caddy_data:
+  farmacontrol_caddy_config:
+  farmacontrol_backups:
