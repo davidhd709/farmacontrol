@@ -263,6 +263,10 @@ describe('Gestión de Presentaciones Comerciales y Factores de Conversión (UX-0
 
     fireEvent.click(deactivateButtons[0]);
 
+    // Diálogo de Confirmación preventiva
+    const confirmBtn = await screen.findByRole('button', { name: /Inactivar Presentación/i });
+    fireEvent.click(confirmBtn);
+
     await waitFor(() => {
       expect(deactivateSpy).toHaveBeenCalledWith('prod-amox', 'pres-1');
     });

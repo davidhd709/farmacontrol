@@ -15,6 +15,7 @@ import {
   Typography,
 } from '@mui/material';
 import type { BankAccountDto, BankMovementType, CreateBankMovementDto } from '@farmacia/contracts';
+import { ConfirmDialog } from '../../../components/ConfirmDialog';
 
 interface BankMovementDialogProps {
   open: boolean;
@@ -45,6 +46,8 @@ export const BankMovementDialog: React.FC<BankMovementDialogProps> = ({
   const [concept, setConcept] = useState('');
   const [externalReference, setExternalReference] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [pendingData, setPendingData] = useState<CreateBankMovementDto | null>(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
 
   useEffect(() => {
     setMovementType('DEPOSIT');
@@ -52,6 +55,8 @@ export const BankMovementDialog: React.FC<BankMovementDialogProps> = ({
     setConcept('');
     setExternalReference('');
     setErrorMessage(null);
+    setPendingData(null);
+    setConfirmLoading(false);
   }, [open, account]);
 
   if (!account) return null;
@@ -61,7 +66,7 @@ export const BankMovementDialog: React.FC<BankMovementDialogProps> = ({
   const isDebit = MOVEMENT_TYPE_LABELS[movementType].isOutflow;
   const willExceed = isDebit && parsedAmount > currentBal;
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
@@ -82,13 +87,20 @@ export const BankMovementDialog: React.FC<BankMovementDialogProps> = ({
       return;
     }
 
+    setPendingData({
+      movementType,
+      amount: amount.trim(),
+      concept: concept.trim(),
+      externalReference: externalReference.trim() || null,
+    });
+  };
+
+  const handleConfirmMovement = async () => {
+    if (!pendingData) return;
+    setConfirmLoading(true);
     try {
-      await onSubmit({
-        movementType,
-        amount: amount.trim(),
-        concept: concept.trim(),
-        externalReference: externalReference.trim() || null,
-      });
+      await onSubmit(pendingData);
+      setPendingData(null);
       onClose();
     } catch (err: unknown) {
       if (err instanceof Error) {
@@ -96,6 +108,9 @@ export const BankMovementDialog: React.FC<BankMovementDialogProps> = ({
       } else {
         setErrorMessage('Error al registrar el movimiento.');
       }
+      setPendingData(null);
+    } finally {
+      setConfirmLoading(false);
     }
   };
 
@@ -181,10 +196,21 @@ export const BankMovementDialog: React.FC<BankMovementDialogProps> = ({
             disabled={isSubmitting || willExceed}
             data-testid="submit-movement-btn"
           >
-            {isSubmitting ? 'Procesando...' : 'Confirmar Movimiento'}
+            {isSubmitting ? 'Procesando...' : 'Registrar Movimiento'}
           </Button>
         </DialogActions>
       </form>
+
+      <ConfirmDialog
+        open={Boolean(pendingData)}
+        title="Confirmar Movimiento Bancario"
+        description={`¿Estás seguro de registrar un movimiento de ${pendingData ? MOVEMENT_TYPE_LABELS[pendingData.movementType].label : ''} por $${Number(pendingData?.amount || 0).toLocaleString('es-CO', { minimumFractionDigits: 2 })} COP en la cuenta "${account.name}" (${account.bankName})?`}
+        confirmText="Confirmar y Asentar"
+        confirmColor={pendingData && MOVEMENT_TYPE_LABELS[pendingData.movementType].isOutflow ? 'error' : 'primary'}
+        isLoading={confirmLoading}
+        onConfirm={handleConfirmMovement}
+        onCancel={() => !confirmLoading && setPendingData(null)}
+      />
     </Dialog>
   );
 };

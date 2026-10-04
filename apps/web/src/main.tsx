@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import { AuthProvider } from './features/auth/context/AuthContext';
+import { AlertModalProvider } from './context/AlertModalContext';
 import { appTheme } from './theme/app-theme';
 import './index.css';
 
@@ -29,7 +30,9 @@ if (rootElement) {
         <QueryClientProvider client={queryClient}>
           <BrowserRouter>
             <AuthProvider>
-              <App />
+              <AlertModalProvider>
+                <App />
+              </AlertModalProvider>
             </AuthProvider>
           </BrowserRouter>
         </QueryClientProvider>

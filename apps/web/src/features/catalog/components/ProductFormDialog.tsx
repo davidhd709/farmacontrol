@@ -35,6 +35,7 @@ interface ProductFormDialogProps {
   onClose: () => void;
   product?: ProductDto | null;
   onManagePresentations?: (product: ProductDto) => void;
+  onSuccess?: (productName: string, isEditing: boolean) => void;
 }
 
 export function ProductFormDialog({
@@ -42,6 +43,7 @@ export function ProductFormDialog({
   onClose,
   product,
   onManagePresentations,
+  onSuccess,
 }: ProductFormDialogProps) {
   const isEditing = Boolean(product);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -156,6 +158,7 @@ export function ProductFormDialog({
       } else {
         await createMutation.mutateAsync(payload);
       }
+      onSuccess?.(values.name, isEditing);
       onClose();
     } catch (error) {
       if (error instanceof ApiError) {

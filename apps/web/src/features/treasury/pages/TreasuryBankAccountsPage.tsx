@@ -45,6 +45,7 @@ import {
 } from '../hooks/useTreasury';
 import { BankAccountDialog } from '../components/BankAccountDialog';
 import { BankMovementDialog } from '../components/BankMovementDialog';
+import { SweetModal } from '../../../components/SweetModal';
 
 export function TreasuryBankAccountsPage() {
   const { hasPermission } = usePermissions();
@@ -59,6 +60,7 @@ export function TreasuryBankAccountsPage() {
   const [editingAccount, setEditingAccount] = useState<BankAccountDto | null>(null);
   const [movementDialogOpen, setMovementDialogOpen] = useState(false);
   const [movementAccount, setMovementAccount] = useState<BankAccountDto | null>(null);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   // Filter state for movements
   const [movementTypeFilter, setMovementTypeFilter] = useState('');
@@ -115,8 +117,10 @@ export function TreasuryBankAccountsPage() {
         id: editingAccount.id,
         data: data as UpdateBankAccountDto,
       });
+      setToastMsg('Cuenta bancaria actualizada correctamente.');
     } else {
       await createAccountMutation.mutateAsync(data as CreateBankAccountDto);
+      setToastMsg('Cuenta bancaria registrada exitosamente.');
     }
   };
 
@@ -126,6 +130,7 @@ export function TreasuryBankAccountsPage() {
       accountId: movementAccount.id,
       data,
     });
+    setToastMsg('Movimiento de tesorería registrado correctamente.');
   };
 
   const totalBalanceNumber = parseFloat(summary?.totalBalance ?? '0');
@@ -474,6 +479,16 @@ export function TreasuryBankAccountsPage() {
         account={movementAccount}
         onSubmit={handleSaveMovement}
         isSubmitting={createMovementMutation.isPending}
+      />
+
+      <SweetModal
+        open={Boolean(toastMsg)}
+        type="success"
+        title="¡Buen trabajo!"
+        text={toastMsg || ''}
+        confirmText="OK"
+        onConfirm={() => setToastMsg(null)}
+        onClose={() => setToastMsg(null)}
       />
     </Container>
   );

@@ -17,12 +17,14 @@ interface DeactivateCategoryDialogProps {
   open: boolean;
   onClose: () => void;
   category: CategoryDto | null;
+  onSuccess?: (category: CategoryDto) => void;
 }
 
 export function DeactivateCategoryDialog({
   open,
   onClose,
   category,
+  onSuccess,
 }: DeactivateCategoryDialogProps) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const deactivateMutation = useDeactivateCategory();
@@ -34,6 +36,7 @@ export function DeactivateCategoryDialog({
 
     try {
       await deactivateMutation.mutateAsync(category.id);
+      onSuccess?.(category);
       onClose();
     } catch (error) {
       if (error instanceof ApiError) {

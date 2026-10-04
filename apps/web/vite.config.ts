@@ -13,7 +13,15 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (id.includes('/node_modules/@mui/') || id.includes('/node_modules/@emotion/')) {
+          if (id.includes('/node_modules/@mui/icons-material/')) {
+            return 'mui-icons';
+          }
+
+          if (id.includes('/node_modules/@emotion/')) {
+            return 'emotion';
+          }
+
+          if (id.includes('/node_modules/@mui/')) {
             return 'ui';
           }
 

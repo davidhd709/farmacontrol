@@ -7,7 +7,6 @@ import {
   Card,
   CardContent,
   Chip,
-  Container,
   FormControl,
   InputLabel,
   MenuItem,
@@ -89,8 +88,13 @@ export function ExpirationAlertsPage() {
           <Chip
             size="small"
             color="error"
+            variant="outlined"
             label={`🔴 VENCIDO (${Math.abs(days)}d)`}
-            sx={{ fontWeight: 700 }}
+            sx={{
+              fontWeight: 700,
+              bgcolor: 'rgba(211, 47, 47, 0.04)',
+              borderColor: 'rgba(211, 47, 47, 0.4)',
+            }}
             data-testid="chip-severity-vencido"
           />
         );
@@ -99,8 +103,14 @@ export function ExpirationAlertsPage() {
           <Chip
             size="small"
             color="warning"
+            variant="outlined"
             label={`🟠 CRÍTICO (${days}d)`}
-            sx={{ fontWeight: 700, bgcolor: '#ed6c02', color: '#fff' }}
+            sx={{
+              fontWeight: 700,
+              bgcolor: 'rgba(237, 108, 2, 0.06)',
+              color: '#c25e00',
+              borderColor: 'rgba(237, 108, 2, 0.5)',
+            }}
             data-testid="chip-severity-critico"
           />
         );
@@ -109,8 +119,13 @@ export function ExpirationAlertsPage() {
           <Chip
             size="small"
             color="warning"
+            variant="outlined"
             label={`🟡 ALERTA (${days}d)`}
-            sx={{ fontWeight: 600 }}
+            sx={{
+              fontWeight: 600,
+              bgcolor: 'rgba(237, 108, 2, 0.04)',
+              borderColor: 'rgba(237, 108, 2, 0.35)',
+            }}
             data-testid="chip-severity-alerta"
           />
         );
@@ -119,13 +134,18 @@ export function ExpirationAlertsPage() {
           <Chip
             size="small"
             color="info"
+            variant="outlined"
             label={`🔵 PRÓXIMO (${days}d)`}
-            sx={{ fontWeight: 600 }}
+            sx={{
+              fontWeight: 600,
+              bgcolor: 'rgba(2, 136, 209, 0.04)',
+              borderColor: 'rgba(2, 136, 209, 0.35)',
+            }}
             data-testid="chip-severity-proximo"
           />
         );
       default:
-        return <Chip size="small" label={sev} />;
+        return <Chip size="small" variant="outlined" label={sev} />;
     }
   };
 
@@ -137,7 +157,7 @@ export function ExpirationAlertsPage() {
   };
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
+    <Box sx={{ p: { xs: 2, md: 3 }, maxWidth: 1400, margin: '0 auto' }}>
       <Stack spacing={3}>
         {/* Cabecera con navegación y botón de acción */}
         <Box
@@ -150,7 +170,7 @@ export function ExpirationAlertsPage() {
           }}
         >
           <Box>
-            <Typography variant="h4" component="h1" sx={{ fontWeight: 700 }}>
+            <Typography variant="h4" component="h1" sx={{ fontWeight: 800, color: 'text.primary' }}>
               Alertas de Vencimiento de Lotes
             </Typography>
             <Typography variant="body2" color="text.secondary">
@@ -165,6 +185,12 @@ export function ExpirationAlertsPage() {
               onClick={() => evaluateMutation.mutate()}
               disabled={evaluateMutation.isPending}
               data-testid="trigger-scan-btn"
+              sx={{
+                textTransform: 'none',
+                fontWeight: 700,
+                transition: 'transform 0.1s ease, background-color 0.15s ease',
+                '&:active': { transform: 'scale(0.98)' },
+              }}
             >
               {evaluateMutation.isPending ? 'Escaneando…' : '↻ Escanear Lotes Ahora'}
             </Button>
@@ -176,6 +202,7 @@ export function ExpirationAlertsPage() {
             severity={actionMessage.type}
             onClose={() => setActionMessage(null)}
             data-testid="action-feedback-alert"
+            sx={{ borderRadius: 2 }}
           >
             {actionMessage.text}
           </Alert>
@@ -189,12 +216,12 @@ export function ExpirationAlertsPage() {
             gap: 2,
           }}
         >
-          <Card variant="outlined">
+          <Card variant="outlined" sx={{ borderRadius: 2 }}>
             <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: 0.5 }}>
                 TOTAL EN RIESGO
               </Typography>
-              <Typography variant="h4" sx={{ fontWeight: 800, mt: 0.5 }}>
+              <Typography variant="h4" sx={{ fontWeight: 800, mt: 0.5, fontVariantNumeric: 'tabular-nums' }}>
                 {summaryQuery.data?.totalActive ?? 0}
               </Typography>
               <Typography variant="caption" color="text.secondary">
@@ -203,12 +230,19 @@ export function ExpirationAlertsPage() {
             </CardContent>
           </Card>
 
-          <Card variant="outlined" sx={{ borderColor: 'error.main' }}>
+          <Card
+            variant="outlined"
+            sx={{
+              borderRadius: 2,
+              bgcolor: 'rgba(211, 47, 47, 0.02)',
+              borderColor: 'rgba(211, 47, 47, 0.25)',
+            }}
+          >
             <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-              <Typography variant="caption" color="error.main" sx={{ fontWeight: 700 }}>
+              <Typography variant="caption" color="error.main" sx={{ fontWeight: 700, letterSpacing: 0.5 }}>
                 🔴 VENCIDOS (≤ 0d)
               </Typography>
-              <Typography variant="h4" color="error.main" sx={{ fontWeight: 800, mt: 0.5 }}>
+              <Typography variant="h4" color="error.main" sx={{ fontWeight: 800, mt: 0.5, fontVariantNumeric: 'tabular-nums' }}>
                 {summaryQuery.data?.vencidos ?? 0}
               </Typography>
               <Typography variant="caption" color="text.secondary">
@@ -217,12 +251,19 @@ export function ExpirationAlertsPage() {
             </CardContent>
           </Card>
 
-          <Card variant="outlined" sx={{ borderColor: '#ed6c02' }}>
+          <Card
+            variant="outlined"
+            sx={{
+              borderRadius: 2,
+              bgcolor: 'rgba(237, 108, 2, 0.02)',
+              borderColor: 'rgba(237, 108, 2, 0.25)',
+            }}
+          >
             <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-              <Typography variant="caption" sx={{ color: '#ed6c02', fontWeight: 700 }}>
+              <Typography variant="caption" sx={{ color: '#c25e00', fontWeight: 700, letterSpacing: 0.5 }}>
                 🟠 CRÍTICOS (&lt; 30d)
               </Typography>
-              <Typography variant="h4" sx={{ color: '#ed6c02', fontWeight: 800, mt: 0.5 }}>
+              <Typography variant="h4" sx={{ color: '#c25e00', fontWeight: 800, mt: 0.5, fontVariantNumeric: 'tabular-nums' }}>
                 {summaryQuery.data?.criticos ?? 0}
               </Typography>
               <Typography variant="caption" color="text.secondary">
@@ -231,12 +272,19 @@ export function ExpirationAlertsPage() {
             </CardContent>
           </Card>
 
-          <Card variant="outlined" sx={{ borderColor: 'warning.main' }}>
+          <Card
+            variant="outlined"
+            sx={{
+              borderRadius: 2,
+              bgcolor: 'rgba(237, 108, 2, 0.015)',
+              borderColor: 'rgba(237, 108, 2, 0.2)',
+            }}
+          >
             <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-              <Typography variant="caption" color="warning.dark" sx={{ fontWeight: 700 }}>
+              <Typography variant="caption" color="warning.dark" sx={{ fontWeight: 700, letterSpacing: 0.5 }}>
                 🟡 EN ALERTA (31-60d)
               </Typography>
-              <Typography variant="h4" color="warning.dark" sx={{ fontWeight: 800, mt: 0.5 }}>
+              <Typography variant="h4" color="warning.dark" sx={{ fontWeight: 800, mt: 0.5, fontVariantNumeric: 'tabular-nums' }}>
                 {summaryQuery.data?.alertas ?? 0}
               </Typography>
               <Typography variant="caption" color="text.secondary">
@@ -245,12 +293,19 @@ export function ExpirationAlertsPage() {
             </CardContent>
           </Card>
 
-          <Card variant="outlined" sx={{ borderColor: 'info.main' }}>
+          <Card
+            variant="outlined"
+            sx={{
+              borderRadius: 2,
+              bgcolor: 'rgba(2, 136, 209, 0.015)',
+              borderColor: 'rgba(2, 136, 209, 0.2)',
+            }}
+          >
             <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-              <Typography variant="caption" color="info.main" sx={{ fontWeight: 700 }}>
+              <Typography variant="caption" color="info.main" sx={{ fontWeight: 700, letterSpacing: 0.5 }}>
                 🔵 PRÓXIMOS (61-90d)
               </Typography>
-              <Typography variant="h4" color="info.main" sx={{ fontWeight: 800, mt: 0.5 }}>
+              <Typography variant="h4" color="info.main" sx={{ fontWeight: 800, mt: 0.5, fontVariantNumeric: 'tabular-nums' }}>
                 {summaryQuery.data?.proximos ?? 0}
               </Typography>
               <Typography variant="caption" color="text.secondary">
@@ -261,7 +316,7 @@ export function ExpirationAlertsPage() {
         </Box>
 
         {/* Barra de Filtros y Búsqueda */}
-        <Paper variant="outlined" sx={{ p: 2 }}>
+        <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: 'center' }}>
             <TextField
               size="small"
@@ -305,6 +360,12 @@ export function ExpirationAlertsPage() {
                   setPage(1);
                 }}
                 data-testid="clear-filters-btn"
+                sx={{
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  transition: 'transform 0.1s ease',
+                  '&:active': { transform: 'scale(0.98)' },
+                }}
               >
                 Limpiar filtros
               </Button>
@@ -431,7 +492,7 @@ export function ExpirationAlertsPage() {
           )}
         </Paper>
       </Stack>
-    </Container>
+    </Box>
   );
 }
 

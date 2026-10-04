@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Box, useMediaQuery, useTheme } from '@mui/material';
+import { Box, CircularProgress, useMediaQuery, useTheme } from '@mui/material';
 import { Outlet } from 'react-router-dom';
 import { AppNavbar } from './AppNavbar';
 import { AppSidebar, SIDEBAR_WIDTH } from './AppSidebar';
@@ -32,17 +32,25 @@ export const AppLayout: React.FC = () => {
           component="main"
           sx={{
             flexGrow: 1,
+            minWidth: 0,
             width: {
               xs: '100%',
               md: sidebarOpen ? `calc(100% - ${SIDEBAR_WIDTH}px)` : '100%',
             },
-            transition: 'width 0.2s ease, margin 0.2s ease',
             p: { xs: 2, sm: 3 },
             maxWidth: '100%',
             overflowX: 'hidden',
           }}
         >
-          <Outlet />
+          <React.Suspense
+            fallback={
+              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '40vh' }}>
+                <CircularProgress size={32} />
+              </Box>
+            }
+          >
+            <Outlet />
+          </React.Suspense>
         </Box>
       </Box>
     </Box>

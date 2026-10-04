@@ -358,15 +358,13 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ open, onClose }) => {
                         borderRadius: 2,
                         py: 0.9,
                         px: 1.5,
-                        transition: 'all 0.15s ease',
+                        transition: 'background-color 0.15s ease, color 0.15s ease',
                         '&.Mui-selected': {
-                          bgcolor: 'rgba(15, 118, 110, 0.08)',
+                          bgcolor: 'rgba(15, 118, 110, 0.10)',
                           color: 'primary.main',
                           fontWeight: 700,
-                          borderLeft: '4px solid',
-                          borderColor: 'primary.main',
                           '&:hover': {
-                            bgcolor: 'rgba(15, 118, 110, 0.12)',
+                            bgcolor: 'rgba(15, 118, 110, 0.15)',
                           },
                         },
                         '&:hover': {
@@ -425,7 +423,6 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ open, onClose }) => {
       sx={{
         width: { md: open ? SIDEBAR_WIDTH : 0 },
         flexShrink: { md: 0 },
-        transition: 'width 0.2s ease',
       }}
     >
       {/* Móvil / Tablet: Drawer temporal */}

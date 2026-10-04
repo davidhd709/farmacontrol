@@ -48,10 +48,33 @@ export const PurchaseDetailDialog: React.FC<PurchaseDetailDialogProps> = ({
   }
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle sx={{ fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="md"
+      fullWidth
+      slotProps={{
+        paper: {
+          sx: {
+            borderRadius: 2.5,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+          },
+        },
+      }}
+    >
+      <DialogTitle sx={{ fontWeight: 800, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span>Detalle de Factura de Compra: {purchase.invoiceNumber}</span>
-        <Chip label={purchase.status} color="success" size="small" sx={{ fontWeight: 'bold' }} />
+        <Chip
+          label={purchase.status}
+          color="success"
+          size="small"
+          variant="outlined"
+          sx={{
+            fontWeight: 700,
+            bgcolor: 'rgba(46, 125, 50, 0.04)',
+            borderColor: 'rgba(46, 125, 50, 0.4)',
+          }}
+        />
       </DialogTitle>
 
       <DialogContent dividers>
@@ -170,7 +193,16 @@ export const PurchaseDetailDialog: React.FC<PurchaseDetailDialogProps> = ({
       </DialogContent>
 
       <DialogActions sx={{ p: 2 }}>
-        <Button onClick={onClose} variant="contained">
+        <Button
+          onClick={onClose}
+          variant="contained"
+          sx={{
+            textTransform: 'none',
+            fontWeight: 700,
+            transition: 'transform 0.1s ease',
+            '&:active': { transform: 'scale(0.98)' },
+          }}
+        >
           Cerrar
         </Button>
       </DialogActions>

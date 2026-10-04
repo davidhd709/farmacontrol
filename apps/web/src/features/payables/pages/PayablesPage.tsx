@@ -41,6 +41,7 @@ import {
 } from '../api/payables.api';
 import { HomeBackButton } from '../../../components/HomeBackButton';
 import { useBankAccountOptions } from '../../treasury/hooks/useTreasury';
+import { ConfirmDialog } from '../../../components/ConfirmDialog';
 
 // ============================================================
 // Schema
@@ -89,6 +90,7 @@ function PaymentModal({ payable, onClose, onSuccess }: PaymentModalProps) {
   const [reversalTarget, setReversalTarget] = useState<any | null>(null);
   const [reversalReason, setReversalReason] = useState('');
   const [reversalError, setReversalError] = useState<string | null>(null);
+  const [pendingPayment, setPendingPayment] = useState<PaymentFormData | null>(null);
   const queryClient = useQueryClient();
   const retry = useRef<{ fingerprint: string; key: string } | null>(null);
 
@@ -154,7 +156,20 @@ function PaymentModal({ payable, onClose, onSuccess }: PaymentModalProps) {
   const canPay = detail?.status === 'PENDIENTE' && balance > 0;
 
   return (
-    <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog
+      open
+      onClose={onClose}
+      maxWidth="sm"
+      fullWidth
+      slotProps={{
+        paper: {
+          sx: {
+            borderRadius: 2.5,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+          },
+        },
+      }}
+    >
       <DialogTitle>
         <Box>
           <Typography variant="h6" component="span" sx={{ fontWeight: 700 }}>
@@ -335,7 +350,7 @@ function PaymentModal({ payable, onClose, onSuccess }: PaymentModalProps) {
 
         {/* Formulario */}
         {canPay && (
-          <Box component="form" id="payable-payment-form" onSubmit={handleSubmit((d) => mutation.mutate(d))}>
+          <Box component="form" id="payable-payment-form" onSubmit={handleSubmit((d) => setPendingPayment(d))}>
             <Typography variant="subtitle2" gutterBottom>
               Registrar Pago al Proveedor
             </Typography>
@@ -450,6 +465,22 @@ function PaymentModal({ payable, onClose, onSuccess }: PaymentModalProps) {
           </Button>
         )}
       </DialogActions>
+
+      <ConfirmDialog
+        open={Boolean(pendingPayment)}
+        title="Confirmar Pago a Proveedor"
+        description={`¿Estás seguro de registrar un pago de $${Number(pendingPayment?.amount || 0).toLocaleString('es-CO', { minimumFractionDigits: 2 })} mediante ${pendingPayment?.paymentMethod} para la factura ${detail?.invoiceNumber ?? '—'} del proveedor ${detail?.supplierName ?? '—'}? Esta operación registrará la salida de dinero en ${pendingPayment?.paymentMethod === 'TRANSFERENCIA' ? 'banco' : 'caja'}.`}
+        confirmText="Confirmar y Pagar"
+        confirmColor="error"
+        isLoading={mutation.isPending}
+        onConfirm={() => {
+          if (pendingPayment) {
+            mutation.mutate(pendingPayment);
+            setPendingPayment(null);
+          }
+        }}
+        onCancel={() => setPendingPayment(null)}
+      />
     </Dialog>
   );
 }

@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { HomeBackButton } from '../../../components/HomeBackButton';
+import { ConfirmDialog } from '../../../components/ConfirmDialog';
+import { SweetModal } from '../../../components/SweetModal';
 import {
   Alert,
   Avatar,
@@ -44,6 +46,11 @@ export function UsersPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<SystemUserListItemDto | null>(null);
 
+  // Confirmaciones modales
+  const [userToToggleStatus, setUserToToggleStatus] = useState<SystemUserListItemDto | null>(null);
+  const [isConfirmCreateOpen, setIsConfirmCreateOpen] = useState(false);
+  const [isConfirmEditRolesOpen, setIsConfirmEditRolesOpen] = useState(false);
+
   // Formulario creación
   const [newUsername, setNewUsername] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -54,7 +61,23 @@ export function UsersPage() {
   const [editRoles, setEditRoles] = useState<string[]>([]);
   const [editError, setEditError] = useState<string | null>(null);
 
-  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  // Notificaciones flotantes (Toast / Snackbar)
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error' | 'info' | 'warning';
+  }>({
+    open: false,
+    message: '',
+    severity: 'success',
+  });
+
+  const notify = (
+    message: string,
+    severity: 'success' | 'error' | 'info' | 'warning' = 'success'
+  ) => {
+    setSnackbar({ open: true, message, severity });
+  };
 
   // Consultas
   const usersQuery = useQuery({
@@ -72,15 +95,19 @@ export function UsersPage() {
     mutationFn: createSystemUser,
     onSuccess: (newUser) => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
+      setIsConfirmCreateOpen(false);
       setIsCreateOpen(false);
       setNewUsername('');
       setNewPassword('');
       setSelectedRoles(['cajero']);
       setCreateError(null);
-      setActionSuccess(`Usuario "${newUser.username}" creado exitosamente.`);
+      notify(`Usuario "${newUser.username}" creado exitosamente.`);
     },
     onError: (err: any) => {
-      setCreateError(err.message || 'Error al crear el usuario.');
+      setIsConfirmCreateOpen(false);
+      const msg = err.message || 'Error al crear el usuario.';
+      setCreateError(msg);
+      notify(msg, 'error');
     },
   });
 
@@ -90,13 +117,14 @@ export function UsersPage() {
       updateSystemUserStatus(id, isActive),
     onSuccess: (updated) => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
-      setActionSuccess(
+      setUserToToggleStatus(null);
+      notify(
         `Usuario "${updated.username}" ${updated.isActive ? 'activado' : 'desactivado'} con éxito.`
       );
     },
     onError: (err: any) => {
-      setActionSuccess(null);
-      alert(err.message || 'Error al cambiar estado del usuario.');
+      setUserToToggleStatus(null);
+      notify(err.message || 'Error al cambiar estado del usuario.', 'error');
     },
   });
 
@@ -106,12 +134,16 @@ export function UsersPage() {
       updateSystemUserRoles(id, roles),
     onSuccess: (updated) => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
+      setIsConfirmEditRolesOpen(false);
       setEditingUser(null);
       setEditError(null);
-      setActionSuccess(`Roles actualizados para "${updated.username}".`);
+      notify(`Roles actualizados para "${updated.username}".`);
     },
     onError: (err: any) => {
-      setEditError(err.message || 'Error al actualizar roles.');
+      setIsConfirmEditRolesOpen(false);
+      const msg = err.message || 'Error al actualizar roles.';
+      setEditError(msg);
+      notify(msg, 'error');
     },
   });
 
@@ -133,7 +165,7 @@ export function UsersPage() {
     );
   };
 
-  const handleCreateSubmit = (e: React.FormEvent) => {
+  const handlePreSubmitCreate = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newUsername.trim()) {
       setCreateError('Ingresa un nombre de usuario.');
@@ -144,6 +176,10 @@ export function UsersPage() {
       return;
     }
     setCreateError(null);
+    setIsConfirmCreateOpen(true);
+  };
+
+  const handleConfirmCreate = () => {
     createMutation.mutate({
       username: newUsername.trim(),
       password: newPassword,
@@ -151,8 +187,13 @@ export function UsersPage() {
     });
   };
 
-  const handleEditRolesSubmit = (e: React.FormEvent) => {
+  const handlePreSubmitEditRoles = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!editingUser) return;
+    setIsConfirmEditRolesOpen(true);
+  };
+
+  const handleConfirmEditRoles = () => {
     if (!editingUser) return;
     rolesMutation.mutate({
       id: editingUser.id,
@@ -201,12 +242,6 @@ export function UsersPage() {
             </Button>
           </Box>
         </Box>
-
-        {actionSuccess && (
-          <Alert severity="success" onClose={() => setActionSuccess(null)}>
-            {actionSuccess}
-          </Alert>
-        )}
 
         {/* Tarjeta de Resumen y Búsqueda */}
         <Paper
@@ -359,9 +394,7 @@ export function UsersPage() {
                           size="small"
                           variant="outlined"
                           color={u.isActive ? 'error' : 'success'}
-                          onClick={() =>
-                            statusMutation.mutate({ id: u.id, isActive: !u.isActive })
-                          }
+                          onClick={() => setUserToToggleStatus(u)}
                           disabled={statusMutation.isPending}
                           sx={{ textTransform: 'none', fontWeight: 600 }}
                         >
@@ -384,7 +417,7 @@ export function UsersPage() {
         maxWidth="sm"
         fullWidth
       >
-        <form onSubmit={handleCreateSubmit}>
+        <form onSubmit={handlePreSubmitCreate}>
           <DialogTitle sx={{ fontWeight: 800 }}>Nuevo Usuario del Sistema</DialogTitle>
           <DialogContent dividers>
             <Stack spacing={2.5} sx={{ mt: 1 }}>
@@ -453,7 +486,7 @@ export function UsersPage() {
               color="primary"
               disabled={createMutation.isPending}
             >
-              {createMutation.isPending ? 'Guardando…' : 'Crear Usuario'}
+              Continuar
             </Button>
           </DialogActions>
         </form>
@@ -466,7 +499,7 @@ export function UsersPage() {
         maxWidth="sm"
         fullWidth
       >
-        <form onSubmit={handleEditRolesSubmit}>
+        <form onSubmit={handlePreSubmitEditRoles}>
           <DialogTitle sx={{ fontWeight: 800 }}>
             Editar Roles para {editingUser?.username}
           </DialogTitle>
@@ -516,11 +549,69 @@ export function UsersPage() {
               color="primary"
               disabled={rolesMutation.isPending}
             >
-              {rolesMutation.isPending ? 'Guardando…' : 'Guardar Cambios'}
+              Guardar Cambios
             </Button>
           </DialogActions>
         </form>
       </Dialog>
+
+      {/* DIÁLOGO CONFIRMACIÓN: ACTIVAR / DESACTIVAR */}
+      <ConfirmDialog
+        open={Boolean(userToToggleStatus)}
+        onClose={() => setUserToToggleStatus(null)}
+        onConfirm={() => {
+          if (userToToggleStatus) {
+            statusMutation.mutate({
+              id: userToToggleStatus.id,
+              isActive: !userToToggleStatus.isActive,
+            });
+          }
+        }}
+        isLoading={statusMutation.isPending}
+        title={userToToggleStatus?.isActive ? 'Desactivar Usuario' : 'Activar Usuario'}
+        description={
+          userToToggleStatus?.isActive
+            ? `¿Estás seguro de que deseas desactivar al usuario "${userToToggleStatus.username}"? El colaborador no podrá acceder al sistema ni realizar ventas u operaciones.`
+            : `¿Estás seguro de reactivar al usuario "${userToToggleStatus?.username}"? Podrá volver a iniciar sesión con sus credenciales autorizadas.`
+        }
+        confirmText={userToToggleStatus?.isActive ? 'Sí, desactivar' : 'Sí, activar'}
+        confirmColor={userToToggleStatus?.isActive ? 'error' : 'success'}
+      />
+
+      {/* DIÁLOGO CONFIRMACIÓN: CREAR USUARIO */}
+      <ConfirmDialog
+        open={isConfirmCreateOpen}
+        onClose={() => setIsConfirmCreateOpen(false)}
+        onConfirm={handleConfirmCreate}
+        isLoading={createMutation.isPending}
+        title="Confirmar Creación de Usuario"
+        description={`¿Estás seguro de registrar al usuario "${newUsername}" con los roles: ${selectedRoles.join(', ')}?`}
+        confirmText="Confirmar y Crear"
+        confirmColor="primary"
+      />
+
+      {/* DIÁLOGO CONFIRMACIÓN: EDITAR ROLES */}
+      <ConfirmDialog
+        open={isConfirmEditRolesOpen}
+        onClose={() => setIsConfirmEditRolesOpen(false)}
+        onConfirm={handleConfirmEditRoles}
+        isLoading={rolesMutation.isPending}
+        title="Confirmar Actualización de Roles"
+        description={`¿Estás seguro de guardar los roles [${editRoles.join(', ')}] para el usuario "${editingUser?.username}"? Esto modificará de inmediato sus permisos operativos.`}
+        confirmText="Confirmar y Guardar"
+        confirmColor="primary"
+      />
+
+      {/* NOTIFICACIONES MODALES SWEETALERT */}
+      <SweetModal
+        open={snackbar.open}
+        type={snackbar.severity === 'error' ? 'error' : snackbar.severity === 'warning' ? 'warning' : 'success'}
+        title={snackbar.severity === 'error' ? 'Error' : '¡Buen trabajo!'}
+        description={snackbar.message}
+        confirmText="OK"
+        onConfirm={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+        onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+      />
     </Container>
   );
 }

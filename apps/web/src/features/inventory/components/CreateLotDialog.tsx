@@ -84,9 +84,22 @@ export const CreateLotDialog = ({
   };
 
   return (
-    <Dialog open={open} onClose={isSubmitting ? undefined : onClose} maxWidth="sm" fullWidth>
+    <Dialog
+      open={open}
+      onClose={isSubmitting ? undefined : onClose}
+      maxWidth="sm"
+      fullWidth
+      slotProps={{
+        paper: {
+          sx: {
+            borderRadius: 2.5,
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.04)',
+          },
+        },
+      }}
+    >
       <form onSubmit={handleSubmit}>
-        <DialogTitle>Registrar Nuevo Lote de Inventario</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 700 }}>Registrar Nuevo Lote de Inventario</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2.5}>
             {errorMessage && <Alert severity="error">{errorMessage}</Alert>}
@@ -156,13 +169,20 @@ export const CreateLotDialog = ({
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button onClick={onClose} disabled={isSubmitting} color="inherit">
+          <Button onClick={onClose} disabled={isSubmitting} color="inherit" sx={{ textTransform: 'none' }}>
             Cancelar
           </Button>
           <Button
             type="submit"
             variant="contained"
             disabled={isSubmitting}
+            sx={{
+              fontWeight: 700,
+              textTransform: 'none',
+              px: 3,
+              transition: 'transform 0.1s ease, background-color 0.15s ease',
+              '&:active': { transform: 'scale(0.98)' },
+            }}
           >
             {isSubmitting ? 'Registrando...' : 'Guardar Lote'}
           </Button>

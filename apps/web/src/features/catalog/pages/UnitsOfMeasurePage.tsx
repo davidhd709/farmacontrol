@@ -8,7 +8,6 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
-  DialogContentText,
   DialogTitle,
   FormControl,
   InputLabel,
@@ -34,6 +33,8 @@ import {
   useDeactivateUnitOfMeasure,
 } from '../hooks/useUnitsOfMeasure';
 import { HomeBackButton } from '../../../components/HomeBackButton';
+import { ConfirmDialog } from '../../../components/ConfirmDialog';
+import { SweetModal } from '../../../components/SweetModal';
 
 const CATEGORY_LABELS: Record<string, { label: string; color: 'primary' | 'secondary' | 'info' | 'success' | 'warning' | 'default' }> = {
   FARMACEUTICA: { label: 'Medicamento / Farma', color: 'primary' },
@@ -61,6 +62,17 @@ export const UnitsOfMeasurePage: React.FC = () => {
 
   const [confirmDeactivateOpen, setConfirmDeactivateOpen] = useState(false);
   const [unitToToggle, setUnitToToggle] = useState<UnitOfMeasureDto | null>(null);
+
+  // Notificación flotante (Snackbar)
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error' | 'info' | 'warning';
+  }>({
+    open: false,
+    message: '',
+    severity: 'success',
+  });
 
   const queryFilters = {
     search: searchTerm.trim() || undefined,
@@ -118,6 +130,11 @@ export const UnitsOfMeasurePage: React.FC = () => {
             category: formCategory,
           },
         });
+        setSnackbar({
+          open: true,
+          message: `Unidad de medida "${formName.trim()}" actualizada con éxito.`,
+          severity: 'success',
+        });
       } else {
         await createMutation.mutateAsync({
           code: formCode.trim().toUpperCase(),
@@ -125,11 +142,17 @@ export const UnitsOfMeasurePage: React.FC = () => {
           description: formDescription.trim() || null,
           category: formCategory,
         });
+        setSnackbar({
+          open: true,
+          message: `Unidad de medida "${formName.trim()}" creada exitosamente.`,
+          severity: 'success',
+        });
       }
       setFormOpen(false);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al guardar la unidad de medida.';
       setFormError(msg);
+      setSnackbar({ open: true, message: msg, severity: 'error' });
     }
   };
 
@@ -144,10 +167,17 @@ export const UnitsOfMeasurePage: React.FC = () => {
           payload: { isActive: true },
         });
       }
+      setSnackbar({
+        open: true,
+        message: `Unidad "${unitToToggle.name}" ${unitToToggle.isActive ? 'inactivada' : 'reactivada'} con éxito.`,
+        severity: 'success',
+      });
       setConfirmDeactivateOpen(false);
       setUnitToToggle(null);
     } catch (err) {
-      console.error(err);
+      const msg = err instanceof Error ? err.message : 'Error al cambiar estado de la unidad.';
+      setSnackbar({ open: true, message: msg, severity: 'error' });
+      setConfirmDeactivateOpen(false);
     }
   };
 
@@ -391,30 +421,39 @@ export const UnitsOfMeasurePage: React.FC = () => {
       </Dialog>
 
       {/* Diálogo de Confirmación Inactivar/Activar */}
-      <Dialog open={confirmDeactivateOpen} onClose={() => setConfirmDeactivateOpen(false)}>
-        <DialogTitle sx={{ fontWeight: 700 }}>
-          {unitToToggle?.isActive ? 'Inactivar Unidad de Medida' : 'Reactivar Unidad de Medida'}
-        </DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            ¿Estás seguro de que deseas {unitToToggle?.isActive ? 'inactivar' : 'reactivar'} la unidad{' '}
-            <strong>{unitToToggle?.name} ({unitToToggle?.code})</strong>?
+      <ConfirmDialog
+        open={confirmDeactivateOpen}
+        onClose={() => setConfirmDeactivateOpen(false)}
+        onConfirm={handleToggleActive}
+        isLoading={deactivateMutation.isPending || updateMutation.isPending}
+        title={unitToToggle?.isActive ? 'Inactivar Unidad de Medida' : 'Reactivar Unidad de Medida'}
+        description={
+          <Stack spacing={1}>
+            <Typography variant="body2" color="text.secondary">
+              ¿Estás seguro de que deseas {unitToToggle?.isActive ? 'inactivar' : 'reactivar'} la unidad{' '}
+              <strong>{unitToToggle?.name} ({unitToToggle?.code})</strong>?
+            </Typography>
             {unitToToggle?.isActive && (
-              <Typography variant="body2" color="warning.main" sx={{ mt: 1 }}>
-                Los productos que ya usan esta unidad conservarán su histórico, pero no se sugerirá para nuevos registros.
+              <Typography variant="caption" color="warning.main" sx={{ display: 'block' }}>
+                ⚠️ Los productos que ya usan esta unidad conservarán su histórico, pero no se sugerirá para nuevos registros.
               </Typography>
             )}
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
-          <Button onClick={() => setConfirmDeactivateOpen(false)} color="inherit">
-            Cancelar
-          </Button>
-          <Button onClick={handleToggleActive} variant="contained" color={unitToToggle?.isActive ? 'error' : 'primary'}>
-            Confirmar
-          </Button>
-        </DialogActions>
-      </Dialog>
+          </Stack>
+        }
+        confirmText={unitToToggle?.isActive ? 'Inactivar' : 'Reactivar'}
+        confirmColor={unitToToggle?.isActive ? 'error' : 'primary'}
+      />
+
+      {/* Notificación modal estilo SweetAlert2 */}
+      <SweetModal
+        open={snackbar.open}
+        type={snackbar.severity === 'error' ? 'error' : snackbar.severity === 'warning' ? 'warning' : 'success'}
+        title={snackbar.severity === 'error' ? '¡Error!' : '¡Buen trabajo!'}
+        text={snackbar.message}
+        confirmText="OK"
+        onConfirm={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+        onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+      />
     </Box>
   );
 };

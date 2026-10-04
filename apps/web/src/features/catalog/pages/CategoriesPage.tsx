@@ -1,12 +1,10 @@
 import { useState } from 'react';
 import {
   Alert,
-  AppBar,
   Box,
   Button,
   Chip,
   CircularProgress,
-  Container,
   FormControl,
   InputAdornment,
   InputLabel,
@@ -22,14 +20,15 @@ import {
   TablePagination,
   TableRow,
   TextField,
-  Toolbar,
   Typography,
 } from '@mui/material';
 import { SYSTEM_PERMISSIONS, type CategoryDto } from '@farmacia/contracts';
+import { HomeBackButton } from '../../../components/HomeBackButton';
 import { PermissionGate } from '../../auth/components/PermissionGate';
 import { useCategories } from '../hooks/useCategories';
 import { CategoryFormDialog } from '../components/CategoryFormDialog';
 import { DeactivateCategoryDialog } from '../components/DeactivateCategoryDialog';
+import { SweetModal } from '../../../components/SweetModal';
 
 type StatusFilterOption = 'active' | 'inactive' | 'all';
 
@@ -43,6 +42,17 @@ export function CategoriesPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<CategoryDto | null>(null);
   const [categoryToDeactivate, setCategoryToDeactivate] = useState<CategoryDto | null>(null);
+
+  // Notificación flotante (Snackbar)
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error' | 'info' | 'warning';
+  }>({
+    open: false,
+    message: '',
+    severity: 'success',
+  });
 
   const queryFilters = {
     search: searchTerm.trim() || undefined,
@@ -90,18 +100,28 @@ export function CategoriesPage() {
   const total = data?.total ?? 0;
 
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
-      <AppBar
-        position="static"
-        color="inherit"
-        elevation={0}
-        sx={{ borderBottom: 1, borderColor: 'divider' }}
-      >
-        <Toolbar sx={{ justifyContent: 'space-between' }}>
-          <Box sx={{ display: 'flex', flexDirection: 'row', gap: 2, alignItems: 'center' }}>
-            <Typography variant="h6" component="span" sx={{ fontWeight: 700 }}>
-              Catálogo / Categorías
-            </Typography>
+    <Box sx={{ p: { xs: 2, md: 3 }, maxWidth: 1400, margin: '0 auto' }}>
+      <Stack spacing={3}>
+        {/* Encabezado y Acciones */}
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: { xs: 'column', sm: 'row' },
+            justifyContent: 'space-between',
+            alignItems: { xs: 'stretch', sm: 'center' },
+            gap: 2,
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <HomeBackButton />
+            <Box>
+              <Typography component="h1" variant="h4" sx={{ fontWeight: 800, color: 'text.primary' }}>
+                Categorías de Productos
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                Administra las clasificaciones y familias de productos del inventario farmacéutico.
+              </Typography>
+            </Box>
           </Box>
 
           <PermissionGate permission={SYSTEM_PERMISSIONS.CATEGORIES_MANAGE}>
@@ -110,23 +130,17 @@ export function CategoriesPage() {
               color="primary"
               onClick={handleOpenCreate}
               data-testid="create-category-btn"
+              sx={{
+                textTransform: 'none',
+                fontWeight: 700,
+                transition: 'transform 0.1s ease, background-color 0.15s ease',
+                '&:active': { transform: 'scale(0.98)' },
+              }}
             >
               Nueva Categoría
             </Button>
           </PermissionGate>
-        </Toolbar>
-      </AppBar>
-
-      <Container component="main" maxWidth="lg" sx={{ py: 4 }}>
-        <Stack spacing={3}>
-          <Box>
-            <Typography component="h1" variant="h1">
-              Categorías de Productos
-            </Typography>
-            <Typography color="text.secondary" sx={{ mt: 0.5 }}>
-              Administra las clasificaciones y familias de productos del inventario farmacéutico.
-            </Typography>
-          </Box>
+        </Box>
 
           {isError ? (
             <Alert severity="error">
@@ -261,6 +275,12 @@ export function CategoriesPage() {
                                 variant="outlined"
                                 onClick={() => handleOpenEdit(category)}
                                 aria-label={`Editar categoría ${category.name}`}
+                                sx={{
+                                  textTransform: 'none',
+                                  fontWeight: 600,
+                                  transition: 'transform 0.1s ease',
+                                  '&:active': { transform: 'scale(0.98)' },
+                                }}
                               >
                                 Editar
                               </Button>
@@ -271,6 +291,12 @@ export function CategoriesPage() {
                                   variant="outlined"
                                   onClick={() => handleOpenDeactivate(category)}
                                   aria-label={`Inactivar categoría ${category.name}`}
+                                  sx={{
+                                    textTransform: 'none',
+                                    fontWeight: 600,
+                                    transition: 'transform 0.1s ease',
+                                    '&:active': { transform: 'scale(0.98)' },
+                                  }}
                                 >
                                   Inactivar
                                 </Button>
@@ -300,19 +326,45 @@ export function CategoriesPage() {
             />
           </Paper>
         </Stack>
-      </Container>
 
       {/* Diálogos modales */}
       <CategoryFormDialog
         open={isFormOpen}
         onClose={() => setIsFormOpen(false)}
         category={selectedCategory}
+        onSuccess={(categoryName, isEditing) => {
+          setSnackbar({
+            open: true,
+            message: isEditing
+              ? `Categoría "${categoryName}" actualizada con éxito.`
+              : `Categoría "${categoryName}" creada exitosamente.`,
+            severity: 'success',
+          });
+        }}
       />
 
       <DeactivateCategoryDialog
         open={Boolean(categoryToDeactivate)}
         onClose={() => setCategoryToDeactivate(null)}
         category={categoryToDeactivate}
+        onSuccess={(cat) => {
+          setSnackbar({
+            open: true,
+            message: `Categoría "${cat.name}" inactivada con éxito.`,
+            severity: 'success',
+          });
+        }}
+      />
+
+      {/* Notificación modal SweetAlert */}
+      <SweetModal
+        open={snackbar.open}
+        type={snackbar.severity === 'error' ? 'error' : snackbar.severity === 'warning' ? 'warning' : 'success'}
+        title={snackbar.severity === 'error' ? 'Error' : '¡Buen trabajo!'}
+        description={snackbar.message}
+        confirmText="OK"
+        onConfirm={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+        onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
       />
     </Box>
   );

@@ -38,6 +38,7 @@ import {
   useUpdatePresentation,
 } from '../hooks/usePresentations';
 import { PresentationFormDialog } from './PresentationFormDialog';
+import { ConfirmDialog } from '../../../components/ConfirmDialog';
 
 interface ProductPresentationsDialogProps {
   open: boolean;
@@ -53,6 +54,7 @@ export function ProductPresentationsDialog({
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedPresentation, setSelectedPresentation] =
     useState<ProductPresentationDto | null>(null);
+  const [presToDeactivate, setPresToDeactivate] = useState<ProductPresentationDto | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   // Conversion calculator state
@@ -474,7 +476,7 @@ export function ProductPresentationsDialog({
                                       variant="outlined"
                                       color="error"
                                       disabled={pres.isDefault || pres.isDefaultSale}
-                                      onClick={() => handleDeactivate(pres)}
+                                      onClick={() => setPresToDeactivate(pres)}
                                     >
                                       Inactivar
                                     </Button>
@@ -609,6 +611,24 @@ export function ProductPresentationsDialog({
         product={product}
         presentation={selectedPresentation}
         availablePresentations={presentations}
+      />
+
+      {/* Diálogo de Confirmación: Inactivar Presentación */}
+      <ConfirmDialog
+        open={Boolean(presToDeactivate)}
+        onClose={() => setPresToDeactivate(null)}
+        onConfirm={async () => {
+          if (presToDeactivate) {
+            const target = presToDeactivate;
+            setPresToDeactivate(null);
+            await handleDeactivate(target);
+          }
+        }}
+        isLoading={deactivateMutation.isPending}
+        title="Inactivar Presentación Comercial"
+        description={`¿Estás seguro de que deseas inactivar la presentación "${presToDeactivate?.name}"? Esta presentación dejará de estar disponible para dispensación en POS y compras.`}
+        confirmText="Inactivar Presentación"
+        confirmColor="error"
       />
     </>
   );

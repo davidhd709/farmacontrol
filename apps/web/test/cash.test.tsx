@@ -141,6 +141,9 @@ describe('Operación de Caja — Pantalla CashPage (UX-25)', () => {
 
     fireEvent.click(confirmBtn);
 
+    const finalConfirmBtn = await screen.findByRole('button', { name: 'Confirmar Ingreso' });
+    fireEvent.click(finalConfirmBtn);
+
     await waitFor(() => {
       expect(cashApi.createCashMovement).toHaveBeenCalledWith(
         expect.objectContaining({

@@ -907,18 +907,52 @@ export const ReceivePurchasePage: React.FC = () => {
 
         {/* Botón de Envío */}
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
-          <Button variant="outlined" component={Link} to="/purchases" size="large">
+          <Button
+            variant="outlined"
+            component={Link}
+            to="/purchases"
+            size="large"
+            sx={{
+              textTransform: 'none',
+              fontWeight: 600,
+              transition: 'transform 0.1s ease',
+              '&:active': { transform: 'scale(0.98)' },
+            }}
+          >
             Cancelar
           </Button>
-          <Button type="submit" variant="contained" color="primary" size="large" sx={{ fontWeight: 'bold', px: 4 }}>
+          <Button
+            type="submit"
+            variant="contained"
+            color="primary"
+            size="large"
+            sx={{
+              fontWeight: 700,
+              px: 4,
+              textTransform: 'none',
+              transition: 'transform 0.1s ease, background-color 0.15s ease',
+              '&:active': { transform: 'scale(0.98)' },
+            }}
+          >
             Confirmar Recepción de Compra
           </Button>
         </Box>
       </form>
 
       {/* Diálogo de Confirmación de Impacto en Inventario */}
-      <Dialog open={confirmOpen} onClose={() => (submitting ? undefined : setConfirmOpen(false))}>
-        <DialogTitle sx={{ fontWeight: 'bold' }}>
+      <Dialog
+        open={confirmOpen}
+        onClose={() => (submitting ? undefined : setConfirmOpen(false))}
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: 2.5,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+            },
+          },
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 800 }}>
           Confirmar Recepción e Ingreso a Inventario
         </DialogTitle>
         <DialogContent>
@@ -948,10 +982,31 @@ export const ReceivePurchasePage: React.FC = () => {
           </DialogContentText>
         </DialogContent>
         <DialogActions sx={{ p: 2 }}>
-          <Button onClick={() => setConfirmOpen(false)} disabled={submitting} color="inherit">
+          <Button
+            onClick={() => setConfirmOpen(false)}
+            disabled={submitting}
+            color="inherit"
+            sx={{
+              textTransform: 'none',
+              fontWeight: 600,
+              transition: 'transform 0.1s ease',
+              '&:active': { transform: 'scale(0.98)' },
+            }}
+          >
             Modificar
           </Button>
-          <Button onClick={handleConfirmSubmit} disabled={submitting} variant="contained" color="primary">
+          <Button
+            onClick={handleConfirmSubmit}
+            disabled={submitting}
+            variant="contained"
+            color="primary"
+            sx={{
+              textTransform: 'none',
+              fontWeight: 700,
+              transition: 'transform 0.1s ease',
+              '&:active': { transform: 'scale(0.98)' },
+            }}
+          >
             {submitting ? 'Procesando Transacción...' : 'Sí, Confirmar Recepción'}
           </Button>
         </DialogActions>

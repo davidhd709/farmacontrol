@@ -20,11 +20,12 @@ import type {
   CreateCashMovementPayload,
 } from '@farmacia/contracts';
 import { createCashMovement } from '../api/cash.api';
+import { ConfirmDialog } from '../../../components/ConfirmDialog';
 
 interface CreateCashMovementDialogProps {
   open: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (isIncome: boolean, amount: number) => void;
   currentBalance: number;
 }
 
@@ -40,6 +41,7 @@ export const CreateCashMovementDialog: React.FC<CreateCashMovementDialogProps> =
 
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [pendingPayload, setPendingPayload] = useState<CreateCashMovementPayload | null>(null);
 
   const amountNum = parseFloat(amountStr) || 0;
   const isIncome = movementType === 'INGRESO_MANUAL';
@@ -56,6 +58,7 @@ export const CreateCashMovementDialog: React.FC<CreateCashMovementDialogProps> =
     setReason('');
     setErrorMsg(null);
     setLoading(false);
+    setPendingPayload(null);
   };
 
   const handleClose = () => {
@@ -63,7 +66,7 @@ export const CreateCashMovementDialog: React.FC<CreateCashMovementDialogProps> =
     onClose();
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
 
@@ -84,20 +87,27 @@ export const CreateCashMovementDialog: React.FC<CreateCashMovementDialogProps> =
       return;
     }
 
+    setPendingPayload({
+      movementType,
+      amount: amountNum,
+      paymentMethod: 'EFECTIVO',
+      reason: reason.trim(),
+    });
+  };
+
+  const handleConfirmMovement = async () => {
+    if (!pendingPayload) return;
     try {
       setLoading(true);
-      const payload: CreateCashMovementPayload = {
-        movementType,
-        amount: amountNum,
-        paymentMethod: 'EFECTIVO',
-        reason: reason.trim(),
-      };
-
-      await createCashMovement(payload);
+      await createCashMovement(pendingPayload);
+      const savedIncome = isIncome;
+      const savedAmount = amountNum;
+      setPendingPayload(null);
       handleClose();
-      onSuccess();
+      onSuccess(savedIncome, savedAmount);
     } catch (err: any) {
       setErrorMsg(err.message || 'Error al registrar el movimiento de caja');
+      setPendingPayload(null);
     } finally {
       setLoading(false);
     }
@@ -233,6 +243,17 @@ export const CreateCashMovementDialog: React.FC<CreateCashMovementDialogProps> =
           </Button>
         </DialogActions>
       </form>
+
+      <ConfirmDialog
+        open={Boolean(pendingPayload)}
+        title={isIncome ? 'Confirmar Ingreso a Caja' : 'Confirmar Egreso de Caja'}
+        description={`¿Estás seguro de registrar un ${isIncome ? 'ingreso' : 'egreso'} de $${amountNum.toLocaleString('es-CO')} en la caja física por concepto de "${reason.trim()}"? Saldo proyectado tras la operación: $${projectedBalance.toLocaleString('es-CO')}.`}
+        confirmText={isIncome ? 'Confirmar Ingreso' : 'Confirmar Egreso'}
+        confirmColor={isIncome ? 'primary' : 'error'}
+        isLoading={loading}
+        onConfirm={handleConfirmMovement}
+        onCancel={() => !loading && setPendingPayload(null)}
+      />
     </Dialog>
   );
 };

@@ -36,13 +36,37 @@ export const SaleReceiptDialog: React.FC<SaleReceiptDialogProps> = ({
     window.print();
   };
 
+  React.useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (onNewSale) {
+          onNewSale();
+        } else {
+          onClose();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [open, onClose, onNewSale]);
+
   return (
     <Dialog
       open={open}
       onClose={onClose}
       maxWidth="sm"
       fullWidth
-      slotProps={{ paper: { className: 'sale-receipt-print' } }}
+      slotProps={{
+        paper: {
+          className: 'sale-receipt-print',
+          sx: {
+            borderRadius: 2.5,
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.04)',
+          },
+        },
+      }}
     >
       <DialogTitle
         sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 1 }}
@@ -217,16 +241,40 @@ export const SaleReceiptDialog: React.FC<SaleReceiptDialogProps> = ({
         className="sale-receipt-no-print"
         sx={{ p: 2, display: 'flex', justifyContent: 'space-between' }}
       >
-        <Button variant="outlined" color="primary" onClick={handlePrint}>
+        <Button
+          variant="outlined"
+          color="primary"
+          onClick={handlePrint}
+          sx={{
+            textTransform: 'none',
+            fontWeight: 600,
+            transition: 'transform 0.1s ease',
+            '&:active': { transform: 'scale(0.98)' },
+          }}
+        >
           Imprimir Comprobante
         </Button>
         <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button onClick={onClose} color="inherit">
+          <Button
+            onClick={onClose}
+            color="inherit"
+            sx={{ textTransform: 'none', fontWeight: 600 }}
+          >
             Cerrar
           </Button>
           {onNewSale && (
-            <Button variant="contained" color="success" onClick={onNewSale}>
-              Nueva Venta
+            <Button
+              variant="contained"
+              color="success"
+              onClick={onNewSale}
+              sx={{
+                textTransform: 'none',
+                fontWeight: 700,
+                transition: 'transform 0.1s ease, background-color 0.15s ease',
+                '&:active': { transform: 'scale(0.98)' },
+              }}
+            >
+              Nueva Venta (Enter)
             </Button>
           )}
         </Box>

@@ -16,11 +16,14 @@ import {
   Chip,
   Alert,
   CircularProgress,
-  AppBar,
-  Toolbar,
-  Container,
 } from '@mui/material';
 import { Link } from 'react-router-dom';
+import CancelIcon from '@mui/icons-material/Cancel';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import { HomeBackButton } from '../../../components/HomeBackButton';
 
 import type { InventoryLotDto, LocationDto, ProductDto } from '@farmacia/contracts';
 import { fetchInventoryLots, fetchLocations } from '../api/inventory.api';
@@ -102,80 +105,112 @@ export const InventoryLotsPage = () => {
       return {
         label: 'VENCIDO',
         color: 'error' as const,
+        icon: <CancelIcon fontSize="small" />,
       };
     }
     if (diffDays <= 30) {
       return {
         label: `Por vencer (${diffDays}d)`,
         color: 'error' as const,
+        icon: <WarningAmberIcon fontSize="small" />,
       };
     }
     if (diffDays <= 90) {
       return {
         label: `Atención (${diffDays}d)`,
         color: 'warning' as const,
+        icon: <AccessTimeIcon fontSize="small" />,
       };
     }
     if (currentQuantity === 0) {
       return {
         label: 'Agotado',
         color: 'default' as const,
+        icon: <HourglassEmptyIcon fontSize="small" />,
       };
     }
     return {
       label: 'Vigente',
       color: 'success' as const,
+      icon: <CheckCircleIcon fontSize="small" />,
     };
   };
 
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
-      <AppBar
-        position="static"
-        color="inherit"
-        elevation={0}
-        sx={{ borderBottom: 1, borderColor: 'divider' }}
-      >
-        <Toolbar sx={{ justifyContent: 'space-between' }}>
-          <Box sx={{ display: 'flex', flexDirection: 'row', gap: 2, alignItems: 'center' }}>
-            <Typography variant="h6" component="span" sx={{ fontWeight: 700 }}>
-              Inventario / Control de Lotes
+    <Box sx={{ p: { xs: 2, md: 3 }, maxWidth: 1400, margin: '0 auto' }}>
+      {/* Encabezado y Acciones */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <HomeBackButton />
+          <Box>
+            <Typography variant="h5" component="h1" sx={{ fontWeight: 800, color: 'text.primary' }}>
+              Gestión de Lotes y Vencimientos
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Monitoreo de existencias, almacén y fechas de vencimiento farmacéuticas con prioridad FEFO.
             </Typography>
           </Box>
-
-          <Box sx={{ display: 'flex', gap: 1.5 }}>
-            <Button component={Link} to="/inventory/movements" variant="outlined">
-              Ver Kardex
-            </Button>
-            <Button
-              variant="outlined"
-              color="warning"
-              onClick={() => setIsAdjustOpen(true)}
-            >
-              Ajuste Manual
-            </Button>
-            <Button variant="outlined" onClick={loadLots} disabled={loading}>
-              Actualizar
-            </Button>
-            <Button
-              variant="contained"
-              onClick={() => setIsCreateOpen(true)}
-            >
-              Registrar Lote
-            </Button>
-          </Box>
-        </Toolbar>
-      </AppBar>
-
-      <Container maxWidth="lg" sx={{ py: 4 }}>
-        <Box sx={{ mb: 3 }}>
-          <Typography variant="h4" sx={{ fontWeight: 700 }}>
-            Gestión de Lotes y Vencimientos
-          </Typography>
-          <Typography color="text.secondary" sx={{ mt: 0.5 }}>
-            Monitoreo de existencias, almacén y fechas de vencimiento farmacéuticas con prioridad FEFO.
-          </Typography>
         </Box>
+
+        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
+          <Button
+            component={Link}
+            to="/inventory/movements"
+            variant="outlined"
+            size="small"
+            sx={{
+              textTransform: 'none',
+              fontWeight: 600,
+              transition: 'transform 0.1s ease',
+              '&:active': { transform: 'scale(0.98)' },
+            }}
+          >
+            Ver Kardex
+          </Button>
+          <Button
+            variant="outlined"
+            color="warning"
+            size="small"
+            onClick={() => setIsAdjustOpen(true)}
+            sx={{
+              textTransform: 'none',
+              fontWeight: 600,
+              transition: 'transform 0.1s ease',
+              '&:active': { transform: 'scale(0.98)' },
+            }}
+          >
+            Ajuste Manual
+          </Button>
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={loadLots}
+            disabled={loading}
+            sx={{
+              textTransform: 'none',
+              fontWeight: 600,
+              transition: 'transform 0.1s ease',
+              '&:active': { transform: 'scale(0.98)' },
+            }}
+          >
+            Actualizar
+          </Button>
+          <Button
+            variant="contained"
+            color="primary"
+            size="small"
+            onClick={() => setIsCreateOpen(true)}
+            sx={{
+              textTransform: 'none',
+              fontWeight: 700,
+              transition: 'transform 0.1s ease, background-color 0.15s ease',
+              '&:active': { transform: 'scale(0.98)' },
+            }}
+          >
+            + Registrar Lote
+          </Button>
+        </Box>
+      </Box>
 
         {/* Filtros */}
         <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
@@ -317,7 +352,9 @@ export const InventoryLotsPage = () => {
                               size="small"
                               label={status.label}
                               color={status.color}
-                              variant="filled"
+                              icon={status.icon}
+                              variant="outlined"
+                              sx={{ fontWeight: 600 }}
                             />
                           </TableCell>
                         </TableRow>
@@ -364,7 +401,6 @@ export const InventoryLotsPage = () => {
           products={products}
           lots={lots}
         />
-      </Container>
     </Box>
   );
 };

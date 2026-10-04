@@ -31,6 +31,7 @@ import { fetchCashBalance, fetchCashMovements } from '../api/cash.api';
 import { CreateCashMovementDialog } from '../components/CreateCashMovementDialog';
 import { PermissionGate } from '../../auth/components/PermissionGate';
 import { HomeBackButton } from '../../../components/HomeBackButton';
+import { SweetModal } from '../../../components/SweetModal';
 
 export const CashPage: React.FC = () => {
   const [balance, setBalance] = useState<CashBalanceDto>({
@@ -54,6 +55,17 @@ export const CashPage: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const [dialogOpen, setDialogOpen] = useState(false);
+
+  // Notificación flotante (Snackbar)
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error' | 'info' | 'warning';
+  }>({
+    open: false,
+    message: '',
+    severity: 'success',
+  });
 
   const loadData = useCallback(async () => {
     try {
@@ -174,12 +186,15 @@ export const CashPage: React.FC = () => {
           </CardContent>
         </Card>
 
-        <Card sx={{ borderRadius: 2, borderLeft: '4px solid', borderColor: 'success.main', boxShadow: 1 }}>
+        <Card variant="outlined" sx={{ borderRadius: 2, bgcolor: 'background.paper' }}>
           <CardContent>
-            <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 600 }}>
-              Ingresos de Hoy
-            </Typography>
-            <Typography variant="h5" sx={{ fontWeight: 700, color: 'success.main', mt: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+              <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 600 }}>
+                Ingresos de Hoy
+              </Typography>
+              <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'success.main' }} />
+            </Box>
+            <Typography variant="h5" sx={{ fontWeight: 700, color: 'success.main', mt: 0.5 }}>
               {`+${formatCurrency(balance.totalIncomeToday)}`}
             </Typography>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
@@ -188,12 +203,15 @@ export const CashPage: React.FC = () => {
           </CardContent>
         </Card>
 
-        <Card sx={{ borderRadius: 2, borderLeft: '4px solid', borderColor: 'error.main', boxShadow: 1 }}>
+        <Card variant="outlined" sx={{ borderRadius: 2, bgcolor: 'background.paper' }}>
           <CardContent>
-            <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 600 }}>
-              Egresos de Hoy
-            </Typography>
-            <Typography variant="h5" sx={{ fontWeight: 700, color: 'error.main', mt: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+              <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 600 }}>
+                Egresos de Hoy
+              </Typography>
+              <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'error.main' }} />
+            </Box>
+            <Typography variant="h5" sx={{ fontWeight: 700, color: 'error.main', mt: 0.5 }}>
               {`-${formatCurrency(balance.totalExpenseToday)}`}
             </Typography>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
@@ -202,12 +220,15 @@ export const CashPage: React.FC = () => {
           </CardContent>
         </Card>
 
-        <Card sx={{ borderRadius: 2, borderLeft: '4px solid', borderColor: 'info.main', boxShadow: 1 }}>
+        <Card variant="outlined" sx={{ borderRadius: 2, bgcolor: 'background.paper' }}>
           <CardContent>
-            <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 600 }}>
-              Operaciones de Hoy
-            </Typography>
-            <Typography variant="h5" sx={{ fontWeight: 700, color: 'text.primary', mt: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+              <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 600 }}>
+                Operaciones de Hoy
+              </Typography>
+              <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: 'info.main' }} />
+            </Box>
+            <Typography variant="h5" sx={{ fontWeight: 700, color: 'text.primary', mt: 0.5 }}>
               {balance.movementsCountToday}
             </Typography>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
@@ -372,11 +393,27 @@ export const CashPage: React.FC = () => {
       <CreateCashMovementDialog
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
-        onSuccess={() => {
+        onSuccess={(isIncome, amount) => {
           setPage(0);
           loadData();
+          setSnackbar({
+            open: true,
+            message: `${isIncome ? 'Ingreso' : 'Egreso'} de caja registrado con éxito por $${amount.toLocaleString('es-CO')}.`,
+            severity: 'success',
+          });
         }}
         currentBalance={balance.currentBalance}
+      />
+
+      {/* Notificación modal estilo SweetAlert2 */}
+      <SweetModal
+        open={snackbar.open}
+        type={snackbar.severity === 'error' ? 'error' : snackbar.severity === 'warning' ? 'warning' : 'success'}
+        title={snackbar.severity === 'error' ? '¡Error!' : '¡Buen trabajo!'}
+        text={snackbar.message}
+        confirmText="OK"
+        onConfirm={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+        onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
       />
     </Box>
   );

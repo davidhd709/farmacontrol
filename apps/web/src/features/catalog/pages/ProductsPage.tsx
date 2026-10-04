@@ -1,12 +1,10 @@
 import { useState } from 'react';
 import {
   Alert,
-  AppBar,
   Box,
   Button,
   Chip,
   CircularProgress,
-  Container,
   FormControl,
   InputAdornment,
   InputLabel,
@@ -22,16 +20,17 @@ import {
   TablePagination,
   TableRow,
   TextField,
-  Toolbar,
   Typography,
 } from '@mui/material';
 import { SYSTEM_PERMISSIONS, type ProductDto } from '@farmacia/contracts';
+import { HomeBackButton } from '../../../components/HomeBackButton';
 import { PermissionGate } from '../../auth/components/PermissionGate';
 import { useCategories } from '../hooks/useCategories';
 import { useProducts } from '../hooks/useProducts';
 import { ProductFormDialog } from '../components/ProductFormDialog';
 import { DeactivateProductDialog } from '../components/DeactivateProductDialog';
 import { ProductPresentationsDialog } from '../components/ProductPresentationsDialog';
+import { SweetModal } from '../../../components/SweetModal';
 
 type StatusFilterOption = 'active' | 'inactive' | 'all';
 type LotFilterOption = 'all' | 'with_lot' | 'without_lot';
@@ -49,6 +48,17 @@ export function ProductsPage() {
   const [selectedProduct, setSelectedProduct] = useState<ProductDto | null>(null);
   const [productToDeactivate, setProductToDeactivate] = useState<ProductDto | null>(null);
   const [productForPresentations, setProductForPresentations] = useState<ProductDto | null>(null);
+
+  // Notificación flotante (Snackbar)
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error' | 'info' | 'warning';
+  }>({
+    open: false,
+    message: '',
+    severity: 'success',
+  });
 
   const { data: categoriesData } = useCategories({ isActive: true, pageSize: 100 });
   const categories = categoriesData?.items ?? [];
@@ -97,18 +107,28 @@ export function ProductsPage() {
   const total = data?.total ?? 0;
 
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
-      <AppBar
-        position="static"
-        color="inherit"
-        elevation={0}
-        sx={{ borderBottom: 1, borderColor: 'divider' }}
-      >
-        <Toolbar sx={{ justifyContent: 'space-between' }}>
-          <Box sx={{ display: 'flex', flexDirection: 'row', gap: 2, alignItems: 'center' }}>
-            <Typography variant="h6" component="span" sx={{ fontWeight: 700 }}>
-              Catálogo / Productos
-            </Typography>
+    <Box sx={{ p: { xs: 2, md: 3 }, maxWidth: 1400, margin: '0 auto' }}>
+      <Stack spacing={3}>
+        {/* Encabezado y Acciones */}
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: { xs: 'column', sm: 'row' },
+            justifyContent: 'space-between',
+            alignItems: { xs: 'stretch', sm: 'center' },
+            gap: 2,
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <HomeBackButton />
+            <Box>
+              <Typography component="h1" variant="h4" sx={{ fontWeight: 800, color: 'text.primary' }}>
+                Catálogo de Productos
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                Administra el portafolio farmacéutico, atributos regulatorios y parámetros de control.
+              </Typography>
+            </Box>
           </Box>
 
           <PermissionGate permission={SYSTEM_PERMISSIONS.PRODUCTS_MANAGE}>
@@ -117,23 +137,17 @@ export function ProductsPage() {
               color="primary"
               onClick={handleOpenCreate}
               data-testid="create-product-btn"
+              sx={{
+                textTransform: 'none',
+                fontWeight: 700,
+                transition: 'transform 0.1s ease, background-color 0.15s ease',
+                '&:active': { transform: 'scale(0.98)' },
+              }}
             >
               Nuevo Producto
             </Button>
           </PermissionGate>
-        </Toolbar>
-      </AppBar>
-
-      <Container component="main" maxWidth="xl" sx={{ py: 4 }}>
-        <Stack spacing={3}>
-          <Box>
-            <Typography component="h1" variant="h1">
-              Catálogo de Productos
-            </Typography>
-            <Typography color="text.secondary" sx={{ mt: 0.5 }}>
-              Administra el portafolio farmacéutico, atributos regulatorios y parámetros de control.
-            </Typography>
-          </Box>
+        </Box>
 
           {isError ? (
             <Alert severity="error">
@@ -346,6 +360,12 @@ export function ProductsPage() {
                                 onClick={() => setProductForPresentations(product)}
                                 aria-label={`Presentaciones de ${product.name}`}
                                 data-testid={`presentations-btn-${product.id}`}
+                                sx={{
+                                  textTransform: 'none',
+                                  fontWeight: 600,
+                                  transition: 'transform 0.1s ease',
+                                  '&:active': { transform: 'scale(0.98)' },
+                                }}
                               >
                                 Presentaciones
                               </Button>
@@ -354,6 +374,12 @@ export function ProductsPage() {
                                 variant="outlined"
                                 onClick={() => handleOpenEdit(product)}
                                 aria-label={`Editar producto ${product.name}`}
+                                sx={{
+                                  textTransform: 'none',
+                                  fontWeight: 600,
+                                  transition: 'transform 0.1s ease',
+                                  '&:active': { transform: 'scale(0.98)' },
+                                }}
                               >
                                 Editar
                               </Button>
@@ -364,6 +390,12 @@ export function ProductsPage() {
                                   variant="outlined"
                                   onClick={() => handleOpenDeactivate(product)}
                                   aria-label={`Inactivar producto ${product.name}`}
+                                  sx={{
+                                    textTransform: 'none',
+                                    fontWeight: 600,
+                                    transition: 'transform 0.1s ease',
+                                    '&:active': { transform: 'scale(0.98)' },
+                                  }}
                                 >
                                   Inactivar
                                 </Button>
@@ -393,7 +425,6 @@ export function ProductsPage() {
             />
           </Paper>
         </Stack>
-      </Container>
 
       {/* Diálogos modales */}
       <ProductFormDialog
@@ -401,18 +432,45 @@ export function ProductsPage() {
         onClose={() => setIsFormOpen(false)}
         product={selectedProduct}
         onManagePresentations={(p) => setProductForPresentations(p)}
+        onSuccess={(productName, isEditing) => {
+          setSnackbar({
+            open: true,
+            message: isEditing
+              ? `Producto "${productName}" actualizado con éxito.`
+              : `Producto "${productName}" creado exitosamente.`,
+            severity: 'success',
+          });
+        }}
       />
 
       <DeactivateProductDialog
         open={Boolean(productToDeactivate)}
         onClose={() => setProductToDeactivate(null)}
         product={productToDeactivate}
+        onSuccess={(p) => {
+          setSnackbar({
+            open: true,
+            message: `Producto "${p.name}" inactivado con éxito.`,
+            severity: 'success',
+          });
+        }}
       />
 
       <ProductPresentationsDialog
         open={Boolean(productForPresentations)}
         onClose={() => setProductForPresentations(null)}
         product={productForPresentations}
+      />
+
+      {/* Notificación modal SweetAlert */}
+      <SweetModal
+        open={snackbar.open}
+        type={snackbar.severity === 'error' ? 'error' : snackbar.severity === 'warning' ? 'warning' : 'success'}
+        title={snackbar.severity === 'error' ? 'Error' : '¡Buen trabajo!'}
+        description={snackbar.message}
+        confirmText="OK"
+        onConfirm={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+        onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
       />
     </Box>
   );

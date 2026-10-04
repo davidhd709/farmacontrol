@@ -127,6 +127,9 @@ describe('PayablesPage (Frontend Cuentas por Pagar — UX-23)', () => {
     const submitBtn = screen.getByRole('button', { name: /Pagar Proveedor/i });
     fireEvent.click(submitBtn);
 
+    const confirmBtn = await screen.findByRole('button', { name: 'Confirmar y Pagar' });
+    fireEvent.click(confirmBtn);
+
     await waitFor(() => {
       expect(registerPaymentSpy).toHaveBeenCalledWith('pay-1', expect.objectContaining({
         amount: '150000',

@@ -15,12 +15,6 @@ import {
   Chip,
   CircularProgress,
   Alert,
-  Snackbar,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogContentText,
-  DialogActions,
 } from '@mui/material';
 import type { SupplierDto } from '@farmacia/contracts';
 import { SYSTEM_PERMISSIONS } from '@farmacia/contracts';
@@ -28,6 +22,8 @@ import { HomeBackButton } from '../../../components/HomeBackButton';
 import { fetchSuppliers, deactivateSupplier } from '../api/suppliers.api';
 import { SupplierFormDialog } from '../components/SupplierFormDialog';
 import { PermissionGate } from '../../auth/components/PermissionGate';
+import { ConfirmDialog } from '../../../components/ConfirmDialog';
+import { SweetModal } from '../../../components/SweetModal';
 
 export const SuppliersPage: React.FC = () => {
   const [suppliers, setSuppliers] = useState<SupplierDto[]>([]);
@@ -113,7 +109,7 @@ export const SuppliersPage: React.FC = () => {
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <HomeBackButton />
           <Box>
-            <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+            <Typography variant="h4" component="h1" sx={{ fontWeight: 800, color: 'text.primary' }}>
               Directorio de Proveedores
             </Typography>
             <Typography variant="body1" color="text.secondary">
@@ -127,7 +123,14 @@ export const SuppliersPage: React.FC = () => {
             variant="contained"
             color="primary"
             onClick={handleOpenCreate}
-            sx={{ fontWeight: 'bold', px: 3, py: 1 }}
+            sx={{
+              fontWeight: 700,
+              px: 3,
+              py: 1,
+              textTransform: 'none',
+              transition: 'transform 0.1s ease, background-color 0.15s ease',
+              '&:active': { transform: 'scale(0.98)' },
+            }}
           >
             + Nuevo Proveedor
           </Button>
@@ -250,7 +253,12 @@ export const SuppliersPage: React.FC = () => {
                       label={supplier.isActive ? 'Activo' : 'Inactivo'}
                       color={supplier.isActive ? 'success' : 'default'}
                       size="small"
-                      sx={{ fontWeight: 'bold' }}
+                      variant="outlined"
+                      sx={{
+                        fontWeight: 700,
+                        bgcolor: supplier.isActive ? 'rgba(46, 125, 50, 0.04)' : undefined,
+                        borderColor: supplier.isActive ? 'rgba(46, 125, 50, 0.4)' : undefined,
+                      }}
                     />
                   </TableCell>
                   <TableCell sx={{ textAlign: 'right' }}>
@@ -260,6 +268,12 @@ export const SuppliersPage: React.FC = () => {
                           size="small"
                           variant="outlined"
                           onClick={() => handleOpenEdit(supplier)}
+                          sx={{
+                            textTransform: 'none',
+                            fontWeight: 600,
+                            transition: 'transform 0.1s ease',
+                            '&:active': { transform: 'scale(0.98)' },
+                          }}
                         >
                           Editar
                         </Button>
@@ -269,6 +283,12 @@ export const SuppliersPage: React.FC = () => {
                             variant="outlined"
                             color="error"
                             onClick={() => handleOpenDeactivate(supplier)}
+                            sx={{
+                              textTransform: 'none',
+                              fontWeight: 600,
+                              transition: 'transform 0.1s ease',
+                              '&:active': { transform: 'scale(0.98)' },
+                            }}
                           >
                             Inactivar
                           </Button>
@@ -299,47 +319,31 @@ export const SuppliersPage: React.FC = () => {
       />
 
       {/* Diálogo Confirmación de Inactivación */}
-      <Dialog
+      <ConfirmDialog
         open={deactivateDialogOpen}
-        onClose={() => (actionLoading ? undefined : setDeactivateDialogOpen(false))}
-      >
-        <DialogTitle sx={{ fontWeight: 'bold', color: 'error.main' }}>
-          Confirmar Inactivación de Proveedor
-        </DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            ¿Estás seguro de que deseas inactivar al proveedor{' '}
-            <strong>{supplierToDeactivate?.name}</strong> (NIT:{' '}
-            {supplierToDeactivate?.taxId})?
-            <br /><br />
-            Al inactivarlo, no podrá ser seleccionado para nuevas recepciones de compras, conservando todo el historial de compras previas.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
-          <Button
-            onClick={() => setDeactivateDialogOpen(false)}
-            disabled={actionLoading}
-            color="inherit"
-          >
-            Cancelar
-          </Button>
-          <Button
-            onClick={handleConfirmDeactivate}
-            disabled={actionLoading}
-            color="error"
-            variant="contained"
-          >
-            {actionLoading ? 'Inactivando...' : 'Confirmar Inactivación'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        title="Confirmar Inactivación de Proveedor"
+        description={`¿Estás seguro de que deseas inactivar al proveedor ${supplierToDeactivate?.name || ''} (NIT: ${supplierToDeactivate?.taxId || ''})? Al inactivarlo, no podrá ser seleccionado para nuevas recepciones de compras, conservando todo el historial de compras previas.`}
+        confirmText="Confirmar Inactivación"
+        confirmColor="error"
+        isLoading={actionLoading}
+        onConfirm={handleConfirmDeactivate}
+        onCancel={() => {
+          if (!actionLoading) {
+            setDeactivateDialogOpen(false);
+            setSupplierToDeactivate(null);
+          }
+        }}
+      />
 
-      {/* Notificación Toast */}
-      <Snackbar
+      {/* Modal de Evento / Notificación SweetAlert */}
+      <SweetModal
         open={Boolean(toastMsg)}
-        autoHideDuration={4000}
+        type="success"
+        title="¡Buen trabajo!"
+        description={toastMsg}
+        confirmText="OK"
+        onConfirm={() => setToastMsg(null)}
         onClose={() => setToastMsg(null)}
-        message={toastMsg}
       />
     </Box>
   );

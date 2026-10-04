@@ -14,6 +14,7 @@ import {
 } from '@mui/material';
 import type { InventoryLotDto, ProductDto } from '@farmacia/contracts';
 import { adjustInventory } from '../api/inventory.api';
+import { ConfirmDialog } from '../../../components/ConfirmDialog';
 
 interface AdjustInventoryDialogProps {
   open: boolean;
@@ -37,13 +38,15 @@ export const AdjustInventoryDialog = ({
   const [reason, setReason] = useState('');
   const [notes, setNotes] = useState('');
 
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const availableLots = lots.filter((l) => (productId ? l.productId === productId : true));
   const selectedLot = lots.find((l) => l.id === lotId);
+  const selectedProduct = products.find((p) => p.id === productId);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handlePreSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
@@ -71,6 +74,10 @@ export const AdjustInventoryDialog = ({
       return;
     }
 
+    setConfirmOpen(true);
+  };
+
+  const handleConfirmAdjust = async () => {
     try {
       setIsSubmitting(true);
       await adjustInventory({
@@ -85,18 +92,33 @@ export const AdjustInventoryDialog = ({
       setReason('');
       setNotes('');
       setQuantity(1);
+      setConfirmOpen(false);
       onSuccess();
       onClose();
     } catch (err: any) {
       setErrorMessage(err.message || 'Error al procesar el ajuste de inventario.');
+      setConfirmOpen(false);
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <Dialog open={open} onClose={isSubmitting ? undefined : onClose} maxWidth="sm" fullWidth>
-      <form onSubmit={handleSubmit}>
+    <Dialog
+      open={open}
+      onClose={isSubmitting ? undefined : onClose}
+      maxWidth="sm"
+      fullWidth
+      slotProps={{
+        paper: {
+          sx: {
+            borderRadius: 2.5,
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.04)',
+          },
+        },
+      }}
+    >
+      <form onSubmit={handlePreSubmit}>
         <DialogTitle sx={{ fontWeight: 700 }}>
           Ajuste Manual de Inventario (Supervisor)
         </DialogTitle>
@@ -211,7 +233,7 @@ export const AdjustInventoryDialog = ({
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button onClick={onClose} disabled={isSubmitting} color="inherit">
+          <Button onClick={onClose} disabled={isSubmitting} color="inherit" sx={{ textTransform: 'none' }}>
             Cancelar
           </Button>
           <Button
@@ -219,11 +241,50 @@ export const AdjustInventoryDialog = ({
             variant="contained"
             color={adjustmentType === 'DECREMENTO' ? 'error' : 'primary'}
             disabled={isSubmitting}
+            sx={{
+              fontWeight: 700,
+              textTransform: 'none',
+              px: 3,
+              transition: 'transform 0.1s ease, background-color 0.15s ease',
+              '&:active': { transform: 'scale(0.98)' },
+            }}
           >
-            {isSubmitting ? 'Procesando...' : 'Confirmar Ajuste'}
+            {isSubmitting ? 'Procesando...' : 'Revisar y Confirmar'}
           </Button>
         </DialogActions>
       </form>
+
+      {/* DIÁLOGO CONFIRMACIÓN: ASENTAR AJUSTE */}
+      <ConfirmDialog
+        open={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        onConfirm={handleConfirmAdjust}
+        isLoading={isSubmitting}
+        title="Confirmar Ajuste en Kardex"
+        description={
+          <Stack spacing={1}>
+            <Typography variant="body2" color="text.secondary">
+              ¿Estás seguro de registrar un ajuste de tipo{' '}
+              <strong>{adjustmentType === 'INCREMENTO' ? 'INCREMENTO (+)' : 'DECREMENTO (-)'}</strong> por{' '}
+              <strong>{quantity} {selectedLot?.product?.baseUnit || 'unidades'}</strong>?
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              <strong>Producto:</strong> {selectedProduct?.name || selectedLot?.product?.name}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              <strong>Lote:</strong> {selectedLot?.lotNumber}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              <strong>Motivo:</strong> {reason}
+            </Typography>
+            <Typography variant="caption" color="warning.main" sx={{ mt: 1, display: 'block' }}>
+              ⚠️ Esta operación generará un movimiento de inventario inmutable y actualizará el saldo físico del lote.
+            </Typography>
+          </Stack>
+        }
+        confirmText="Asentar Ajuste"
+        confirmColor={adjustmentType === 'DECREMENTO' ? 'error' : 'primary'}
+      />
     </Dialog>
   );
 };

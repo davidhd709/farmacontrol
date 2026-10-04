@@ -17,12 +17,14 @@ interface DeactivateProductDialogProps {
   open: boolean;
   onClose: () => void;
   product: ProductDto | null;
+  onSuccess?: (product: ProductDto) => void;
 }
 
 export function DeactivateProductDialog({
   open,
   onClose,
   product,
+  onSuccess,
 }: DeactivateProductDialogProps) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const deactivateMutation = useDeactivateProduct();
@@ -34,6 +36,7 @@ export function DeactivateProductDialog({
 
     try {
       await deactivateMutation.mutateAsync(product.id);
+      onSuccess?.(product);
       onClose();
     } catch (error) {
       if (error instanceof ApiError) {

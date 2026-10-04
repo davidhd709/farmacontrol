@@ -233,6 +233,9 @@ describe('TreasuryBankAccountsPage (Slice 11.4 Frontend)', () => {
     const submitBtn = screen.getByTestId('submit-movement-btn');
     fireEvent.click(submitBtn);
 
+    const confirmBtn = await screen.findByRole('button', { name: 'Confirmar y Asentar' });
+    fireEvent.click(confirmBtn);
+
     await waitFor(() => {
       expect(treasuryApi.createBankMovement).toHaveBeenCalledWith(
         'acc-1',

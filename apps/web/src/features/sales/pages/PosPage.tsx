@@ -16,7 +16,10 @@ import {
   Autocomplete,
   Divider,
   MenuItem,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
+import DeleteIcon from '@mui/icons-material/Delete';
 import type { CustomerDto, ProductDto, ProductPresentationDto, SaleDto, SalePaymentMethod } from '@farmacia/contracts';
 import { fetchDefaultCustomer } from '../../customers/api/customers.api';
 import { CustomerFormDialog } from '../../customers/components/CustomerFormDialog';
@@ -24,6 +27,8 @@ import { fetchProducts } from '../../catalog/api/products.api';
 import { confirmSale } from '../api/sales.api';
 import { PosPaymentDialog } from '../components/PosPaymentDialog';
 import { SaleReceiptDialog } from '../components/SaleReceiptDialog';
+import { ConfirmDialog } from '../../../components/ConfirmDialog';
+import { SweetModal } from '../../../components/SweetModal';
 
 interface CartItem {
   productId: string;
@@ -64,6 +69,33 @@ export const PosPage: React.FC = () => {
 
   // Notificaciones y errores
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [confirmClearOpen, setConfirmClearOpen] = useState(false);
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error' | 'info' | 'warning';
+  }>({
+    open: false,
+    message: '',
+    severity: 'success',
+  });
+
+  // Referencia al buscador para autoenfoque
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Atajo de teclado global F2 para liquidar venta rápidamente
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'F2') {
+        e.preventDefault();
+        if (cart.length > 0 && !paymentDialogOpen && !receiptSale) {
+          setPaymentDialogOpen(true);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [cart.length, paymentDialogOpen, receiptSale]);
 
   // Cargar cliente por defecto al iniciar
   useEffect(() => {
@@ -326,6 +358,7 @@ export const PosPage: React.FC = () => {
               renderInput={(params) => (
                 <TextField
                   {...params}
+                  inputRef={searchInputRef}
                   label="Buscar producto por nombre, código o escáner..."
                   placeholder="Ej: Amoxicilina, MED-001..."
                   size="small"
@@ -431,14 +464,34 @@ export const PosPage: React.FC = () => {
                         />
                       </TableCell>
                       <TableCell align="center">
-                        <TextField
-                          type="number"
-                          size="small"
-                          value={item.quantityCommercial}
-                          onChange={(e) => handleUpdateQty(idx, Number(e.target.value))}
-                          slotProps={{ htmlInput: { min: 1, step: 1, style: { textAlign: 'center' } } }}
-                          sx={{ width: 80 }}
-                        />
+                        <Box sx={{ display: 'inline-flex', alignItems: 'center', border: 1, borderColor: 'divider', borderRadius: 1.5, p: 0.2, bgcolor: 'background.paper' }}>
+                          <Button
+                            size="small"
+                            onClick={() => handleUpdateQty(idx, item.quantityCommercial - 1)}
+                            disabled={item.quantityCommercial <= 1}
+                            sx={{ minWidth: 26, width: 26, height: 26, p: 0, fontSize: '0.95rem', lineHeight: 1, fontWeight: 700 }}
+                            aria-label="Disminuir cantidad"
+                          >
+                            -
+                          </Button>
+                          <TextField
+                            type="number"
+                            size="small"
+                            value={item.quantityCommercial}
+                            onChange={(e) => handleUpdateQty(idx, Number(e.target.value))}
+                            slotProps={{ htmlInput: { min: 1, step: 1, style: { textAlign: 'center', width: 40, padding: '2px 4px', fontSize: '0.875rem', fontWeight: 700 } } }}
+                            variant="standard"
+                            sx={{ '& .MuiInput-underline:before': { borderBottom: 'none' }, '& .MuiInput-underline:hover:not(.Mui-disabled):before': { borderBottom: 'none' }, '& .MuiInput-underline:after': { borderBottom: 'none' } }}
+                          />
+                          <Button
+                            size="small"
+                            onClick={() => handleUpdateQty(idx, item.quantityCommercial + 1)}
+                            sx={{ minWidth: 26, width: 26, height: 26, p: 0, fontSize: '0.95rem', lineHeight: 1, fontWeight: 700 }}
+                            aria-label="Aumentar cantidad"
+                          >
+                            +
+                          </Button>
+                        </Box>
                       </TableCell>
                       <TableCell align="right">
                         ${item.unitPrice.toLocaleString('es-CO')}
@@ -447,14 +500,20 @@ export const PosPage: React.FC = () => {
                         ${item.total.toLocaleString('es-CO')}
                       </TableCell>
                       <TableCell align="center">
-                        <Button
-                          size="small"
-                          color="error"
-                          onClick={() => handleRemoveItem(idx)}
-                          sx={{ minWidth: 32 }}
-                        >
-                          ✕
-                        </Button>
+                        <Tooltip title="Eliminar ítem">
+                          <IconButton
+                            size="small"
+                            color="error"
+                            onClick={() => handleRemoveItem(idx)}
+                            aria-label={`Eliminar ${item.productName}`}
+                            sx={{
+                              transition: 'transform 0.1s ease',
+                              '&:active': { transform: 'scale(0.92)' },
+                            }}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
                       </TableCell>
                     </TableRow>
                   ))
@@ -509,9 +568,36 @@ export const PosPage: React.FC = () => {
             size="large"
             disabled={cart.length === 0}
             onClick={() => setPaymentDialogOpen(true)}
-            sx={{ fontWeight: 800, py: 1.5, mb: 1, textTransform: 'none', fontSize: '1.1rem' }}
+            sx={{
+              fontWeight: 800,
+              py: 1.5,
+              mb: 1,
+              textTransform: 'none',
+              fontSize: '1.05rem',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              gap: 1.2,
+              transition: 'transform 0.1s ease, background-color 0.15s ease',
+              '&:active': { transform: 'scale(0.98)' },
+            }}
           >
-            Cobrar y Liquidar
+            <span>Cobrar y Liquidar</span>
+            <Box
+              component="span"
+              sx={{
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                opacity: 0.9,
+                bgcolor: 'rgba(255,255,255,0.22)',
+                px: 0.8,
+                py: 0.2,
+                borderRadius: 1,
+                lineHeight: 1,
+              }}
+            >
+              F2
+            </Box>
           </Button>
 
           <Button
@@ -520,7 +606,7 @@ export const PosPage: React.FC = () => {
             fullWidth
             size="small"
             disabled={cart.length === 0}
-            onClick={handleClearCart}
+            onClick={() => setConfirmClearOpen(true)}
             sx={{ textTransform: 'none', color: 'text.secondary' }}
           >
             Limpiar Carrito
@@ -541,10 +627,14 @@ export const PosPage: React.FC = () => {
       <SaleReceiptDialog
         open={Boolean(receiptSale)}
         sale={receiptSale}
-        onClose={() => setReceiptSale(null)}
+        onClose={() => {
+          setReceiptSale(null);
+          setTimeout(() => searchInputRef.current?.focus(), 50);
+        }}
         onNewSale={() => {
           setReceiptSale(null);
           handleClearCart();
+          setTimeout(() => searchInputRef.current?.focus(), 50);
         }}
       />
 
@@ -555,7 +645,42 @@ export const PosPage: React.FC = () => {
         onCustomerCreated={(newCust) => {
           setSelectedCustomer(newCust);
           setCustomerModalOpen(false);
+          setSnackbar({
+            open: true,
+            message: `Cliente "${newCust.name}" asignado a la venta.`,
+            severity: 'success',
+          });
         }}
+      />
+
+      {/* Diálogo de Confirmación: Limpiar Carrito */}
+      <ConfirmDialog
+        open={confirmClearOpen}
+        onClose={() => setConfirmClearOpen(false)}
+        onConfirm={() => {
+          handleClearCart();
+          setConfirmClearOpen(false);
+          setSnackbar({
+            open: true,
+            message: 'El carrito de venta ha sido vaciado.',
+            severity: 'info',
+          });
+        }}
+        title="Vaciar Carrito de Venta"
+        description="¿Estás seguro de que deseas limpiar el carrito? Se descartarán todos los productos y medicamentos agregados a esta transacción."
+        confirmText="Vaciar Carrito"
+        confirmColor="error"
+      />
+
+      {/* Notificación modal estilo SweetAlert2 */}
+      <SweetModal
+        open={snackbar.open}
+        type={snackbar.severity === 'error' ? 'error' : snackbar.severity === 'warning' ? 'warning' : snackbar.severity === 'info' ? 'info' : 'success'}
+        title={snackbar.severity === 'error' ? '¡Error!' : snackbar.severity === 'warning' ? '¡Atención!' : snackbar.severity === 'info' ? 'Información' : '¡Buen trabajo!'}
+        text={snackbar.message}
+        confirmText="OK"
+        onConfirm={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+        onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
       />
     </Box>
   );

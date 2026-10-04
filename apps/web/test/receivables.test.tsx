@@ -127,6 +127,9 @@ describe('ReceivablesPage (Frontend Cuentas por Cobrar — UX-21)', () => {
     const submitBtn = screen.getByRole('button', { name: /Registrar Abono/i });
     fireEvent.click(submitBtn);
 
+    const confirmBtn = await screen.findByRole('button', { name: /Confirmar y Abonar/i });
+    fireEvent.click(confirmBtn);
+
     await waitFor(() => {
       expect(registerPaymentSpy).toHaveBeenCalledWith('rec-1', expect.objectContaining({
         amount: '50000',

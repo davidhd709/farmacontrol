@@ -16,11 +16,11 @@ import {
   Chip,
   Alert,
   CircularProgress,
-  AppBar,
-  Toolbar,
-  Container,
 } from '@mui/material';
 import { Link } from 'react-router-dom';
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
+import TuneIcon from '@mui/icons-material/Tune';
 import { HomeBackButton } from '../../../components/HomeBackButton';
 
 import type {
@@ -79,50 +79,72 @@ export const InventoryMovementsPage = () => {
     loadMovements();
   }, [loadMovements]);
 
-  const getMovementColor = (type: string) => {
+  const getMovementMeta = (type: string) => {
     if (type.startsWith('ENTRADA') || type.startsWith('AJUSTE_POSITIVO')) {
-      return 'success' as const;
+      return {
+        color: 'success' as const,
+        icon: <ArrowDownwardIcon fontSize="small" />,
+      };
     }
     if (type.startsWith('SALIDA') || type.startsWith('AJUSTE_NEGATIVO')) {
-      return 'error' as const;
+      return {
+        color: 'error' as const,
+        icon: <ArrowUpwardIcon fontSize="small" />,
+      };
     }
-    return 'default' as const;
+    return {
+      color: 'info' as const,
+      icon: <TuneIcon fontSize="small" />,
+    };
   };
 
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
-      <AppBar
-        position="static"
-        color="inherit"
-        elevation={0}
-        sx={{ borderBottom: 1, borderColor: 'divider' }}
-      >
-        <Toolbar sx={{ justifyContent: 'space-between' }}>
-          <Box sx={{ display: 'flex', flexDirection: 'row', gap: 2, alignItems: 'center' }}>
-            <HomeBackButton />
-            <Button component={Link} to="/inventory/lots" color="inherit" sx={{ fontWeight: 700 }}>
-              ← Lotes
-            </Button>
-            <Typography variant="h6" component="span" sx={{ fontWeight: 700 }}>
-              Inventario / Kardex de Movimientos
+    <Box sx={{ p: { xs: 2, md: 3 }, maxWidth: 1400, margin: '0 auto' }}>
+      {/* Encabezado y Acciones */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <HomeBackButton />
+          <Box>
+            <Typography variant="h5" component="h1" sx={{ fontWeight: 800, color: 'text.primary' }}>
+              Libro Mayor de Movimientos (Kardex)
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Trazabilidad inmutable y auditoría de entradas, salidas y ajustes de inventario.
             </Typography>
           </Box>
+        </Box>
 
-          <Button variant="outlined" onClick={loadMovements} disabled={loading}>
+        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
+          <Button
+            component={Link}
+            to="/inventory/lots"
+            variant="outlined"
+            size="small"
+            sx={{
+              textTransform: 'none',
+              fontWeight: 600,
+              transition: 'transform 0.1s ease',
+              '&:active': { transform: 'scale(0.98)' },
+            }}
+          >
+            ← Volver a Lotes
+          </Button>
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={loadMovements}
+            disabled={loading}
+            sx={{
+              textTransform: 'none',
+              fontWeight: 600,
+              transition: 'transform 0.1s ease',
+              '&:active': { transform: 'scale(0.98)' },
+            }}
+          >
             Actualizar
           </Button>
-        </Toolbar>
-      </AppBar>
-
-      <Container maxWidth="lg" sx={{ py: 4 }}>
-        <Box sx={{ mb: 3 }}>
-          <Typography variant="h4" sx={{ fontWeight: 700 }}>
-            Libro Mayor de Movimientos (Kardex)
-          </Typography>
-          <Typography color="text.secondary" sx={{ mt: 0.5 }}>
-            Trazabilidad inmutable y auditoría de entradas, salidas y ajustes de inventario.
-          </Typography>
         </Box>
+      </Box>
 
         {/* Filtros */}
         <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
@@ -205,12 +227,19 @@ export const InventoryMovementsPage = () => {
                           {new Date(m.createdAt).toLocaleString()}
                         </TableCell>
                         <TableCell>
-                          <Chip
-                            size="small"
-                            label={m.movementType}
-                            color={getMovementColor(m.movementType)}
-                            variant="filled"
-                          />
+                          {(() => {
+                            const meta = getMovementMeta(m.movementType);
+                            return (
+                              <Chip
+                                size="small"
+                                label={m.movementType}
+                                color={meta.color}
+                                icon={meta.icon}
+                                variant="outlined"
+                                sx={{ fontWeight: 600 }}
+                              />
+                            );
+                          })()}
                         </TableCell>
                         <TableCell>
                           <Typography variant="body2" sx={{ fontWeight: 600 }}>
@@ -252,7 +281,6 @@ export const InventoryMovementsPage = () => {
             )}
           </TableContainer>
         </Paper>
-      </Container>
     </Box>
   );
 };

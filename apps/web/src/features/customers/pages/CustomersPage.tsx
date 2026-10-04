@@ -15,12 +15,6 @@ import {
   Chip,
   CircularProgress,
   Alert,
-  Snackbar,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogContentText,
-  DialogActions,
   Tooltip,
 } from '@mui/material';
 import type { CustomerDto } from '@farmacia/contracts';
@@ -29,6 +23,8 @@ import { HomeBackButton } from '../../../components/HomeBackButton';
 import { fetchCustomers, deactivateCustomer } from '../api/customers.api';
 import { CustomerFormDialog } from '../components/CustomerFormDialog';
 import { PermissionGate } from '../../auth/components/PermissionGate';
+import { ConfirmDialog } from '../../../components/ConfirmDialog';
+import { SweetModal } from '../../../components/SweetModal';
 
 export const CustomersPage: React.FC = () => {
   const [customers, setCustomers] = useState<CustomerDto[]>([]);
@@ -136,7 +132,13 @@ export const CustomersPage: React.FC = () => {
             variant="contained"
             color="primary"
             onClick={handleOpenCreate}
-            sx={{ fontWeight: 600, textTransform: 'none', px: 3 }}
+            sx={{
+              fontWeight: 700,
+              textTransform: 'none',
+              px: 3,
+              transition: 'transform 0.1s ease, background-color 0.15s ease',
+              '&:active': { transform: 'scale(0.98)' },
+            }}
           >
             + Nuevo Cliente
           </Button>
@@ -246,7 +248,12 @@ export const CustomersPage: React.FC = () => {
                       label={c.isActive ? 'Activo' : 'Inactivo'}
                       color={c.isActive ? 'success' : 'default'}
                       size="small"
-                      variant="filled"
+                      variant="outlined"
+                      sx={{
+                        fontWeight: 700,
+                        bgcolor: c.isActive ? 'rgba(46, 125, 50, 0.04)' : undefined,
+                        borderColor: c.isActive ? 'rgba(46, 125, 50, 0.4)' : undefined,
+                      }}
                     />
                   </TableCell>
                   <TableCell align="right">
@@ -254,8 +261,14 @@ export const CustomersPage: React.FC = () => {
                       <PermissionGate permission={SYSTEM_PERMISSIONS.CUSTOMERS_MANAGE}>
                         <Button
                           size="small"
-                          variant="text"
+                          variant="outlined"
                           onClick={() => handleOpenEdit(c)}
+                          sx={{
+                            textTransform: 'none',
+                            fontWeight: 600,
+                            transition: 'transform 0.1s ease',
+                            '&:active': { transform: 'scale(0.98)' },
+                          }}
                         >
                           Editar
                         </Button>
@@ -265,7 +278,13 @@ export const CustomersPage: React.FC = () => {
                         {c.isDefault ? (
                           <Tooltip title="El cliente predeterminado no puede ser inactivado">
                             <span>
-                              <Button size="small" variant="text" color="error" disabled>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                color="error"
+                                disabled
+                                sx={{ textTransform: 'none' }}
+                              >
                                 Inactivar
                               </Button>
                             </span>
@@ -273,9 +292,15 @@ export const CustomersPage: React.FC = () => {
                         ) : c.isActive ? (
                           <Button
                             size="small"
-                            variant="text"
+                            variant="outlined"
                             color="error"
                             onClick={() => handleOpenDeactivate(c)}
+                            sx={{
+                              textTransform: 'none',
+                              fontWeight: 600,
+                              transition: 'transform 0.1s ease',
+                              '&:active': { transform: 'scale(0.98)' },
+                            }}
                           >
                             Inactivar
                           </Button>
@@ -294,50 +319,43 @@ export const CustomersPage: React.FC = () => {
       <CustomerFormDialog
         open={formOpen}
         onClose={() => setFormOpen(false)}
-        onSaved={loadCustomers}
+        onSaved={() => {
+          loadCustomers();
+          setToastMsg(
+            selectedCustomer
+              ? 'Cliente actualizado correctamente.'
+              : 'Cliente registrado exitosamente.'
+          );
+        }}
         customerToEdit={selectedCustomer}
       />
 
       {/* Diálogo Confirmar Inactivación */}
-      <Dialog
+      <ConfirmDialog
         open={deactivateDialogOpen}
-        onClose={() => (actionLoading ? null : setDeactivateDialogOpen(false))}
-      >
-        <DialogTitle sx={{ fontWeight: 600 }}>Confirmar Inactivación</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            ¿Está seguro de que desea inactivar al cliente{' '}
-            <strong>{customerToDeactivate?.name}</strong> (Documento:{' '}
-            {customerToDeactivate?.documentNumber})? Los clientes inactivos no aparecerán en las
-            búsquedas del Punto de Venta.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
-          <Button
-            onClick={() => setDeactivateDialogOpen(false)}
-            disabled={actionLoading}
-            color="inherit"
-          >
-            Cancelar
-          </Button>
-          <Button
-            onClick={handleConfirmDeactivate}
-            color="error"
-            variant="contained"
-            disabled={actionLoading}
-            startIcon={actionLoading ? <CircularProgress size={18} color="inherit" /> : null}
-          >
-            Confirmar Inactivación
-          </Button>
-        </DialogActions>
-      </Dialog>
+        title="Confirmar Inactivación de Cliente"
+        description={`¿Estás seguro de que deseas inactivar al cliente ${customerToDeactivate?.name || ''} (Documento: ${customerToDeactivate?.documentNumber || ''})? Los clientes inactivos no aparecerán en las búsquedas del Punto de Venta.`}
+        confirmText="Confirmar Inactivación"
+        confirmColor="error"
+        isLoading={actionLoading}
+        onConfirm={handleConfirmDeactivate}
+        onCancel={() => {
+          if (!actionLoading) {
+            setDeactivateDialogOpen(false);
+            setCustomerToDeactivate(null);
+          }
+        }}
+      />
 
-      {/* Toast Notificaciones */}
-      <Snackbar
+      {/* Modal de Evento / Notificación SweetAlert */}
+      <SweetModal
         open={Boolean(toastMsg)}
-        autoHideDuration={4000}
+        type="success"
+        title="¡Buen trabajo!"
+        description={toastMsg}
+        confirmText="OK"
+        onConfirm={() => setToastMsg(null)}
         onClose={() => setToastMsg(null)}
-        message={toastMsg}
       />
     </Box>
   );

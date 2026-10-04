@@ -40,6 +40,7 @@ import {
 } from '../api/receivables.api';
 import { HomeBackButton } from '../../../components/HomeBackButton';
 import { useBankAccountOptions } from '../../treasury/hooks/useTreasury';
+import { ConfirmDialog } from '../../../components/ConfirmDialog';
 
 // ============================================================
 // Schema de validación para el formulario de abono
@@ -99,6 +100,7 @@ function PaymentModal({ receivable, onClose, onSuccess }: PaymentModalProps) {
   const [reversalTarget, setReversalTarget] = useState<ReceivablePaymentDto | null>(null);
   const [reversalReason, setReversalReason] = useState('');
   const [reversalError, setReversalError] = useState<string | null>(null);
+  const [pendingPayment, setPendingPayment] = useState<PaymentFormData | null>(null);
 
   const {
     control,
@@ -156,7 +158,20 @@ function PaymentModal({ receivable, onClose, onSuccess }: PaymentModalProps) {
   const canPay = detail?.status === 'PENDIENTE' && balance > 0;
 
   return (
-    <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog
+      open
+      onClose={onClose}
+      maxWidth="sm"
+      fullWidth
+      slotProps={{
+        paper: {
+          sx: {
+            borderRadius: 2.5,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+          },
+        },
+      }}
+    >
       <DialogTitle>
         <Box>
           <Typography variant="h6" component="span" sx={{ fontWeight: 700 }}>
@@ -344,7 +359,7 @@ function PaymentModal({ receivable, onClose, onSuccess }: PaymentModalProps) {
 
         {/* Formulario de Registrar Nuevo Abono */}
         {canPay && (
-          <Box component="form" id="payment-form" onSubmit={handleSubmit((d) => mutation.mutate(d))}>
+          <Box component="form" id="payment-form" onSubmit={handleSubmit((d) => setPendingPayment(d))}>
             <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5 }}>
               Registrar Nuevo Abono
             </Typography>
@@ -519,6 +534,40 @@ function PaymentModal({ receivable, onClose, onSuccess }: PaymentModalProps) {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Diálogo de Confirmación: Registrar Abono */}
+      <ConfirmDialog
+        open={Boolean(pendingPayment)}
+        onClose={() => setPendingPayment(null)}
+        onConfirm={() => {
+          if (pendingPayment) {
+            const data = pendingPayment;
+            setPendingPayment(null);
+            mutation.mutate(data);
+          }
+        }}
+        isLoading={mutation.isPending}
+        title="Confirmar Registro de Abono"
+        description={
+          <Stack spacing={1}>
+            <Typography variant="body2" color="text.secondary">
+              ¿Estás seguro de registrar un abono por{' '}
+              <strong>${Number(pendingPayment?.amount || 0).toLocaleString('es-CO', { minimumFractionDigits: 2 })}</strong>?
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              <strong>Factura:</strong> {detail?.invoiceNumber || receivable.invoiceNumber}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              <strong>Cliente:</strong> {detail?.customerName || receivable.customerName}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              <strong>Método de pago:</strong> {pendingPayment?.paymentMethod}
+            </Typography>
+          </Stack>
+        }
+        confirmText="Confirmar y Abonar"
+        confirmColor="primary"
+      />
     </Dialog>
   );
 }

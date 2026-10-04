@@ -76,7 +76,7 @@ export const PurchasesListPage: React.FC = () => {
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <HomeBackButton />
           <Box>
-            <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+            <Typography variant="h4" component="h1" sx={{ fontWeight: 800, color: 'text.primary' }}>
               Historial de Compras y Abastecimiento
             </Typography>
             <Typography variant="body1" color="text.secondary">
@@ -91,7 +91,14 @@ export const PurchasesListPage: React.FC = () => {
             color="primary"
             component={Link}
             to="/purchases/receive"
-            sx={{ fontWeight: 'bold', px: 3, py: 1 }}
+            sx={{
+              fontWeight: 700,
+              px: 3,
+              py: 1,
+              textTransform: 'none',
+              transition: 'transform 0.1s ease, background-color 0.15s ease',
+              '&:active': { transform: 'scale(0.98)' },
+            }}
           >
             + Recepcionar Compra
           </Button>
@@ -100,13 +107,13 @@ export const PurchasesListPage: React.FC = () => {
 
       {/* Alertas */}
       {errorMsg && (
-        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setErrorMsg(null)}>
+        <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }} onClose={() => setErrorMsg(null)}>
           {errorMsg}
         </Alert>
       )}
 
       {/* Barra de Filtros */}
-      <Paper sx={{ p: 2, mb: 3, display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+      <Paper variant="outlined" sx={{ p: 2, mb: 3, borderRadius: 2, display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
         <TextField
           select
           label="Filtrar por Proveedor"
@@ -132,7 +139,18 @@ export const PurchasesListPage: React.FC = () => {
           sx={{ minWidth: 240, flexGrow: 1 }}
         />
 
-        <Button variant="outlined" onClick={loadData} disabled={loading} size="medium">
+        <Button
+          variant="outlined"
+          onClick={loadData}
+          disabled={loading}
+          size="medium"
+          sx={{
+            textTransform: 'none',
+            fontWeight: 600,
+            transition: 'transform 0.1s ease',
+            '&:active': { transform: 'scale(0.98)' },
+          }}
+        >
           Actualizar
         </Button>
       </Paper>
@@ -143,7 +161,7 @@ export const PurchasesListPage: React.FC = () => {
           <CircularProgress />
         </Box>
       ) : purchases.length === 0 ? (
-        <Paper sx={{ p: 6, textAlign: 'center' }}>
+        <Paper variant="outlined" sx={{ p: 6, textAlign: 'center', borderRadius: 2 }}>
           <Typography variant="h6" color="text.secondary" gutterBottom>
             No se encontraron compras registradas
           </Typography>
@@ -153,23 +171,33 @@ export const PurchasesListPage: React.FC = () => {
               : 'Aún no se han registrado compras a proveedores en el sistema.'}
           </Typography>
           <PermissionGate permission={SYSTEM_PERMISSIONS.PURCHASES_RECEIVE}>
-            <Button variant="contained" component={Link} to="/purchases/receive">
+            <Button
+              variant="contained"
+              component={Link}
+              to="/purchases/receive"
+              sx={{
+                textTransform: 'none',
+                fontWeight: 700,
+                transition: 'transform 0.1s ease',
+                '&:active': { transform: 'scale(0.98)' },
+              }}
+            >
               Registrar Primera Compra
             </Button>
           </PermissionGate>
         </Paper>
       ) : (
-        <TableContainer component={Paper} sx={{ boxShadow: 1, borderRadius: 1.5 }}>
+        <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
           <Table aria-label="Tabla de compras">
             <TableHead sx={{ bgcolor: 'action.hover' }}>
               <TableRow>
-                <TableCell sx={{ fontWeight: 'bold' }}>Factura / Comprobante</TableCell>
-                <TableCell sx={{ fontWeight: 'bold' }}>Proveedor</TableCell>
-                <TableCell sx={{ fontWeight: 'bold' }}>Fecha de Factura</TableCell>
-                <TableCell sx={{ fontWeight: 'bold', textAlign: 'right' }}>Total Factura</TableCell>
-                <TableCell sx={{ fontWeight: 'bold', textAlign: 'center' }}>Líneas</TableCell>
-                <TableCell sx={{ fontWeight: 'bold', textAlign: 'center' }}>Estado</TableCell>
-                <TableCell sx={{ fontWeight: 'bold', textAlign: 'right' }}>Acciones</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Factura / Comprobante</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Proveedor</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Fecha de Factura</TableCell>
+                <TableCell sx={{ fontWeight: 700, textAlign: 'right' }}>Total Factura</TableCell>
+                <TableCell sx={{ fontWeight: 700, textAlign: 'center' }}>Líneas</TableCell>
+                <TableCell sx={{ fontWeight: 700, textAlign: 'center' }}>Estado</TableCell>
+                <TableCell sx={{ fontWeight: 700, textAlign: 'right' }}>Acciones</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -189,18 +217,23 @@ export const PurchasesListPage: React.FC = () => {
                     )}
                   </TableCell>
                   <TableCell>{purchase.purchaseDate}</TableCell>
-                  <TableCell sx={{ textAlign: 'right', fontWeight: 'bold', color: 'primary.main' }}>
+                  <TableCell sx={{ textAlign: 'right', fontWeight: 800, color: 'text.primary', fontVariantNumeric: 'tabular-nums' }}>
                     ${Number(purchase.totalAmount).toLocaleString()}
                   </TableCell>
                   <TableCell sx={{ textAlign: 'center' }}>
-                    <Chip label={`${purchase.lines.length} productos`} size="small" variant="outlined" />
+                    <Chip label={`${purchase.lines.length} productos`} size="small" variant="outlined" sx={{ fontWeight: 600 }} />
                   </TableCell>
                   <TableCell sx={{ textAlign: 'center' }}>
                     <Chip
                       label={purchase.status}
                       color="success"
                       size="small"
-                      sx={{ fontWeight: 'bold' }}
+                      variant="outlined"
+                      sx={{
+                        fontWeight: 700,
+                        bgcolor: 'rgba(46, 125, 50, 0.04)',
+                        borderColor: 'rgba(46, 125, 50, 0.4)',
+                      }}
                     />
                   </TableCell>
                   <TableCell sx={{ textAlign: 'right' }}>
@@ -208,6 +241,12 @@ export const PurchasesListPage: React.FC = () => {
                       size="small"
                       variant="outlined"
                       onClick={() => handleOpenDetail(purchase)}
+                      sx={{
+                        textTransform: 'none',
+                        fontWeight: 600,
+                        transition: 'transform 0.1s ease',
+                        '&:active': { transform: 'scale(0.98)' },
+                      }}
                     >
                       Ver Detalle
                     </Button>

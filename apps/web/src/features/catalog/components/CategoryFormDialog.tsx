@@ -22,9 +22,15 @@ interface CategoryFormDialogProps {
   open: boolean;
   onClose: () => void;
   category?: CategoryDto | null;
+  onSuccess?: (categoryName: string, isEditing: boolean) => void;
 }
 
-export function CategoryFormDialog({ open, onClose, category }: CategoryFormDialogProps) {
+export function CategoryFormDialog({
+  open,
+  onClose,
+  category,
+  onSuccess,
+}: CategoryFormDialogProps) {
   const isEditing = Boolean(category);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -73,6 +79,7 @@ export function CategoryFormDialog({ open, onClose, category }: CategoryFormDial
           description: values.description ? values.description : null,
         });
       }
+      onSuccess?.(values.name, isEditing);
       onClose();
     } catch (error) {
       if (error instanceof ApiError) {

@@ -15,7 +15,6 @@ import {
   Chip,
   CircularProgress,
   Alert,
-  Snackbar,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -30,6 +29,7 @@ import { fetchSales, cancelSale } from '../api/sales.api';
 import { SaleReceiptDialog } from '../components/SaleReceiptDialog';
 import { HomeBackButton } from '../../../components/HomeBackButton';
 import { PermissionGate } from '../../auth/components/PermissionGate';
+import { SweetModal } from '../../../components/SweetModal';
 
 export const SalesHistoryPage: React.FC = () => {
   const navigate = useNavigate();
@@ -399,12 +399,15 @@ export const SalesHistoryPage: React.FC = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Toast de Éxito */}
-      <Snackbar
+      {/* Notificación modal estilo SweetAlert2 */}
+      <SweetModal
         open={Boolean(toastMsg)}
-        autoHideDuration={4000}
+        type="success"
+        title="¡Buen trabajo!"
+        text={toastMsg || ''}
+        confirmText="OK"
+        onConfirm={() => setToastMsg(null)}
         onClose={() => setToastMsg(null)}
-        message={toastMsg}
       />
     </Box>
   );

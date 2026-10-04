@@ -78,8 +78,28 @@ export const PosPaymentDialog: React.FC<PosPaymentDialogProps> = ({
     }
   };
 
+  const commonDenominations = [5000, 10000, 20000, 50000, 100000];
+  const quickDenominations = commonDenominations.filter((d) => d > total).slice(0, 3);
+  if (quickDenominations.length === 0 && total > 0) {
+    const nextCeil = Math.ceil(total / 50000) * 50000;
+    if (nextCeil > total) quickDenominations.push(nextCeil);
+  }
+
   return (
-    <Dialog open={open} onClose={loading ? undefined : onClose} maxWidth="xs" fullWidth>
+    <Dialog
+      open={open}
+      onClose={loading ? undefined : onClose}
+      maxWidth="xs"
+      fullWidth
+      slotProps={{
+        paper: {
+          sx: {
+            borderRadius: 2.5,
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.04)',
+          },
+        },
+      }}
+    >
       <form onSubmit={handleConfirm}>
         <DialogTitle sx={{ fontWeight: 700, pb: 1 }}>Cobro y Liquidación de Venta</DialogTitle>
         <DialogContent dividers>
@@ -144,12 +164,38 @@ export const PosPaymentDialog: React.FC<PosPaymentDialogProps> = ({
                 disabled={loading}
                 autoFocus
                 slotProps={{ htmlInput: { min: total, step: 'any' } }}
-                sx={{ mb: 1.5 }}
+                sx={{ mb: 1 }}
               />
 
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', p: 1.5, bgcolor: 'background.default', borderRadius: 1, border: 1, borderColor: 'divider' }}>
+              {/* Sugerencias de pago rápido con billetes comunes */}
+              <Box sx={{ display: 'flex', gap: 0.8, flexWrap: 'wrap', mb: 1.5, alignItems: 'center' }}>
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, mr: 0.5 }}>
+                  Rápido:
+                </Typography>
+                <Button
+                  size="small"
+                  variant={amountPaidNum === total ? 'contained' : 'outlined'}
+                  onClick={() => setAmountPaidStr(String(total))}
+                  sx={{ py: 0.2, px: 0.8, fontSize: '0.75rem', minWidth: 'auto', textTransform: 'none' }}
+                >
+                  Exacto
+                </Button>
+                {quickDenominations.map((denom) => (
+                  <Button
+                    key={denom}
+                    size="small"
+                    variant={amountPaidNum === denom ? 'contained' : 'outlined'}
+                    onClick={() => setAmountPaidStr(String(denom))}
+                    sx={{ py: 0.2, px: 0.8, fontSize: '0.75rem', minWidth: 'auto', textTransform: 'none' }}
+                  >
+                    ${denom.toLocaleString('es-CO')}
+                  </Button>
+                ))}
+              </Box>
+
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1.5, bgcolor: changeGiven > 0 ? 'success.50' : 'background.default', borderRadius: 1.5, border: 1, borderColor: changeGiven > 0 ? 'success.200' : 'divider' }}>
                 <Typography variant="body2" sx={{ fontWeight: 600 }}>Cambio / Devuelta:</Typography>
-                <Typography variant="subtitle1" sx={{ fontWeight: 700, color: changeGiven > 0 ? 'success.main' : 'text.primary' }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 800, color: changeGiven > 0 ? 'success.dark' : 'text.primary' }}>
                   ${changeGiven.toLocaleString('es-CO')}
                 </Typography>
               </Box>
@@ -168,7 +214,7 @@ export const PosPaymentDialog: React.FC<PosPaymentDialogProps> = ({
         </DialogContent>
 
         <DialogActions sx={{ p: 2 }}>
-          <Button onClick={onClose} disabled={loading} color="inherit">
+          <Button onClick={onClose} disabled={loading} color="inherit" sx={{ textTransform: 'none' }}>
             Cancelar
           </Button>
           <Button
@@ -178,7 +224,13 @@ export const PosPaymentDialog: React.FC<PosPaymentDialogProps> = ({
             disabled={loading}
             data-testid="confirm-payment-btn"
             startIcon={loading ? <CircularProgress size={18} color="inherit" /> : null}
-            sx={{ fontWeight: 700, px: 3 }}
+            sx={{
+              fontWeight: 700,
+              px: 3,
+              textTransform: 'none',
+              transition: 'transform 0.1s ease, background-color 0.15s ease',
+              '&:active': { transform: 'scale(0.98)' },
+            }}
           >
             {loading ? 'Confirmando venta...' : 'Confirmar Venta'}
           </Button>
