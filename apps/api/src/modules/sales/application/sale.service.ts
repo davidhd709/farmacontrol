@@ -58,6 +58,10 @@ export class SaleService {
       if (!idempotencyKey?.trim()) {
         throw new BadRequestException('Idempotency-Key es obligatorio para transferencias.');
       }
+    } else if (payload.paymentMethod === 'CREDITO') {
+      if (payload.bankAccountId) {
+        throw new BadRequestException('bankAccountId no aplica para ventas a crédito.');
+      }
     } else if (payload.paymentMethod !== 'EFECTIVO') {
       throw new BadRequestException(
         'El pago con tarjeta requiere una política de liquidación aprobada.',
@@ -329,6 +333,24 @@ export class SaleService {
         });
       }
 
+      // 2.7. Cuenta por Cobrar si es Crédito
+      if (payload.paymentMethod === 'CREDITO') {
+        const dueDate = new Date();
+        dueDate.setDate(dueDate.getDate() + 30);
+        await tx.receivable.create({
+          data: {
+            saleId: sale.id,
+            customerId: customerId!,
+            totalAmount: new Prisma.Decimal(sale.total).toFixed(2),
+            amountPaid: '0.00',
+            balance: new Prisma.Decimal(sale.total).toFixed(2),
+            status: 'PENDIENTE',
+            dueDate,
+            notes: payload.notes || `Venta a crédito comprobante ${sale.invoiceNumber}`,
+          },
+        });
+      }
+
       // 2.6.1. Contabilidad automática de partida doble (asiento automático)
       if (this.accountingEngine) {
         await this.accountingEngine.handleSaleConfirmed(
@@ -375,6 +397,8 @@ export class SaleService {
       }
 
       return dto;
+    }, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
     });
 
     // 3. Auditoría asíncrona fuera de la transacción
@@ -540,6 +564,12 @@ export class SaleService {
           createdById: auditCtx.userId || '00000000-0000-0000-0000-000000000000',
         });
       }
+      if (sale.paymentMethod === 'CREDITO') {
+        await tx.receivable.updateMany({
+          where: { saleId: sale.id },
+          data: { status: 'CANCELADA', notes: `Venta anulada: ${trimmedReason}` },
+        });
+      }
 
       // Reversión contable automática
       if (this.accountingEngine) {
@@ -552,6 +582,8 @@ export class SaleService {
       }
 
       return sale.toDto();
+    }, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
     });
 
     if (this.auditService) {

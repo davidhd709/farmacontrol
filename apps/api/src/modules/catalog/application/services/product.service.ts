@@ -21,6 +21,7 @@ import {
   ProductCodeAlreadyExistsException,
   ProductNotFoundException,
 } from '../../domain/exceptions/product.exceptions';
+import { prisma, Prisma } from '@farmacia/database';
 import { AuditService } from '../../../audit/application/services/audit.service';
 import type { AuditContext } from './category.service';
 
@@ -91,6 +92,19 @@ export class ProductService {
       throw new ProductNotFoundException(id);
     }
     return product;
+  }
+
+  public async getProductDtoById(id: string): Promise<ProductDto> {
+    const product = await this.getProductById(id);
+    const stockAgg = await prisma.$queryRaw<Array<{ total_stock: number }>>`
+      SELECT COALESCE(SUM(current_quantity), 0)::int AS total_stock
+      FROM inventory_lots
+      WHERE product_id = ${id}::uuid
+        AND is_active = true
+        AND current_quantity > 0
+        AND expiration_date >= CURRENT_DATE
+    `;
+    return product.toDto(stockAgg[0]?.total_stock ?? 0);
   }
 
   public async updateProduct(
@@ -183,8 +197,27 @@ export class ProductService {
 
     const { items, total } = await this.productRepository.findAll(filters);
 
+    const productIds = items.map((p) => p.id);
+    const stockMap = new Map<string, number>();
+
+    if (productIds.length > 0) {
+      const lotStockAggs = await prisma.$queryRaw<Array<{ product_id: string; total_stock: number }>>`
+        SELECT product_id, COALESCE(SUM(current_quantity), 0)::int AS total_stock
+        FROM inventory_lots
+        WHERE product_id IN (${Prisma.join(productIds.map((id) => Prisma.sql`${id}::uuid`))})
+          AND is_active = true
+          AND current_quantity > 0
+          AND expiration_date >= CURRENT_DATE
+        GROUP BY product_id
+      `;
+
+      for (const agg of lotStockAggs) {
+        stockMap.set(agg.product_id, agg.total_stock);
+      }
+    }
+
     return {
-      items: items.map((p) => p.toDto()),
+      items: items.map((p) => p.toDto(stockMap.get(p.id) ?? 0)),
       total,
       page,
       pageSize,

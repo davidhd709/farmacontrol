@@ -29,6 +29,7 @@ export class ConfirmSaleValidationPipe implements PipeTransform {
       'TRANSFERENCIA',
       'TARJETA_DEBITO',
       'TARJETA_CREDITO',
+      'CREDITO',
     ];
     const paymentMethod = record.paymentMethod as SalePaymentMethod;
     if (!paymentMethod || !validMethods.includes(paymentMethod)) {

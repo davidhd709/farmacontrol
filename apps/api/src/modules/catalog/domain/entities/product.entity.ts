@@ -337,7 +337,7 @@ export class Product {
     return num.toFixed(2);
   }
 
-  public toDto(): ProductDto {
+  public toDto(availableStock?: number): ProductDto {
     return {
       id: this._id,
       categoryId: this._categoryId,
@@ -356,6 +356,7 @@ export class Product {
       basePrice: this._basePrice,
       baseCost: this._baseCost,
       isActive: this._isActive,
+      availableStock: availableStock ?? undefined,
       presentations: this._presentations,
       createdAt: this._createdAt.toISOString(),
       updatedAt: this._updatedAt.toISOString(),

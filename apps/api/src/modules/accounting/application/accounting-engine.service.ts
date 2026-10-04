@@ -111,7 +111,11 @@ export class AccountingEngineService {
     const subtotalCents = totalCents - taxCents;
 
     const paymentPurpose: DbPurpose =
-      sale.paymentMethod === 'EFECTIVO' ? 'CASH' : 'BANK';
+      sale.paymentMethod === 'EFECTIVO'
+        ? 'CASH'
+        : sale.paymentMethod === 'CREDITO'
+          ? 'CUSTOMERS'
+          : 'BANK';
 
     // Calcular costo de mercancía vendida (COGS) a partir de los lotes y costo base de productos
     let cogsCents = 0n;

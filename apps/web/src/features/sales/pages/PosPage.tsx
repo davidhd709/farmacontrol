@@ -36,6 +36,7 @@ interface CartItem {
   productName: string;
   baseUnit: string;
   basePrice: number;
+  availableStock?: number;
   availablePresentations?: ProductPresentationDto[];
   presentationId?: string | null;
   presentationName?: string | null;
@@ -129,9 +130,30 @@ export const PosPage: React.FC = () => {
     }
   };
 
-  // Agregar ítem al carrito
+  // Calcular el total de unidades base de un producto ya reservadas en las demás líneas del carrito
+  const getCartProductTotalBaseUnits = (items: CartItem[], productId: string, excludeIndex = -1): number => {
+    return items.reduce((acc, it, idx) => {
+      if (idx === excludeIndex || it.productId !== productId) return acc;
+      return acc + (it.quantityCommercial * it.presentationFactor);
+    }, 0);
+  };
+
+  // Agregar ítem al carrito con validación de existencia vigente (no vencida)
   const handleAddToCart = (product: ProductDto, presentation?: ProductPresentationDto | null) => {
     setErrorMsg(null);
+
+    // Validación P0: Prevenir agregar productos sin existencias vigentes
+    if (product.availableStock !== undefined && product.availableStock <= 0) {
+      const msg = `El producto "${product.name}" no tiene existencias disponibles o lotes vigentes para la venta.`;
+      setErrorMsg(msg);
+      setSnackbar({
+        open: true,
+        message: msg,
+        severity: 'warning',
+      });
+      return;
+    }
+
     const salePresentations = (product.presentations || []).filter(
       (p) => p.isActive && (p.saleEnabled ?? true),
     );
@@ -151,10 +173,20 @@ export const PosPage: React.FC = () => {
         (item) => item.productId === product.id && item.presentationId === presId
       );
 
+      const otherBase = getCartProductTotalBaseUnits(prev, product.id, existingIdx);
+      const newQty = existingIdx >= 0 ? prev[existingIdx].quantityCommercial + 1 : 1;
+      const totalBaseRequired = otherBase + (newQty * factor);
+
+      if (product.availableStock !== undefined && totalBaseRequired > product.availableStock) {
+        setErrorMsg(
+          `Stock insuficiente para "${product.name}": requiere ${totalBaseRequired} ${product.baseUnit}, pero sólo hay ${product.availableStock} disponibles.`
+        );
+        return prev;
+      }
+
       if (existingIdx >= 0) {
         const updated = [...prev];
         const item = updated[existingIdx];
-        const newQty = item.quantityCommercial + 1;
         const subtotal = newQty * item.unitPrice - item.discount;
         const taxAmount = (subtotal * (item.taxRate / 100));
         updated[existingIdx] = {
@@ -181,6 +213,7 @@ export const PosPage: React.FC = () => {
           productName: product.name,
           baseUnit: product.baseUnit,
           basePrice: Number(product.basePrice),
+          availableStock: product.availableStock,
           availablePresentations: salePresentations,
           presentationId: presId,
           presentationName: presName,
@@ -200,15 +233,26 @@ export const PosPage: React.FC = () => {
   // Cambiar presentación de un producto existente en el carrito
   const handleChangePresentation = (index: number, newPresId: string | null) => {
     setCart((prev) => {
-      const updated = [...prev];
-      const item = updated[index];
+      const item = prev[index];
       const pres = item.availablePresentations?.find((p) => p.id === newPresId) || null;
       const factor = pres ? pres.conversionFactor : 1;
+      const otherBase = getCartProductTotalBaseUnits(prev, item.productId, index);
+      const totalBaseRequired = otherBase + (item.quantityCommercial * factor);
+
+      if (item.availableStock !== undefined && totalBaseRequired > item.availableStock) {
+        setErrorMsg(
+          `Stock insuficiente para "${item.productName}" en esta presentación: requiere ${totalBaseRequired} ${item.baseUnit}, pero sólo hay ${item.availableStock} disponibles.`
+        );
+        return prev;
+      }
+
+      setErrorMsg(null);
       const unitPrice = pres ? Number(pres.price) : item.basePrice;
       const presName = pres ? pres.name : null;
       const subtotal = Math.max(0, item.quantityCommercial * unitPrice - item.discount);
       const taxAmount = subtotal * (item.taxRate / 100);
 
+      const updated = [...prev];
       updated[index] = {
         ...item,
         presentationId: newPresId,
@@ -226,8 +270,19 @@ export const PosPage: React.FC = () => {
   const handleUpdateQty = (index: number, newQty: number) => {
     if (newQty <= 0) return;
     setCart((prev) => {
+      const item = prev[index];
+      const otherBase = getCartProductTotalBaseUnits(prev, item.productId, index);
+      const totalBaseRequired = otherBase + (newQty * item.presentationFactor);
+
+      if (item.availableStock !== undefined && totalBaseRequired > item.availableStock) {
+        setErrorMsg(
+          `Stock insuficiente para "${item.productName}": requiere ${totalBaseRequired} ${item.baseUnit}, pero sólo hay ${item.availableStock} disponibles.`
+        );
+        return prev;
+      }
+
+      setErrorMsg(null);
       const updated = [...prev];
-      const item = updated[index];
       const subtotal = Math.max(0, newQty * item.unitPrice - item.discount);
       const taxAmount = (subtotal * (item.taxRate / 100));
       updated[index] = {
@@ -289,6 +344,8 @@ export const PosPage: React.FC = () => {
       setPaymentDialogOpen(false);
       setReceiptSale(completedSale);
       setCart([]);
+      setProductOptions([]);
+      productOptionsRef.current = [];
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al procesar la venta';
       setErrorMsg(msg);
@@ -348,6 +405,7 @@ export const PosPage: React.FC = () => {
               data-testid="pos-product-autocomplete"
               options={productOptions}
               getOptionLabel={(opt) => `${opt.code} - ${opt.name} (${opt.baseUnit})`}
+              getOptionDisabled={(opt) => opt.availableStock !== undefined && opt.availableStock <= 0}
               loading={productLoading}
               onInputChange={(_, value) => handleSearchProducts(value)}
               onChange={(_, value) => {
@@ -372,33 +430,59 @@ export const PosPage: React.FC = () => {
                   }}
                 />
               )}
-              renderOption={(props, opt) => (
-                <li {...props} key={opt.id}>
-                  <Box sx={{ width: '100%', py: 0.5 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>{opt.name}</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 700, color: 'primary.main' }}>
-                        ${Number(opt.basePrice).toLocaleString('es-CO')} / {opt.baseUnit}
-                      </Typography>
+              renderOption={(props, opt) => {
+                const isOutOfStock = opt.availableStock !== undefined && opt.availableStock <= 0;
+                return (
+                  <li {...props} key={opt.id}>
+                    <Box sx={{ width: '100%', py: 0.5, opacity: isOutOfStock ? 0.6 : 1 }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          {opt.name}
+                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          {opt.availableStock !== undefined && (
+                            <Chip
+                              size="small"
+                              label={
+                                isOutOfStock
+                                  ? 'Sin stock'
+                                  : `Disp: ${opt.availableStock} ${opt.baseUnit}`
+                              }
+                              color={
+                                isOutOfStock
+                                  ? 'error'
+                                  : opt.availableStock > 10
+                                  ? 'success'
+                                  : 'warning'
+                              }
+                              variant={isOutOfStock ? 'filled' : 'outlined'}
+                              sx={{ height: 20, fontSize: '0.68rem', fontWeight: 700 }}
+                            />
+                          )}
+                          <Typography variant="body2" sx={{ fontWeight: 700, color: 'primary.main', whiteSpace: 'nowrap' }}>
+                            ${Number(opt.basePrice).toLocaleString('es-CO')} / {opt.baseUnit}
+                          </Typography>
+                        </Box>
+                      </Box>
+                      <Box sx={{ display: 'flex', gap: 0.8, alignItems: 'center', mt: 0.5, flexWrap: 'wrap' }}>
+                        <Typography variant="caption" color="text.secondary">
+                          SKU: {opt.code} • Base: {opt.baseUnit} {opt.requiresLotControl && '• FEFO'}
+                        </Typography>
+                        {opt.presentations && opt.presentations.length > 0 && opt.presentations.map((pr) => (
+                          <Chip
+                            key={pr.id}
+                            size="small"
+                            label={`${pr.name} (x${pr.conversionFactor}): $${Number(pr.price).toLocaleString('es-CO')}`}
+                            variant={pr.isDefault ? 'filled' : 'outlined'}
+                            color={pr.isDefault ? 'primary' : 'default'}
+                            sx={{ height: 18, fontSize: '0.65rem' }}
+                          />
+                        ))}
+                      </Box>
                     </Box>
-                    <Box sx={{ display: 'flex', gap: 0.8, alignItems: 'center', mt: 0.5, flexWrap: 'wrap' }}>
-                      <Typography variant="caption" color="text.secondary">
-                        SKU: {opt.code} • Base: {opt.baseUnit} {opt.requiresLotControl && '• FEFO'}
-                      </Typography>
-                      {opt.presentations && opt.presentations.length > 0 && opt.presentations.map((pr) => (
-                        <Chip
-                          key={pr.id}
-                          size="small"
-                          label={`${pr.name} (x${pr.conversionFactor}): $${Number(pr.price).toLocaleString('es-CO')}`}
-                          variant={pr.isDefault ? 'filled' : 'outlined'}
-                          color={pr.isDefault ? 'primary' : 'default'}
-                          sx={{ height: 18, fontSize: '0.65rem' }}
-                        />
-                      ))}
-                    </Box>
-                  </Box>
-                </li>
-              )}
+                  </li>
+                );
+              }}
             />
           </Paper>
 
@@ -455,13 +539,32 @@ export const PosPage: React.FC = () => {
                             Unidad base individual ({item.baseUnit})
                           </Typography>
                         )}
-                        <Chip
-                          label={`FEFO: descuenta ${item.quantityCommercial * item.presentationFactor} ${item.baseUnit}`}
-                          size="small"
-                          color={item.presentationFactor > 1 ? 'secondary' : 'info'}
-                          variant="outlined"
-                          sx={{ height: 18, fontSize: '0.65rem', mt: 0.5 }}
-                        />
+                        <Box sx={{ display: 'flex', gap: 0.8, alignItems: 'center', mt: 0.5, flexWrap: 'wrap' }}>
+                          <Chip
+                            label={`FEFO: descuenta ${item.quantityCommercial * item.presentationFactor} ${item.baseUnit}`}
+                            size="small"
+                            color={item.presentationFactor > 1 ? 'secondary' : 'info'}
+                            variant="outlined"
+                            sx={{ height: 18, fontSize: '0.65rem' }}
+                          />
+                          {item.availableStock !== undefined && (
+                            <Chip
+                              label={`Disp: ${item.availableStock} ${item.baseUnit}`}
+                              size="small"
+                              color={
+                                item.quantityCommercial * item.presentationFactor > item.availableStock
+                                  ? 'error'
+                                  : 'default'
+                              }
+                              variant={
+                                item.quantityCommercial * item.presentationFactor > item.availableStock
+                                  ? 'filled'
+                                  : 'outlined'
+                              }
+                              sx={{ height: 18, fontSize: '0.65rem' }}
+                            />
+                          )}
+                        </Box>
                       </TableCell>
                       <TableCell align="center">
                         <Box sx={{ display: 'inline-flex', alignItems: 'center', border: 1, borderColor: 'divider', borderRadius: 1.5, p: 0.2, bgcolor: 'background.paper' }}>

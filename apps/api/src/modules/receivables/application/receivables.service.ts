@@ -285,6 +285,8 @@ export class ReceivablesService {
         responseBody: result,
       });
       return result;
+    }, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
     });
   }
 
@@ -510,6 +512,8 @@ export class ReceivablesService {
       });
 
       return this.toDto(updated, payments);
+    }, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
     });
   }
 }

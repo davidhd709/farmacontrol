@@ -4,7 +4,8 @@ export type SalePaymentMethod =
   | 'EFECTIVO'
   | 'TRANSFERENCIA'
   | 'TARJETA_DEBITO'
-  | 'TARJETA_CREDITO';
+  | 'TARJETA_CREDITO'
+  | 'CREDITO';
 
 export interface SaleLotAllocationDto {
   id: string;

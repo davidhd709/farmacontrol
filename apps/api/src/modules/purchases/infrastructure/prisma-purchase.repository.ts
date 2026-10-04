@@ -146,6 +146,8 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
       }
 
       return result;
+    }, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
     });
   }
 

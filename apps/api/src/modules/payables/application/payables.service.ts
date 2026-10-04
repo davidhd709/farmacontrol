@@ -304,6 +304,8 @@ export class PayablesService {
         responseBody: result,
       });
       return result;
+    }, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
     });
   }
 
@@ -529,6 +531,8 @@ export class PayablesService {
       });
 
       return this.toDto(updated, payments);
+    }, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
     });
   }
 }

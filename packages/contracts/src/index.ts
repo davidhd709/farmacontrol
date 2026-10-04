@@ -280,6 +280,7 @@ export interface ProductDto {
   basePrice: string;
   baseCost: string;
   isActive: boolean;
+  availableStock?: number;
   presentations?: ProductPresentationDto[];
   createdAt: string;
   updatedAt: string;

@@ -131,8 +131,7 @@ export class ProductController {
   @RequirePermissions(SYSTEM_PERMISSIONS.PRODUCTS_READ)
   public async getById(@Param('id') id: string): Promise<ProductDto> {
     try {
-      const product = await this.productService.getProductById(id);
-      return product.toDto();
+      return await this.productService.getProductDtoById(id);
     } catch (err) {
       if (err instanceof ProductNotFoundException) {
         throw new NotFoundException(err.message);

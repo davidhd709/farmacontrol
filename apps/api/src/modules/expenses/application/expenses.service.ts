@@ -234,6 +234,8 @@ export class ExpensesService {
       }
 
       return expense;
+    }, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
     });
 
     return this.findById(created.id);
@@ -349,6 +351,8 @@ export class ExpensesService {
           tx,
         );
       }
+    }, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
     });
 
     return this.findById(expenseId);
@@ -419,6 +423,8 @@ export class ExpensesService {
       if (this.accountingEngine) {
         await this.accountingEngine.handleExpenseCancelled(expenseId, reason, userId, tx);
       }
+    }, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
     });
 
     return this.findById(expenseId);
@@ -494,6 +500,8 @@ export class ExpensesService {
       if (this.accountingEngine) {
         await this.accountingEngine.handleExpensePaymentReversed(paymentId, reason, userId, tx);
       }
+    }, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
     });
 
     return this.findById(expenseId);
