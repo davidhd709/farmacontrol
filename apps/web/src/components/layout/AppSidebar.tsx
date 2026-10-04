@@ -197,6 +197,18 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ open, onClose }) => {
           icon: <BalanceIcon fontSize="small" />,
           permission: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
         },
+        {
+          title: 'Estado de Resultados (PyG)',
+          path: '/accounting/income-statement',
+          icon: <AssessmentIcon fontSize="small" />,
+          permission: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
+        },
+        {
+          title: 'Balance General',
+          path: '/accounting/balance-sheet',
+          icon: <AccountBalanceIcon fontSize="small" />,
+          permission: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
+        },
       ],
     },
     {

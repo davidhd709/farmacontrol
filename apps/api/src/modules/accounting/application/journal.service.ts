@@ -222,6 +222,11 @@ export class JournalService {
   async post(raw: JournalPostInput, tx?: Tx): Promise<PostedEntry> {
     const input = validateJournalPost(raw);
     if (tx) {
+      const isolation = await tx.$queryRaw<{ level: string }[]>`
+        SELECT current_setting('transaction_isolation') AS level
+      `;
+      if (isolation[0]?.level !== 'serializable')
+        throw new AccountingValidationError('El asiento requiere una transacción SERIALIZABLE.');
       return this.postOnce(input, tx);
     }
     for (let attempt = 0; attempt < 3; attempt++) {

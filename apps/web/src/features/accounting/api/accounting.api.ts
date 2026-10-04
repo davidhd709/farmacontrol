@@ -125,6 +125,8 @@ import type {
   ReverseJournalEntryPayload,
   TrialBalanceReportDto,
   GeneralLedgerReportDto,
+  IncomeStatementReportDto,
+  BalanceSheetReportDto,
   PaginatedResponse,
 } from '@farmacia/contracts';
 
@@ -159,4 +161,62 @@ export const fetchGeneralLedger = (accountId: string, fromDate: string, toDate: 
   apiRequest<GeneralLedgerReportDto>(
     `accounting/reports/general-ledger?accountId=${encodeURIComponent(accountId)}&fromDate=${encodeURIComponent(fromDate)}&toDate=${encodeURIComponent(toDate)}`,
   );
+
+export const fetchIncomeStatement = (fromDate: string, toDate: string) =>
+  apiRequest<IncomeStatementReportDto>(
+    `accounting/reports/income-statement?fromDate=${encodeURIComponent(fromDate)}&toDate=${encodeURIComponent(toDate)}`,
+  );
+
+export const fetchBalanceSheet = (asOfDate: string) =>
+  apiRequest<BalanceSheetReportDto>(
+    `accounting/reports/balance-sheet?asOfDate=${encodeURIComponent(asOfDate)}`,
+  );
+
+export async function exportTrialBalanceExcel(fromDate: string, toDate: string): Promise<void> {
+  const response = await fileRequest(
+    `accounting/reports/trial-balance/export?fromDate=${encodeURIComponent(fromDate)}&toDate=${encodeURIComponent(toDate)}`,
+    { method: 'GET' },
+  );
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `balance_comprobacion_${fromDate}_${toDate}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+export async function exportIncomeStatementExcel(fromDate: string, toDate: string): Promise<void> {
+  const response = await fileRequest(
+    `accounting/reports/income-statement/export?fromDate=${encodeURIComponent(fromDate)}&toDate=${encodeURIComponent(toDate)}`,
+    { method: 'GET' },
+  );
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `estado_resultados_${fromDate}_${toDate}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+export async function exportBalanceSheetExcel(asOfDate: string): Promise<void> {
+  const response = await fileRequest(
+    `accounting/reports/balance-sheet/export?asOfDate=${encodeURIComponent(asOfDate)}`,
+    { method: 'GET' },
+  );
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `balance_general_${asOfDate}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
 

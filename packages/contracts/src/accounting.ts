@@ -175,3 +175,86 @@ export interface GeneralLedgerReportDto {
   movements: GeneralLedgerMovementDto[];
 }
 
+// ===== ESTADOS FINANCIEROS (ESTADO DE RESULTADOS Y BALANCE GENERAL) =====
+
+export interface OperatingExpenseItemDto {
+  accountId: string;
+  accountCode: string;
+  accountName: string;
+  amount: string;
+}
+
+export interface IncomeStatementReportDto {
+  fromDate: string;
+  toDate: string;
+  generatedAt: string;
+  grossSales: string;
+  returns: string;
+  discounts: string;
+  netSales: string;
+  costOfGoodsSold: string;
+  grossProfit: string;
+  grossMarginPercentage: number;
+  operatingExpenses: OperatingExpenseItemDto[];
+  totalOperatingExpenses: string;
+  operatingIncome: string;
+  operatingMarginPercentage: number;
+  netIncome: string;
+}
+
+export interface BalanceSheetAccountItemDto {
+  accountId: string;
+  accountCode: string;
+  accountName: string;
+  accountType: AccountType;
+  balance: string;
+}
+
+export interface BalanceSheetCategoryGroupDto {
+  title: string;
+  total: string;
+  accounts: BalanceSheetAccountItemDto[];
+}
+
+export interface BalanceSheetReportDto {
+  asOfDate: string;
+  generatedAt: string;
+  assets: {
+    current: {
+      cashAndBanks: BalanceSheetCategoryGroupDto;
+      receivables: BalanceSheetCategoryGroupDto;
+      inventory: BalanceSheetCategoryGroupDto;
+      otherCurrent: BalanceSheetCategoryGroupDto;
+      total: string;
+    };
+    nonCurrent: {
+      propertyPlantEquipment: BalanceSheetCategoryGroupDto;
+      otherNonCurrent: BalanceSheetCategoryGroupDto;
+      total: string;
+    };
+    totalAssets: string;
+  };
+  liabilities: {
+    current: {
+      suppliers: BalanceSheetCategoryGroupDto;
+      taxes: BalanceSheetCategoryGroupDto;
+      otherPayables: BalanceSheetCategoryGroupDto;
+      total: string;
+    };
+    nonCurrent: {
+      longTermPayables: BalanceSheetCategoryGroupDto;
+      total: string;
+    };
+    totalLiabilities: string;
+  };
+  equity: {
+    capital: BalanceSheetCategoryGroupDto;
+    retainedEarnings: BalanceSheetCategoryGroupDto;
+    currentPeriodResult: string;
+    totalEquity: string;
+  };
+  totalLiabilitiesAndEquity: string;
+  isBalanced: boolean;
+  difference: string;
+}
+
