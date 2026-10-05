@@ -82,3 +82,58 @@ export interface SaleQueryFilters {
   page?: number;
   limit?: number;
 }
+
+// ===== NOTAS CRÉDITO / DEVOLUCIONES EN VENTAS (RF-033) =====
+
+export interface CreateCreditNoteLinePayload {
+  saleLineId: string;
+  quantityCommercial: number;
+}
+
+export interface CreateCreditNotePayload {
+  saleId: string;
+  reason: string;
+  refundMethod?: 'EFECTIVO' | 'CREDITO_CARTERA' | 'TRANSFERENCIA' | 'SALDO_A_FAVOR';
+  restock?: boolean;
+  items: CreateCreditNoteLinePayload[];
+}
+
+export interface CreditNoteLineDto {
+  id: string;
+  creditNoteId: string;
+  saleLineId: string;
+  productId: string;
+  productCode?: string;
+  productName?: string;
+  lotId?: string | null;
+  lotNumber?: string | null;
+  quantityCommercial: number;
+  quantityBaseUnits: number;
+  unitPrice: number;
+  subtotal: number;
+  taxRate: number;
+  taxAmount: number;
+  total: number;
+  createdAt: string;
+}
+
+export interface CreditNoteDto {
+  id: string;
+  creditNoteNumber: string;
+  saleId: string;
+  saleInvoiceNumber?: string;
+  customerId: string;
+  customerName?: string;
+  customerDocument?: string;
+  reason: string;
+  subtotal: number;
+  taxTotal: number;
+  total: number;
+  refundMethod: string;
+  restock: boolean;
+  createdById: string;
+  createdByName?: string | null;
+  createdAt: string;
+  lines: CreditNoteLineDto[];
+}
+

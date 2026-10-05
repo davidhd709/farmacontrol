@@ -740,7 +740,7 @@ export function PayablesPage() {
                   </TableCell>
                 </TableRow>
               )}
-              {!isLoading && filteredItems.length === 0 && (
+              {!isLoading && !isError && filteredItems.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={9} align="center" sx={{ py: 4, color: 'text.secondary' }}>
                     No se encontraron cuentas por pagar

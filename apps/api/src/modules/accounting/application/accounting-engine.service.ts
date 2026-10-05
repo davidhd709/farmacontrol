@@ -82,6 +82,39 @@ export interface ExpensePaymentEventInput {
   paymentDate: Date | string;
 }
 
+export interface CreditNoteEventInput {
+  id: string;
+  creditNoteNumber: string;
+  saleId: string;
+  saleInvoiceNumber?: string;
+  customerId: string;
+  customerName?: string;
+  reason: string;
+  subtotal: number | string | Prisma.Decimal;
+  taxTotal: number | string | Prisma.Decimal;
+  total: number | string | Prisma.Decimal;
+  refundMethod: string;
+  restock: boolean;
+  costTotal?: number | string | Prisma.Decimal;
+  createdById?: string | null;
+  createdAt?: Date | string;
+}
+
+export interface DebitNoteEventInput {
+  id: string;
+  debitNoteNumber: string;
+  purchaseId: string;
+  purchaseInvoiceNumber?: string;
+  supplierId: string;
+  supplierName?: string;
+  reason: string;
+  subtotal: number | string | Prisma.Decimal;
+  taxTotal: number | string | Prisma.Decimal;
+  total: number | string | Prisma.Decimal;
+  createdById?: string | null;
+  createdAt?: Date | string;
+}
+
 @Injectable()
 export class AccountingEngineService {
   private readonly logger = new Logger(AccountingEngineService.name);
@@ -645,6 +678,199 @@ export class AccountingEngineService {
         entryDate: new Date().toISOString().slice(0, 10),
         reason,
         createdById: userId,
+      },
+      tx,
+    );
+  }
+
+  /**
+   * Genera el asiento contable automático al confirmar una Nota Crédito en ventas (RF-033).
+   * Partida doble balanceada:
+   * Débito: DEVOLUCIONES EN VENTAS (4175) por subtotal
+   * Débito: IVA GENERADO (2408) por impuesto devuelto (si aplica)
+   * Crédito: CLIENTES / CAJA / BANCOS por el total devuelto
+   * Si restock:
+   * Débito: INVENTARIO (1435) por el costo de reposición
+   * Crédito: COSTO DE VENTAS (6135) por el costo revertido
+   */
+  async handleCreditNoteConfirmed(note: CreditNoteEventInput, tx?: Tx) {
+    const client = tx ?? prisma;
+    const totalCents = parseMoneyToCents(
+      new Prisma.Decimal(note.total).toFixed(2),
+      'Total de nota crédito',
+    );
+    if (totalCents <= 0n) return null;
+
+    const taxCents = note.taxTotal
+      ? parseMoneyToCents(new Prisma.Decimal(note.taxTotal).toFixed(2), 'IVA de nota crédito')
+      : 0n;
+    const subtotalCents = totalCents - taxCents;
+
+    const cogsCents = note.costTotal
+      ? parseMoneyToCents(new Prisma.Decimal(note.costTotal).toFixed(2), 'Costo revertido')
+      : 0n;
+
+    const paymentPurpose: DbPurpose =
+      note.refundMethod === 'CREDITO_CARTERA'
+        ? 'CUSTOMERS'
+        : note.refundMethod === 'EFECTIVO'
+          ? 'CASH'
+          : 'BANK';
+
+    const requiredPurposes: DbPurpose[] = ['SALES_RETURNS', paymentPurpose];
+    if (taxCents > 0n) {
+      requiredPurposes.push('VAT_OUTPUT');
+    }
+    if (note.restock && cogsCents > 0n) {
+      requiredPurposes.push('INVENTORY', 'COST_OF_SALES');
+    }
+
+    const entryDate = note.createdAt ? new Date(note.createdAt) : new Date();
+
+    const canPost = await this.journalService.canPostForPurposes(
+      requiredPurposes,
+      entryDate,
+      client,
+    );
+    if (!canPost) {
+      this.logger.warn(
+        `Nota Crédito ${note.creditNoteNumber}: propósitos contables pendientes de mapeo. Se omite asiento automático.`,
+      );
+      return null;
+    }
+
+    const lines: JournalLineInput[] = [];
+
+    // Débito a Devoluciones en Ventas (4175)
+    lines.push({
+      purpose: 'SALES_RETURNS',
+      debit: centsToMoneyString(subtotalCents),
+      credit: '0.00',
+      description: `Devolución en ventas NC ${note.creditNoteNumber}${note.saleInvoiceNumber ? ' s/factura ' + note.saleInvoiceNumber : ''}`,
+    });
+
+    // Débito a IVA Generado (2408)
+    if (taxCents > 0n) {
+      lines.push({
+        purpose: 'VAT_OUTPUT',
+        debit: centsToMoneyString(taxCents),
+        credit: '0.00',
+        description: `IVA revertido por devolución NC ${note.creditNoteNumber}`,
+      });
+    }
+
+    // Crédito a Clientes / Caja / Bancos
+    lines.push({
+      purpose: paymentPurpose,
+      debit: '0.00',
+      credit: centsToMoneyString(totalCents),
+      description: `Reembolso / ajuste cartera NC ${note.creditNoteNumber} a ${note.customerName || 'Cliente'}`,
+    });
+
+    // Reversión de Costo de Ventas e Inventario si hubo reintegro
+    if (note.restock && cogsCents > 0n) {
+      lines.push({
+        purpose: 'INVENTORY',
+        debit: centsToMoneyString(cogsCents),
+        credit: '0.00',
+        description: `Reintegro físico de mercancía a inventario NC ${note.creditNoteNumber}`,
+      });
+      lines.push({
+        purpose: 'COST_OF_SALES',
+        debit: '0.00',
+        credit: centsToMoneyString(cogsCents),
+        description: `Reversión costo de mercancía devuelta NC ${note.creditNoteNumber}`,
+      });
+    }
+
+    return this.journalService.post(
+      {
+        entryDate: entryDate.toISOString().slice(0, 10),
+        description: `Nota Crédito ${note.creditNoteNumber} (${note.reason})${note.saleInvoiceNumber ? ' s/factura ' + note.saleInvoiceNumber : ''}`,
+        sourceType: 'CREDIT_NOTE',
+        sourceId: note.id,
+        createdById: note.createdById ?? undefined,
+        lines,
+      },
+      tx,
+    );
+  }
+
+  /**
+   * Genera el asiento contable automático al confirmar una Nota Débito a proveedor en compras (RF-033).
+   * Partida doble balanceada:
+   * Débito: PROVEEDORES (2205) por el total
+   * Crédito: INVENTARIO (1435) por el costo de la mercancía devuelta
+   * Crédito: IVA DESCONTABLE (2408) por el IVA descontable devuelto al proveedor
+   */
+  async handleDebitNoteConfirmed(note: DebitNoteEventInput, tx?: Tx) {
+    const client = tx ?? prisma;
+    const totalCents = parseMoneyToCents(
+      new Prisma.Decimal(note.total).toFixed(2),
+      'Total de nota débito',
+    );
+    if (totalCents <= 0n) return null;
+
+    const taxCents = note.taxTotal
+      ? parseMoneyToCents(new Prisma.Decimal(note.taxTotal).toFixed(2), 'IVA de nota débito')
+      : 0n;
+    const subtotalCents = totalCents - taxCents;
+
+    const requiredPurposes: DbPurpose[] = ['SUPPLIERS', 'INVENTORY'];
+    if (taxCents > 0n) {
+      requiredPurposes.push('VAT_INPUT');
+    }
+
+    const entryDate = note.createdAt ? new Date(note.createdAt) : new Date();
+
+    const canPost = await this.journalService.canPostForPurposes(
+      requiredPurposes,
+      entryDate,
+      client,
+    );
+    if (!canPost) {
+      this.logger.warn(
+        `Nota Débito ${note.debitNoteNumber}: propósitos contables pendientes de mapeo. Se omite asiento automático.`,
+      );
+      return null;
+    }
+
+    const lines: JournalLineInput[] = [];
+
+    // Débito a Proveedores (2205)
+    lines.push({
+      purpose: 'SUPPLIERS',
+      debit: centsToMoneyString(totalCents),
+      credit: '0.00',
+      description: `Nota Débito ND ${note.debitNoteNumber} a proveedor ${note.supplierName || ''}`,
+    });
+
+    // Crédito a Inventario (1435)
+    lines.push({
+      purpose: 'INVENTORY',
+      debit: '0.00',
+      credit: centsToMoneyString(subtotalCents),
+      description: `Salida de mercancía devuelta a proveedor ND ${note.debitNoteNumber}`,
+    });
+
+    // Crédito a IVA Descontable (2408)
+    if (taxCents > 0n) {
+      lines.push({
+        purpose: 'VAT_INPUT',
+        debit: '0.00',
+        credit: centsToMoneyString(taxCents),
+        description: `Reversión IVA descontable devolución compra ND ${note.debitNoteNumber}`,
+      });
+    }
+
+    return this.journalService.post(
+      {
+        entryDate: entryDate.toISOString().slice(0, 10),
+        description: `Nota Débito ${note.debitNoteNumber} (${note.reason})${note.purchaseInvoiceNumber ? ' s/factura ' + note.purchaseInvoiceNumber : ''}`,
+        sourceType: 'DEBIT_NOTE',
+        sourceId: note.id,
+        createdById: note.createdById ?? undefined,
+        lines,
       },
       tx,
     );

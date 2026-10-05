@@ -6,7 +6,7 @@ import type {
   AgingSummaryDto,
   ReversePaymentPayload,
 } from '@farmacia/contracts';
-import { apiRequest } from '../../../api/http-client';
+import { apiRequestData } from '../../../api/http-client';
 
 export async function fetchPayables(
   filters: PayableQueryFilters = {},
@@ -21,18 +21,17 @@ export async function fetchPayables(
   if (filters.pageSize) query.set('pageSize', String(filters.pageSize));
 
   const qs = query.toString();
-  return apiRequest<PaginatedResponse<PayableDto>>(
-    qs ? `payables?${qs}` : 'payables',
-    { method: 'GET' },
-  );
+  return apiRequestData<PaginatedResponse<PayableDto>>(qs ? `payables?${qs}` : 'payables', {
+    method: 'GET',
+  });
 }
 
 export async function fetchPayableById(id: string): Promise<PayableDto> {
-  return apiRequest<PayableDto>(`payables/${id}`, { method: 'GET' });
+  return apiRequestData<PayableDto>(`payables/${id}`, { method: 'GET' });
 }
 
 export async function fetchPayablesAgingSummary(): Promise<AgingSummaryDto> {
-  return apiRequest<AgingSummaryDto>('payables/aging-summary', { method: 'GET' });
+  return apiRequestData<AgingSummaryDto>('payables/aging-summary', { method: 'GET' });
 }
 
 export async function registerPayablePayment(
@@ -40,7 +39,7 @@ export async function registerPayablePayment(
   payload: RegisterPayablePaymentPayload,
   idempotencyKey: string,
 ): Promise<PayableDto> {
-  return apiRequest<PayableDto>(`payables/${id}/payments`, {
+  return apiRequestData<PayableDto>(`payables/${id}/payments`, {
     method: 'POST',
     headers: { 'Idempotency-Key': idempotencyKey },
     body: JSON.stringify(payload),
@@ -52,9 +51,8 @@ export async function revertPayablePayment(
   paymentId: string,
   payload: ReversePaymentPayload,
 ): Promise<PayableDto> {
-  return apiRequest<PayableDto>(`payables/${payableId}/payments/${paymentId}/reverse`, {
+  return apiRequestData<PayableDto>(`payables/${payableId}/payments/${paymentId}/reverse`, {
     method: 'POST',
     body: JSON.stringify(payload),
   });
 }
-

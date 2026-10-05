@@ -24,12 +24,15 @@ import { fetchPurchases } from '../api/purchases.api';
 import { fetchSuppliers } from '../../suppliers/api/suppliers.api';
 import { PurchaseDetailDialog } from '../components/PurchaseDetailDialog';
 import { PermissionGate } from '../../auth/components/PermissionGate';
+import { DebitNoteDialog } from '../components/DebitNoteDialog';
 
 export const PurchasesListPage: React.FC = () => {
   const [purchases, setPurchases] = useState<PurchaseDto[]>([]);
   const [suppliers, setSuppliers] = useState<SupplierDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [purchaseForDebitNote, setPurchaseForDebitNote] = useState<PurchaseDto | null>(null);
 
   // Filtros
   const [selectedSupplierId, setSelectedSupplierId] = useState('');
@@ -250,6 +253,20 @@ export const PurchasesListPage: React.FC = () => {
                     >
                       Ver Detalle
                     </Button>
+                    {purchase.status === 'RECEIVED' && (
+                      <PermissionGate permission={SYSTEM_PERMISSIONS.PURCHASES_RECEIVE}>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="warning"
+                          onClick={() => setPurchaseForDebitNote(purchase)}
+                          sx={{ ml: 1, textTransform: 'none', fontWeight: 600 }}
+                          data-testid={`debit-note-btn-${purchase.id}`}
+                        >
+                          Devolución
+                        </Button>
+                      </PermissionGate>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
@@ -258,11 +275,29 @@ export const PurchasesListPage: React.FC = () => {
         </TableContainer>
       )}
 
+      {successMsg && (
+        <Alert severity="success" sx={{ mt: 2 }} onClose={() => setSuccessMsg(null)}>
+          {successMsg}
+        </Alert>
+      )}
+
       {/* Modal de Detalle */}
       <PurchaseDetailDialog
         open={detailOpen}
         onClose={() => setDetailOpen(false)}
         purchase={selectedPurchase}
+      />
+
+      {/* Nota Débito / Devolución a proveedor (RF-033) */}
+      <DebitNoteDialog
+        open={Boolean(purchaseForDebitNote)}
+        purchase={purchaseForDebitNote}
+        onClose={() => setPurchaseForDebitNote(null)}
+        onCreated={(number) => {
+          setPurchaseForDebitNote(null);
+          setSuccessMsg(`Nota débito ${number} registrada correctamente.`);
+          void loadData();
+        }}
       />
     </Box>
   );

@@ -9,17 +9,21 @@ import { IdentityModule } from '../identity/identity.module';
 import { CustomersModule } from '../customers/customers.module';
 import { AccountingModule } from '../accounting/accounting.module';
 
+import { CreditNotesController } from './presentation/controllers/credit-notes.controller';
+import { CreditNotesService } from './application/credit-notes.service';
+
 @Module({
   imports: [IdentityModule, AuditModule, CustomersModule, AccountingModule],
-  controllers: [SaleController],
+  controllers: [SaleController, CreditNotesController],
   providers: [
     SaleService,
+    CreditNotesService,
     IdempotencyService,
     {
       provide: SALE_REPOSITORY,
       useClass: PrismaSaleRepository,
     },
   ],
-  exports: [SaleService, SALE_REPOSITORY],
+  exports: [SaleService, CreditNotesService, SALE_REPOSITORY],
 })
 export class SalesModule {}

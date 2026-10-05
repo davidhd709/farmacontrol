@@ -30,6 +30,7 @@ import { SaleReceiptDialog } from '../components/SaleReceiptDialog';
 import { HomeBackButton } from '../../../components/HomeBackButton';
 import { PermissionGate } from '../../auth/components/PermissionGate';
 import { SweetModal } from '../../../components/SweetModal';
+import { CreditNoteDialog } from '../components/CreditNoteDialog';
 
 export const SalesHistoryPage: React.FC = () => {
   const navigate = useNavigate();
@@ -55,6 +56,9 @@ export const SalesHistoryPage: React.FC = () => {
 
   // Notificaciones Toast
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+
+  // Nota Crédito (devolución parcial)
+  const [saleForCreditNote, setSaleForCreditNote] = useState<SaleDto | null>(null);
 
   const loadSales = useCallback(async () => {
     setLoading(true);
@@ -312,6 +316,22 @@ export const SalesHistoryPage: React.FC = () => {
                       </Tooltip>
 
                       {sale.status === 'COMPLETED' && (
+                        <PermissionGate permission={SYSTEM_PERMISSIONS.SALES_CREATE}>
+                          <Tooltip title="Devolución parcial con nota crédito">
+                            <Button
+                              variant="outlined"
+                              color="warning"
+                              size="small"
+                              onClick={() => setSaleForCreditNote(sale)}
+                              data-testid={`credit-note-btn-${sale.id}`}
+                            >
+                              Devolución
+                            </Button>
+                          </Tooltip>
+                        </PermissionGate>
+                      )}
+
+                      {sale.status === 'COMPLETED' && (
                         <PermissionGate permission={SYSTEM_PERMISSIONS.SALES_CANCEL}>
                           <Tooltip title="Anular venta y restituir lotes">
                             <Button
@@ -398,6 +418,18 @@ export const SalesHistoryPage: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Nota Crédito / Devolución parcial (RF-033) */}
+      <CreditNoteDialog
+        open={Boolean(saleForCreditNote)}
+        sale={saleForCreditNote}
+        onClose={() => setSaleForCreditNote(null)}
+        onCreated={(number) => {
+          setSaleForCreditNote(null);
+          setToastMsg(`Nota crédito ${number} registrada correctamente.`);
+          void loadSales();
+        }}
+      />
 
       {/* Notificación modal estilo SweetAlert2 */}
       <SweetModal

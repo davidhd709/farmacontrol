@@ -828,7 +828,7 @@ export function ReceivablesPage() {
                   </TableCell>
                 </TableRow>
               )}
-              {!isLoading && filteredItems.length === 0 && (
+              {!isLoading && !isError && filteredItems.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={8} align="center" sx={{ py: 4, color: 'text.secondary' }}>
                     No se encontraron cuentas por cobrar

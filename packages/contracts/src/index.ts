@@ -66,6 +66,7 @@ export const SYSTEM_PERMISSIONS = {
   SALES_READ: 'sales:read',
   SALES_CREATE: 'sales:create',
   SALES_CANCEL: 'sales:cancel',
+  SALES_CREDIT_NOTE: 'sales:credit_note',
 
   // Caja
   CASH_READ: 'cash:read',
@@ -77,6 +78,7 @@ export const SYSTEM_PERMISSIONS = {
   PURCHASES_READ: 'purchases:read',
   PURCHASES_CREATE: 'purchases:create',
   PURCHASES_RECEIVE: 'purchases:receive',
+  PURCHASES_DEBIT_NOTE: 'purchases:debit_note',
 
   // Clientes y proveedores
   CUSTOMERS_READ: 'customers:read',
@@ -680,6 +682,55 @@ export interface PurchaseQueryFilters {
   status?: string;
   page?: number;
   pageSize?: number;
+}
+
+// ===== NOTAS DÉBITO / DEVOLUCIONES EN COMPRAS (RF-033) =====
+
+export interface CreateDebitNoteLinePayload {
+  purchaseLineId: string;
+  quantityCommercial: number;
+}
+
+export interface CreateDebitNotePayload {
+  purchaseId: string;
+  reason: string;
+  items: CreateDebitNoteLinePayload[];
+}
+
+export interface DebitNoteLineDto {
+  id: string;
+  purchaseLineId: string;
+  productId: string;
+  productCode?: string;
+  productName?: string;
+  lotId: string;
+  lotNumber?: string;
+  quantityCommercial: number;
+  quantityBaseUnits: number;
+  unitCost: number;
+  subtotal: number;
+  taxRate: number;
+  taxAmount: number;
+  total: number;
+  createdAt: string;
+}
+
+export interface DebitNoteDto {
+  id: string;
+  debitNoteNumber: string;
+  purchaseId: string;
+  purchaseInvoiceNumber?: string;
+  supplierId: string;
+  supplierName?: string;
+  supplierTaxId?: string;
+  reason: string;
+  subtotal: number;
+  taxTotal: number;
+  total: number;
+  createdById: string;
+  createdByName?: string | null;
+  createdAt: string;
+  lines: DebitNoteLineDto[];
 }
 
 export * from './cash.dto';

@@ -6,7 +6,7 @@ import type {
   AgingSummaryDto,
   ReversePaymentPayload,
 } from '@farmacia/contracts';
-import { apiRequest } from '../../../api/http-client';
+import { apiRequestData } from '../../../api/http-client';
 
 export async function fetchReceivables(
   filters: ReceivableQueryFilters = {},
@@ -21,18 +21,18 @@ export async function fetchReceivables(
   if (filters.pageSize) query.set('pageSize', String(filters.pageSize));
 
   const qs = query.toString();
-  return apiRequest<PaginatedResponse<ReceivableDto>>(
+  return apiRequestData<PaginatedResponse<ReceivableDto>>(
     qs ? `receivables?${qs}` : 'receivables',
     { method: 'GET' },
   );
 }
 
 export async function fetchReceivableById(id: string): Promise<ReceivableDto> {
-  return apiRequest<ReceivableDto>(`receivables/${id}`, { method: 'GET' });
+  return apiRequestData<ReceivableDto>(`receivables/${id}`, { method: 'GET' });
 }
 
 export async function fetchReceivablesAgingSummary(): Promise<AgingSummaryDto> {
-  return apiRequest<AgingSummaryDto>('receivables/aging-summary', { method: 'GET' });
+  return apiRequestData<AgingSummaryDto>('receivables/aging-summary', { method: 'GET' });
 }
 
 export async function registerReceivablePayment(
@@ -40,7 +40,7 @@ export async function registerReceivablePayment(
   payload: RegisterReceivablePaymentPayload,
   idempotencyKey: string,
 ): Promise<ReceivableDto> {
-  return apiRequest<ReceivableDto>(`receivables/${id}/payments`, {
+  return apiRequestData<ReceivableDto>(`receivables/${id}/payments`, {
     method: 'POST',
     headers: { 'Idempotency-Key': idempotencyKey },
     body: JSON.stringify(payload),
@@ -52,9 +52,11 @@ export async function revertReceivablePayment(
   paymentId: string,
   payload: ReversePaymentPayload,
 ): Promise<ReceivableDto> {
-  return apiRequest<ReceivableDto>(`receivables/${receivableId}/payments/${paymentId}/reverse`, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
+  return apiRequestData<ReceivableDto>(
+    `receivables/${receivableId}/payments/${paymentId}/reverse`,
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+  );
 }
-
