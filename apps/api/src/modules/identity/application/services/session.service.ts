@@ -132,7 +132,8 @@ export class SessionService {
 
         if (shouldUpdate) {
           session.recordUsage(now);
-          await this.sessionRepository.update(session);
+          const updated = await this.sessionRepository.update(session);
+          return updated.isValid(now) ? updated : null;
         }
       }
 

@@ -133,6 +133,25 @@ describe('PrismaSessionRepository (Integration with PostgreSQL)', () => {
     expect(inDb!.isValid()).toBe(false);
   });
 
+  it('no reactiva una sesión revocada si llega tarde una actualización de uso', async () => {
+    const user = await createTestUser('user_stale_session_touch');
+    const { tokenHash } = tokenAdapter.generate();
+    const session = await sessionRepository.create(Session.create({
+      userId: user.id!,
+      tokenHash,
+      expiresAt: new Date(Date.now() + 3600 * 1000),
+    }));
+    const staleSession = await sessionRepository.findById(session.id!);
+
+    session.revoke();
+    await sessionRepository.update(session);
+    staleSession!.recordUsage(new Date());
+    const result = await sessionRepository.update(staleSession!);
+
+    expect(result.isRevoked()).toBe(true);
+    expect((await sessionRepository.findById(session.id!))?.isRevoked()).toBe(true);
+  });
+
   it('debe eliminar una sesión específica con delete(id)', async () => {
     const user = await createTestUser('user_delete_session');
     const { tokenHash } = tokenAdapter.generate();

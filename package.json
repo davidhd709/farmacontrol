@@ -21,7 +21,8 @@
     "db:test:check": "pnpm --filter @farmacia/database db:test:check",
     "db:test:migrate": "pnpm --filter @farmacia/database db:test:migrate",
     "db:seed:rbac": "pnpm --filter @farmacia/database db:seed:rbac",
-    "db:seed:admin": "pnpm --filter @farmacia/api seed:admin"
+    "db:seed:admin": "pnpm --filter @farmacia/api seed:admin",
+    "db:reset:admin-password": "pnpm --filter @farmacia/api reset:admin-password"
   },
   "devDependencies": {
     "@eslint/js": "^9.20.0",

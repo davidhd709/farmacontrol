@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "seed:admin": "tsx src/modules/identity/infrastructure/cli/provision-initial-user.ts"
+    "seed:admin": "tsx src/modules/identity/infrastructure/cli/provision-initial-user.ts",
+    "reset:admin-password": "tsx src/modules/identity/infrastructure/cli/reset-admin-password.ts"
   },
   "dependencies": {
     "@farmacia/contracts": "workspace:*",

@@ -56,11 +56,21 @@ export class PrismaSessionRepository implements SessionRepositoryPort {
       throw new Error('No se puede actualizar una sesión sin identificador primario id.');
     }
 
+    if (!session.revokedAt) {
+      // Una lectura antigua no puede restaurar una sesión revocada por logout o recuperación.
+      await this.client.session.updateMany({
+        where: { id: session.id, revokedAt: null },
+        data: { lastUsedAt: session.lastUsedAt ?? null },
+      });
+      const current = await this.client.session.findUniqueOrThrow({ where: { id: session.id } });
+      return this.toDomain(current);
+    }
+
     const record = await this.client.session.update({
       where: { id: session.id },
       data: {
         lastUsedAt: session.lastUsedAt ?? null,
-        revokedAt: session.revokedAt ?? null,
+        revokedAt: session.revokedAt,
       },
     });
 

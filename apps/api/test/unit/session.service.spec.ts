@@ -229,6 +229,28 @@ describe('SessionService (Unit)', () => {
       expect(mockSessionRepository.update).toHaveBeenCalledWith(activeSession);
     });
 
+    it('rechaza una sesión revocada mientras se actualizaba su último uso', async () => {
+      const activeSession = Session.create({
+        id: 'session-uuid-1',
+        userId: sampleUserId,
+        tokenHash: sampleTokenHash,
+        expiresAt: new Date(Date.now() + 3600 * 1000),
+      });
+      const revokedSession = Session.reconstitute({
+        id: 'session-uuid-1',
+        userId: sampleUserId,
+        tokenHash: sampleTokenHash,
+        expiresAt: activeSession.expiresAt,
+        createdAt: new Date(),
+        lastUsedAt: new Date(),
+        revokedAt: new Date(),
+      });
+      vi.mocked(mockSessionRepository.findByTokenHash).mockResolvedValue(activeSession);
+      vi.mocked(mockSessionRepository.update).mockResolvedValue(revokedSession);
+
+      expect(await service.validateSession(sampleRawToken)).toBeNull();
+    });
+
     it('debe retornar null si la sesión no existe en la base de datos', async () => {
       vi.mocked(mockSessionRepository.findByTokenHash).mockResolvedValue(null);
 
