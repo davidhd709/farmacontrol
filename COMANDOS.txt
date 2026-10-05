@@ -44,8 +44,15 @@ B) Aplicar migraciones a la base de datos de desarrollo (farmacia_db):
 C) Sembrar la matriz de permisos y roles del sistema (RBAC):
   pnpm db:seed:rbac
 
-D) Sembrar el usuario administrador inicial (admin / AdminPassword123!):
-  pnpm --filter @farmacia/database exec tsx src/seed/seed-dev-admin.ts
+D) Crear el administrador inicial en una base de datos sin usuarios:
+  export INITIAL_ADMIN_USERNAME=admin_farmacia
+  read -rs INITIAL_ADMIN_PASSWORD
+  export INITIAL_ADMIN_PASSWORD
+  pnpm db:seed:admin
+  unset INITIAL_ADMIN_PASSWORD
+
+  Usa el usuario y la contrasena que definiste. El comando rechaza la creacion
+  si ya existe algun usuario; en ese caso utiliza sus credenciales existentes.
 
 E) Sembrar datos de prueba (productos, presentaciones, lotes con stock, clientes y proveedores):
   pnpm --filter @farmacia/database exec tsx src/seed/seed-demo-data.ts
@@ -80,9 +87,21 @@ Opcion B: Compilacion y arranque directo
 - Health Check:     http://localhost:3000/api/v1/health
 
 Credenciales de Acceso:
-  Usuario:     admin
-  Contrasena:  AdminPassword123!
+  Usa el usuario y la contrasena definidos al crear el administrador inicial.
+  Si el inicio de sesion responde 429, espera el tiempo indicado por la API
+  antes de intentar de nuevo con las credenciales correctas.
 
+  Si olvidaste la contrasena de la cuenta admin existente, detén la API y
+  espera a que terminen las peticiones en curso. Luego, en tu terminal:
+    read -rs RESET_ADMIN_PASSWORD
+    export RESET_ADMIN_PASSWORD
+    pnpm db:reset:admin-password
+    unset RESET_ADMIN_PASSWORD
+
+  Vuelve a iniciar la API al terminar. El restablecimiento revoca las sesiones
+  anteriores de admin. Para otro usuario administrador, define
+  RESET_ADMIN_USERNAME con su nombre. No escribas la contrasena en el comando
+  ni la compartas por chat.
 
 7. COMANDOS DE CALIDAD Y PRUEBAS AUTOMATIZADAS
 --------------------------------------------------------------------------------

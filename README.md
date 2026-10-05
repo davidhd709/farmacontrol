@@ -89,15 +89,48 @@ cp .env.example .env
 
 ```bash
 # Aplicar migraciones de base de datos
-pnpm --filter @farmacia/database db:deploy
+pnpm --filter @farmacia/database exec prisma migrate deploy
 
-# Poblar roles, permisos RBAC y usuario administrador inicial
-pnpm --filter @farmacia/database seed:rbac
+# Poblar roles y permisos RBAC
+pnpm db:seed:rbac
 ```
 
-Credenciales por defecto creadas por el seed:
-- **Usuario:** `admin`
-- **Contraseña:** `AdminPassword123!`
+El seed de RBAC no crea usuarios ni contraseñas por defecto. Para crear el primer
+administrador en una base de datos sin usuarios, define un nombre de usuario y
+una contraseña propia, y ejecuta:
+
+```bash
+export INITIAL_ADMIN_USERNAME=admin_farmacia
+read -rs INITIAL_ADMIN_PASSWORD
+export INITIAL_ADMIN_PASSWORD
+pnpm db:seed:admin
+unset INITIAL_ADMIN_PASSWORD
+```
+
+La contraseña debe tener entre 10 y 128 caracteres e incluir mayúscula,
+minúscula, número y carácter especial. El comando rechaza el aprovisionamiento
+si ya existe algún usuario; en ese caso se deben usar las credenciales de un
+usuario existente. Tras varios intentos fallidos, el inicio de sesión se bloquea
+temporalmente y la API indica el tiempo de espera en `Retry-After`.
+
+Si olvidaste la contraseña de una cuenta `admin` ya creada, restablécela desde
+una terminal en el servidor que tiene acceso a la base de datos. Detén antes
+la API y espera a que terminen las peticiones en curso; vuelve a iniciarla
+después del comando:
+
+```bash
+export RESET_ADMIN_USERNAME=admin_farmacia
+read -rs RESET_ADMIN_PASSWORD
+export RESET_ADMIN_PASSWORD
+pnpm db:reset:admin-password
+unset RESET_ADMIN_PASSWORD
+unset RESET_ADMIN_USERNAME
+```
+
+El comando usa `admin` si no defines `RESET_ADMIN_USERNAME`. Exige que la cuenta
+indicada esté activa y tenga el rol de administrador,
+registra el cambio en auditoría y revoca sus sesiones anteriores. No incluyas
+la contraseña en el comando ni la compartas por chat.
 
 ### 4.5 Iniciar Servicios en Modo Desarrollo
 
