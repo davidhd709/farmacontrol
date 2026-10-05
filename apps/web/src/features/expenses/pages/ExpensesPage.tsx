@@ -43,7 +43,9 @@ import {
   ExpensePaymentMethod,
   ExpensesSummaryDto,
   BankAccountDto,
+  ThirdPartyDto,
 } from '@farmacia/contracts';
+import { ThirdPartyAutocomplete } from '../../third-parties/components/ThirdPartyAutocomplete';
 import {
   fetchExpenses,
   fetchExpensesSummary,
@@ -97,6 +99,7 @@ export const ExpensesPage: React.FC = () => {
 
   // Campos para crear gasto
   const [newCatId, setNewCatId] = useState('');
+  const [newThirdParty, setNewThirdParty] = useState<ThirdPartyDto | null>(null);
   const [newBeneficiary, setNewBeneficiary] = useState('');
   const [newDescription, setNewDescription] = useState('');
   const [newDocumentNumber, setNewDocumentNumber] = useState('');
@@ -201,6 +204,7 @@ export const ExpensesPage: React.FC = () => {
   // Manejo de Creación de Gasto
   const handleOpenCreate = () => {
     setNewCatId(categories.length > 0 ? categories[0].id : '');
+    setNewThirdParty(null);
     setNewBeneficiary('');
     setNewDescription('');
     setNewDocumentNumber('');
@@ -764,14 +768,24 @@ export const ExpensesPage: React.FC = () => {
                 ))}
               </TextField>
 
-              <TextField
+              <ThirdPartyAutocomplete
+                value={newThirdParty}
+                onChange={(tp, raw) => {
+                  setNewThirdParty(tp);
+                  if (tp) {
+                    setNewBeneficiary(tp.name);
+                    if (tp.documentNumber && !newDocumentNumber) {
+                      setNewDocumentNumber(tp.documentNumber);
+                    }
+                  } else if (raw !== undefined) {
+                    setNewBeneficiary(raw);
+                  }
+                }}
                 label="Beneficiario / Tercero / Proveedor"
-                value={newBeneficiary}
-                onChange={(e) => setNewBeneficiary(e.target.value)}
+                placeholder="Buscar en el directorio o escribir nombre..."
                 required
-                fullWidth
-                placeholder="Ej. Enel, Acueducto, Papelería San José, Juan Pérez"
-                size="small"
+                freeSolo
+                showQuickCreate
               />
 
               <TextField

@@ -309,7 +309,14 @@ export interface ReopenFiscalPeriodPayload {
 // ===== REPORTE AUXILIAR DE TERCEROS / MEDIOS MAGNÉTICOS (RF-034) =====
 
 export interface ThirdPartyRowDto {
+  thirdPartyId?: string | null;
+  documentType?: string | null;
   documentNumber: string;
+  verificationDigit?: string | null;
+  personType?: string | null;
+  taxRegime?: string | null;
+  city?: string | null;
+  department?: string | null;
   name: string;
   role: 'CUSTOMER' | 'SUPPLIER' | 'BENEFICIARY' | 'OTHER';
   initialBalance: string;
@@ -333,6 +340,7 @@ export interface ThirdPartyReportFilters {
   fromDate?: string;
   toDate?: string;
   accountId?: string;
+  thirdPartyId?: string;
   search?: string;
 }
 

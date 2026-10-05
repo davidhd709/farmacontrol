@@ -299,11 +299,19 @@ export interface ThirdPartyReportFilters {
   fromDate?: string;
   toDate?: string;
   accountId?: string;
+  thirdPartyId?: string;
   search?: string;
 }
 
 export interface ThirdPartyRowDto {
+  thirdPartyId?: string | null;
+  documentType?: string | null;
   documentNumber: string;
+  verificationDigit?: string | null;
+  personType?: string | null;
+  taxRegime?: string | null;
+  city?: string | null;
+  department?: string | null;
   name: string;
   role: 'CUSTOMER' | 'SUPPLIER' | 'BENEFICIARY' | 'OTHER';
   initialBalance: string;
@@ -328,6 +336,7 @@ export const fetchThirdPartyReport = (filters: ThirdPartyReportFilters = {}) => 
   if (filters.fromDate) params.append('fromDate', filters.fromDate);
   if (filters.toDate) params.append('toDate', filters.toDate);
   if (filters.accountId) params.append('accountId', filters.accountId);
+  if (filters.thirdPartyId) params.append('thirdPartyId', filters.thirdPartyId);
   if (filters.search) params.append('search', filters.search);
   const q = params.toString();
   return apiRequest<ThirdPartyReportDto>(`accounting/reports/third-parties${q ? `?${q}` : ''}`);
@@ -338,6 +347,7 @@ export async function exportThirdPartyReportExcel(filters: ThirdPartyReportFilte
   if (filters.fromDate) params.append('fromDate', filters.fromDate);
   if (filters.toDate) params.append('toDate', filters.toDate);
   if (filters.accountId) params.append('accountId', filters.accountId);
+  if (filters.thirdPartyId) params.append('thirdPartyId', filters.thirdPartyId);
   if (filters.search) params.append('search', filters.search);
   const q = params.toString();
 

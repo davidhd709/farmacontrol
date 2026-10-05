@@ -1014,6 +1014,27 @@ export class AccountingReportsService {
       thirdPartiesMap.set(mapKey, current);
     }
 
+    let targetDocument: string | null = null;
+    if (filters.thirdPartyId) {
+      const targetTp = await prisma.thirdParty.findUnique({
+        where: { id: filters.thirdPartyId },
+      });
+      if (targetTp) {
+        targetDocument = targetTp.documentNumber;
+      }
+    }
+
+    const docNumbers = Array.from(new Set(Array.from(thirdPartiesMap.values()).map((i) => i.documentNumber)));
+    const dbThirdParties = docNumbers.length > 0
+      ? await prisma.thirdParty.findMany({
+          where: { documentNumber: { in: docNumbers } },
+        })
+      : [];
+    const dbThirdPartyMap = new Map<string, (typeof dbThirdParties)[0]>();
+    for (const tp of dbThirdParties) {
+      dbThirdPartyMap.set(tp.documentNumber, tp);
+    }
+
     let totalReportDebitCents = 0n;
     let totalReportCreditCents = 0n;
     const rows: ThirdPartyRowDto[] = [];
@@ -1027,6 +1048,10 @@ export class AccountingReportsService {
         item.periodDebitCents === 0n &&
         item.periodCreditCents === 0n
       ) {
+        continue;
+      }
+
+      if (targetDocument && item.documentNumber !== targetDocument) {
         continue;
       }
 
@@ -1044,9 +1069,18 @@ export class AccountingReportsService {
       const initBalanceCents = item.initDebitCents - item.initCreditCents;
       const finalBalanceCents = initBalanceCents + item.periodDebitCents - item.periodCreditCents;
 
+      const dbTp = dbThirdPartyMap.get(item.documentNumber);
+
       rows.push({
+        thirdPartyId: dbTp?.id || null,
+        documentType: dbTp?.documentType || null,
         documentNumber: item.documentNumber,
-        name: item.name,
+        verificationDigit: dbTp?.verificationDigit || null,
+        personType: dbTp?.personType || null,
+        taxRegime: dbTp?.taxRegime || null,
+        city: dbTp?.city || null,
+        department: dbTp?.department || null,
+        name: dbTp?.name || item.name,
         role: item.role,
         initialBalance: centsToString(initBalanceCents),
         totalDebit: centsToString(item.periodDebitCents),
@@ -1082,22 +1116,30 @@ export class AccountingReportsService {
     const sheet = workbook.addWorksheet('Reporte de Terceros');
 
     sheet.columns = [
-      { header: 'Documento / NIT', key: 'doc', width: 20 },
-      { header: 'Nombre / Razón Social', key: 'name', width: 40 },
-      { header: 'Tipo Tercero', key: 'role', width: 18 },
-      { header: 'Saldo Anterior', key: 'initial', width: 18 },
-      { header: 'Débitos Período', key: 'debits', width: 18 },
-      { header: 'Créditos Período', key: 'credits', width: 18 },
-      { header: 'Saldo Final', key: 'final', width: 18 },
+      { header: 'Tipo Doc', key: 'docType', width: 10 },
+      { header: 'Documento / NIT', key: 'doc', width: 18 },
+      { header: 'DV', key: 'dv', width: 6 },
+      { header: 'Nombre / Razón Social', key: 'name', width: 38 },
+      { header: 'Tipo Tercero', key: 'role', width: 16 },
+      { header: 'Régimen Tributario', key: 'regime', width: 22 },
+      { header: 'Ciudad', key: 'city', width: 16 },
+      { header: 'Saldo Anterior', key: 'initial', width: 16 },
+      { header: 'Débitos Período', key: 'debits', width: 16 },
+      { header: 'Créditos Período', key: 'credits', width: 16 },
+      { header: 'Saldo Final', key: 'final', width: 16 },
     ];
 
     sheet.getRow(1).font = { bold: true };
 
     for (const row of report.rows) {
       sheet.addRow({
+        docType: row.documentType || 'CC/NIT',
         doc: row.documentNumber,
+        dv: row.verificationDigit || '',
         name: row.name,
         role: row.role,
+        regime: row.taxRegime || 'ORDINARIO',
+        city: row.city || '',
         initial: parseFloat(row.initialBalance),
         debits: parseFloat(row.totalDebit),
         credits: parseFloat(row.totalCredit),
@@ -1107,9 +1149,13 @@ export class AccountingReportsService {
 
     sheet.addRow({});
     const totalRow = sheet.addRow({
+      docType: '',
       doc: 'TOTALES',
+      dv: '',
       name: '',
       role: '',
+      regime: '',
+      city: '',
       initial: '',
       debits: parseFloat(report.totalDebit),
       credits: parseFloat(report.totalCredit),

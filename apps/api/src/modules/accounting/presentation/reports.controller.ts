@@ -144,12 +144,14 @@ export class AccountingReportsController {
     @Query('fromDate') fromDate?: string,
     @Query('toDate') toDate?: string,
     @Query('accountId') accountId?: string,
+    @Query('thirdPartyId') thirdPartyId?: string,
     @Query('search') search?: string,
   ): Promise<ThirdPartyReportDto> {
     return this.reportsService.getThirdPartyReport({
       fromDate,
       toDate,
       accountId,
+      thirdPartyId,
       search,
     });
   }
@@ -160,6 +162,7 @@ export class AccountingReportsController {
     @Query('fromDate') fromDate: string | undefined,
     @Query('toDate') toDate: string | undefined,
     @Query('accountId') accountId: string | undefined,
+    @Query('thirdPartyId') thirdPartyId: string | undefined,
     @Query('search') search: string | undefined,
     @Res() res: Response,
   ): Promise<void> {
@@ -167,6 +170,7 @@ export class AccountingReportsController {
       fromDate,
       toDate,
       accountId,
+      thirdPartyId,
       search,
     });
     res.setHeader(

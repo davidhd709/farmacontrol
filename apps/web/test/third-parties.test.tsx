@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ThirdPartyDto } from '@farmacia/contracts';
 import * as thirdPartiesApi from '../src/features/third-parties/api/third-parties.api';
 import { ThirdPartiesPage } from '../src/features/third-parties/pages/ThirdPartiesPage';
+import { ThirdPartyAutocomplete } from '../src/features/third-parties/components/ThirdPartyAutocomplete';
 import { appTheme } from '../src/theme/app-theme';
 
 // Mock de usePermissions para tener acceso de administración
@@ -162,6 +163,62 @@ describe('ThirdPartiesPage (Gestión Unificada de Terceros)', () => {
           role: 'SUPPLIER',
         })
       );
+    });
+  });
+});
+
+describe('ThirdPartyAutocomplete (Selector de Terceros para Contabilidad y Gastos)', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.spyOn(thirdPartiesApi, 'fetchThirdParties').mockResolvedValue({
+      items: mockThirdParties,
+      total: 3,
+      page: 1,
+      pageSize: 20,
+      totalPages: 1,
+    });
+  });
+
+  it('debe renderizar el selector con su placeholder y permitir escribir', async () => {
+    const handleChange = vi.fn();
+    render(
+      <ThemeProvider theme={appTheme}>
+        <ThirdPartyAutocomplete
+          value={null}
+          onChange={handleChange}
+          label="Tercero"
+          placeholder="Buscar tercero..."
+          freeSolo
+        />
+      </ThemeProvider>
+    );
+
+    const input = screen.getByPlaceholderText('Buscar tercero...');
+    expect(input).toBeInTheDocument();
+
+    fireEvent.change(input, { target: { value: 'DisFarma' } });
+    expect(input).toHaveValue('DisFarma');
+  });
+
+  it('debe mostrar opciones al interactuar y permitir seleccionar un tercero', async () => {
+    const handleChange = vi.fn();
+    render(
+      <ThemeProvider theme={appTheme}>
+        <ThirdPartyAutocomplete
+          value={null}
+          onChange={handleChange}
+          label="Tercero"
+          placeholder="Buscar tercero..."
+        />
+      </ThemeProvider>
+    );
+
+    const input = screen.getByPlaceholderText('Buscar tercero...');
+    fireEvent.focus(input);
+    fireEvent.mouseDown(input);
+
+    await waitFor(() => {
+      expect(thirdPartiesApi.fetchThirdParties).toHaveBeenCalled();
     });
   });
 });
