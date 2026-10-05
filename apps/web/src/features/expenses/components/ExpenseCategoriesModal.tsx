@@ -148,7 +148,7 @@ export const ExpenseCategoriesModal: React.FC<Props> = ({ open, onClose, onCateg
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-          Categorías de Gastos Operativos
+          Categorías de Causación de Gastos
         </Typography>
         <IconButton onClick={onClose} size="small">
           <CloseIcon />

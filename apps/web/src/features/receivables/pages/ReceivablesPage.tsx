@@ -641,7 +641,7 @@ export function ReceivablesPage() {
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(5, 1fr)' },
+          gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)', lg: 'repeat(6, 1fr)' },
           gap: 2,
           mb: 3,
         }}
@@ -696,13 +696,25 @@ export function ReceivablesPage() {
 
         <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: 'error.50', borderColor: 'error.200' }}>
           <Typography variant="caption" color="error.dark" sx={{ fontWeight: 600 }}>
-            Vencidas &gt; 60 Días
+            Vencidas 61 - 90 Días
           </Typography>
           <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5, color: 'error.dark' }}>
-            ${(Number(agingData?.days61To90.amount ?? 0) + Number(agingData?.daysOver90.amount ?? 0)).toLocaleString('es-CO', { minimumFractionDigits: 2 })}
+            ${Number(agingData?.days61To90.amount ?? 0).toLocaleString('es-CO', { minimumFractionDigits: 2 })}
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            {(agingData?.days61To90.count ?? 0) + (agingData?.daysOver90.count ?? 0)} crédito(s)
+            {agingData?.days61To90.count ?? 0} crédito(s)
+          </Typography>
+        </Paper>
+
+        <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: 'error.100', borderColor: 'error.400' }}>
+          <Typography variant="caption" color="error.dark" sx={{ fontWeight: 700 }}>
+            &gt; 90 Días (Cartera Crítica)
+          </Typography>
+          <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5, color: 'error.dark' }}>
+            ${Number(agingData?.daysOver90.amount ?? 0).toLocaleString('es-CO', { minimumFractionDigits: 2 })}
+          </Typography>
+          <Typography variant="caption" color="error.dark" sx={{ fontWeight: 600 }}>
+            {agingData?.daysOver90.count ?? 0} crédito(s)
           </Typography>
         </Paper>
       </Box>

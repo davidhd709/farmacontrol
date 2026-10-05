@@ -381,7 +381,7 @@ export const ExpensesPage: React.FC = () => {
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
           <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
-            Gastos Operativos
+            Causación de Gastos
           </Typography>
           <Typography variant="body2" color="text.secondary">
             Causación, control presupuestal, registro de desembolsos y contabilidad automática
@@ -402,7 +402,7 @@ export const ExpensesPage: React.FC = () => {
             startIcon={<AddIcon />}
             onClick={handleOpenCreate}
           >
-            Registrar Gasto
+            Causar Gasto
           </Button>
         </Box>
       </Box>
@@ -745,7 +745,7 @@ export const ExpensesPage: React.FC = () => {
       {/* Modal Registrar Nuevo Gasto */}
       <Dialog open={createModalOpen} onClose={() => setCreateModalOpen(false)} maxWidth="sm" fullWidth>
         <form onSubmit={handleCreateSubmit}>
-          <DialogTitle sx={{ fontWeight: 'bold' }}>Registrar Gasto Operativo</DialogTitle>
+          <DialogTitle sx={{ fontWeight: 'bold' }}>Registrar Causación de Gasto</DialogTitle>
           <DialogContent dividers>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
               <TextField

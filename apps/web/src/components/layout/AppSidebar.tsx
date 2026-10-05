@@ -182,7 +182,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ open, onClose }) => {
           permission: SYSTEM_PERMISSIONS.PAYABLES_READ,
         },
         {
-          title: 'Gastos Operativos',
+          title: 'Causación de Gastos',
           path: '/expenses',
           icon: <ReceiptLongIcon fontSize="small" />,
           permission: SYSTEM_PERMISSIONS.EXPENSES_READ,
