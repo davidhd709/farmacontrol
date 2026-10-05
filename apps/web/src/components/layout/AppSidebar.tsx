@@ -155,6 +155,17 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ open, onClose }) => {
       ],
     },
     {
+      category: 'TERCEROS',
+      items: [
+        {
+          title: 'Directorio de Terceros',
+          path: '/third-parties',
+          icon: <PeopleAltIcon fontSize="small" />,
+          permission: SYSTEM_PERMISSIONS.THIRD_PARTIES_READ,
+        },
+      ],
+    },
+    {
       category: 'CONTABILIDAD Y FINANZAS',
       items: [
         {

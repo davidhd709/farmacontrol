@@ -56,6 +56,10 @@ export const BASE_PERMISSIONS: PermissionDefinition[] = [
   { name: SYSTEM_PERMISSIONS.SUPPLIERS_READ, description: 'Consultar directorio de proveedores' },
   { name: SYSTEM_PERMISSIONS.SUPPLIERS_MANAGE, description: 'Registrar y editar proveedores' },
 
+  // Terceros unificados
+  { name: SYSTEM_PERMISSIONS.THIRD_PARTIES_READ, description: 'Consultar directorio unificado de terceros (clientes, proveedores, empleados)' },
+  { name: SYSTEM_PERMISSIONS.THIRD_PARTIES_MANAGE, description: 'Crear, editar, activar e inactivar terceros unificados' },
+
   // Cartera
   { name: SYSTEM_PERMISSIONS.RECEIVABLES_READ, description: 'Consultar cuentas por cobrar' },
   { name: SYSTEM_PERMISSIONS.RECEIVABLES_MANAGE, description: 'Registrar abonos y gestionar cartera de clientes' },
@@ -119,6 +123,8 @@ export const BASE_ROLES: RoleDefinition[] = [
       SYSTEM_PERMISSIONS.CUSTOMERS_MANAGE,
       SYSTEM_PERMISSIONS.SUPPLIERS_READ,
       SYSTEM_PERMISSIONS.SUPPLIERS_MANAGE,
+      SYSTEM_PERMISSIONS.THIRD_PARTIES_READ,
+      SYSTEM_PERMISSIONS.THIRD_PARTIES_MANAGE,
       SYSTEM_PERMISSIONS.RECEIVABLES_READ,
       SYSTEM_PERMISSIONS.RECEIVABLES_MANAGE,
       SYSTEM_PERMISSIONS.PAYABLES_READ,

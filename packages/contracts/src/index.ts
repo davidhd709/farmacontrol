@@ -86,6 +86,10 @@ export const SYSTEM_PERMISSIONS = {
   SUPPLIERS_READ: 'suppliers:read',
   SUPPLIERS_MANAGE: 'suppliers:manage',
 
+  // Terceros unificados
+  THIRD_PARTIES_READ: 'third_parties:read',
+  THIRD_PARTIES_MANAGE: 'third_parties:manage',
+
   // Cartera
   RECEIVABLES_READ: 'receivables:read',
   RECEIVABLES_MANAGE: 'receivables:manage',
@@ -1068,3 +1072,5 @@ export interface VerifyBackupResultDto {
   sha256Match: boolean;
   message: string;
 }
+
+export * from './third-parties.dto';

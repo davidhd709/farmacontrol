@@ -20,6 +20,7 @@ const BackupManagementPage = lazy(() => import('./features/backups/pages/BackupM
 const UsersPage = lazy(() => import('./features/users/pages/UsersPage').then((m) => ({ default: m.UsersPage })));
 const SuppliersPage = lazy(() => import('./features/suppliers/pages/SuppliersPage').then((m) => ({ default: m.SuppliersPage })));
 const CustomersPage = lazy(() => import('./features/customers/pages/CustomersPage').then((m) => ({ default: m.CustomersPage })));
+const ThirdPartiesPage = lazy(() => import('./features/third-parties/pages/ThirdPartiesPage').then((m) => ({ default: m.ThirdPartiesPage })));
 const PurchasesListPage = lazy(() => import('./features/purchases/pages/PurchasesListPage').then((m) => ({ default: m.PurchasesListPage })));
 const ReceivePurchasePage = lazy(() => import('./features/purchases/pages/ReceivePurchasePage').then((m) => ({ default: m.ReceivePurchasePage })));
 const CashPage = lazy(() => import('./features/cash/pages/CashPage').then((m) => ({ default: m.CashPage })));
@@ -68,6 +69,7 @@ export const App = () => {
             <Route path="/users" element={<UsersPage />} />
             <Route path="/suppliers" element={<SuppliersPage />} />
             <Route path="/customers" element={<CustomersPage />} />
+            <Route path="/third-parties" element={<ThirdPartiesPage />} />
             <Route path="/purchases" element={<PurchasesListPage />} />
             <Route path="/purchases/receive" element={<ReceivePurchasePage />} />
             <Route path="/cash" element={<CashPage />} />

@@ -318,6 +318,7 @@ model Supplier {
   purchases   Purchase[]
   payables    Payable[]
   debitNotes  DebitNote[]
+  thirdParty  ThirdParty?
 
   @@index([taxId])
   @@index([name])
@@ -414,6 +415,7 @@ model Customer {
   sales          Sale[]
   receivables    Receivable[]
   creditNotes    CreditNote[]
+  thirdParty     ThirdParty?
 
   @@index([documentNumber])
   @@index([name])
@@ -1116,6 +1118,45 @@ model DebitNoteLine {
   @@index([productId])
   @@index([lotId])
   @@map("debit_note_lines")
+}
+
+model ThirdParty {
+  id                String    @id @default(uuid()) @db.Uuid
+  personType        String    @default("NATURAL") @map("person_type") @db.VarChar(20)
+  documentType      String    @default("CC") @map("document_type") @db.VarChar(20)
+  documentNumber    String    @unique @map("document_number") @db.VarChar(50)
+  verificationDigit String?   @map("verification_digit") @db.VarChar(2)
+  name              String    @db.VarChar(200)
+  tradeName         String?   @map("trade_name") @db.VarChar(200)
+  contactName       String?   @map("contact_name") @db.VarChar(100)
+  phone             String?   @db.VarChar(50)
+  email             String?   @db.VarChar(100)
+  address           String?   @db.VarChar(255)
+  city              String?   @db.VarChar(100)
+  department        String?   @db.VarChar(100)
+  taxRegime         String?   @default("NO_RESPONSABLE_IVA") @map("tax_regime") @db.VarChar(50)
+  isCustomer        Boolean   @default(false) @map("is_customer")
+  isSupplier        Boolean   @default(false) @map("is_supplier")
+  isEmployee        Boolean   @default(false) @map("is_employee")
+  isOther           Boolean   @default(false) @map("is_other")
+  isActive          Boolean   @default(true) @map("is_active")
+  notes             String?   @db.VarChar(500)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  customerId        String?   @unique @map("customer_id") @db.Uuid
+  customer          Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  supplierId        String?   @unique @map("supplier_id") @db.Uuid
+  supplier          Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+
+  @@index([documentNumber])
+  @@index([name])
+  @@index([isCustomer])
+  @@index([isSupplier])
+  @@index([isEmployee])
+  @@index([isActive])
+  @@map("third_parties")
 }
 
 
