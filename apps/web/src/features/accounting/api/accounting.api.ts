@@ -285,4 +285,197 @@ export const reopenFiscalPeriod = (id: string, payload: ReopenFiscalPeriodPayloa
     body: JSON.stringify(payload),
   });
 
+// ===== REPORTE AUXILIAR DE TERCEROS / MEDIOS MAGNÉTICOS (RF-034) =====
+
+export interface ThirdPartyReportFilters {
+  fromDate?: string;
+  toDate?: string;
+  accountId?: string;
+  search?: string;
+}
+
+export interface ThirdPartyRowDto {
+  documentNumber: string;
+  name: string;
+  role: 'CUSTOMER' | 'SUPPLIER' | 'BENEFICIARY' | 'OTHER';
+  initialBalance: string;
+  totalDebit: string;
+  totalCredit: string;
+  finalBalance: string;
+}
+
+export interface ThirdPartyReportDto {
+  fromDate: string;
+  toDate: string;
+  accountId: string | null;
+  accountCode: string | null;
+  generatedAt: string;
+  rows: ThirdPartyRowDto[];
+  totalDebit: string;
+  totalCredit: string;
+}
+
+export const fetchThirdPartyReport = (filters: ThirdPartyReportFilters = {}) => {
+  const params = new URLSearchParams();
+  if (filters.fromDate) params.append('fromDate', filters.fromDate);
+  if (filters.toDate) params.append('toDate', filters.toDate);
+  if (filters.accountId) params.append('accountId', filters.accountId);
+  if (filters.search) params.append('search', filters.search);
+  const q = params.toString();
+  return apiRequest<ThirdPartyReportDto>(`accounting/reports/third-parties${q ? `?${q}` : ''}`);
+};
+
+export async function exportThirdPartyReportExcel(filters: ThirdPartyReportFilters = {}): Promise<void> {
+  const params = new URLSearchParams();
+  if (filters.fromDate) params.append('fromDate', filters.fromDate);
+  if (filters.toDate) params.append('toDate', filters.toDate);
+  if (filters.accountId) params.append('accountId', filters.accountId);
+  if (filters.search) params.append('search', filters.search);
+  const q = params.toString();
+
+  const response = await fileRequest(
+    `accounting/reports/third-parties/export${q ? `?${q}` : ''}`,
+    { method: 'GET' },
+  );
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `reporte_terceros_${filters.fromDate || 'inicio'}_${filters.toDate || 'corte'}.xlsx`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+// ===== NOTAS CRÉDITO Y NOTAS DÉBITO (RF-033) =====
+
+export interface CreateCreditNoteLinePayload {
+  saleLineId: string;
+  quantityCommercial: number;
+}
+
+export interface CreateCreditNotePayload {
+  saleId: string;
+  reason: string;
+  refundMethod?: 'EFECTIVO' | 'CREDITO_CARTERA' | 'TRANSFERENCIA' | 'SALDO_A_FAVOR';
+  restock?: boolean;
+  items: CreateCreditNoteLinePayload[];
+}
+
+export interface CreditNoteLineDto {
+  id: string;
+  creditNoteId: string;
+  saleLineId: string;
+  productId: string;
+  productCode?: string;
+  productName?: string;
+  lotId?: string | null;
+  lotNumber?: string | null;
+  quantityCommercial: number;
+  quantityBaseUnits: number;
+  unitPrice: number;
+  subtotal: number;
+  taxRate: number;
+  taxAmount: number;
+  total: number;
+  createdAt: string;
+}
+
+export interface CreditNoteDto {
+  id: string;
+  creditNoteNumber: string;
+  saleId: string;
+  saleInvoiceNumber?: string;
+  customerId: string;
+  customerName?: string;
+  customerDocument?: string;
+  reason: string;
+  subtotal: number;
+  taxTotal: number;
+  total: number;
+  refundMethod: string;
+  restock: boolean;
+  createdById: string;
+  createdByName?: string | null;
+  createdAt: string;
+  lines: CreditNoteLineDto[];
+}
+
+export const fetchSaleCreditNotes = (saleId: string) =>
+  apiRequest<CreditNoteDto[]>(`sales/${encodeURIComponent(saleId)}/credit-notes`);
+
+export const createSaleCreditNote = (saleId: string, payload: CreateCreditNotePayload) =>
+  apiRequest<CreditNoteDto>(`sales/${encodeURIComponent(saleId)}/credit-notes`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+export const fetchAllCreditNotes = (saleId?: string) => {
+  const q = saleId ? `?saleId=${encodeURIComponent(saleId)}` : '';
+  return apiRequest<CreditNoteDto[]>(`credit-notes${q}`);
+};
+
+export interface CreateDebitNoteLinePayload {
+  purchaseLineId: string;
+  quantityCommercial: number;
+}
+
+export interface CreateDebitNotePayload {
+  purchaseId: string;
+  reason: string;
+  items: CreateDebitNoteLinePayload[];
+}
+
+export interface DebitNoteLineDto {
+  id: string;
+  debitNoteId: string;
+  purchaseLineId: string;
+  productId: string;
+  productCode?: string;
+  productName?: string;
+  lotId?: string | null;
+  lotNumber?: string | null;
+  quantityCommercial: number;
+  quantityBaseUnits: number;
+  unitCost: number;
+  subtotal: number;
+  taxRate: number;
+  taxAmount: number;
+  total: number;
+  createdAt: string;
+}
+
+export interface DebitNoteDto {
+  id: string;
+  debitNoteNumber: string;
+  purchaseId: string;
+  purchaseInvoiceNumber?: string;
+  supplierId: string;
+  supplierName?: string;
+  supplierTaxId?: string;
+  reason: string;
+  subtotal: number;
+  taxTotal: number;
+  total: number;
+  createdById: string;
+  createdByName?: string | null;
+  createdAt: string;
+  lines: DebitNoteLineDto[];
+}
+
+export const fetchPurchaseDebitNotes = (purchaseId: string) =>
+  apiRequest<DebitNoteDto[]>(`purchases/${encodeURIComponent(purchaseId)}/debit-notes`);
+
+export const createPurchaseDebitNote = (purchaseId: string, payload: CreateDebitNotePayload) =>
+  apiRequest<DebitNoteDto>(`purchases/${encodeURIComponent(purchaseId)}/debit-notes`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+export const fetchAllDebitNotes = (purchaseId?: string) => {
+  const q = purchaseId ? `?purchaseId=${encodeURIComponent(purchaseId)}` : '';
+  return apiRequest<DebitNoteDto[]>(`debit-notes${q}`);
+};
+
 

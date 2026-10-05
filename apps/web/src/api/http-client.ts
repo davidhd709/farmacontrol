@@ -1,3 +1,5 @@
+import type { ApiResponse } from '@farmacia/contracts';
+
 const DEFAULT_API_URL = '/api/v1';
 
 const apiUrl = (import.meta.env.VITE_API_URL || DEFAULT_API_URL).replace(/\/$/, '');
@@ -76,4 +78,12 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
   }
 
   return payload as T;
+}
+
+export async function apiRequestData<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const response = await apiRequest<ApiResponse<T>>(path, options);
+  if (!response.success || response.data === undefined) {
+    throw new ApiError('La respuesta del servidor no contiene datos válidos.', 0, response);
+  }
+  return response.data;
 }

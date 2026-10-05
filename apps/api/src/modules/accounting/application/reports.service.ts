@@ -11,6 +11,9 @@ import {
   BalanceSheetReportDto,
   BalanceSheetCategoryGroupDto,
   BalanceSheetAccountItemDto,
+  ThirdPartyReportDto,
+  ThirdPartyRowDto,
+  ThirdPartyReportFilters,
 } from '@farmacia/contracts';
 import { parseJournalDate, normalizeJournalAmount } from '../domain/journal-rules';
 import ExcelJS from 'exceljs';
@@ -789,6 +792,330 @@ export class AccountingReportsService {
 
     sheet.addRow([]);
     sheet.addRow(['TOTAL PASIVO Y PATRIMONIO', parseFloat(report.totalLiabilitiesAndEquity)]).font = { bold: true };
+
+    return Buffer.from(await workbook.xlsx.writeBuffer());
+  }
+
+  /**
+   * Genera el Reporte Auxiliar de Terceros / Medios Magnéticos (RF-034).
+   * Agrupa los movimientos contables por Tercero (NIT / Cédula, Razón Social).
+   */
+  async getThirdPartyReport(filters: ThirdPartyReportFilters): Promise<ThirdPartyReportDto> {
+    const fromDate = filters.fromDate || new Date(new Date().getFullYear(), 0, 1).toISOString().slice(0, 10);
+    const toDate = filters.toDate || new Date().toISOString().slice(0, 10);
+
+    const from = parseJournalDate(fromDate);
+    const to = parseJournalDate(toDate);
+    if (from > to) {
+      throw new BadRequestException('La fecha inicial no puede ser mayor a la fecha final.');
+    }
+    const toEnd = new Date(`${toDate}T23:59:59.999Z`);
+
+    const lineWhere: Prisma.JournalEntryLineWhereInput = {
+      journalEntry: {
+        status: 'POSTED',
+      },
+    };
+
+    if (filters.accountId) {
+      lineWhere.accountId = filters.accountId;
+    }
+
+    const lines = await prisma.journalEntryLine.findMany({
+      where: lineWhere,
+      include: {
+        journalEntry: true,
+        account: true,
+      },
+    });
+
+    const saleIds = new Set<string>();
+    const creditNoteIds = new Set<string>();
+    const purchaseIds = new Set<string>();
+    const debitNoteIds = new Set<string>();
+    const recPaymentIds = new Set<string>();
+    const payPaymentIds = new Set<string>();
+    const expenseIds = new Set<string>();
+    const expPaymentIds = new Set<string>();
+
+    for (const l of lines) {
+      const st = l.journalEntry.sourceType;
+      const sid = l.journalEntry.sourceId;
+      if (st === 'SALE') saleIds.add(sid);
+      else if (st === 'CREDIT_NOTE') creditNoteIds.add(sid);
+      else if (st === 'PURCHASE') purchaseIds.add(sid);
+      else if (st === 'DEBIT_NOTE') debitNoteIds.add(sid);
+      else if (st === 'RECEIVABLE_PAYMENT') recPaymentIds.add(sid);
+      else if (st === 'PAYABLE_PAYMENT') payPaymentIds.add(sid);
+      else if (st === 'EXPENSE') expenseIds.add(sid);
+      else if (st === 'EXPENSE_PAYMENT') expPaymentIds.add(sid);
+    }
+
+    const sourceThirdPartyMap = new Map<
+      string,
+      { doc: string; name: string; role: 'CUSTOMER' | 'SUPPLIER' | 'BENEFICIARY' | 'OTHER' }
+    >();
+
+    if (saleIds.size > 0) {
+      const sales = await prisma.sale.findMany({
+        where: { id: { in: Array.from(saleIds) } },
+        include: { customer: true },
+      });
+      for (const s of sales) {
+        sourceThirdPartyMap.set(`SALE:${s.id}`, {
+          doc: s.customer.documentNumber,
+          name: s.customer.name,
+          role: 'CUSTOMER',
+        });
+      }
+    }
+
+    if (creditNoteIds.size > 0) {
+      const cns = await prisma.creditNote.findMany({
+        where: { id: { in: Array.from(creditNoteIds) } },
+        include: { customer: true },
+      });
+      for (const cn of cns) {
+        sourceThirdPartyMap.set(`CREDIT_NOTE:${cn.id}`, {
+          doc: cn.customer.documentNumber,
+          name: cn.customer.name,
+          role: 'CUSTOMER',
+        });
+      }
+    }
+
+    if (purchaseIds.size > 0) {
+      const purchases = await prisma.purchase.findMany({
+        where: { id: { in: Array.from(purchaseIds) } },
+        include: { supplier: true },
+      });
+      for (const p of purchases) {
+        sourceThirdPartyMap.set(`PURCHASE:${p.id}`, {
+          doc: p.supplier.taxId,
+          name: p.supplier.name,
+          role: 'SUPPLIER',
+        });
+      }
+    }
+
+    if (debitNoteIds.size > 0) {
+      const dns = await prisma.debitNote.findMany({
+        where: { id: { in: Array.from(debitNoteIds) } },
+        include: { supplier: true },
+      });
+      for (const dn of dns) {
+        sourceThirdPartyMap.set(`DEBIT_NOTE:${dn.id}`, {
+          doc: dn.supplier.taxId,
+          name: dn.supplier.name,
+          role: 'SUPPLIER',
+        });
+      }
+    }
+
+    if (recPaymentIds.size > 0) {
+      const payments = await prisma.receivablePayment.findMany({
+        where: { id: { in: Array.from(recPaymentIds) } },
+        include: { receivable: { include: { customer: true } } },
+      });
+      for (const rp of payments) {
+        sourceThirdPartyMap.set(`RECEIVABLE_PAYMENT:${rp.id}`, {
+          doc: rp.receivable.customer.documentNumber,
+          name: rp.receivable.customer.name,
+          role: 'CUSTOMER',
+        });
+      }
+    }
+
+    if (payPaymentIds.size > 0) {
+      const payments = await prisma.payablePayment.findMany({
+        where: { id: { in: Array.from(payPaymentIds) } },
+        include: { payable: { include: { supplier: true } } },
+      });
+      for (const pp of payments) {
+        sourceThirdPartyMap.set(`PAYABLE_PAYMENT:${pp.id}`, {
+          doc: pp.payable.supplier.taxId,
+          name: pp.payable.supplier.name,
+          role: 'SUPPLIER',
+        });
+      }
+    }
+
+    if (expenseIds.size > 0) {
+      const expenses = await prisma.expense.findMany({
+        where: { id: { in: Array.from(expenseIds) } },
+      });
+      for (const e of expenses) {
+        sourceThirdPartyMap.set(`EXPENSE:${e.id}`, {
+          doc: e.documentNumber || 'SIN-NIT',
+          name: e.beneficiary,
+          role: 'BENEFICIARY',
+        });
+      }
+    }
+
+    if (expPaymentIds.size > 0) {
+      const expPayments = await prisma.expensePayment.findMany({
+        where: { id: { in: Array.from(expPaymentIds) } },
+        include: { expense: true },
+      });
+      for (const ep of expPayments) {
+        sourceThirdPartyMap.set(`EXPENSE_PAYMENT:${ep.id}`, {
+          doc: ep.expense.documentNumber || 'SIN-NIT',
+          name: ep.expense.beneficiary,
+          role: 'BENEFICIARY',
+        });
+      }
+    }
+
+    const thirdPartiesMap = new Map<
+      string,
+      {
+        documentNumber: string;
+        name: string;
+        role: 'CUSTOMER' | 'SUPPLIER' | 'BENEFICIARY' | 'OTHER';
+        initDebitCents: bigint;
+        initCreditCents: bigint;
+        periodDebitCents: bigint;
+        periodCreditCents: bigint;
+      }
+    >();
+
+    for (const l of lines) {
+      const key = `${l.journalEntry.sourceType}:${l.journalEntry.sourceId}`;
+      const tp = sourceThirdPartyMap.get(key) || {
+        doc: '222222222222',
+        name: 'Consumidor Final / Varios',
+        role: 'OTHER' as const,
+      };
+
+      const mapKey = `${tp.doc}__${tp.name}`;
+      const current = thirdPartiesMap.get(mapKey) || {
+        documentNumber: tp.doc,
+        name: tp.name,
+        role: tp.role,
+        initDebitCents: 0n,
+        initCreditCents: 0n,
+        periodDebitCents: 0n,
+        periodCreditCents: 0n,
+      };
+
+      const dCents = normalizeJournalAmount(l.debit.toFixed(2)).cents;
+      const cCents = normalizeJournalAmount(l.credit.toFixed(2)).cents;
+      const entryDate = l.journalEntry.entryDate;
+
+      if (entryDate < from) {
+        current.initDebitCents += dCents;
+        current.initCreditCents += cCents;
+      } else if (entryDate <= toEnd) {
+        current.periodDebitCents += dCents;
+        current.periodCreditCents += cCents;
+      }
+
+      thirdPartiesMap.set(mapKey, current);
+    }
+
+    let totalReportDebitCents = 0n;
+    let totalReportCreditCents = 0n;
+    const rows: ThirdPartyRowDto[] = [];
+
+    const searchLower = filters.search?.toLowerCase().trim();
+
+    for (const item of thirdPartiesMap.values()) {
+      if (
+        item.initDebitCents === 0n &&
+        item.initCreditCents === 0n &&
+        item.periodDebitCents === 0n &&
+        item.periodCreditCents === 0n
+      ) {
+        continue;
+      }
+
+      if (
+        searchLower &&
+        !item.documentNumber.toLowerCase().includes(searchLower) &&
+        !item.name.toLowerCase().includes(searchLower)
+      ) {
+        continue;
+      }
+
+      totalReportDebitCents += item.periodDebitCents;
+      totalReportCreditCents += item.periodCreditCents;
+
+      const initBalanceCents = item.initDebitCents - item.initCreditCents;
+      const finalBalanceCents = initBalanceCents + item.periodDebitCents - item.periodCreditCents;
+
+      rows.push({
+        documentNumber: item.documentNumber,
+        name: item.name,
+        role: item.role,
+        initialBalance: centsToString(initBalanceCents),
+        totalDebit: centsToString(item.periodDebitCents),
+        totalCredit: centsToString(item.periodCreditCents),
+        finalBalance: centsToString(finalBalanceCents),
+      });
+    }
+
+    rows.sort((a, b) => a.name.localeCompare(b.name));
+
+    let accountCode: string | null = null;
+    if (filters.accountId) {
+      const acc = await prisma.account.findUnique({ where: { id: filters.accountId } });
+      accountCode = acc?.code || null;
+    }
+
+    return {
+      fromDate,
+      toDate,
+      accountId: filters.accountId || null,
+      accountCode,
+      generatedAt: new Date().toISOString(),
+      rows,
+      totalDebit: centsToString(totalReportDebitCents),
+      totalCredit: centsToString(totalReportCreditCents),
+    };
+  }
+
+  async exportThirdPartyReportExcel(filters: ThirdPartyReportFilters): Promise<Buffer> {
+    const report = await this.getThirdPartyReport(filters);
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Reporte de Terceros');
+
+    sheet.columns = [
+      { header: 'Documento / NIT', key: 'doc', width: 20 },
+      { header: 'Nombre / Razón Social', key: 'name', width: 40 },
+      { header: 'Tipo Tercero', key: 'role', width: 18 },
+      { header: 'Saldo Anterior', key: 'initial', width: 18 },
+      { header: 'Débitos Período', key: 'debits', width: 18 },
+      { header: 'Créditos Período', key: 'credits', width: 18 },
+      { header: 'Saldo Final', key: 'final', width: 18 },
+    ];
+
+    sheet.getRow(1).font = { bold: true };
+
+    for (const row of report.rows) {
+      sheet.addRow({
+        doc: row.documentNumber,
+        name: row.name,
+        role: row.role,
+        initial: parseFloat(row.initialBalance),
+        debits: parseFloat(row.totalDebit),
+        credits: parseFloat(row.totalCredit),
+        final: parseFloat(row.finalBalance),
+      });
+    }
+
+    sheet.addRow({});
+    const totalRow = sheet.addRow({
+      doc: 'TOTALES',
+      name: '',
+      role: '',
+      initial: '',
+      debits: parseFloat(report.totalDebit),
+      credits: parseFloat(report.totalCredit),
+      final: '',
+    });
+    totalRow.font = { bold: true };
 
     return Buffer.from(await workbook.xlsx.writeBuffer());
   }

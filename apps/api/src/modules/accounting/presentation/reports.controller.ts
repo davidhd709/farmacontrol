@@ -13,6 +13,7 @@ import {
   GeneralLedgerReportDto,
   IncomeStatementReportDto,
   BalanceSheetReportDto,
+  ThirdPartyReportDto,
 } from '@farmacia/contracts';
 import { AccountingReportsService } from '../application/reports.service';
 import { SessionAuthGuard } from '../../identity/presentation/guards/session-auth.guard';
@@ -133,6 +134,48 @@ export class AccountingReportsController {
     res.setHeader(
       'Content-Disposition',
       `attachment; filename="balance_general_${asOfDate}.xlsx"`,
+    );
+    res.send(buffer);
+  }
+
+  @Get('third-parties')
+  @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_READ)
+  async getThirdParties(
+    @Query('fromDate') fromDate?: string,
+    @Query('toDate') toDate?: string,
+    @Query('accountId') accountId?: string,
+    @Query('search') search?: string,
+  ): Promise<ThirdPartyReportDto> {
+    return this.reportsService.getThirdPartyReport({
+      fromDate,
+      toDate,
+      accountId,
+      search,
+    });
+  }
+
+  @Get('third-parties/export')
+  @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_READ)
+  async exportThirdParties(
+    @Query('fromDate') fromDate: string | undefined,
+    @Query('toDate') toDate: string | undefined,
+    @Query('accountId') accountId: string | undefined,
+    @Query('search') search: string | undefined,
+    @Res() res: Response,
+  ): Promise<void> {
+    const buffer = await this.reportsService.exportThirdPartyReportExcel({
+      fromDate,
+      toDate,
+      accountId,
+      search,
+    });
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="reporte_terceros_${fromDate || 'inicio'}_${toDate || 'corte'}.xlsx"`,
     );
     res.send(buffer);
   }
