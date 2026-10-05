@@ -49,6 +49,8 @@ export class AccountingRepository {
   async transaction<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
     return prisma.$transaction(fn, {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      timeout: 60000,
+      maxWait: 15000,
     });
   }
 

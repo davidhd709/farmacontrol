@@ -1,6 +1,14 @@
 import { apiRequest, ApiError } from '../../../api/http-client';
 
-export type AccountType = 'ASSET' | 'LIABILITY' | 'EQUITY' | 'INCOME' | 'EXPENSE' | 'COST';
+export type AccountType =
+  | 'ASSET'
+  | 'LIABILITY'
+  | 'EQUITY'
+  | 'INCOME'
+  | 'EXPENSE'
+  | 'COST'
+  | 'ORDER_DEBTOR'
+  | 'ORDER_CREDITOR';
 export interface AccountDto {
   id: string;
   code: string;

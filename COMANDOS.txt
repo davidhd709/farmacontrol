@@ -57,6 +57,10 @@ D) Crear el administrador inicial en una base de datos sin usuarios:
 E) Sembrar datos de prueba (productos, presentaciones, lotes con stock, clientes y proveedores):
   pnpm --filter @farmacia/database exec tsx src/seed/seed-demo-data.ts
 
+F) Sembrar Plan Unico de Cuentas (PUC oficial de la contadora - 2.939 cuentas y propositos):
+  pnpm db:seed:puc
+  (Tambien se puede importar directamente el archivo docs/PUC.xlsx desde la interfaz web en /accounting/accounts/import)
+
 
 5. LEVANTAR LOS SERVICIOS DE LA APLICACION
 --------------------------------------------------------------------------------

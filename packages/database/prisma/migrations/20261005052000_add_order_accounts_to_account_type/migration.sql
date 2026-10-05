@@ -1,0 +1,3 @@
+-- AlterEnum
+ALTER TYPE "AccountType" ADD VALUE 'ORDER_DEBTOR';
+ALTER TYPE "AccountType" ADD VALUE 'ORDER_CREDITOR';

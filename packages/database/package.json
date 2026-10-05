@@ -16,12 +16,14 @@
     "db:check": "tsx src/check.ts",
     "db:test:check": "NODE_ENV=test tsx src/check-test.ts",
     "db:test:migrate": "NODE_ENV=test prisma migrate deploy",
-    "db:seed:rbac": "tsx src/seed/run-rbac-seed.ts"
+    "db:seed:rbac": "tsx src/seed/run-rbac-seed.ts",
+    "db:seed:puc": "tsx src/seed/seed-puc.ts"
   },
   "dependencies": {
     "@farmacia/contracts": "workspace:*",
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
+    "exceljs": "^4.4.0",
     "pg": "^8.13.3"
   },
   "devDependencies": {

@@ -675,6 +675,8 @@ enum AccountType {
   INCOME
   EXPENSE
   COST
+  ORDER_DEBTOR
+  ORDER_CREDITOR
 }
 
 enum AccountingPurpose {

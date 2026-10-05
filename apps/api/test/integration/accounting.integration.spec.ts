@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { beforeAll, beforeEach, afterAll, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import ExcelJS from 'exceljs';
@@ -361,5 +363,34 @@ describe('Accounting 11.1 PostgreSQL', () => {
     expect(await prisma.auditEvent.count({ where: { action: 'accounting:account_created' } })).toBe(
       0,
     );
+  });
+
+  it('procesa y valida correctamente el archivo PUC enviado por la contadora', async () => {
+    const pucPath = path.resolve(__dirname, '../../../../docs/PUC.xlsx');
+    if (!fs.existsSync(pucPath)) return;
+    const buffer = fs.readFileSync(pucPath);
+
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/accounts/import/preview')
+      .set('Cookie', cookie)
+      .attach('file', buffer, 'PUC.xlsx');
+
+    expect(response.status).toBe(201);
+    expect(response.body.validCount).toBe(2939);
+    expect(response.body.errorCount).toBe(0);
+    expect(response.body.warningCount).toBe(2);
+
+    const bankAccount = response.body.rows.find((r: any) => r.code === '11200501');
+    expect(bankAccount).toBeDefined();
+    expect(bankAccount.name).toBe('Bancolombia Cta Aho 68095832443');
+    expect(bankAccount.type).toBe('ASSET');
+    expect(bankAccount.allowsMovement).toBe(true);
+    expect(bankAccount.purpose).toBe('BANK');
+
+    const cashAccount = response.body.rows.find((r: any) => r.code === '11050501');
+    expect(cashAccount.purpose).toBe('CASH');
+
+    const orderAccount = response.body.rows.find((r: any) => r.code === '8105');
+    expect(orderAccount.type).toBe('ORDER_DEBTOR');
   });
 });

@@ -20,7 +20,16 @@ import { ApiError } from '../../../api/http-client';
 import type { AccountDto, AccountPayload, AccountType } from '../api/accounting.api';
 import { useCreateAccount, useUpdateAccount } from '../hooks/useAccounting';
 
-const accountTypes = ['ASSET', 'LIABILITY', 'EQUITY', 'INCOME', 'EXPENSE', 'COST'] as const;
+const accountTypes = [
+  'ASSET',
+  'LIABILITY',
+  'EQUITY',
+  'INCOME',
+  'EXPENSE',
+  'COST',
+  'ORDER_DEBTOR',
+  'ORDER_CREDITOR',
+] as const;
 export const accountTypeLabels: Record<AccountType, string> = {
   ASSET: 'Activo',
   LIABILITY: 'Pasivo',
@@ -28,6 +37,8 @@ export const accountTypeLabels: Record<AccountType, string> = {
   INCOME: 'Ingreso',
   EXPENSE: 'Gasto',
   COST: 'Costo',
+  ORDER_DEBTOR: 'Cuentas de orden deudoras',
+  ORDER_CREDITOR: 'Cuentas de orden acreedoras',
 };
 const schema = z.object({
   code: z.string().trim().min(1, 'Ingresa el código.'),

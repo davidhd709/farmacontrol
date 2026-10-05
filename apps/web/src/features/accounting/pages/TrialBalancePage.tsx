@@ -36,6 +36,8 @@ const accountTypeNames: Record<AccountType, string> = {
   INCOME: 'Ingreso',
   EXPENSE: 'Gasto',
   COST: 'Costo',
+  ORDER_DEBTOR: 'Cuentas de orden deudoras',
+  ORDER_CREDITOR: 'Cuentas de orden acreedoras',
 };
 
 function formatMoney(value: string | number): string {

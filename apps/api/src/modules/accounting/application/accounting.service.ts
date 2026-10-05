@@ -1,8 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@farmacia/database';
+import crypto from 'node:crypto';
 import {
   AccountInput,
   AccountDto,
+  AccountType,
   AccountingPurpose,
   AccountImportPreviewDto,
   AccountImportRowDto,

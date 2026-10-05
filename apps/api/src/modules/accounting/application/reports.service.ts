@@ -19,7 +19,7 @@ import { parseJournalDate, normalizeJournalAmount } from '../domain/journal-rule
 import ExcelJS from 'exceljs';
 
 function isNormalDebit(type: AccountType): boolean {
-  return type === 'ASSET' || type === 'EXPENSE' || type === 'COST';
+  return type === 'ASSET' || type === 'EXPENSE' || type === 'COST' || type === 'ORDER_DEBTOR';
 }
 
 function centsToString(cents: bigint): string {

@@ -1,4 +1,13 @@
-export const ACCOUNT_TYPES = ['ASSET', 'LIABILITY', 'EQUITY', 'INCOME', 'EXPENSE', 'COST'] as const;
+export const ACCOUNT_TYPES = [
+  'ASSET',
+  'LIABILITY',
+  'EQUITY',
+  'INCOME',
+  'EXPENSE',
+  'COST',
+  'ORDER_DEBTOR',
+  'ORDER_CREDITOR',
+] as const;
 export type AccountType = (typeof ACCOUNT_TYPES)[number];
 
 export const ACCOUNTING_PURPOSES = [

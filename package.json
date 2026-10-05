@@ -22,6 +22,7 @@
     "db:test:migrate": "pnpm --filter @farmacia/database db:test:migrate",
     "db:seed:rbac": "pnpm --filter @farmacia/database db:seed:rbac",
     "db:seed:admin": "pnpm --filter @farmacia/api seed:admin",
+    "db:seed:puc": "pnpm --filter @farmacia/database db:seed:puc",
     "db:reset:admin-password": "pnpm --filter @farmacia/api reset:admin-password"
   },
   "devDependencies": {
