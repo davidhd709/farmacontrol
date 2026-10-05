@@ -19,7 +19,7 @@ describe('ProductService (Application Unit)', () => {
   let productService: ProductService;
 
   const mockCategory = Category.reconstitute({
-    id: 'c0000000-0000-0000-0000-000000000001',
+    id: 'a0000000-0000-0000-0000-000000000001',
     name: 'Analgésicos',
     description: null,
     isActive: true,
@@ -28,7 +28,7 @@ describe('ProductService (Application Unit)', () => {
   });
 
   const sampleProduct = Product.create({
-    id: 'p0000000-0000-0000-0000-000000000001',
+    id: 'b0000000-0000-0000-0000-000000000001',
     categoryId: mockCategory.id,
     categoryName: mockCategory.name,
     code: 'IBU-400',

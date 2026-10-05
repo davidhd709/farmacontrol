@@ -148,6 +148,7 @@ describe('AuditEvent Entity (Unit)', () => {
     expect(dto).toEqual({
       id: 'testid-1234',
       userId: 'user-1',
+      user: null,
       action: 'role:assign',
       entity: 'Role',
       entityId: 'role-admin',
