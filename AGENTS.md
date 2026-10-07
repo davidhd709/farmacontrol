@@ -85,7 +85,7 @@ Usar explícitamente la skill adecuada antes de realizar trabajos importantes.
 
 - `auditar-proyecto`
 - `calidad-codigo`
-- `code-review`
+- `revision-codigo`
 - `pruebas-qa`
 - `revisar-seguridad`
 - `accesibilidad`
