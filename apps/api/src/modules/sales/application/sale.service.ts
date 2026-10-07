@@ -12,6 +12,7 @@ import {
   SaleNotFoundException,
   InsufficientStockException,
   SaleAlreadyCancelledException,
+  SaleHasCreditNotesException,
 } from '../domain/sale.exceptions';
 import { IdempotencyService } from '../infrastructure/idempotency.service';
 import { AuditService } from '../../audit/application/services/audit.service';
@@ -528,6 +529,11 @@ export class SaleService {
       if (!lockedSales.length) throw new SaleNotFoundException(id);
       if (lockedSales[0].status === 'CANCELLED') {
         throw new SaleAlreadyCancelledException(sale.invoiceNumber);
+      }
+      // Una nota crédito ya devolvió parte de la venta: anularla reintegraría dos veces
+      const creditNotesCount = await tx.creditNote.count({ where: { saleId: id } });
+      if (creditNotesCount > 0) {
+        throw new SaleHasCreditNotesException(sale.invoiceNumber, creditNotesCount);
       }
       sale.cancel();
       await this.saleRepository.save(sale, tx);

@@ -334,6 +334,134 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
     });
   });
 
+  describe('AUD-002: Anulación de ventas con notas crédito', () => {
+    async function confirmCashSaleOfTwoUnits(code: string) {
+      await setupStandardPucAndMappings();
+      await prisma.customer.create({
+        data: {
+          documentType: 'CC',
+          documentNumber: '222222222222',
+          name: 'Consumidor Final',
+          isDefault: true,
+          isActive: true,
+        },
+      });
+      // Saldo suficiente para que el control de caja no oculte una devolución duplicada
+      await prisma.cashMovement.create({
+        data: {
+          movementType: 'APERTURA',
+          amount: new Prisma.Decimal(100000),
+          paymentMethod: 'EFECTIVO',
+          reason: 'Apertura de caja',
+          balanceAfter: new Prisma.Decimal(100000),
+          createdByUserId: adminUserId,
+        },
+      });
+      const location = await prisma.location.findFirstOrThrow();
+      const category = await prisma.category.create({ data: { name: `Categoría ${code}` } });
+      const product = await prisma.product.create({
+        data: {
+          code,
+          name: `Producto ${code}`,
+          basePrice: 10000,
+          baseCost: 5000,
+          categoryId: category.id,
+          requiresLotControl: true,
+        },
+      });
+      const presentation = await prisma.productPresentation.create({
+        data: {
+          productId: product.id,
+          name: 'Unidad',
+          conversionFactor: 1,
+          price: new Prisma.Decimal('10000.00'),
+          cost: new Prisma.Decimal('5000.00'),
+          isDefault: true,
+        },
+      });
+      const lot = await prisma.inventoryLot.create({
+        data: {
+          productId: product.id,
+          locationId: location.id,
+          lotNumber: `LOT-${code}`,
+          expirationDate: new Date('2028-12-31'),
+          currentQuantity: 10,
+          isActive: true,
+        },
+      });
+
+      const saleRes = await request(app.getHttpServer())
+        .post('/api/v1/sales/confirm')
+        .set('Cookie', cookie)
+        .send({
+          paymentMethod: 'EFECTIVO',
+          items: [{ productId: product.id, presentationId: presentation.id, quantityCommercial: 2 }],
+        });
+      expect(saleRes.status, JSON.stringify(saleRes.body)).toBe(201);
+
+      const saleLine = await prisma.saleLine.findFirstOrThrow({ where: { saleId: saleRes.body.id } });
+      return { saleId: saleRes.body.id as string, saleLineId: saleLine.id, lotId: lot.id };
+    }
+
+    function returnOneUnit(saleId: string, saleLineId: string) {
+      return creditNotesService.createCreditNote(
+        saleId,
+        {
+          saleId,
+          reason: 'Devolución parcial de una unidad',
+          restock: true,
+          items: [{ saleLineId, quantityCommercial: 1 }],
+        },
+        adminUserId,
+      );
+    }
+
+    it('rechaza anular una venta que ya tiene notas crédito sin alterar inventario, caja ni contabilidad', async () => {
+      const { saleId, saleLineId, lotId } = await confirmCashSaleOfTwoUnits('PROD-AUD002-A');
+      await returnOneUnit(saleId, saleLineId);
+
+      const lotBefore = await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lotId } });
+      expect(lotBefore.currentQuantity).toBe(9);
+      const cashMovementsBefore = await prisma.cashMovement.count();
+      const journalEntriesBefore = await prisma.journalEntry.count();
+      const statusBefore = (await prisma.sale.findUniqueOrThrow({ where: { id: saleId } })).status;
+
+      const cancelRes = await request(app.getHttpServer())
+        .post(`/api/v1/sales/${saleId}/cancel`)
+        .set('Cookie', cookie)
+        .send({ reason: 'Intento de anular venta con devolución previa' });
+
+      expect(cancelRes.status).toBe(409);
+      expect(cancelRes.body.message).toMatch(/nota\(s\) crédito/);
+      expect((await prisma.sale.findUniqueOrThrow({ where: { id: saleId } })).status).toBe(statusBefore);
+      expect((await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lotId } })).currentQuantity).toBe(9);
+      expect(await prisma.cashMovement.count()).toBe(cashMovementsBefore);
+      expect(await prisma.journalEntry.count()).toBe(journalEntriesBefore);
+    });
+
+    it('anulación y nota crédito simultáneas: solo una se aplica y el inventario no se reintegra dos veces', async () => {
+      const { saleId, saleLineId, lotId } = await confirmCashSaleOfTwoUnits('PROD-AUD002-B');
+
+      const [cancelResult, creditNoteResult] = await Promise.allSettled([
+        request(app.getHttpServer())
+          .post(`/api/v1/sales/${saleId}/cancel`)
+          .set('Cookie', cookie)
+          .send({ reason: 'Anulación concurrente con devolución' }),
+        returnOneUnit(saleId, saleLineId),
+      ]);
+
+      expect(cancelResult.status).toBe('fulfilled');
+      const cancelStatus = cancelResult.status === 'fulfilled' ? cancelResult.value.status : 0;
+      const cancelled = cancelStatus === 200;
+      const creditNoteApplied = creditNoteResult.status === 'fulfilled';
+
+      expect(cancelled !== creditNoteApplied).toBe(true);
+      const lot = await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lotId } });
+      expect(lot.currentQuantity).toBe(cancelled ? 10 : 9);
+      expect(await prisma.creditNote.count({ where: { saleId } })).toBe(creditNoteApplied ? 1 : 0);
+    });
+  });
+
   describe('RF-033: Notas Débito (Devoluciones en Compras a Proveedores)', () => {
     it('crea nota débito a proveedor descontando inventario, reduciendo cuenta por pagar y asiento contable balanceado', async () => {
       await setupStandardPucAndMappings();

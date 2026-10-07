@@ -21,6 +21,15 @@ export class SaleAlreadyCancelledException extends Error {
   }
 }
 
+export class SaleHasCreditNotesException extends Error {
+  constructor(invoiceNumber: string, creditNotesCount: number) {
+    super(
+      `La venta con comprobante '${invoiceNumber}' tiene ${creditNotesCount} nota(s) crédito asociada(s) y no puede anularse; la anulación reintegraría de nuevo lo ya devuelto.`
+    );
+    this.name = 'SaleHasCreditNotesException';
+  }
+}
+
 export class IdempotencyConflictException extends Error {
   constructor(key: string) {
     super(`Conflicto de idempotencia: La clave '${key}' ya fue procesada con un contenido de solicitud diferente.`);
