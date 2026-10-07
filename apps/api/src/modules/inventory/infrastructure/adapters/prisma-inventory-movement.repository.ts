@@ -17,14 +17,18 @@ export class PrismaInventoryMovementRepository
     userId?: string,
   ): Promise<InventoryMovementDto> {
     return prisma.$transaction(async (tx) => {
-      // 1. Bloqueo pesimista del lote para concurrencia segura
-      const lot = await tx.inventoryLot.findUnique({
-        where: { id: payload.lotId },
-      });
+      // 1. Bloqueo pesimista del lote: serializa los cambios de saldo concurrentes
+      const lockedLots = await tx.$queryRaw<Array<{ id: string; current_quantity: number }>>`
+        SELECT id, current_quantity
+        FROM inventory_lots
+        WHERE id = ${payload.lotId}::uuid
+        FOR UPDATE
+      `;
 
-      if (!lot) {
+      if (!lockedLots.length) {
         throw new BadRequestException('El lote especificado no existe.');
       }
+      const lot = { id: lockedLots[0].id, currentQuantity: lockedLots[0].current_quantity };
 
       const newBalance = lot.currentQuantity + payload.quantityBaseUnits;
       if (newBalance < 0) {
