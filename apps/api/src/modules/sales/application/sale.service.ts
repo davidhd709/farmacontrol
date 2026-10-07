@@ -25,6 +25,8 @@ import {
 } from '../../cash/domain/cash-rules';
 import { AccountingEngineService } from '../../accounting/application/accounting-engine.service';
 
+const SALE_CONFIRM_ENDPOINT = '/api/v1/sales/confirm';
+
 export interface AuditContext {
   userId?: string | null;
   ipAddress?: string | null;
@@ -113,11 +115,15 @@ export class SaleService {
     if (!payload.items || payload.items.length === 0) {
       throw new Error('La venta debe incluir al menos un producto.');
     }
+    const key = idempotencyKey?.trim();
+    if (!key) {
+      throw new BadRequestException('Idempotency-Key es obligatorio para confirmar una venta.');
+    }
+    if (key.length > 100) {
+      throw new BadRequestException('Idempotency-Key debe tener entre 1 y 100 caracteres.');
+    }
     if (payload.paymentMethod === 'TRANSFERENCIA') {
       requirePaymentBankAccountId(payload.bankAccountId);
-      if (!idempotencyKey?.trim()) {
-        throw new BadRequestException('Idempotency-Key es obligatorio para transferencias.');
-      }
     } else if (payload.paymentMethod === 'CREDITO') {
       if (payload.bankAccountId) {
         throw new BadRequestException('bankAccountId no aplica para ventas a crédito.');
@@ -130,19 +136,22 @@ export class SaleService {
       throw new BadRequestException('bankAccountId solo corresponde a TRANSFERENCIA.');
     }
 
-    // 1. Verificación de Idempotencia
-    let requestHash = '';
-    if (idempotencyKey && idempotencyKey.trim()) {
-      requestHash = this.idempotencyService.computeHash(payload);
-      const cached = await this.idempotencyService.getRecord(idempotencyKey.trim(), requestHash);
-      if (cached) {
-        return cached.responseBody as SaleDto;
-      }
-    }
+    const requestHash = this.idempotencyService.computeHash(
+      SALE_CONFIRM_ENDPOINT,
+      auditCtx.userId ?? '',
+      payload,
+    );
 
-    // 2. Transacción ACID completa en PostgreSQL con reintentos ante conflictos de serialización
-    const saleResult = await executeWithRetry(async () => {
+    // Transacción ACID completa en PostgreSQL con reintentos ante conflictos de serialización
+    const { sale: saleResult, replayed } = await executeWithRetry(async () => {
       return this.client.$transaction(async (tx) => {
+        // 1. Verificación de Idempotencia dentro de la transacción: un reintento por
+        // conflicto con una petición duplicada concurrente encuentra la venta ya registrada
+        const cached = await this.idempotencyService.getRecord(key, requestHash, tx);
+        if (cached) {
+          return { sale: cached.responseBody as SaleDto, replayed: true };
+        }
+
         // 2.1. Resolver Cliente
       let customerId = payload.customerId;
       let customerName = 'Consumidor Final (Cuantías Menores)';
@@ -442,29 +451,27 @@ export class SaleService {
       const dto = sale.toDto();
 
       // 2.7. Guardar registro de Idempotencia dentro de la transacción
-      if (idempotencyKey && idempotencyKey.trim()) {
-        await this.idempotencyService.saveRecord(
-          {
-            key: idempotencyKey.trim(),
-            userId: auditCtx.userId || '00000000-0000-0000-0000-000000000000',
-            endpoint: '/api/v1/sales/confirm',
-            requestHash,
-            responseStatus: 201,
-            responseBody: dto,
-            ttlHours: 24,
-          },
-          tx,
-        );
-      }
+      await this.idempotencyService.saveRecord(
+        {
+          key,
+          userId: auditCtx.userId || '00000000-0000-0000-0000-000000000000',
+          endpoint: SALE_CONFIRM_ENDPOINT,
+          requestHash,
+          responseStatus: 201,
+          responseBody: dto,
+          ttlHours: 24,
+        },
+        tx,
+      );
 
-      return dto;
+      return { sale: dto, replayed: false };
     }, {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
     });
   });
 
-    // 3. Auditoría asíncrona fuera de la transacción
-    if (this.auditService) {
+    // 3. Auditoría asíncrona fuera de la transacción (un reintento no es una venta nueva)
+    if (this.auditService && !replayed) {
       await this.auditService.recordEvent({
         action: 'sales:sale_confirmed',
         entity: 'Sale',

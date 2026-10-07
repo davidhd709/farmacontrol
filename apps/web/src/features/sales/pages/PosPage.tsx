@@ -58,6 +58,9 @@ export const PosPage: React.FC = () => {
   // Búsqueda de Productos
   const [productOptions, setProductOptions] = useState<ProductDto[]>([]);
   const productOptionsRef = useRef<ProductDto[]>([]);
+  // Clave de idempotencia estable mientras el contenido de la venta no cambie: un reintento
+  // tras un fallo de red no puede registrar la venta dos veces.
+  const saleRetryRef = useRef<{ fingerprint: string; key: string } | null>(null);
   const [productLoading, setProductLoading] = useState(false);
 
   // Carrito de Ventas
@@ -325,7 +328,6 @@ export const PosPage: React.FC = () => {
     setPaymentLoading(true);
     setErrorMsg(null);
     try {
-      const idempotencyKey = crypto.randomUUID();
       const payload = {
         customerId: selectedCustomer?.id,
         paymentMethod,
@@ -340,7 +342,13 @@ export const PosPage: React.FC = () => {
         })),
       };
 
-      const completedSale = await confirmSale(payload, idempotencyKey);
+      const fingerprint = JSON.stringify(payload);
+      if (saleRetryRef.current?.fingerprint !== fingerprint) {
+        saleRetryRef.current = { fingerprint, key: crypto.randomUUID() };
+      }
+
+      const completedSale = await confirmSale(payload, saleRetryRef.current.key);
+      saleRetryRef.current = null;
       setPaymentDialogOpen(false);
       setReceiptSale(completedSale);
       setCart([]);

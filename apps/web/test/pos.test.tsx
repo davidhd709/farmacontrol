@@ -222,4 +222,49 @@ describe('PosPage (Frontend POS UX-03 / HU-017)', () => {
     // Se muestra el Comprobante de venta (HU-018)
     expect(await screen.findByText(/Comprobante N°: VEN-20260926-0001/i)).toBeInTheDocument();
   });
+
+  it('AUD-003: reintentar tras un fallo de red reutiliza la misma Idempotency-Key', async () => {
+    vi.mocked(salesApi.confirmSale)
+      .mockRejectedValueOnce(new Error('No fue posible conectar con el servidor.'))
+      .mockResolvedValueOnce(mockConfirmedSale);
+
+    renderComponent();
+    await waitFor(() => {
+      expect(screen.getByText('Consumidor Final')).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText(/Buscar producto por nombre/i), {
+      target: { value: 'Acetaminofén' },
+    });
+    fireEvent.click(await screen.findByRole('option'));
+    await waitFor(() => {
+      expect(screen.getByText('Acetaminofén 500mg')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Cobrar /i }));
+    expect(await screen.findByText('Cobro y Liquidación de Venta')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/Efectivo Recibido/i), { target: { value: '2000' } });
+
+    // Primer intento: falla la red y el diálogo sigue abierto
+    fireEvent.click(screen.getByTestId('confirm-payment-btn'));
+    await waitFor(() => {
+      expect(salesApi.confirmSale).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('confirm-payment-btn')).not.toBeDisabled();
+    });
+
+    // Reintento con el mismo contenido
+    fireEvent.click(screen.getByTestId('confirm-payment-btn'));
+    await waitFor(() => {
+      expect(salesApi.confirmSale).toHaveBeenCalledTimes(2);
+    });
+
+    const [firstPayload, firstKey] = vi.mocked(salesApi.confirmSale).mock.calls[0];
+    const [secondPayload, secondKey] = vi.mocked(salesApi.confirmSale).mock.calls[1];
+    expect(firstKey).toBeTruthy();
+    expect(secondKey).toBe(firstKey);
+    expect(secondPayload).toEqual(firstPayload);
+    expect(await screen.findByText(/Comprobante N°: VEN-20260926-0001/i)).toBeInTheDocument();
+  });
 });

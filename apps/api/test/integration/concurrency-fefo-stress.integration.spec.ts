@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import 'reflect-metadata';
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
@@ -144,6 +145,7 @@ describe('FEFO Inventory Concurrency & Stress Testing (PostgreSQL Real)', () => 
       const concurrentRequests = Array.from({ length: 10 }).map((_, index) => {
         return request(app.getHttpServer())
           .post('/api/v1/sales/confirm')
+          .set('Idempotency-Key', randomUUID())
           .set('Cookie', sessionCookie)
           .send({
             customerId: defaultCustomerId,
@@ -233,6 +235,7 @@ describe('FEFO Inventory Concurrency & Stress Testing (PostgreSQL Real)', () => 
       const concurrentRequests = Array.from({ length: 4 }).map((_, index) => {
         return request(app.getHttpServer())
           .post('/api/v1/sales/confirm')
+          .set('Idempotency-Key', randomUUID())
           .set('Cookie', sessionCookie)
           .send({
             customerId: defaultCustomerId,
@@ -300,6 +303,7 @@ describe('FEFO Inventory Concurrency & Stress Testing (PostgreSQL Real)', () => 
       const cashRequests = Array.from({ length: 6 }).map((_, index) => {
         return request(app.getHttpServer())
           .post('/api/v1/sales/confirm')
+          .set('Idempotency-Key', randomUUID())
           .set('Cookie', sessionCookie)
           .send({
             customerId: defaultCustomerId,

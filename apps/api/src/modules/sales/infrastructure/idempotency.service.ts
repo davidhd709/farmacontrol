@@ -16,8 +16,12 @@ export class IdempotencyService {
     this.client = customClient ?? prisma;
   }
 
-  public computeHash(payload: unknown): string {
-    const serialized = JSON.stringify(payload ?? {});
+  /**
+   * El hash incluye endpoint y usuario: la misma clave reutilizada por otra persona u
+   * operación es un conflicto, nunca una respuesta cacheada ajena.
+   */
+  public computeHash(endpoint: string, userId: string, payload: unknown): string {
+    const serialized = JSON.stringify({ endpoint, userId, payload: payload ?? {} });
     return crypto.createHash('sha256').update(serialized).digest('hex');
   }
 

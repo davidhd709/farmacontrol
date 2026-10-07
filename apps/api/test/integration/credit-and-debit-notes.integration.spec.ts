@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { beforeAll, beforeEach, afterAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { Test } from '@nestjs/testing';
@@ -392,6 +393,7 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
 
       const saleRes = await request(app.getHttpServer())
         .post('/api/v1/sales/confirm')
+        .set('Idempotency-Key', randomUUID())
         .set('Cookie', cookie)
         .send({
           paymentMethod: 'EFECTIVO',

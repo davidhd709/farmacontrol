@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import request from 'supertest';
 import { INestApplication } from '@nestjs/common';
@@ -195,6 +196,7 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
 
     const res = await request(app.getHttpServer())
       .post('/api/v1/sales/confirm')
+      .set('Idempotency-Key', randomUUID())
       .set('Cookie', cajeroCookie)
       .send(payload);
 
@@ -309,6 +311,71 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
     expect(lot1AfterSecond.currentQuantity).toBe(0);
   });
 
+  it('AUD-003: exige Idempotency-Key también en ventas en efectivo', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/sales/confirm')
+      .set('Cookie', cajeroCookie)
+      .send({
+        paymentMethod: 'EFECTIVO',
+        items: [{ productId, presentationId, quantityCommercial: 1 }],
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/Idempotency-Key/);
+    expect(await prisma.sale.count()).toBe(0);
+    expect(
+      (await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lot1Id } })).currentQuantity,
+    ).toBe(10);
+  });
+
+  it('AUD-003: reintentos simultáneos con la misma clave devuelven la misma venta sin duplicarla', async () => {
+    const payload = {
+      paymentMethod: 'EFECTIVO',
+      items: [{ productId, presentationId, quantityCommercial: 1 }],
+    };
+    const send = () =>
+      request(app.getHttpServer())
+        .post('/api/v1/sales/confirm')
+        .set('Cookie', cajeroCookie)
+        .set('Idempotency-Key', 'retry-cash-sale')
+        .send(payload);
+
+    const responses = await Promise.all([send(), send(), send()]);
+
+    expect(responses.map((r) => r.status)).toEqual([201, 201, 201]);
+    expect(new Set(responses.map((r) => r.body.id)).size).toBe(1);
+    expect(await prisma.sale.count()).toBe(1);
+    expect(
+      (await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lot1Id } })).currentQuantity,
+    ).toBe(0);
+    expect(
+      (await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lot2Id } })).currentQuantity,
+    ).toBe(50);
+  }, 30000);
+
+  it('AUD-003: otro usuario que reutiliza la clave recibe 409 y no obtiene la venta ajena', async () => {
+    const payload = {
+      paymentMethod: 'EFECTIVO',
+      items: [{ productId, presentationId, quantityCommercial: 1 }],
+    };
+    const first = await request(app.getHttpServer())
+      .post('/api/v1/sales/confirm')
+      .set('Cookie', cajeroCookie)
+      .set('Idempotency-Key', 'shared-key-sale')
+      .send(payload);
+    expect(first.status).toBe(201);
+
+    const second = await request(app.getHttpServer())
+      .post('/api/v1/sales/confirm')
+      .set('Cookie', supervisorCookie)
+      .set('Idempotency-Key', 'shared-key-sale')
+      .send(payload);
+
+    expect(second.status).toBe(409);
+    expect(second.body.id).toBeUndefined();
+    expect(await prisma.sale.count()).toBe(1);
+  });
+
   it('rechaza transferencia a cuenta inactiva sin afectar FEFO ni crear venta', async () => {
     const owner = await prisma.user.findFirstOrThrow({ where: { username: 'pos_admin' } });
     const bank = await prisma.bankAccount.create({
@@ -386,6 +453,7 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
 
     const res = await request(app.getHttpServer())
       .post('/api/v1/sales/confirm')
+      .set('Idempotency-Key', randomUUID())
       .set('Cookie', cajeroCookie)
       .send(payload);
 
@@ -397,6 +465,7 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
     // 1. Confirmar una venta de 1 caja (10 tabletas del lote 1)
     const saleRes = await request(app.getHttpServer())
       .post('/api/v1/sales/confirm')
+      .set('Idempotency-Key', randomUUID())
       .set('Cookie', cajeroCookie)
       .send({
         paymentMethod: 'EFECTIVO',
@@ -541,6 +610,7 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
     // Usuario sin permisos intentando vender
     const resCreate = await request(app.getHttpServer())
       .post('/api/v1/sales/confirm')
+      .set('Idempotency-Key', randomUUID())
       .set('Cookie', unauthorizedCookie)
       .send({
         paymentMethod: 'EFECTIVO',
