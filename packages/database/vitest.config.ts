@@ -8,5 +8,8 @@ export default defineConfig({
     fileParallelism: false,
     maxWorkers: 1,
     minWorkers: 1,
+    // Los proyectos de Vitest no heredan los timeouts de la configuración raíz.
+    testTimeout: 30000,
+    hookTimeout: 30000,
   },
 });

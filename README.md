@@ -74,7 +74,8 @@ pnpm install
 ### 4.2 Levantar la Base de Datos
 
 ```bash
-docker compose up -d postgres
+pnpm db:up
+pnpm db:test:create   # crea farmacia_test para las pruebas automatizadas
 ```
 
 ### 4.3 Configuración de Variables de Entorno
@@ -90,6 +91,9 @@ cp .env.example .env
 ```bash
 # Aplicar migraciones de base de datos
 pnpm --filter @farmacia/database exec prisma migrate deploy
+
+# Aplicar migraciones a la base de pruebas
+pnpm db:test:migrate
 
 # Poblar roles y permisos RBAC
 pnpm db:seed:rbac
@@ -134,16 +138,32 @@ la contraseña en el comando ni la compartas por chat.
 
 ### 4.5 Iniciar Servicios en Modo Desarrollo
 
+El monorepositorio no tiene un comando único de desarrollo; cada servicio se
+inicia en su propia terminal:
+
 ```bash
-# Iniciar backend, worker y frontend simultáneamente
-pnpm dev
+# Paquetes compartidos (una vez, y cada vez que cambien)
+pnpm db:generate
+pnpm --filter @farmacia/contracts build
+pnpm --filter @farmacia/database build
+
+# Terminal 1: API
+pnpm --filter @farmacia/api start:dev
+
+# Terminal 2: frontend
+pnpm --filter @farmacia/web dev
+
+# Terminal 3: worker (alertas de vencimiento y tareas en segundo plano)
+pnpm --filter @farmacia/worker start:dev
 ```
 
 Puertos asignados:
 - **Frontend Web:** [http://localhost:5173](http://localhost:5173)
 - **API Backend:** [http://localhost:3000/api/v1](http://localhost:3000/api/v1)
-- **Documentación OpenAPI / Swagger:** [http://localhost:3000/api/v1/docs](http://localhost:3000/api/v1/docs)
 - **PostgreSQL:** `localhost:5434` (mapeado a `5432` en el contenedor)
+
+La documentación OpenAPI / Swagger todavía no está publicada por la API
+(pendiente en el plan de trabajo, fase 5).
 
 ---
 
@@ -152,13 +172,13 @@ Puertos asignados:
 El proyecto cuenta con una batería de pruebas automatizadas que validan lógica de dominio, transacciones concurrentes en base de datos real y experiencia de usuario:
 
 ```bash
-# Ejecutar todas las pruebas del monorepositorio (84 suites, 494 pruebas)
+# Ejecutar todas las pruebas del monorepositorio (108 archivos, 704 pruebas)
 pnpm test
 
-# Ejecutar pruebas exclusivas del backend (52 suites con PostgreSQL real)
+# Ejecutar pruebas exclusivas del backend (72 archivos, 534 pruebas con PostgreSQL real)
 pnpm --filter @farmacia/api test
 
-# Ejecutar pruebas del frontend (17 suites con React Testing Library y Vitest)
+# Ejecutar pruebas del frontend (21 archivos, 95 pruebas con React Testing Library y Vitest)
 pnpm --filter @farmacia/web test
 
 # Comprobar tipos y empaquetar aplicaciones para producción
