@@ -67,6 +67,7 @@ export const SYSTEM_PERMISSIONS = {
   SALES_CREATE: 'sales:create',
   SALES_CANCEL: 'sales:cancel',
   SALES_CREDIT_NOTE: 'sales:credit_note',
+  SALES_DISCOUNT_OVERRIDE: 'sales:discount_override',
 
   // Caja
   CASH_READ: 'cash:read',

@@ -418,7 +418,8 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
     });
     const res = await request(app.getHttpServer())
       .post('/api/v1/sales/confirm')
-      .set('Cookie', cajeroCookie)
+      // Precios de 0.10 y 0.20 son rebajas sobre la lista: requieren autorización (AUD-011)
+      .set('Cookie', supervisorCookie)
       .set('Idempotency-Key', 'decimal-bank-sale')
       .send({
         paymentMethod: 'TRANSFERENCIA',
@@ -721,5 +722,52 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
     expect(after.status).toBe('CANCELADA');
     const paymentAfter = await prisma.receivablePayment.findUniqueOrThrow({ where: { id: payment.id } });
     expect(paymentAfter.isReversed).toBe(false);
+  });
+
+  describe('AUD-011: límite de rebajas sin autorización (5 %)', () => {
+    const confirm = (cookie: string, item: Record<string, unknown>) =>
+      request(app.getHttpServer())
+        .post('/api/v1/sales/confirm')
+        .set('Idempotency-Key', randomUUID())
+        .set('Cookie', cookie)
+        .send({ paymentMethod: 'EFECTIVO', items: [{ productId, presentationId, quantityCommercial: 1, ...item }] });
+
+    it('el cajero puede dar hasta el 5 % de descuento', async () => {
+      const res = await confirm(cajeroCookie, { discount: 240 }); // 5 % de 4 800
+      expect(res.status).toBe(201);
+      expect(res.body.total).toBe(4560);
+    });
+
+    it('el cajero no puede superar el 5 %: 403 y sin mover inventario', async () => {
+      const res = await confirm(cajeroCookie, { discount: 241 });
+      expect(res.status).toBe(403);
+      expect(res.body.message).toContain('5 %');
+      const lot1 = await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lot1Id } });
+      expect(lot1.currentQuantity).toBe(10);
+      expect(await prisma.sale.count()).toBe(0);
+    });
+
+    it('el cajero no puede rebajar el precio unitario más del 5 % de la lista', async () => {
+      const res = await confirm(cajeroCookie, { unitPriceOverride: 4000 });
+      expect(res.status).toBe(403);
+    });
+
+    it('cobrar por encima del precio de lista no cuenta como rebaja', async () => {
+      const res = await confirm(cajeroCookie, { unitPriceOverride: 5000 });
+      expect(res.status).toBe(201);
+      expect(res.body.total).toBe(5000);
+    });
+
+    it('un supervisor o administrador puede autorizar una rebaja mayor', async () => {
+      const res = await confirm(supervisorCookie, { discount: 960 }); // 20 %
+      expect(res.status).toBe(201);
+      expect(res.body.total).toBe(3840);
+    });
+
+    it('rechaza descuentos y precios no numéricos o negativos (400)', async () => {
+      expect((await confirm(cajeroCookie, { discount: 'abc' })).status).toBe(400);
+      expect((await confirm(cajeroCookie, { discount: -10 })).status).toBe(400);
+      expect((await confirm(cajeroCookie, { unitPriceOverride: '4800' })).status).toBe(400);
+    });
   });
 });

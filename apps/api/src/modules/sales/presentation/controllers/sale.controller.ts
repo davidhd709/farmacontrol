@@ -13,6 +13,7 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import {
@@ -46,6 +47,7 @@ import {
   SaleHasActivePaymentsException,
   IdempotencyConflictException,
 } from '../../domain/sale.exceptions';
+import { SaleDiscountNotAuthorizedException } from '../../domain/discount-policy';
 
 @Controller('sales')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
@@ -68,10 +70,16 @@ export class SaleController {
           userId: user.id,
           ipAddress: req.ip,
           correlationId: req.headers['x-correlation-id'] as string | undefined,
+          canOverrideDiscount: user.permissions.includes(
+            SYSTEM_PERMISSIONS.SALES_DISCOUNT_OVERRIDE,
+          ),
         },
         idempotencyKey
       );
     } catch (error) {
+      if (error instanceof SaleDiscountNotAuthorizedException) {
+        throw new ForbiddenException(error.message);
+      }
       if (error instanceof InsufficientStockException) {
         throw new BadRequestException(error.message);
       }

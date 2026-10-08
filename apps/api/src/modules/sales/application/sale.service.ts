@@ -16,6 +16,11 @@ import {
   SaleHasActivePaymentsException,
 } from '../domain/sale.exceptions';
 import { IdempotencyService } from '../infrastructure/idempotency.service';
+import {
+  exceedsDiscountLimit,
+  MAX_DISCOUNT_PCT_WITHOUT_AUTHORIZATION,
+  SaleDiscountNotAuthorizedException,
+} from '../domain/discount-policy';
 import { AuditService } from '../../audit/application/services/audit.service';
 import { recordSourceBankMovement } from '../../treasury/application/record-source-bank-movement';
 import { requirePaymentBankAccountId } from '../../treasury/application/payment-idempotency';
@@ -32,6 +37,8 @@ export interface AuditContext {
   userId?: string | null;
   ipAddress?: string | null;
   correlationId?: string | null;
+  /** AUD-011: el usuario puede autorizar rebajas por encima del límite del cajero. */
+  canOverrideDiscount?: boolean;
 }
 
 /**
@@ -223,8 +230,26 @@ export class SaleService {
           presentationName = presentation.name;
         }
 
+        const listUnitPrice = unitPrice;
         if (item.unitPriceOverride !== undefined && item.unitPriceOverride >= 0) {
           unitPrice = item.unitPriceOverride;
+        }
+
+        // AUD-011: rebajas sobre el precio de lista limitadas sin autorización
+        if (
+          !auditCtx.canOverrideDiscount &&
+          exceedsDiscountLimit({
+            quantityCommercial: item.quantityCommercial,
+            listUnitPrice,
+            chargedUnitPrice: unitPrice,
+            discount: item.discount ?? 0,
+            maxPct: MAX_DISCOUNT_PCT_WITHOUT_AUTHORIZATION,
+          })
+        ) {
+          throw new SaleDiscountNotAuthorizedException(
+            product.name,
+            MAX_DISCOUNT_PCT_WITHOUT_AUTHORIZATION,
+          );
         }
 
         const requiredBaseUnits = Math.round(item.quantityCommercial * factor);
