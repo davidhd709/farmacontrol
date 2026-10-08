@@ -192,35 +192,51 @@ export class PrismaInventoryLotRepository implements IInventoryLotRepository {
     };
   }
 
-  public async save(lot: InventoryLot): Promise<InventoryLot> {
-    const raw = await prisma.inventoryLot.upsert({
-      where: { id: lot.id },
-      create: {
-        id: lot.id,
-        productId: lot.productId,
-        locationId: lot.locationId,
-        lotNumber: lot.lotNumber,
-        expirationDate: lot.expirationDate,
-        currentQuantity: lot.currentQuantity,
-        isActive: lot.isActive,
-        createdAt: lot.createdAt,
-        updatedAt: lot.updatedAt,
-      },
-      update: {
-        lotNumber: lot.lotNumber,
-        expirationDate: lot.expirationDate,
-        currentQuantity: lot.currentQuantity,
-        isActive: lot.isActive,
-        updatedAt: new Date(),
-      },
-      include: {
-        product: {
-          select: { id: true, code: true, name: true, baseUnit: true },
+  public async createWithOpeningBalance(
+    lot: InventoryLot,
+    userId?: string,
+  ): Promise<InventoryLot> {
+    const raw = await prisma.$transaction(async (tx) => {
+      const created = await tx.inventoryLot.create({
+        data: {
+          id: lot.id,
+          productId: lot.productId,
+          locationId: lot.locationId,
+          lotNumber: lot.lotNumber,
+          expirationDate: lot.expirationDate,
+          currentQuantity: lot.currentQuantity,
+          isActive: lot.isActive,
+          createdAt: lot.createdAt,
+          updatedAt: lot.updatedAt,
         },
-        location: {
-          select: { id: true, code: true, name: true },
+        include: {
+          product: {
+            select: { id: true, code: true, name: true, baseUnit: true },
+          },
+          location: {
+            select: { id: true, code: true, name: true },
+          },
         },
-      },
+      });
+
+      if (lot.currentQuantity > 0) {
+        await tx.inventoryMovement.create({
+          data: {
+            movementType: 'AJUSTE_POSITIVO',
+            productId: created.productId,
+            lotId: created.id,
+            quantityBaseUnits: lot.currentQuantity,
+            presentationFactorHistorical: 1,
+            balanceAfterBaseUnits: lot.currentQuantity,
+            referenceDocumentType: 'SALDO_INICIAL',
+            referenceDocumentId: created.id,
+            notes: 'Existencia inicial registrada al crear el lote',
+            createdByUserId: userId || null,
+          },
+        });
+      }
+
+      return created;
     });
 
     return InventoryLot.reconstitute({
@@ -235,16 +251,6 @@ export class PrismaInventoryLotRepository implements IInventoryLotRepository {
       updatedAt: raw.updatedAt,
       product: raw.product,
       location: raw.location,
-    });
-  }
-
-  public async updateQuantity(id: string, newQuantity: number): Promise<void> {
-    await prisma.inventoryLot.update({
-      where: { id },
-      data: {
-        currentQuantity: newQuantity,
-        updatedAt: new Date(),
-      },
     });
   }
 
@@ -348,106 +354,6 @@ export class PrismaInventoryLotRepository implements IInventoryLotRepository {
       isActive: raw.isActive,
       createdAt: raw.createdAt,
       updatedAt: raw.updatedAt,
-    });
-  }
-
-  /**
-   * Ejecuta la asignación FEFO transaccional bloqueando las filas concurrentes
-   * con SELECT ... FOR UPDATE en PostgreSQL nativo (RN-001, ADR-002, ADR-003).
-   */
-  public async allocateStockFefoTransactional(
-    productId: string,
-    quantityBaseUnits: number,
-    referenceDocumentType?: string,
-    referenceDocumentId?: string,
-    userId?: string,
-    notes?: string,
-  ): Promise<any> {
-    return prisma.$transaction(async (tx) => {
-      // 1. Bloqueo pesimista de filas en orden FEFO: solo lotes vigentes con saldo > 0
-      const today = new Date().toISOString().split('T')[0];
-
-      const availableLots = await tx.$queryRaw<
-        Array<{
-          id: string;
-          lot_number: string;
-          expiration_date: Date;
-          current_quantity: number;
-        }>
-      >`
-        SELECT id, lot_number, expiration_date, current_quantity
-        FROM inventory_lots
-        WHERE product_id = ${productId}::uuid
-          AND is_active = true
-          AND current_quantity > 0
-          AND expiration_date >= ${today}::date
-        ORDER BY expiration_date ASC, created_at ASC
-        FOR UPDATE
-      `;
-
-      const totalAvailable = availableLots.reduce(
-        (sum, lot) => sum + lot.current_quantity,
-        0,
-      );
-
-      if (totalAvailable < quantityBaseUnits) {
-        throw new Error(
-          `Inventario no vencido insuficiente. Requerido: ${quantityBaseUnits}, Disponible: ${totalAvailable}`,
-        );
-      }
-
-      let remaining = quantityBaseUnits;
-      const allocations: Array<{
-        lotId: string;
-        lotNumber: string;
-        quantityBaseUnits: number;
-      }> = [];
-
-      for (const lot of availableLots) {
-        if (remaining <= 0) break;
-
-        const take = Math.min(lot.current_quantity, remaining);
-        const newQuantity = lot.current_quantity - take;
-
-        // Descontar saldo del lote
-        await tx.inventoryLot.update({
-          where: { id: lot.id },
-          data: {
-            currentQuantity: newQuantity,
-            updatedAt: new Date(),
-          },
-        });
-
-        // Registrar movimiento inmutable en Kardex
-        await tx.inventoryMovement.create({
-          data: {
-            movementType: 'SALIDA_VENTA',
-            productId,
-            lotId: lot.id,
-            quantityBaseUnits: -take,
-            presentationFactorHistorical: 1,
-            balanceAfterBaseUnits: newQuantity,
-            referenceDocumentType: referenceDocumentType || null,
-            referenceDocumentId: referenceDocumentId || null,
-            notes: notes || 'Salida automática por motor FEFO concurrente',
-            createdByUserId: userId || null,
-          },
-        });
-
-        allocations.push({
-          lotId: lot.id,
-          lotNumber: lot.lot_number,
-          quantityBaseUnits: take,
-        });
-
-        remaining -= take;
-      }
-
-      return {
-        productId,
-        totalAllocated: quantityBaseUnits,
-        allocations,
-      };
     });
   }
 }

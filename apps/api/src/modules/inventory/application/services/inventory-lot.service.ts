@@ -60,23 +60,6 @@ export class InventoryLotService {
     return lots.map((lot) => lot.toDto());
   }
 
-  public async allocateFefoStock(
-    productId: string,
-    quantityBaseUnits: number,
-    referenceDocumentType?: string,
-    referenceDocumentId?: string,
-    userId?: string,
-    notes?: string,
-  ): Promise<any> {
-    return this.lotRepository.allocateStockFefoTransactional(
-      productId,
-      quantityBaseUnits,
-      referenceDocumentType,
-      referenceDocumentId,
-      userId,
-      notes,
-    );
-  }
 
   public async createLot(
     payload: CreateInventoryLotPayload,
@@ -128,7 +111,7 @@ export class InventoryLotService {
         currentQuantity: payload.initialQuantity ?? 0,
       });
 
-      const savedLot = await this.lotRepository.save(lot);
+      const savedLot = await this.lotRepository.createWithOpeningBalance(lot, userId);
 
       await this.auditService.recordEvent({
         userId,

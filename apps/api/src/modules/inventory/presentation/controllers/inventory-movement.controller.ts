@@ -14,6 +14,8 @@ import type { Request } from 'express';
 import { SessionAuthGuard } from '../../../identity/presentation/guards/session-auth.guard';
 import { PermissionsGuard } from '../../../identity/presentation/guards/permissions.guard';
 import { RequirePermissions } from '../../../identity/presentation/decorators/require-permissions.decorator';
+import { CurrentUser } from '../../../identity/presentation/decorators/current-user.decorator';
+import type { AuthenticatedUserContext } from '../../../identity/presentation/guards/session-auth.guard';
 import { SYSTEM_PERMISSIONS, InventoryMovementType } from '@farmacia/contracts';
 import { InventoryMovementService } from '../../application/services/inventory-movement.service';
 
@@ -52,60 +54,12 @@ export class InventoryMovementController {
     return { success: true, ...result };
   }
 
-  @Post()
-  @RequirePermissions(SYSTEM_PERMISSIONS.INVENTORY_ADJUST)
-  @HttpCode(HttpStatus.CREATED)
-  public async recordMovement(
-    @Body() body: any,
-    @Req() req: Request,
-  ) {
-    if (!body || typeof body !== 'object') {
-      throw new BadRequestException('El cuerpo de la solicitud no es válido.');
-    }
-
-    if (!body.productId || !UUID_REGEX.test(body.productId)) {
-      throw new BadRequestException('productId inválido.');
-    }
-    if (!body.lotId || !UUID_REGEX.test(body.lotId)) {
-      throw new BadRequestException('lotId inválido.');
-    }
-    if (!body.movementType) {
-      throw new BadRequestException('movementType es obligatorio.');
-    }
-    if (typeof body.quantityBaseUnits !== 'number' || !Number.isInteger(body.quantityBaseUnits)) {
-      throw new BadRequestException('quantityBaseUnits debe ser un entero.');
-    }
-
-    const session = (req as any).session;
-    const ipAddress = req.ip || req.socket.remoteAddress;
-    const correlationId = req.headers['x-correlation-id'] as string;
-
-    const data = await this.movementService.recordMovement(
-      {
-        movementType: body.movementType,
-        productId: body.productId,
-        lotId: body.lotId,
-        presentationId: body.presentationId,
-        quantityBaseUnits: body.quantityBaseUnits,
-        presentationFactorHistorical: body.presentationFactorHistorical,
-        quantityCommercial: body.quantityCommercial,
-        referenceDocumentType: body.referenceDocumentType,
-        referenceDocumentId: body.referenceDocumentId,
-        notes: body.notes,
-      },
-      session?.userId,
-      ipAddress,
-      correlationId,
-    );
-
-    return { success: true, data };
-  }
-
   @Post('adjust')
   @RequirePermissions(SYSTEM_PERMISSIONS.INVENTORY_ADJUST)
   @HttpCode(HttpStatus.CREATED)
   public async adjustInventory(
     @Body() body: any,
+    @CurrentUser() user: AuthenticatedUserContext,
     @Req() req: Request,
   ) {
     if (!body || typeof body !== 'object') {
@@ -120,14 +74,17 @@ export class InventoryMovementController {
     if (body.adjustmentType !== 'INCREMENTO' && body.adjustmentType !== 'DECREMENTO') {
       throw new BadRequestException('adjustmentType debe ser INCREMENTO o DECREMENTO.');
     }
-    if (typeof body.quantityBaseUnits !== 'number' || body.quantityBaseUnits <= 0) {
+    if (
+      typeof body.quantityBaseUnits !== 'number' ||
+      !Number.isInteger(body.quantityBaseUnits) ||
+      body.quantityBaseUnits <= 0
+    ) {
       throw new BadRequestException('quantityBaseUnits debe ser un entero positivo mayor a 0.');
     }
     if (!body.reason || typeof body.reason !== 'string' || body.reason.trim().length === 0) {
       throw new BadRequestException('reason (motivo justificado) es obligatorio.');
     }
 
-    const session = (req as any).session;
     const ipAddress = req.ip || req.socket.remoteAddress;
     const correlationId = req.headers['x-correlation-id'] as string;
 
@@ -140,7 +97,7 @@ export class InventoryMovementController {
         reason: body.reason.trim(),
         notes: body.notes,
       },
-      session?.userId,
+      user.id,
       ipAddress,
       correlationId,
     );

@@ -9,16 +9,11 @@ export interface IInventoryLotRepository {
   findByProductLocationAndLotNumber(productId: string, locationId: string, lotNumber: string): Promise<InventoryLot | null>;
   findAvailableLotsByProductFefo(productId: string, locationId?: string): Promise<InventoryLot[]>;
   findAll(filters: InventoryLotQueryFilters): Promise<PaginatedResponse<InventoryLotDto>>;
-  save(lot: InventoryLot): Promise<InventoryLot>;
-  updateQuantity(id: string, newQuantity: number): Promise<void>;
-  allocateStockFefoTransactional(
-    productId: string,
-    quantityBaseUnits: number,
-    referenceDocumentType?: string,
-    referenceDocumentId?: string,
-    userId?: string,
-    notes?: string,
-  ): Promise<any>;
+  /**
+   * Crea un lote nuevo. Si trae existencia inicial, registra en la misma transacción
+   * el movimiento de kardex que la respalda (AUD-004): el stock nunca aparece sin documento.
+   */
+  createWithOpeningBalance(lot: InventoryLot, userId?: string): Promise<InventoryLot>;
   
   // Ubicaciones
   findLocationById(id: string): Promise<Location | null>;
