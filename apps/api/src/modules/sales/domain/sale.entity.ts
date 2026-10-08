@@ -97,6 +97,8 @@ export interface SaleLineProps {
   quantityCommercial: number;
   quantityBaseUnits: number;
   unitPrice: number;
+  /** Costo por unidad base vigente al vender (AUD-007); nulo en ventas antiguas. */
+  unitCost?: number | null;
   discount: number;
   subtotal: number;
   taxRate: number;
@@ -120,6 +122,7 @@ export class SaleLine {
     presentationFactorHistorical?: number;
     quantityCommercial: number;
     unitPrice: number;
+    unitCost?: number | null;
     discount?: number;
     taxRate?: number;
     lotAllocations?: SaleLotAllocation[];
@@ -164,6 +167,7 @@ export class SaleLine {
       quantityCommercial: payload.quantityCommercial,
       quantityBaseUnits,
       unitPrice: payload.unitPrice,
+      unitCost: payload.unitCost ?? null,
       discount,
       subtotal,
       taxRate,
@@ -210,6 +214,9 @@ export class SaleLine {
   }
   public get unitPrice(): number {
     return this.props.unitPrice;
+  }
+  public get unitCost(): number | null {
+    return this.props.unitCost ?? null;
   }
   public get discount(): number {
     return this.props.discount;

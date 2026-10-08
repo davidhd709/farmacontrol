@@ -215,6 +215,7 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
           ],
         },
         adminUserId,
+        randomUUID(),
       );
 
       expect(nc).toBeDefined();
@@ -330,6 +331,7 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
             items: [{ saleLineId: saleLine.id, quantityCommercial: 5 }],
           },
           adminUserId,
+          randomUUID(),
         ),
       ).rejects.toThrow('excede el saldo disponible');
     });
@@ -415,6 +417,7 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
           items: [{ saleLineId, quantityCommercial: 1 }],
         },
         adminUserId,
+        randomUUID(),
       );
     }
 

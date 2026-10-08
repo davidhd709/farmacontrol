@@ -39,6 +39,10 @@ export const BASE_PERMISSIONS: PermissionDefinition[] = [
   { name: SYSTEM_PERMISSIONS.SALES_CREATE, description: 'Registrar ventas en punto de venta con asignación FEFO' },
   { name: SYSTEM_PERMISSIONS.SALES_CANCEL, description: 'Anular ventas y revertir lotes asignados' },
   {
+    name: SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE,
+    description: 'Registrar devoluciones de clientes (notas crédito) con reembolso',
+  },
+  {
     name: SYSTEM_PERMISSIONS.SALES_DISCOUNT_OVERRIDE,
     description: 'Autorizar descuentos o rebajas de precio superiores al límite del cajero (5 %)',
   },
@@ -117,6 +121,7 @@ export const BASE_ROLES: RoleDefinition[] = [
       SYSTEM_PERMISSIONS.SALES_CREATE,
       SYSTEM_PERMISSIONS.SALES_CANCEL,
       SYSTEM_PERMISSIONS.SALES_DISCOUNT_OVERRIDE,
+      SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE,
       SYSTEM_PERMISSIONS.CASH_READ,
       SYSTEM_PERMISSIONS.CASH_OPEN,
       SYSTEM_PERMISSIONS.CASH_CLOSE,

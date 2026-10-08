@@ -316,7 +316,7 @@ export const SalesHistoryPage: React.FC = () => {
                       </Tooltip>
 
                       {sale.status === 'COMPLETED' && (
-                        <PermissionGate permission={SYSTEM_PERMISSIONS.SALES_CREATE}>
+                        <PermissionGate permission={SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE}>
                           <Tooltip title="Devolución parcial con nota crédito">
                             <Button
                               variant="outlined"

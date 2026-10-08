@@ -342,6 +342,7 @@ export class SaleService {
           presentationFactorHistorical: factor,
           quantityCommercial: item.quantityCommercial,
           unitPrice,
+          unitCost: Number(product.baseCost),
           discount: item.discount ?? 0,
           lotAllocations: lineAllocations,
         });
