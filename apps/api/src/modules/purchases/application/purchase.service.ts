@@ -67,7 +67,8 @@ export class PurchaseService {
     }
 
     // AUD-008: una factura del proveedor solo se recibe una vez
-    const invoiceNumber = input.invoiceNumber?.trim();
+    // Misma normalización que la entidad Purchase (sin espacios, en mayúsculas)
+    const invoiceNumber = input.invoiceNumber?.trim().toUpperCase();
     if (!invoiceNumber) {
       throw new BadRequestException('El número de factura es obligatorio');
     }

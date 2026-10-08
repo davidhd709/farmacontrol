@@ -259,8 +259,9 @@ describe('PurchaseController (Integration with PostgreSQL, Inventory & RBAC)', (
       const first = await receive({ supplierId, invoiceNumber: 'FV-DUP-1', purchaseDate: '2026-09-26', lines: [line()] });
       expect(first.status).toBe(201);
 
-      const second = await receive({ supplierId, invoiceNumber: ' FV-DUP-1 ', purchaseDate: '2026-09-26', lines: [line()] });
+      const second = await receive({ supplierId, invoiceNumber: ' fv-dup-1 ', purchaseDate: '2026-09-26', lines: [line()] });
       expect(second.status).toBe(409);
+      expect(second.body.message).toContain('ya fue recibida');
 
       expect(await prisma.purchase.count({ where: { invoiceNumber: 'FV-DUP-1' } })).toBe(1);
       const lot = await prisma.inventoryLot.findFirstOrThrow({ where: { lotNumber: 'LOTE-AUD008' } });
