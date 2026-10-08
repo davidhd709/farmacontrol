@@ -413,6 +413,13 @@ export class ReceivablesService {
         throw new BadRequestException('Este abono ya fue revertido previamente.');
       }
 
+      // AUD-006: una cuenta cerrada por anulación de la venta no se reabre
+      if (raw.status !== 'PENDIENTE' && raw.status !== 'PAGADA') {
+        throw new BadRequestException(
+          `No se puede reversar un abono de una cuenta en estado "${raw.status}".`,
+        );
+      }
+
       const paymentAmountCents = parseMoneyToCents(payment.amount.toString(), 'Monto del abono a revertir');
       const balanceCents = parseMoneyToCents(raw.balance.toString(), 'Saldo pendiente');
       const amountPaidCents = parseMoneyToCents(raw.amountPaid.toString(), 'Total abonado');

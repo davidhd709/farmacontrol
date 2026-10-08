@@ -13,6 +13,7 @@ import {
   InsufficientStockException,
   SaleAlreadyCancelledException,
   SaleHasCreditNotesException,
+  SaleHasActivePaymentsException,
 } from '../domain/sale.exceptions';
 import { IdempotencyService } from '../infrastructure/idempotency.service';
 import { AuditService } from '../../audit/application/services/audit.service';
@@ -541,6 +542,15 @@ export class SaleService {
       const creditNotesCount = await tx.creditNote.count({ where: { saleId: id } });
       if (creditNotesCount > 0) {
         throw new SaleHasCreditNotesException(sale.invoiceNumber, creditNotesCount);
+      }
+      // AUD-006: la anulación no devuelve abonos; deben reversarse antes en Cartera
+      if (sale.paymentMethod === 'CREDITO') {
+        const activePaymentsCount = await tx.receivablePayment.count({
+          where: { receivable: { saleId: id }, isReversed: false },
+        });
+        if (activePaymentsCount > 0) {
+          throw new SaleHasActivePaymentsException(sale.invoiceNumber, activePaymentsCount);
+        }
       }
       sale.cancel();
       await this.saleRepository.save(sale, tx);

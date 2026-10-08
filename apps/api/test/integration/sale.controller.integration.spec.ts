@@ -625,4 +625,101 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
       .send({ reason: 'Sin permiso de anular' });
     expect(resCancel.status).toBe(403);
   });
+
+  it('AUD-006: no anula una venta a crédito con abonos vigentes; tras reversarlos sí la anula', async () => {
+    const saleRes = await request(app.getHttpServer())
+      .post('/api/v1/sales/confirm')
+      .set('Idempotency-Key', randomUUID())
+      .set('Cookie', cajeroCookie)
+      .send({
+        paymentMethod: 'CREDITO',
+        customerId,
+        items: [{ productId, presentationId, quantityCommercial: 1 }],
+      });
+    expect(saleRes.status).toBe(201);
+    const saleId = saleRes.body.id;
+    const receivable = await prisma.receivable.findUniqueOrThrow({ where: { saleId } });
+
+    const payRes = await request(app.getHttpServer())
+      .post(`/api/v1/receivables/${receivable.id}/payments`)
+      .set('Idempotency-Key', randomUUID())
+      .set('Cookie', supervisorCookie)
+      .send({ amount: 2000, paymentMethod: 'EFECTIVO' });
+    expect(payRes.status).toBe(201);
+    const paymentId = payRes.body.data.payments[0].id;
+
+    const blocked = await request(app.getHttpServer())
+      .post(`/api/v1/sales/${saleId}/cancel`)
+      .set('Cookie', supervisorCookie)
+      .send({ reason: 'Cliente desiste de la compra' });
+    expect(blocked.status).toBe(409);
+    expect(blocked.body.message).toContain('abono');
+
+    const saleAfterBlock = await prisma.sale.findUniqueOrThrow({ where: { id: saleId } });
+    expect(saleAfterBlock.status).not.toBe('CANCELLED');
+    const lot1AfterBlock = await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lot1Id } });
+    expect(lot1AfterBlock.currentQuantity).toBe(0);
+
+    const reverseRes = await request(app.getHttpServer())
+      .post(`/api/v1/receivables/${receivable.id}/payments/${paymentId}/reverse`)
+      .set('Cookie', supervisorCookie)
+      .send({ reason: 'Devolución del abono por desistimiento' });
+    expect(reverseRes.status).toBe(200);
+
+    const cancelRes = await request(app.getHttpServer())
+      .post(`/api/v1/sales/${saleId}/cancel`)
+      .set('Cookie', supervisorCookie)
+      .send({ reason: 'Cliente desiste de la compra' });
+    expect(cancelRes.status).toBe(200);
+
+    const receivableAfter = await prisma.receivable.findUniqueOrThrow({ where: { saleId } });
+    expect(receivableAfter.status).toBe('CANCELADA');
+    const lot1AfterCancel = await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lot1Id } });
+    expect(lot1AfterCancel.currentQuantity).toBe(10);
+  });
+
+  it('AUD-006: no reversa abonos de una cuenta por cobrar cancelada (no la reabre)', async () => {
+    const admin = await prisma.user.findUniqueOrThrow({ where: { username: 'pos_admin' } });
+    const sale = await prisma.sale.create({
+      data: {
+        invoiceNumber: 'FV-AUD006',
+        customerId,
+        paymentMethod: 'CREDITO',
+        subtotal: '5000',
+        total: '5000',
+        status: 'CANCELLED',
+        createdById: admin.id,
+      },
+    });
+    const receivable = await prisma.receivable.create({
+      data: {
+        saleId: sale.id,
+        customerId,
+        totalAmount: '5000',
+        amountPaid: '1000',
+        balance: '4000',
+        status: 'CANCELADA',
+        dueDate: new Date('2027-06-30'),
+      },
+    });
+    const payment = await prisma.receivablePayment.create({
+      data: {
+        receivableId: receivable.id,
+        amount: '1000',
+        paymentMethod: 'EFECTIVO',
+        createdByUserId: admin.id,
+      },
+    });
+
+    const res = await request(app.getHttpServer())
+      .post(`/api/v1/receivables/${receivable.id}/payments/${payment.id}/reverse`)
+      .set('Cookie', supervisorCookie)
+      .send({ reason: 'Intento de reabrir la cuenta' });
+    expect(res.status).toBe(400);
+
+    const after = await prisma.receivable.findUniqueOrThrow({ where: { id: receivable.id } });
+    expect(after.status).toBe('CANCELADA');
+    const paymentAfter = await prisma.receivablePayment.findUniqueOrThrow({ where: { id: payment.id } });
+    expect(paymentAfter.isReversed).toBe(false);
+  });
 });
