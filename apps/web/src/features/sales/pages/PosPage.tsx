@@ -30,6 +30,9 @@ import { SaleReceiptDialog } from '../components/SaleReceiptDialog';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { SweetModal } from '../../../components/SweetModal';
 
+/** Pausa de escritura antes de consultar el catálogo (AUD-014). */
+const SEARCH_DEBOUNCE_MS = 250;
+
 interface CartItem {
   productId: string;
   productCode: string;
@@ -114,24 +117,72 @@ export const PosPage: React.FC = () => {
     initDefaultCustomer();
   }, []);
 
-  // Búsqueda de productos
-  const handleSearchProducts = async (term: string) => {
-    if (!term || term.trim().length < 2) {
+  // Búsqueda de productos (AUD-014): una petición por pausa de escritura, la anterior se
+  // cancela y solo se aceptan resultados del último término buscado.
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchAbortRef = useRef<AbortController | null>(null);
+  const searchTermRef = useRef('');
+  const resultsTermRef = useRef('');
+
+  const runProductSearch = async (term: string): Promise<ProductDto[]> => {
+    searchAbortRef.current?.abort();
+    const controller = new AbortController();
+    searchAbortRef.current = controller;
+    setProductLoading(true);
+    try {
+      const res = await fetchProducts({ search: term }, { signal: controller.signal });
+      if (controller.signal.aborted || searchTermRef.current !== term) return [];
+      const items = res.items.filter((p) => p.isActive);
+      productOptionsRef.current = items;
+      resultsTermRef.current = term;
+      setProductOptions(items);
+      return items;
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return [];
+      console.error(err);
+      return [];
+    } finally {
+      if (searchAbortRef.current === controller) setProductLoading(false);
+    }
+  };
+
+  const handleSearchProducts = (rawTerm: string) => {
+    const term = rawTerm.trim();
+    searchTermRef.current = term;
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    if (term.length < 2) {
+      searchAbortRef.current?.abort();
+      productOptionsRef.current = [];
+      resultsTermRef.current = '';
       setProductOptions([]);
       return;
     }
-    setProductLoading(true);
-    try {
-      const res = await fetchProducts({ search: term.trim() });
-      const items = res.items.filter((p) => p.isActive);
-      productOptionsRef.current = items;
-      setProductOptions(items);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setProductLoading(false);
+    searchDebounceRef.current = setTimeout(() => {
+      void runProductSearch(term);
+    }, SEARCH_DEBOUNCE_MS);
+  };
+
+  // Enter (o el escáner) agrega el primer resultado del término que está escrito ahora
+  const handleSearchEnter = async () => {
+    const term = searchTermRef.current;
+    if (term.length < 2) return;
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    const items =
+      resultsTermRef.current === term && productOptionsRef.current.length > 0
+        ? productOptionsRef.current
+        : await runProductSearch(term);
+    if (items.length > 0 && searchTermRef.current === term) {
+      handleAddToCart(items[0], null);
     }
   };
+
+  useEffect(
+    () => () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+      searchAbortRef.current?.abort();
+    },
+    [],
+  );
 
   // Calcular el total de unidades base de un producto ya reservadas en las demás líneas del carrito
   const getCartProductTotalBaseUnits = (items: CartItem[], productId: string, excludeIndex = -1): number => {
@@ -415,7 +466,9 @@ export const PosPage: React.FC = () => {
               getOptionLabel={(opt) => `${opt.code} - ${opt.name} (${opt.baseUnit})`}
               getOptionDisabled={(opt) => opt.availableStock !== undefined && opt.availableStock <= 0}
               loading={productLoading}
-              onInputChange={(_, value) => handleSearchProducts(value)}
+              onInputChange={(_, value, reason) => {
+                if (reason === 'input' || reason === 'clear') handleSearchProducts(value);
+              }}
               onChange={(_, value) => {
                 if (value) {
                   handleAddToCart(value, null);
@@ -429,11 +482,10 @@ export const PosPage: React.FC = () => {
                   placeholder="Ej: Amoxicilina, MED-001..."
                   size="small"
                   autoFocus
-                  onChange={(e) => handleSearchProducts(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && productOptionsRef.current.length > 0) {
+                    if (e.key === 'Enter') {
                       e.preventDefault();
-                      handleAddToCart(productOptionsRef.current[0], null);
+                      void handleSearchEnter();
                     }
                   }}
                 />

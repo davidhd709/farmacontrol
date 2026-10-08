@@ -1,5 +1,5 @@
 import { ThemeProvider } from '@mui/material';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -167,7 +167,10 @@ describe('PosPage (Frontend POS UX-03 / HU-017)', () => {
     fireEvent.change(searchInput, { target: { value: 'Aceta' } });
 
     await waitFor(() => {
-      expect(productsApi.fetchProducts).toHaveBeenCalledWith({ search: 'Aceta' });
+      expect(productsApi.fetchProducts).toHaveBeenCalledWith(
+        { search: 'Aceta' },
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      );
     });
 
     const option = await screen.findByRole('option');
@@ -190,7 +193,10 @@ describe('PosPage (Frontend POS UX-03 / HU-017)', () => {
     const searchInput = screen.getByLabelText(/Buscar producto por nombre/i);
     fireEvent.change(searchInput, { target: { value: 'Acetaminofén' } });
     await waitFor(() => {
-      expect(productsApi.fetchProducts).toHaveBeenCalledWith({ search: 'Acetaminofén' });
+      expect(productsApi.fetchProducts).toHaveBeenCalledWith(
+        { search: 'Acetaminofén' },
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      );
     });
     const option = await screen.findByRole('option');
     fireEvent.click(option);
@@ -266,5 +272,47 @@ describe('PosPage (Frontend POS UX-03 / HU-017)', () => {
     expect(secondKey).toBe(firstKey);
     expect(secondPayload).toEqual(firstPayload);
     expect(await screen.findByText(/Comprobante N°: VEN-20260926-0001/i)).toBeInTheDocument();
+  });
+
+  describe('AUD-014: búsqueda de productos', () => {
+    it('hace una sola petición por pausa de escritura y nunca dos por tecla', async () => {
+      renderComponent();
+      const input = screen.getByLabelText(/Buscar producto por nombre/i);
+      vi.mocked(productsApi.fetchProducts).mockClear();
+
+      fireEvent.change(input, { target: { value: 'Ace' } });
+      fireEvent.change(input, { target: { value: 'Acet' } });
+      fireEvent.change(input, { target: { value: 'Aceta' } });
+
+      await waitFor(() => expect(productsApi.fetchProducts).toHaveBeenCalledTimes(1));
+      expect(vi.mocked(productsApi.fetchProducts).mock.calls[0][0]).toEqual({ search: 'Aceta' });
+    });
+
+    it('Enter agrega el primer resultado del término escrito, no el de una respuesta anterior', async () => {
+      const otherProduct: ProductDto = { ...mockProduct, id: 'prod-2', code: 'MED-002', name: 'Ibuprofeno 400mg' };
+      vi.mocked(productsApi.fetchProducts).mockImplementation(async (filters) => ({
+        items: filters?.search === 'Ibup' ? [otherProduct] : [mockProduct],
+        total: 1,
+        page: 1,
+        pageSize: 20,
+        totalPages: 1,
+      }));
+      renderComponent();
+      const input = screen.getByLabelText(/Buscar producto por nombre/i);
+
+      fireEvent.change(input, { target: { value: 'Aceta' } });
+      await waitFor(() => expect(productsApi.fetchProducts).toHaveBeenCalled());
+      await screen.findByRole('option');
+
+      // El escáner escribe otro código y presiona Enter antes de la pausa
+      fireEvent.change(input, { target: { value: 'Ibup' } });
+      fireEvent.keyDown(input, { key: 'Enter' });
+
+      const cart = screen.getByRole('table', { name: 'carrito de ventas' });
+      await waitFor(() => {
+        expect(within(cart).getByText('Ibuprofeno 400mg')).toBeInTheDocument();
+      });
+      expect(within(cart).queryByText('Acetaminofén 500mg')).not.toBeInTheDocument();
+    });
   });
 });
