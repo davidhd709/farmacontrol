@@ -100,13 +100,24 @@ export class ConfirmSaleValidationPipe implements PipeTransform {
         presentationId = item.presentationId.trim();
       }
 
+      // AUD-011: precio y descuento solo como montos válidos no negativos
+      const optionalMoney = (raw: unknown, field: string): number | undefined => {
+        if (raw === undefined || raw === null) return undefined;
+        const parsed = typeof raw === 'number' ? raw : Number.NaN;
+        if (!Number.isFinite(parsed) || parsed < 0) {
+          throw new BadRequestException(
+            `El campo "${field}" del ítem ${index} debe ser un número mayor o igual a cero.`,
+          );
+        }
+        return parsed;
+      };
+
       return {
         productId: item.productId.trim(),
         presentationId,
         quantityCommercial: qty,
-        unitPriceOverride:
-          item.unitPriceOverride !== undefined ? Number(item.unitPriceOverride) : undefined,
-        discount: item.discount !== undefined ? Number(item.discount) : undefined,
+        unitPriceOverride: optionalMoney(item.unitPriceOverride, 'unitPriceOverride'),
+        discount: optionalMoney(item.discount, 'discount'),
       };
     });
 

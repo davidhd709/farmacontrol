@@ -215,6 +215,7 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
           ],
         },
         adminUserId,
+        randomUUID(),
       );
 
       expect(nc).toBeDefined();
@@ -330,6 +331,7 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
             items: [{ saleLineId: saleLine.id, quantityCommercial: 5 }],
           },
           adminUserId,
+          randomUUID(),
         ),
       ).rejects.toThrow('excede el saldo disponible');
     });
@@ -415,6 +417,7 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
           items: [{ saleLineId, quantityCommercial: 1 }],
         },
         adminUserId,
+        randomUUID(),
       );
     }
 
@@ -574,6 +577,9 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
       // 3. Verificar cuenta por pagar reducida
       const reloadedPayable = await prisma.payable.findUniqueOrThrow({ where: { id: payable.id } });
       expect(reloadedPayable.balance.toFixed(2)).toBe('28000.00'); // 40000 - 12000 = 28000
+      // AUD-009: la nota débito reduce el total adeudado y conserva saldo = total - pagado
+      expect(reloadedPayable.totalAmount.toFixed(2)).toBe('28000.00');
+      expect(reloadedPayable.amountPaid.toFixed(2)).toBe('0.00');
 
       // 4. Verificar asiento contable de Nota Débito
       const entry = await prisma.journalEntry.findFirst({
@@ -662,6 +668,99 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
           adminUserId,
         ),
       ).rejects.toThrow('Existencias insuficientes en el lote');
+    });
+  });
+
+  describe('AUD-009: Notas débito sobre cuentas por pagar con abonos', () => {
+    async function setupPaidPurchase(amountPaid: number) {
+      await setupStandardPucAndMappings();
+      const location = await prisma.location.findFirstOrThrow();
+      const supplier = await prisma.supplier.create({
+        data: { taxId: `900555${amountPaid}-1`, name: `Proveedor AUD-009 ${amountPaid}` },
+      });
+      const category = await prisma.category.create({ data: { name: `Cat AUD-009 ${amountPaid}` } });
+      const product = await prisma.product.create({
+        data: { code: `AUD009-${amountPaid}`, name: 'Loratadina 10mg', basePrice: 8000, baseCost: 4000, categoryId: category.id },
+      });
+      const lot = await prisma.inventoryLot.create({
+        data: {
+          productId: product.id,
+          locationId: location.id,
+          lotNumber: `LOT-AUD009-${amountPaid}`,
+          expirationDate: new Date('2029-06-30'),
+          currentQuantity: 10,
+        },
+      });
+      const purchase = await prisma.purchase.create({
+        data: {
+          supplierId: supplier.id,
+          invoiceNumber: `FAC-AUD009-${amountPaid}`,
+          status: 'RECEIVED',
+          purchaseDate: new Date('2026-10-01'),
+          totalAmount: 40000,
+          receivedByUserId: adminUserId,
+        },
+      });
+      const purchaseLine = await prisma.purchaseLine.create({
+        data: {
+          purchaseId: purchase.id,
+          productId: product.id,
+          lotId: lot.id,
+          quantityCommercial: 10,
+          quantityBaseUnits: 10,
+          unitCost: 4000,
+          subtotal: 40000,
+          lotNumber: `LOT-AUD009-${amountPaid}`,
+          expirationDate: new Date('2029-06-30'),
+        },
+      });
+      const payable = await prisma.payable.create({
+        data: {
+          purchaseId: purchase.id,
+          supplierId: supplier.id,
+          totalAmount: 40000,
+          amountPaid,
+          balance: 40000 - amountPaid,
+          status: amountPaid === 40000 ? 'PAGADA' : 'PENDIENTE',
+          dueDate: new Date('2026-11-01'),
+        },
+      });
+      return { purchase, purchaseLine, payable, lot };
+    }
+
+    it('con abono parcial: reduce total y saldo, y mantiene saldo = total - pagado', async () => {
+      const { purchase, purchaseLine, payable } = await setupPaidPurchase(20000);
+
+      await debitNotesService.createDebitNote(
+        purchase.id,
+        { purchaseId: purchase.id, reason: 'Devolución parcial', items: [{ purchaseLineId: purchaseLine.id, quantityCommercial: 3 }] },
+        adminUserId,
+      );
+
+      const reloaded = await prisma.payable.findUniqueOrThrow({ where: { id: payable.id } });
+      expect(reloaded.totalAmount.toFixed(2)).toBe('28000.00');
+      expect(reloaded.amountPaid.toFixed(2)).toBe('20000.00');
+      expect(reloaded.balance.toFixed(2)).toBe('8000.00');
+      expect(reloaded.status).toBe('PENDIENTE');
+    });
+
+    it('rechaza la nota débito si deja el total por debajo de lo ya pagado, sin tocar inventario ni CxP', async () => {
+      const { purchase, purchaseLine, payable, lot } = await setupPaidPurchase(35000);
+
+      await expect(
+        debitNotesService.createDebitNote(
+          purchase.id,
+          { purchaseId: purchase.id, reason: 'Devolución mayor al saldo', items: [{ purchaseLineId: purchaseLine.id, quantityCommercial: 3 }] },
+          adminUserId,
+        ),
+      ).rejects.toThrow('menor a lo ya pagado');
+
+      const reloaded = await prisma.payable.findUniqueOrThrow({ where: { id: payable.id } });
+      expect(reloaded.totalAmount.toFixed(2)).toBe('40000.00');
+      expect(reloaded.balance.toFixed(2)).toBe('5000.00');
+      const reloadedLot = await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lot.id } });
+      expect(reloadedLot.currentQuantity).toBe(10);
+      expect(await prisma.debitNote.count({ where: { purchaseId: purchase.id } })).toBe(0);
     });
   });
 

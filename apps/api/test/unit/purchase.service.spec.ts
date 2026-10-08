@@ -31,6 +31,10 @@ describe('PurchaseService & Purchase Entities (Unit)', () => {
           isActive: true,
         })),
       },
+      purchase: {
+        // Sin facturas previas del proveedor (AUD-008)
+        findUnique: vi.fn(async () => null),
+      },
       location: {
         findFirst: vi.fn(async () => ({
           id: 'loc-1',

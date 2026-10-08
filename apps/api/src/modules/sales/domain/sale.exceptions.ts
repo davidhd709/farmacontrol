@@ -21,6 +21,15 @@ export class SaleAlreadyCancelledException extends Error {
   }
 }
 
+export class SaleHasActivePaymentsException extends Error {
+  constructor(invoiceNumber: string, activePaymentsCount: number) {
+    super(
+      `La venta a crédito '${invoiceNumber}' tiene ${activePaymentsCount} abono(s) vigente(s) y no puede anularse; reverse primero los abonos en Cartera para devolver ese dinero.`
+    );
+    this.name = 'SaleHasActivePaymentsException';
+  }
+}
+
 export class SaleHasCreditNotesException extends Error {
   constructor(invoiceNumber: string, creditNotesCount: number) {
     super(

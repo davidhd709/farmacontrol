@@ -93,7 +93,9 @@ export interface CreateCreditNoteLinePayload {
 export interface CreateCreditNotePayload {
   saleId: string;
   reason: string;
-  refundMethod?: 'EFECTIVO' | 'CREDITO_CARTERA' | 'TRANSFERENCIA' | 'SALDO_A_FAVOR';
+  refundMethod?: 'EFECTIVO' | 'CREDITO_CARTERA' | 'TRANSFERENCIA';
+  /** Cuenta desde la que se transfiere el reembolso; por defecto la de la venta. */
+  bankAccountId?: string;
   restock?: boolean;
   items: CreateCreditNoteLinePayload[];
 }

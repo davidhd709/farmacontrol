@@ -8,7 +8,6 @@ import type {
   InventoryMovementDto,
   InventoryMovementQueryFilters,
   PaginatedResponse,
-  RecordInventoryMovementPayload,
 } from '@farmacia/contracts';
 
 @Injectable()
@@ -18,37 +17,6 @@ export class InventoryMovementService {
     private readonly movementRepository: IInventoryMovementRepository,
     private readonly auditService: AuditService,
   ) {}
-
-  public async recordMovement(
-    payload: RecordInventoryMovementPayload,
-    userId?: string,
-    ipAddress?: string,
-    correlationId?: string,
-  ): Promise<InventoryMovementDto> {
-    const movement = await this.movementRepository.recordMovement(
-      payload,
-      userId,
-    );
-
-    await this.auditService.recordEvent({
-      userId,
-      action: `INVENTORY_MOVEMENT_${payload.movementType}`,
-      entity: 'InventoryMovement',
-      entityId: movement.id,
-      details: {
-        movementType: payload.movementType,
-        productId: payload.productId,
-        lotId: payload.lotId,
-        quantityBaseUnits: payload.quantityBaseUnits,
-        balanceAfter: movement.balanceAfterBaseUnits,
-        referenceDoc: payload.referenceDocumentId,
-      },
-      ipAddress,
-      correlationId,
-    });
-
-    return movement;
-  }
 
   public async adjustInventory(
     payload: {

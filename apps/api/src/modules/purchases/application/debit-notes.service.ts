@@ -233,23 +233,37 @@ export class DebitNotesService {
           const count = await tx.debitNote.count();
           const debitNoteNumber = `ND-${String(count + 1).padStart(6, '0')}`;
 
-          // 4. Ajuste en Cuentas por Pagar (Payables) si existe
-          const payable = await tx.payable.findUnique({
-            where: { purchaseId: purchase.id },
-          });
+          // 4. Ajuste en Cuentas por Pagar (AUD-009): la nota débito reduce lo adeudado
+          //    y conserva el invariante saldo = total - pagado.
+          const payableRows = await tx.$queryRaw<
+            Array<{ id: string; total_amount: Prisma.Decimal; amount_paid: Prisma.Decimal; status: string; notes: string | null }>
+          >`
+            SELECT id, total_amount, amount_paid, status, notes
+            FROM payables
+            WHERE purchase_id = ${purchase.id}::uuid
+            FOR UPDATE
+          `;
 
-          if (payable) {
-            const currentBalance = new Prisma.Decimal(payable.balance);
-            const debitAmount = new Prisma.Decimal(centsToMoneyString(totalDebitCents));
-            const newBalance = currentBalance.sub(debitAmount);
-            const finalBalance = newBalance.lt(0) ? new Prisma.Decimal(0) : newBalance;
+          if (payableRows.length > 0) {
+            const payable = payableRows[0];
+            const totalCents = parseMoneyToCents(payable.total_amount.toString(), 'Total CxP');
+            const paidCents = parseMoneyToCents(payable.amount_paid.toString(), 'Pagado CxP');
+            const newTotalCents = totalCents - totalDebitCents;
+            const newBalanceCents = newTotalCents - paidCents;
+
+            if (newBalanceCents < 0n) {
+              throw new BadRequestException(
+                `La nota débito (${centsToMoneyString(totalDebitCents)}) deja la factura ${purchase.invoiceNumber} con un total de ${centsToMoneyString(newTotalCents)}, menor a lo ya pagado (${centsToMoneyString(paidCents)}). Reverse primero los pagos excedentes al proveedor.`,
+              );
+            }
 
             await tx.payable.update({
               where: { id: payable.id },
               data: {
-                balance: finalBalance,
-                status: finalBalance.isZero() ? 'PAGADA' : payable.status,
-                notes: `${payable.notes || ''} [Nota Débito ${debitNoteNumber}: -${debitAmount.toFixed(2)}]`.trim(),
+                totalAmount: new Prisma.Decimal(centsToMoneyString(newTotalCents)),
+                balance: new Prisma.Decimal(centsToMoneyString(newBalanceCents)),
+                status: newBalanceCents === 0n ? 'PAGADA' : payable.status,
+                notes: `${payable.notes || ''} [Nota Débito ${debitNoteNumber}: -${centsToMoneyString(totalDebitCents)}]`.trim(),
               },
             });
           }

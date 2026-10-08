@@ -46,6 +46,8 @@ export const CreditNoteDialog: React.FC<Props> = ({ open, sale, onClose, onCreat
   const [refundMethod, setRefundMethod] = useState<RefundMethod>('EFECTIVO');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Una clave por diálogo abierto: un reintento tras un fallo de red no duplica la devolución
+  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
 
   useEffect(() => {
     if (open && sale) {
@@ -54,16 +56,18 @@ export const CreditNoteDialog: React.FC<Props> = ({ open, sale, onClose, onCreat
       setRestock(true);
       setRefundMethod(sale.paymentMethod === 'CREDITO' ? 'CREDITO_CARTERA' : 'EFECTIVO');
       setError(null);
+      setIdempotencyKey(crypto.randomUUID());
     }
   }, [open, sale]);
 
+  // Estimado sobre el valor neto cobrado (con descuento e IVA); el servidor calcula el exacto
   const estimatedTotal = useMemo(() => {
     if (!sale) return 0;
     return sale.lines.reduce((acc, line) => {
       const q = Number(quantities[line.id] || 0);
-      if (!q || q <= 0) return acc;
-      const sub = Number(line.unitPrice) * q;
-      return acc + sub + (sub * Number(line.taxRate)) / 100;
+      const sold = Number(line.quantityCommercial);
+      if (!q || q <= 0 || !sold) return acc;
+      return acc + (Number(line.total) * q) / sold;
     }, 0);
   }, [sale, quantities]);
 
@@ -84,13 +88,17 @@ export const CreditNoteDialog: React.FC<Props> = ({ open, sale, onClose, onCreat
     setSubmitting(true);
     setError(null);
     try {
-      const nc = await createSaleCreditNote(sale.id, {
-        saleId: sale.id,
-        reason: reason.trim(),
-        restock,
-        refundMethod,
-        items,
-      });
+      const nc = await createSaleCreditNote(
+        sale.id,
+        {
+          saleId: sale.id,
+          reason: reason.trim(),
+          restock,
+          refundMethod,
+          items,
+        },
+        idempotencyKey,
+      );
       onCreated(nc.creditNoteNumber);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo registrar la nota crédito.');
@@ -169,14 +177,17 @@ export const CreditNoteDialog: React.FC<Props> = ({ open, sale, onClose, onCreat
                 onChange={(e) => setRefundMethod(e.target.value as RefundMethod)}
               >
                 <MenuItem value="EFECTIVO">Efectivo (egreso de caja)</MenuItem>
-                <MenuItem value="CREDITO_CARTERA">Abono a cartera del cliente</MenuItem>
-                <MenuItem value="TRANSFERENCIA">Transferencia</MenuItem>
-                <MenuItem value="SALDO_A_FAVOR">Saldo a favor</MenuItem>
+                {sale.paymentMethod === 'CREDITO' && (
+                  <MenuItem value="CREDITO_CARTERA">Abono a cartera del cliente</MenuItem>
+                )}
+                {sale.paymentMethod === 'TRANSFERENCIA' && (
+                  <MenuItem value="TRANSFERENCIA">Transferencia a la cuenta de la venta</MenuItem>
+                )}
               </Select>
             </FormControl>
             <FormControlLabel
               control={<Checkbox checked={restock} onChange={(e) => setRestock(e.target.checked)} />}
-              label="Reintegrar unidades al inventario (lote original)"
+              label="Reintegrar unidades al inventario (lotes originales)"
             />
           </Stack>
 
@@ -189,6 +200,7 @@ export const CreditNoteDialog: React.FC<Props> = ({ open, sale, onClose, onCreat
               {restock ? ', reintegro de inventario y reversión del costo' : ''}).
               {refundMethod === 'EFECTIVO' && ' Se registrará un egreso en caja.'}
               {refundMethod === 'CREDITO_CARTERA' && ' Se reducirá el saldo de la cuenta por cobrar.'}
+              {refundMethod === 'TRANSFERENCIA' && ' Se registrará un retiro en la cuenta bancaria de la venta.'}
             </Typography>
           </Alert>
 

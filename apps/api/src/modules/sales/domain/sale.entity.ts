@@ -5,6 +5,13 @@ import {
   SaleLineDto,
   SaleLotAllocationDto,
 } from '@farmacia/contracts';
+import {
+  centsToNumber,
+  lineGrossCents,
+  moneyToCents,
+  percentageOfCents,
+  quantityToHundredths,
+} from './sale-money';
 
 export interface SaleLotAllocationProps {
   id: string;
@@ -90,6 +97,8 @@ export interface SaleLineProps {
   quantityCommercial: number;
   quantityBaseUnits: number;
   unitPrice: number;
+  /** Costo por unidad base vigente al vender (AUD-007); nulo en ventas antiguas. */
+  unitCost?: number | null;
   discount: number;
   subtotal: number;
   taxRate: number;
@@ -113,6 +122,7 @@ export class SaleLine {
     presentationFactorHistorical?: number;
     quantityCommercial: number;
     unitPrice: number;
+    unitCost?: number | null;
     discount?: number;
     taxRate?: number;
     lotAllocations?: SaleLotAllocation[];
@@ -127,11 +137,23 @@ export class SaleLine {
 
     const factor = payload.presentationFactorHistorical ?? 1;
     const quantityBaseUnits = Math.round(payload.quantityCommercial * factor);
-    const discount = payload.discount ?? 0;
-    const subtotal = Math.max(0, payload.quantityCommercial * payload.unitPrice - discount);
     const taxRate = payload.taxRate ?? 0;
-    const taxAmount = Math.round(subtotal * (taxRate / 100) * 100) / 100;
-    const total = subtotal + taxAmount;
+
+    // AUD-010: cálculo exacto en centavos
+    const grossCents = lineGrossCents(
+      quantityToHundredths(payload.quantityCommercial, 'La cantidad vendida'),
+      moneyToCents(payload.unitPrice, 'El precio unitario'),
+    );
+    const discountCents = moneyToCents(payload.discount ?? 0, 'El descuento');
+    if (discountCents > grossCents) {
+      throw new Error('El descuento no puede superar el valor de la línea');
+    }
+    const subtotalCents = grossCents - discountCents;
+    const taxCents = percentageOfCents(subtotalCents, taxRate);
+    const discount = centsToNumber(discountCents);
+    const subtotal = centsToNumber(subtotalCents);
+    const taxAmount = centsToNumber(taxCents);
+    const total = centsToNumber(subtotalCents + taxCents);
 
     return new SaleLine({
       id: payload.id ?? crypto.randomUUID(),
@@ -145,6 +167,7 @@ export class SaleLine {
       quantityCommercial: payload.quantityCommercial,
       quantityBaseUnits,
       unitPrice: payload.unitPrice,
+      unitCost: payload.unitCost ?? null,
       discount,
       subtotal,
       taxRate,
@@ -191,6 +214,9 @@ export class SaleLine {
   }
   public get unitPrice(): number {
     return this.props.unitPrice;
+  }
+  public get unitCost(): number | null {
+    return this.props.unitCost ?? null;
   }
   public get discount(): number {
     return this.props.discount;
@@ -281,18 +307,30 @@ export class Sale {
       throw new Error('Una venta debe contener al menos un producto');
     }
 
-    const subtotal = payload.lines.reduce((acc, l) => acc + l.subtotal, 0);
-    const taxTotal = payload.lines.reduce((acc, l) => acc + l.taxAmount, 0);
-    const discountTotal = payload.lines.reduce((acc, l) => acc + l.discount, 0);
-    const total = payload.lines.reduce((acc, l) => acc + l.total, 0);
+    // AUD-010: totales sumados en centavos
+    const sumCents = (pick: (l: SaleLine) => number, name: string) =>
+      payload.lines.reduce((acc, l) => acc + moneyToCents(pick(l), name), 0n);
+    const subtotalCents = sumCents((l) => l.subtotal, 'El subtotal');
+    const taxTotalCents = sumCents((l) => l.taxAmount, 'El IVA');
+    const discountTotalCents = sumCents((l) => l.discount, 'El descuento');
+    const totalCents = sumCents((l) => l.total, 'El total');
 
-    const amountPaid = payload.amountPaid !== undefined ? payload.amountPaid : total;
-    if (payload.paymentMethod === 'EFECTIVO' && amountPaid < total) {
+    const amountPaidCents =
+      payload.amountPaid !== undefined
+        ? moneyToCents(payload.amountPaid, 'El monto recibido')
+        : totalCents;
+    const subtotal = centsToNumber(subtotalCents);
+    const taxTotal = centsToNumber(taxTotalCents);
+    const discountTotal = centsToNumber(discountTotalCents);
+    const total = centsToNumber(totalCents);
+    const amountPaid = centsToNumber(amountPaidCents);
+    if (payload.paymentMethod === 'EFECTIVO' && amountPaidCents < totalCents) {
       throw new Error(
         `El monto recibido ($${amountPaid}) no cubre el valor total de la venta ($${total})`,
       );
     }
-    const changeGiven = payload.paymentMethod === 'EFECTIVO' ? Math.max(0, amountPaid - total) : 0;
+    const changeGiven =
+      payload.paymentMethod === 'EFECTIVO' ? centsToNumber(amountPaidCents - totalCents) : 0;
 
     const now = new Date();
     return new Sale({

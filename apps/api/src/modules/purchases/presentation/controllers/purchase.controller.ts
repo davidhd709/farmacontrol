@@ -11,6 +11,7 @@ import {
   HttpStatus,
   NotFoundException,
   BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import {
@@ -35,6 +36,8 @@ import {
   PurchaseNotFoundException,
   SupplierNotActiveException,
   ExpiredLotDateException,
+  DuplicatePurchaseInvoiceException,
+  PurchaseLotConflictException,
 } from '../../domain/purchase.exceptions';
 
 @Controller('purchases')
@@ -63,6 +66,12 @@ export class PurchaseController {
         error instanceof ExpiredLotDateException
       ) {
         throw new BadRequestException(error.message);
+      }
+      if (
+        error instanceof DuplicatePurchaseInvoiceException ||
+        error instanceof PurchaseLotConflictException
+      ) {
+        throw new ConflictException(error.message);
       }
       if (error instanceof Error) {
         throw new BadRequestException(error.message);

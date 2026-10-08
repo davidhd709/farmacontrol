@@ -20,3 +20,17 @@ export class ExpiredLotDateException extends Error {
     this.name = 'ExpiredLotDateException';
   }
 }
+
+export class DuplicatePurchaseInvoiceException extends Error {
+  constructor(invoiceNumber: string) {
+    super(`La factura "${invoiceNumber}" de este proveedor ya fue recibida; no se puede registrar dos veces.`);
+    this.name = 'DuplicatePurchaseInvoiceException';
+  }
+}
+
+export class PurchaseLotConflictException extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PurchaseLotConflictException';
+  }
+}

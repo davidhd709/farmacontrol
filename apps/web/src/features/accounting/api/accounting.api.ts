@@ -376,7 +376,8 @@ export interface CreateCreditNoteLinePayload {
 export interface CreateCreditNotePayload {
   saleId: string;
   reason: string;
-  refundMethod?: 'EFECTIVO' | 'CREDITO_CARTERA' | 'TRANSFERENCIA' | 'SALDO_A_FAVOR';
+  refundMethod?: 'EFECTIVO' | 'CREDITO_CARTERA' | 'TRANSFERENCIA';
+  bankAccountId?: string;
   restock?: boolean;
   items: CreateCreditNoteLinePayload[];
 }
@@ -423,9 +424,15 @@ export interface CreditNoteDto {
 export const fetchSaleCreditNotes = (saleId: string) =>
   apiRequest<CreditNoteDto[]>(`sales/${encodeURIComponent(saleId)}/credit-notes`);
 
-export const createSaleCreditNote = (saleId: string, payload: CreateCreditNotePayload) =>
+/** La clave de idempotencia se reutiliza en los reintentos del mismo envío (AUD-007). */
+export const createSaleCreditNote = (
+  saleId: string,
+  payload: CreateCreditNotePayload,
+  idempotencyKey: string,
+) =>
   apiRequest<CreditNoteDto>(`sales/${encodeURIComponent(saleId)}/credit-notes`, {
     method: 'POST',
+    headers: { 'idempotency-key': idempotencyKey },
     body: JSON.stringify(payload),
   });
 

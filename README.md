@@ -172,13 +172,13 @@ La documentación OpenAPI / Swagger todavía no está publicada por la API
 El proyecto cuenta con una batería de pruebas automatizadas que validan lógica de dominio, transacciones concurrentes en base de datos real y experiencia de usuario:
 
 ```bash
-# Ejecutar todas las pruebas del monorepositorio (108 archivos, 704 pruebas)
+# Ejecutar todas las pruebas del monorepositorio (114 archivos, 752 pruebas)
 pnpm test
 
-# Ejecutar pruebas exclusivas del backend (72 archivos, 534 pruebas con PostgreSQL real)
+# Ejecutar pruebas exclusivas del backend (77 archivos, 577 pruebas con PostgreSQL real)
 pnpm --filter @farmacia/api test
 
-# Ejecutar pruebas del frontend (21 archivos, 95 pruebas con React Testing Library y Vitest)
+# Ejecutar pruebas del frontend (22 archivos, 100 pruebas con React Testing Library y Vitest)
 pnpm --filter @farmacia/web test
 
 # Comprobar tipos y empaquetar aplicaciones para producción

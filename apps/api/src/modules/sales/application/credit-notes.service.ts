@@ -9,6 +9,33 @@ import { AccountingEngineService } from '../../accounting/application/accounting
 import { AuditService } from '../../audit/application/services/audit.service';
 import { parseMoneyToCents, centsToMoneyString } from '../../treasury/domain/treasury-rules';
 import { calculateNewCashBalanceCents } from '../../cash/domain/cash-rules';
+import { recordSourceBankMovement } from '../../treasury/application/record-source-bank-movement';
+import { IdempotencyService } from '../infrastructure/idempotency.service';
+import {
+  creditAmountsForLine,
+  splitProportionally,
+  splitReturnAcrossLots,
+} from '../domain/credit-note-rules';
+import { quantityToHundredths, SaleMoneyError } from '../domain/sale-money';
+
+const CREDIT_NOTE_ENDPOINT = 'POST /api/v1/sales/credit-notes';
+
+type CreditNoteRefundMethod = NonNullable<CreateCreditNotePayload['refundMethod']>;
+/** SALDO_A_FAVOR no tiene contrapartida (saldo del cliente) implementada todavía. */
+const REFUND_METHODS: CreditNoteRefundMethod[] = ['EFECTIVO', 'TRANSFERENCIA', 'CREDITO_CARTERA'];
+
+function moneyCents(value: Prisma.Decimal | string | number, name: string): bigint {
+  return parseMoneyToCents(new Prisma.Decimal(value).toFixed(2), name);
+}
+
+function toHundredths(value: number, productName: string): bigint {
+  try {
+    return quantityToHundredths(value, `La cantidad de ${productName}`);
+  } catch (error) {
+    if (error instanceof SaleMoneyError) throw new BadRequestException(error.message);
+    throw error;
+  }
+}
 
 type Tx = Parameters<Parameters<PrismaClient['$transaction']>[0]>[0];
 
@@ -66,48 +93,66 @@ async function executeWithRetry<T>(
 export class CreditNotesService {
   private readonly client: PrismaClient;
 
+  private readonly idempotencyService: IdempotencyService;
+
   constructor(
     @Optional() customClient?: PrismaClient,
     @Optional() private readonly accountingEngine?: AccountingEngineService,
     @Optional() private readonly auditService?: AuditService,
+    @Optional() idempotencyService?: IdempotencyService,
   ) {
     this.client = customClient ?? prisma;
+    this.idempotencyService = idempotencyService ?? new IdempotencyService(this.client);
   }
 
   async createCreditNote(
     saleId: string,
     payload: CreateCreditNotePayload,
     userId: string,
+    idempotencyKey?: string,
   ): Promise<CreditNoteDto> {
     if (!payload.items || payload.items.length === 0) {
       throw new BadRequestException('La nota crédito debe incluir al menos una línea a devolver.');
     }
+    // AUD-007: una nota crédito mueve dinero e inventario; un reintento no la duplica
+    const key = idempotencyKey?.trim();
+    if (!key || key.length > 100) {
+      throw new BadRequestException(
+        'Idempotency-Key es obligatorio (máximo 100 caracteres) para registrar una nota crédito.',
+      );
+    }
+    const endpoint = `${CREDIT_NOTE_ENDPOINT}:${saleId}`;
+    const requestHash = this.idempotencyService.computeHash(endpoint, userId, payload);
 
-    return executeWithRetry(async () => {
+    const { dto, replayed } = await executeWithRetry(async () => {
       return this.client.$transaction(
         async (tx) => {
-          // 1. Obtener venta con sus líneas y lotes asignados
-          const sale = await tx.sale.findUnique({
+          const cached = await this.idempotencyService.getRecord(key, requestHash, tx);
+          if (cached) {
+            return { dto: cached.responseBody as CreditNoteDto, replayed: true };
+          }
+
+          // 1. Bloquear la venta: serializa notas crédito y anulaciones concurrentes
+          const lockedSales = await tx.$queryRaw<Array<{ id: string }>>`
+            SELECT id FROM sales WHERE id = ${saleId}::uuid FOR UPDATE
+          `;
+          if (!lockedSales.length) {
+            throw new NotFoundException(`Venta con id '${saleId}' no encontrada.`);
+          }
+
+          const sale = await tx.sale.findUniqueOrThrow({
             where: { id: saleId },
             include: {
               customer: true,
               lines: {
                 include: {
                   product: true,
-                  lotAllocations: {
-                    include: { lot: true },
-                  },
+                  lotAllocations: { orderBy: { createdAt: 'asc' } },
                 },
               },
-              creditNotes: {
-                include: { lines: true },
-              },
+              creditNotes: { include: { lines: true } },
             },
           });
-
-          if (!sale) {
-            throw new NotFoundException(`Venta con id '${saleId}' no encontrada.`);
-          }
 
           if (sale.status === 'CANCELLED') {
             throw new BadRequestException(
@@ -115,27 +160,63 @@ export class CreditNotesService {
             );
           }
 
-          // 2. Validar cantidades devueltas por línea
+          // 2. Forma de reembolso
+          const refundMethod: CreditNoteRefundMethod =
+            payload.refundMethod ??
+            (sale.paymentMethod === 'CREDITO' ? 'CREDITO_CARTERA' : 'EFECTIVO');
+          if (!REFUND_METHODS.includes(refundMethod)) {
+            throw new BadRequestException(
+              `La forma de reembolso '${refundMethod}' no está disponible. Use: ${REFUND_METHODS.join(', ')}.`,
+            );
+          }
+          if (refundMethod === 'CREDITO_CARTERA' && sale.paymentMethod !== 'CREDITO') {
+            throw new BadRequestException(
+              'El abono a cartera solo aplica a ventas a crédito.',
+            );
+          }
+          const refundBankAccountId =
+            refundMethod === 'TRANSFERENCIA'
+              ? (payload.bankAccountId ?? sale.bankAccountId ?? null)
+              : null;
+          if (refundMethod === 'TRANSFERENCIA' && !refundBankAccountId) {
+            throw new BadRequestException(
+              'Indique la cuenta bancaria desde la que se transfiere el reembolso.',
+            );
+          }
+          const restock = payload.restock !== false;
+
+          // 3. Consecutivo (la restricción única y el reintento cubren la concurrencia)
+          const count = await tx.creditNote.count();
+          const creditNoteNumber = `NC-${String(count + 1).padStart(6, '0')}`;
+
+          // 4. Líneas: montos proporcionales al neto vendido, lotes originales y costo histórico
           const creditLinesData: Array<{
             saleLineId: string;
             productId: string;
             lotId: string | null;
-            quantityCommercial: number;
+            quantityCommercial: Prisma.Decimal;
             quantityBaseUnits: number;
             unitPrice: Prisma.Decimal;
             subtotal: Prisma.Decimal;
             taxRate: Prisma.Decimal;
             taxAmount: Prisma.Decimal;
             total: Prisma.Decimal;
-            costBaseUnit: Prisma.Decimal;
           }> = [];
 
           let totalSubtotalCents = 0n;
           let totalTaxCents = 0n;
-          let totalReturnCents = 0n;
           let totalCostCents = 0n;
+          const priorLines = sale.creditNotes.flatMap((cn) => cn.lines);
+          const seenLines = new Set<string>();
 
           for (const item of payload.items) {
+            if (seenLines.has(item.saleLineId)) {
+              throw new BadRequestException(
+                `La línea de venta '${item.saleLineId}' aparece más de una vez en la nota crédito.`,
+              );
+            }
+            seenLines.add(item.saleLineId);
+
             const line = sale.lines.find((l) => l.id === item.saleLineId);
             if (!line) {
               throw new BadRequestException(
@@ -143,149 +224,191 @@ export class CreditNotesService {
               );
             }
 
-            if (item.quantityCommercial <= 0) {
+            const returnedH = toHundredths(item.quantityCommercial, line.product.name);
+            if (returnedH <= 0n) {
               throw new BadRequestException(
                 `La cantidad a devolver debe ser mayor a cero para el producto ${line.product.name}.`,
               );
             }
-
-            // Sumar cantidades ya acreditadas en notas crédito previas
-            let alreadyCredited = 0;
-            for (const cn of sale.creditNotes) {
-              for (const cnl of cn.lines) {
-                if (cnl.saleLineId === line.id) {
-                  alreadyCredited += Number(cnl.quantityCommercial);
-                }
-              }
-            }
-
-            const maxAvailable = Number(line.quantityCommercial) - alreadyCredited;
-            if (item.quantityCommercial > maxAvailable + 0.0001) {
+            const soldH = toHundredths(Number(line.quantityCommercial), line.product.name);
+            const linePrior = priorLines.filter((cnl) => cnl.saleLineId === line.id);
+            const prevH = linePrior.reduce(
+              (acc, cnl) => acc + toHundredths(Number(cnl.quantityCommercial), line.product.name),
+              0n,
+            );
+            if (prevH + returnedH > soldH) {
               throw new BadRequestException(
-                `Cantidad a devolver (${item.quantityCommercial}) excede el saldo disponible (${maxAvailable}) para ${line.product.name}.`,
+                `Cantidad a devolver (${item.quantityCommercial}) excede el saldo disponible (${centsToMoneyString(soldH - prevH)}) para ${line.product.name}.`,
               );
             }
 
-            const factor = line.presentationFactorHistorical || 1;
-            const quantityBaseUnits = Math.round(item.quantityCommercial * factor);
-
-            // Seleccionar lote asignado originalmente
-            const lotId =
-              line.lotAllocations.length > 0 ? line.lotAllocations[0].lotId : null;
-
-            const unitPrice = new Prisma.Decimal(line.unitPrice);
-            const lineSubtotal = unitPrice.mul(new Prisma.Decimal(item.quantityCommercial));
-            const lineTaxRate = new Prisma.Decimal(line.taxRate);
-            const lineTax = lineSubtotal.mul(lineTaxRate).div(100);
-            const lineTotal = lineSubtotal.add(lineTax);
-
-            const lineSubCents = parseMoneyToCents(lineSubtotal.toFixed(2), 'Subtotal línea');
-            const lineTaxCents = parseMoneyToCents(lineTax.toFixed(2), 'IVA línea');
-            const lineTotCents = lineSubCents + lineTaxCents;
-
-            totalSubtotalCents += lineSubCents;
-            totalTaxCents += lineTaxCents;
-            totalReturnCents += lineTotCents;
-
-            const costPerUnit = new Prisma.Decimal(line.product.baseCost);
-            const lineCostCents = BigInt(quantityBaseUnits) * parseMoneyToCents(costPerUnit.toFixed(2), 'Costo base');
-            totalCostCents += lineCostCents;
-
-            creditLinesData.push({
-              saleLineId: line.id,
-              productId: line.productId,
-              lotId,
-              quantityCommercial: item.quantityCommercial,
-              quantityBaseUnits,
-              unitPrice,
-              subtotal: new Prisma.Decimal(centsToMoneyString(lineSubCents)),
-              taxRate: lineTaxRate,
-              taxAmount: new Prisma.Decimal(centsToMoneyString(lineTaxCents)),
-              total: new Prisma.Decimal(centsToMoneyString(lineTotCents)),
-              costBaseUnit: costPerUnit,
+            const amounts = creditAmountsForLine({
+              soldHundredths: soldH,
+              previouslyReturnedHundredths: prevH,
+              returnedHundredths: returnedH,
+              line: {
+                subtotal: moneyCents(line.subtotal, 'Subtotal de la línea'),
+                tax: moneyCents(line.taxAmount, 'IVA de la línea'),
+              },
+              previouslyCredited: {
+                subtotal: linePrior.reduce((a, c) => a + moneyCents(c.subtotal, 'Subtotal NC'), 0n),
+                tax: linePrior.reduce((a, c) => a + moneyCents(c.taxAmount, 'IVA NC'), 0n),
+              },
             });
 
-            // 3. Reintegro a Inventario si restock === true
-            const shouldRestock = payload.restock !== false;
-            if (shouldRestock && lotId) {
-              const updatedLot = await tx.inventoryLot.update({
-                where: { id: lotId },
-                data: {
-                  currentQuantity: { increment: quantityBaseUnits },
-                },
+            const factor = line.presentationFactorHistorical || 1;
+            const prevBase = linePrior.reduce((acc, cnl) => acc + cnl.quantityBaseUnits, 0);
+            const completesLine = prevH + returnedH === soldH;
+            const baseUnits = completesLine
+              ? line.quantityBaseUnits - prevBase
+              : Math.round((Number(returnedH) / 100) * factor);
+
+            // Costo histórico de la venta; ventas anteriores al registro del costo usan el actual
+            const unitCostCents = moneyCents(
+              line.unitCost ?? line.product.baseCost,
+              'Costo unitario',
+            );
+            totalCostCents += BigInt(baseUnits) * unitCostCents;
+
+            // Reparto entre los lotes de los que salió la venta
+            let portions: Array<{ lotId: string | null; baseUnits: number }>;
+            if (line.lotAllocations.length > 0) {
+              try {
+                portions = splitReturnAcrossLots(
+                  baseUnits,
+                  line.lotAllocations.map((a) => ({
+                    lotId: a.lotId,
+                    availableBaseUnits:
+                      a.quantityBaseUnits -
+                      linePrior
+                        .filter((cnl) => cnl.lotId === a.lotId)
+                        .reduce((acc, cnl) => acc + cnl.quantityBaseUnits, 0),
+                  })),
+                );
+              } catch (error) {
+                throw new BadRequestException((error as Error).message);
+              }
+            } else {
+              portions = [{ lotId: null, baseUnits }];
+            }
+
+            const weights = portions.map((p) => BigInt(p.baseUnits));
+            const subParts = splitProportionally(amounts.subtotal, weights);
+            const taxParts = splitProportionally(amounts.tax, weights);
+            const qtyParts = splitProportionally(returnedH, weights);
+
+            for (let k = 0; k < portions.length; k++) {
+              const portion = portions[k];
+              creditLinesData.push({
+                saleLineId: line.id,
+                productId: line.productId,
+                lotId: portion.lotId,
+                quantityCommercial: new Prisma.Decimal(centsToMoneyString(qtyParts[k])),
+                quantityBaseUnits: portion.baseUnits,
+                unitPrice: new Prisma.Decimal(line.unitPrice),
+                subtotal: new Prisma.Decimal(centsToMoneyString(subParts[k])),
+                taxRate: new Prisma.Decimal(line.taxRate),
+                taxAmount: new Prisma.Decimal(centsToMoneyString(taxParts[k])),
+                total: new Prisma.Decimal(centsToMoneyString(subParts[k] + taxParts[k])),
               });
 
-              await tx.inventoryMovement.create({
-                data: {
-                  movementType: 'ENTRADA_DEVOLUCION_VENTA',
-                  productId: line.productId,
-                  lotId,
-                  presentationId: line.presentationId || null,
-                  quantityBaseUnits,
-                  presentationFactorHistorical: line.presentationFactorHistorical,
-                  balanceAfterBaseUnits: updatedLot.currentQuantity,
-                  referenceDocumentType: 'CREDIT_NOTE',
-                  referenceDocumentId: sale.invoiceNumber,
-                  notes: `Reintegro por devolución en venta ${sale.invoiceNumber} (${payload.reason})`,
-                  createdByUserId: userId,
-                },
-              });
+              if (restock && portion.lotId) {
+                await tx.$queryRaw`
+                  SELECT id FROM inventory_lots WHERE id = ${portion.lotId}::uuid FOR UPDATE
+                `;
+                const updatedLot = await tx.inventoryLot.update({
+                  where: { id: portion.lotId },
+                  data: { currentQuantity: { increment: portion.baseUnits } },
+                });
+                await tx.inventoryMovement.create({
+                  data: {
+                    movementType: 'ENTRADA_DEVOLUCION_VENTA',
+                    productId: line.productId,
+                    lotId: portion.lotId,
+                    presentationId: line.presentationId || null,
+                    quantityBaseUnits: portion.baseUnits,
+                    presentationFactorHistorical: line.presentationFactorHistorical,
+                    balanceAfterBaseUnits: updatedLot.currentQuantity,
+                    referenceDocumentType: 'CREDIT_NOTE',
+                    referenceDocumentId: creditNoteNumber,
+                    notes: `Reintegro por ${creditNoteNumber} de la venta ${sale.invoiceNumber} (${payload.reason})`,
+                    createdByUserId: userId,
+                  },
+                });
+              }
             }
+
+            totalSubtotalCents += amounts.subtotal;
+            totalTaxCents += amounts.tax;
           }
 
-          // 4. Consecutivo de Nota Crédito
-          const count = await tx.creditNote.count();
-          const creditNoteNumber = `NC-${String(count + 1).padStart(6, '0')}`;
+          const totalReturnCents = totalSubtotalCents + totalTaxCents;
+          if (totalReturnCents <= 0n) {
+            throw new BadRequestException('La nota crédito no tiene valor a devolver.');
+          }
+          const totalReturnStr = centsToMoneyString(totalReturnCents);
 
-          const refundMethod =
-            payload.refundMethod ||
-            (sale.paymentMethod === 'CREDITO' ? 'CREDITO_CARTERA' : 'EFECTIVO');
-
-          // 5. Ajuste financiero según método de reembolso
+          // 5. Ajuste financiero según la forma de reembolso
           if (refundMethod === 'CREDITO_CARTERA') {
-            const receivable = await tx.receivable.findUnique({
-              where: { saleId: sale.id },
-            });
-            if (receivable) {
-              const currentBalance = new Prisma.Decimal(receivable.balance);
-              const returnAmount = new Prisma.Decimal(centsToMoneyString(totalReturnCents));
-              const newBalance = currentBalance.sub(returnAmount);
-              const finalBalance = newBalance.lt(0) ? new Prisma.Decimal(0) : newBalance;
-
-              await tx.receivable.update({
-                where: { id: receivable.id },
-                data: {
-                  balance: finalBalance,
-                  status: finalBalance.isZero() ? 'PAGADA' : receivable.status,
-                  notes: `${receivable.notes || ''} [Nota Crédito ${creditNoteNumber}: -${returnAmount.toFixed(2)}]`.trim(),
-                },
-              });
+            const rows = await tx.$queryRaw<
+              Array<{
+                id: string;
+                total_amount: Prisma.Decimal;
+                amount_paid: Prisma.Decimal;
+                status: string;
+                notes: string | null;
+              }>
+            >`
+              SELECT id, total_amount, amount_paid, status, notes
+              FROM receivables
+              WHERE sale_id = ${sale.id}::uuid
+              FOR UPDATE
+            `;
+            if (!rows.length) {
+              throw new BadRequestException(
+                `La venta ${sale.invoiceNumber} no tiene cuenta por cobrar para abonar la devolución.`,
+              );
             }
+            const receivable = rows[0];
+            const newTotalCents =
+              moneyCents(receivable.total_amount, 'Total CxC') - totalReturnCents;
+            const paidCents = moneyCents(receivable.amount_paid, 'Abonado CxC');
+            const newBalanceCents = newTotalCents - paidCents;
+            if (newBalanceCents < 0n) {
+              throw new BadRequestException(
+                `La devolución (${totalReturnStr}) supera lo que el cliente aún debe en la factura ${sale.invoiceNumber}. Reembolse la diferencia en efectivo o transferencia, o reverse primero los abonos.`,
+              );
+            }
+            await tx.receivable.update({
+              where: { id: receivable.id },
+              data: {
+                totalAmount: new Prisma.Decimal(centsToMoneyString(newTotalCents)),
+                balance: new Prisma.Decimal(centsToMoneyString(newBalanceCents)),
+                status: newBalanceCents === 0n ? 'PAGADA' : receivable.status,
+                notes: `${receivable.notes || ''} [Nota Crédito ${creditNoteNumber}: -${totalReturnStr}]`.trim(),
+              },
+            });
           } else if (refundMethod === 'EFECTIVO') {
             await tx.$executeRaw`SELECT pg_advisory_xact_lock(742189321)`;
-
             const lastRows = await tx.$queryRaw<Array<{ balance_after: Prisma.Decimal }>>`
               SELECT balance_after
               FROM cash_movements
               ORDER BY created_at DESC
               LIMIT 1
             `;
-
             const currentBalanceCents =
               lastRows.length > 0
                 ? parseMoneyToCents(lastRows[0].balance_after.toString(), 'Saldo de caja')
                 : 0n;
-
             const { balanceAfter } = calculateNewCashBalanceCents(
               currentBalanceCents,
               'EGRESO_MANUAL',
               totalReturnCents,
             );
-
             await tx.cashMovement.create({
               data: {
                 movementType: 'EGRESO_MANUAL',
-                amount: new Prisma.Decimal(centsToMoneyString(totalReturnCents)),
+                amount: new Prisma.Decimal(totalReturnStr),
                 paymentMethod: 'EFECTIVO',
                 reason: `Reembolso por Nota Crédito ${creditNoteNumber} de venta ${sale.invoiceNumber}`,
                 referenceDocumentType: 'CREDIT_NOTE',
@@ -293,6 +416,16 @@ export class CreditNotesService {
                 balanceAfter: new Prisma.Decimal(centsToMoneyString(balanceAfter)),
                 createdByUserId: userId,
               },
+            });
+          } else {
+            await recordSourceBankMovement(tx, {
+              bankAccountId: refundBankAccountId!,
+              movementType: 'WITHDRAWAL',
+              amount: totalReturnStr,
+              concept: `Reembolso por Nota Crédito ${creditNoteNumber} de venta ${sale.invoiceNumber}`,
+              referenceDocumentType: 'CREDIT_NOTE',
+              referenceDocumentId: creditNoteNumber,
+              createdById: userId,
             });
           }
 
@@ -305,41 +438,21 @@ export class CreditNotesService {
               reason: payload.reason,
               subtotal: new Prisma.Decimal(centsToMoneyString(totalSubtotalCents)),
               taxTotal: new Prisma.Decimal(centsToMoneyString(totalTaxCents)),
-              total: new Prisma.Decimal(centsToMoneyString(totalReturnCents)),
+              total: new Prisma.Decimal(totalReturnStr),
               refundMethod,
-              restock: payload.restock !== false,
+              restock,
               createdById: userId,
-              lines: {
-                create: creditLinesData.map((cl) => ({
-                  saleLineId: cl.saleLineId,
-                  productId: cl.productId,
-                  lotId: cl.lotId,
-                  quantityCommercial: cl.quantityCommercial,
-                  quantityBaseUnits: cl.quantityBaseUnits,
-                  unitPrice: cl.unitPrice,
-                  subtotal: cl.subtotal,
-                  taxRate: cl.taxRate,
-                  taxAmount: cl.taxAmount,
-                  total: cl.total,
-                })),
-              },
+              lines: { create: creditLinesData },
             },
             include: {
-              lines: {
-                include: {
-                  product: true,
-                  lot: true,
-                },
-              },
+              lines: { include: { product: true, lot: true } },
               customer: true,
               sale: true,
-              createdByUser: {
-                select: { id: true, username: true },
-              },
+              createdByUser: { select: { id: true, username: true } },
             },
           });
 
-          // 7. Generar Asiento Contable Automático (Partida Doble)
+          // 7. Asiento contable automático con el costo histórico revertido
           if (this.accountingEngine) {
             await this.accountingEngine.handleCreditNoteConfirmed(
               {
@@ -363,13 +476,44 @@ export class CreditNotesService {
             );
           }
 
-          return this.mapToDto(creditNote);
+          const result = this.mapToDto(creditNote);
+          await this.idempotencyService.saveRecord(
+            {
+              key,
+              userId,
+              endpoint,
+              requestHash,
+              responseStatus: 201,
+              responseBody: result,
+              ttlHours: 24,
+            },
+            tx,
+          );
+          return { dto: result, replayed: false };
         },
         {
           isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
         },
       );
     });
+
+    if (!replayed && this.auditService) {
+      await this.auditService.recordEvent({
+        action: 'sales:credit_note_created',
+        entity: 'CreditNote',
+        entityId: dto.id,
+        userId,
+        details: {
+          creditNoteNumber: dto.creditNoteNumber,
+          saleId,
+          total: dto.total,
+          refundMethod: dto.refundMethod,
+          restock: dto.restock,
+        },
+      });
+    }
+
+    return dto;
   }
 
   async listCreditNotes(saleId?: string): Promise<CreditNoteDto[]> {

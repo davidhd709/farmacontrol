@@ -2,6 +2,7 @@ import { Injectable, Optional } from '@nestjs/common';
 import { prisma, PrismaClient, Prisma } from '@farmacia/database';
 import { IPurchaseRepository } from '../domain/purchase.repository';
 import { Purchase, PurchaseLine } from '../domain/purchase.entity';
+import { PurchaseLotConflictException } from '../domain/purchase.exceptions';
 import { PurchaseQueryFilters } from '@farmacia/contracts';
 
 @Injectable()
@@ -54,31 +55,44 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
 
       // 2. Procesar cada línea de compra y afectar inventario
       for (const line of purchase.lines) {
-        // Buscar o crear lote en la ubicación
-        let lot = await tx.inventoryLot.findUnique({
-          where: {
-            productId_locationId_lotNumber: {
-              productId: line.productId,
-              locationId: defaultLocationId,
-              lotNumber: line.lotNumber,
-            },
-          },
-        });
+        // Buscar o crear lote en la ubicación, bloqueando la fila si ya existe
+        const existing = await tx.$queryRaw<
+          Array<{ id: string; expiration_date: Date; is_active: boolean }>
+        >`
+          SELECT id, expiration_date, is_active
+          FROM inventory_lots
+          WHERE product_id = ${line.productId}::uuid
+            AND location_id = ${defaultLocationId}::uuid
+            AND lot_number = ${line.lotNumber}
+          FOR UPDATE
+        `;
 
-        let newBalance = line.quantityBaseUnits;
-        if (lot) {
+        let lotId: string;
+        let newBalance: number;
+        if (existing.length > 0) {
+          const current = existing[0];
+          // AUD-008: un mismo lote del fabricante tiene una sola fecha de vencimiento,
+          // y un lote desactivado no se reactiva silenciosamente con una compra.
+          const currentExp = current.expiration_date.toISOString().split('T')[0];
+          const lineExp = line.expirationDate.toISOString().split('T')[0];
+          if (currentExp !== lineExp) {
+            throw new PurchaseLotConflictException(
+              `El lote "${line.lotNumber}" ya existe con vencimiento ${currentExp}; la factura indica ${lineExp}. Verifique el número de lote o la fecha.`,
+            );
+          }
+          if (!current.is_active) {
+            throw new PurchaseLotConflictException(
+              `El lote "${line.lotNumber}" está desactivado y no puede recibir mercancía.`,
+            );
+          }
           const updatedLot = await tx.inventoryLot.update({
-            where: { id: lot.id },
-            data: {
-              currentQuantity: { increment: line.quantityBaseUnits },
-              expirationDate: line.expirationDate,
-              isActive: true,
-            },
+            where: { id: current.id },
+            data: { currentQuantity: { increment: line.quantityBaseUnits } },
           });
+          lotId = current.id;
           newBalance = updatedLot.currentQuantity;
-          line.setLotId(lot.id);
         } else {
-          lot = await tx.inventoryLot.create({
+          const created = await tx.inventoryLot.create({
             data: {
               id: line.lotId,
               productId: line.productId,
@@ -89,13 +103,13 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
               isActive: true,
             },
           });
-          line.setLotId(lot.id);
+          lotId = created.id;
+          newBalance = line.quantityBaseUnits;
         }
+        line.setLotId(lotId);
 
-        const factorHistorical =
-          line.quantityCommercial > 0
-            ? Math.round(line.quantityBaseUnits / line.quantityCommercial)
-            : 1;
+        // AUD-008: se guarda el factor de la presentación, no uno recalculado
+        const factorHistorical = line.conversionFactor;
 
         // Insertar línea de compra
         await tx.purchaseLine.create({
@@ -104,7 +118,7 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
             purchaseId: purchase.id,
             productId: line.productId,
             presentationId: line.presentationId,
-            lotId: lot.id,
+            lotId,
             quantityCommercial: new Prisma.Decimal(line.quantityCommercial),
             presentationFactorHistorical: factorHistorical,
             quantityBaseUnits: line.quantityBaseUnits,
@@ -122,7 +136,7 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
           data: {
             movementType: 'ENTRADA_COMPRA',
             productId: line.productId,
-            lotId: lot.id,
+            lotId,
             presentationId: line.presentationId,
             quantityBaseUnits: line.quantityBaseUnits,
             presentationFactorHistorical: factorHistorical,
@@ -244,6 +258,7 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
         lotNumber: l.lotNumber,
         expirationDate: l.expirationDate,
         quantityCommercial: Number(l.quantityCommercial),
+        conversionFactor: l.presentationFactorHistorical,
         quantityBaseUnits: l.quantityBaseUnits,
         unitCost: Number(l.unitCost),
         subtotal: Number(l.subtotal),
