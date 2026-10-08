@@ -344,6 +344,7 @@ model Purchase {
   payable          Payable?
   debitNotes       DebitNote[]
 
+  @@unique([supplierId, invoiceNumber])
   @@index([supplierId])
   @@index([invoiceNumber])
   @@index([purchaseDate])

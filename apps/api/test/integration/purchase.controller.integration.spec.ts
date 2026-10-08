@@ -239,4 +239,103 @@ describe('PurchaseController (Integration with PostgreSQL, Inventory & RBAC)', (
     expect(res.body.items).toHaveLength(1);
     expect(res.body.items[0].invoiceNumber).toBe('FAC-LIST-1');
   });
+
+  describe('AUD-008: recepción de compras', () => {
+    const receive = (body: Record<string, unknown>) =>
+      request(app.getHttpServer()).post('/api/v1/purchases/receive').set('Cookie', [adminCookie]).send(body);
+
+    const line = (overrides: Record<string, unknown> = {}) => ({
+      productId,
+      presentationId,
+      lotNumber: 'LOTE-AUD008',
+      expirationDate: validFutureDateStr,
+      quantityCommercial: 2,
+      unitCost: 12000,
+      locationId,
+      ...overrides,
+    });
+
+    it('rechaza recibir dos veces la misma factura del mismo proveedor (409)', async () => {
+      const first = await receive({ supplierId, invoiceNumber: 'FV-DUP-1', purchaseDate: '2026-09-26', lines: [line()] });
+      expect(first.status).toBe(201);
+
+      const second = await receive({ supplierId, invoiceNumber: ' FV-DUP-1 ', purchaseDate: '2026-09-26', lines: [line()] });
+      expect(second.status).toBe(409);
+
+      expect(await prisma.purchase.count({ where: { invoiceNumber: 'FV-DUP-1' } })).toBe(1);
+      const lot = await prisma.inventoryLot.findFirstOrThrow({ where: { lotNumber: 'LOTE-AUD008' } });
+      expect(lot.currentQuantity).toBe(100);
+    });
+
+    it('dos recepciones simultáneas de la misma factura solo registran una', async () => {
+      const results = await Promise.all([
+        receive({ supplierId, invoiceNumber: 'FV-CONC-1', purchaseDate: '2026-09-26', lines: [line()] }),
+        receive({ supplierId, invoiceNumber: 'FV-CONC-1', purchaseDate: '2026-09-26', lines: [line()] }),
+      ]);
+      const statuses = results.map((r) => r.status).sort();
+      expect(statuses[0]).toBe(201);
+      expect(statuses[1]).not.toBe(201);
+      expect(await prisma.purchase.count({ where: { invoiceNumber: 'FV-CONC-1' } })).toBe(1);
+    });
+
+    it('no sobrescribe el vencimiento de un lote existente: rechaza la recepción y no mueve stock', async () => {
+      const first = await receive({ supplierId, invoiceNumber: 'FV-EXP-1', purchaseDate: '2026-09-26', lines: [line()] });
+      expect(first.status).toBe(201);
+
+      const otherDate = new Date(validFutureDate);
+      otherDate.setDate(otherDate.getDate() + 60);
+      const second = await receive({
+        supplierId,
+        invoiceNumber: 'FV-EXP-2',
+        purchaseDate: '2026-09-27',
+        lines: [line({ expirationDate: otherDate.toISOString().split('T')[0] })],
+      });
+      expect(second.status).toBe(409);
+      expect(second.body.message).toContain('vencimiento');
+
+      const lot = await prisma.inventoryLot.findFirstOrThrow({ where: { lotNumber: 'LOTE-AUD008' } });
+      expect(lot.currentQuantity).toBe(100);
+      expect(lot.expirationDate.toISOString().split('T')[0]).toBe(validFutureDateStr);
+      expect(await prisma.purchase.count({ where: { invoiceNumber: 'FV-EXP-2' } })).toBe(0);
+    });
+
+    it('no reactiva un lote desactivado', async () => {
+      await prisma.inventoryLot.create({
+        data: {
+          productId,
+          locationId,
+          lotNumber: 'LOTE-AUD008',
+          expirationDate: new Date(validFutureDateStr),
+          currentQuantity: 0,
+          isActive: false,
+        },
+      });
+
+      const res = await receive({ supplierId, invoiceNumber: 'FV-INACT-1', purchaseDate: '2026-09-26', lines: [line()] });
+      expect(res.status).toBe(409);
+
+      const lot = await prisma.inventoryLot.findFirstOrThrow({ where: { lotNumber: 'LOTE-AUD008' } });
+      expect(lot.isActive).toBe(false);
+      expect(lot.currentQuantity).toBe(0);
+    });
+
+    it('guarda el factor de la presentación, no uno recalculado desde cantidades redondeadas', async () => {
+      const blister = await prisma.productPresentation.create({
+        data: { productId, name: 'Blíster x 3', conversionFactor: 3, price: 1500, cost: 750 },
+      });
+
+      const res = await receive({
+        supplierId,
+        invoiceNumber: 'FV-FACTOR-1',
+        purchaseDate: '2026-09-26',
+        lines: [line({ presentationId: blister.id, lotNumber: 'LOTE-FACTOR', quantityCommercial: 0.5, unitCost: 750 })],
+      });
+      expect(res.status).toBe(201);
+
+      const stored = await prisma.purchaseLine.findFirstOrThrow({ where: { lotNumber: 'LOTE-FACTOR' } });
+      expect(stored.presentationFactorHistorical).toBe(3);
+      const movement = await prisma.inventoryMovement.findFirstOrThrow({ where: { lotId: stored.lotId } });
+      expect(movement.presentationFactorHistorical).toBe(3);
+    });
+  });
 });

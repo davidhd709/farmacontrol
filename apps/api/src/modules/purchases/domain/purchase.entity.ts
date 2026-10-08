@@ -28,6 +28,7 @@ export interface ReconstitutePurchaseLineProps {
   lotNumber: string;
   expirationDate: Date;
   quantityCommercial: number;
+  conversionFactor: number;
   quantityBaseUnits: number;
   unitCost: number;
   subtotal: number;
@@ -45,6 +46,7 @@ export class PurchaseLine {
   private readonly _lotNumber: string;
   private readonly _expirationDate: Date;
   private readonly _quantityCommercial: number;
+  private readonly _conversionFactor: number;
   private readonly _quantityBaseUnits: number;
   private readonly _unitCost: number;
   private readonly _subtotal: number;
@@ -61,6 +63,7 @@ export class PurchaseLine {
     this._lotNumber = props.lotNumber;
     this._expirationDate = props.expirationDate;
     this._quantityCommercial = props.quantityCommercial;
+    this._conversionFactor = props.conversionFactor;
     this._quantityBaseUnits = props.quantityBaseUnits;
     this._unitCost = props.unitCost;
     this._subtotal = props.subtotal;
@@ -123,6 +126,7 @@ export class PurchaseLine {
       lotNumber: props.lotNumber.trim().toUpperCase(),
       expirationDate: props.expirationDate,
       quantityCommercial: props.quantityCommercial,
+      conversionFactor: props.conversionFactor,
       quantityBaseUnits,
       unitCost: props.unitCost,
       subtotal,
@@ -149,6 +153,8 @@ export class PurchaseLine {
   public get expirationDate(): Date { return this._expirationDate; }
   public get quantityCommercial(): number { return this._quantityCommercial; }
   public get quantityBaseUnits(): number { return this._quantityBaseUnits; }
+  /** Factor de la presentación vigente al recibir la compra (unidades base por unidad comercial). */
+  public get conversionFactor(): number { return this._conversionFactor; }
   public get unitCost(): number { return this._unitCost; }
   public get subtotal(): number { return this._subtotal; }
   public get createdAt(): Date { return this._createdAt; }

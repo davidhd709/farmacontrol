@@ -1,5 +1,5 @@
 import { Inject, Injectable, Optional, BadRequestException, NotFoundException } from '@nestjs/common';
-import { prisma, PrismaClient } from '@farmacia/database';
+import { prisma, PrismaClient, Prisma } from '@farmacia/database';
 import {
   PurchaseDto,
   ReceivePurchasePayload,
@@ -12,6 +12,7 @@ import {
   PurchaseNotFoundException,
   SupplierNotActiveException,
   ExpiredLotDateException,
+  DuplicatePurchaseInvoiceException,
 } from '../domain/purchase.exceptions';
 import { AuditService } from '../../audit/application/services/audit.service';
 import { AccountingEngineService } from '../../accounting/application/accounting-engine.service';
@@ -63,6 +64,19 @@ export class PurchaseService {
 
     if (!input.lines || input.lines.length === 0) {
       throw new BadRequestException('La compra debe contener al menos un producto');
+    }
+
+    // AUD-008: una factura del proveedor solo se recibe una vez
+    const invoiceNumber = input.invoiceNumber?.trim();
+    if (!invoiceNumber) {
+      throw new BadRequestException('El número de factura es obligatorio');
+    }
+    const duplicated = await this.client.purchase.findUnique({
+      where: { supplierId_invoiceNumber: { supplierId: supplier.id, invoiceNumber } },
+      select: { id: true },
+    });
+    if (duplicated) {
+      throw new DuplicatePurchaseInvoiceException(invoiceNumber);
     }
 
     // 3. Procesar y Validar cada línea
@@ -160,7 +174,7 @@ export class PurchaseService {
       supplierId: supplier.id,
       supplierName: supplier.name,
       supplierTaxId: supplier.taxId,
-      invoiceNumber: input.invoiceNumber,
+      invoiceNumber,
       purchaseDate,
       dueDate,
       paymentCondition: input.paymentCondition || null,
@@ -171,7 +185,7 @@ export class PurchaseService {
 
     // 5. Guardar transaccionalmente
     const locationId = input.lines[0]?.locationId || defaultLocation.id;
-    const savedPurchase = await this.purchaseRepository.saveTransactional(
+    const savedPurchase = await this.saveRejectingDuplicateInvoice(invoiceNumber, () => this.purchaseRepository.saveTransactional(
       purchase,
       locationId,
       auditCtx?.userId ?? null,
@@ -190,7 +204,7 @@ export class PurchaseService {
           );
         }
       },
-    );
+    ));
 
     // 6. Registrar Auditoría
     if (this.auditService) {
@@ -212,6 +226,24 @@ export class PurchaseService {
     }
 
     return savedPurchase;
+  }
+
+  /** Dos recepciones simultáneas de la misma factura: la restricción única decide. */
+  private async saveRejectingDuplicateInvoice(
+    invoiceNumber: string,
+    save: () => Promise<Purchase>,
+  ): Promise<Purchase> {
+    try {
+      return await save();
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new DuplicatePurchaseInvoiceException(invoiceNumber);
+      }
+      throw error;
+    }
   }
 
   async getPurchaseById(id: string): Promise<Purchase> {
