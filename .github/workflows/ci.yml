@@ -55,6 +55,20 @@ jobs:
           node-version: 22
           cache: 'pnpm'
 
+      # Las pruebas de respaldos ejecutan pg_dump/pg_restore contra PostgreSQL 18;
+      # el cliente que trae el runner es más antiguo y pg_dump rechaza servidores
+      # de versión mayor.
+      - name: Install PostgreSQL 18 client
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y postgresql-client-18
+          echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
+
+      - name: Show PostgreSQL client version
+        run: pg_dump --version
+
       - name: Install dependencies (frozen lockfile)
         run: pnpm install --frozen-lockfile
 
