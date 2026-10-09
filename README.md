@@ -162,8 +162,7 @@ Puertos asignados:
 - **API Backend:** [http://localhost:3000/api/v1](http://localhost:3000/api/v1)
 - **PostgreSQL:** `localhost:5434` (mapeado a `5432` en el contenedor)
 
-La documentación OpenAPI / Swagger todavía no está publicada por la API
-(pendiente en el plan de trabajo, fase 5).
+La API todavía no publica documentación OpenAPI / Swagger.
 
 ---
 
@@ -172,14 +171,17 @@ La documentación OpenAPI / Swagger todavía no está publicada por la API
 El proyecto cuenta con una batería de pruebas automatizadas que validan lógica de dominio, transacciones concurrentes en base de datos real y experiencia de usuario:
 
 ```bash
-# Ejecutar todas las pruebas del monorepositorio (108 archivos, 704 pruebas)
+# Ejecutar todas las pruebas del monorepositorio (api, web, worker y database)
 pnpm test
 
-# Ejecutar pruebas exclusivas del backend (72 archivos, 534 pruebas con PostgreSQL real)
+# Ejecutar pruebas exclusivas del backend (con PostgreSQL real)
 pnpm --filter @farmacia/api test
 
-# Ejecutar pruebas del frontend (21 archivos, 95 pruebas con React Testing Library y Vitest)
+# Ejecutar pruebas del frontend (React Testing Library y Vitest)
 pnpm --filter @farmacia/web test
+
+# Ejecutar pruebas del worker
+pnpm --filter @farmacia/worker test
 
 # Comprobar tipos y empaquetar aplicaciones para producción
 pnpm build

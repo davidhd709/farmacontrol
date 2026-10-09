@@ -1,5 +1,7 @@
 # Informe de Auditoría Global y Consolidación de Entrega
 
+> **Documento obsoleto.** Se conserva como registro histórico. La referencia vigente es [AUDITORIA_2026-10-06.md](AUDITORIA_2026-10-06.md).
+
 **Proyecto:** Sistema de Gestión Operativa para Farmacia  
 **Fecha:** 27 de Septiembre de 2026  
 **Versión de Entrega:** 1.0.0 (Release Candidate / MVP Operativo Completo)  
