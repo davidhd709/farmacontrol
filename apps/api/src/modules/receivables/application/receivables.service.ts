@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+} from '@nestjs/common';
 import { prisma, Prisma } from '@farmacia/database';
 import { CashService } from '../../cash/application/cash.service';
 import {
@@ -399,6 +404,13 @@ export class ReceivablesService {
       }
 
       const raw = rows[0];
+
+      // Una cuenta de una venta anulada no debe volver a quedar pendiente de cobro
+      if (raw.status === 'CANCELADA') {
+        throw new ConflictException(
+          'No se puede revertir un abono de una cuenta por cobrar CANCELADA.',
+        );
+      }
 
       // 2. Buscar el abono a revertir
       const payment = await tx.receivablePayment.findUnique({

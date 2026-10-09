@@ -606,6 +606,130 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
     ).toBe('0');
   });
 
+  describe('AUD-006: anulación de ventas a crédito con abonos', () => {
+    async function confirmCreditSaleWithPayment() {
+      const saleRes = await request(app.getHttpServer())
+        .post('/api/v1/sales/confirm')
+        .set('Idempotency-Key', randomUUID())
+        .set('Cookie', cajeroCookie)
+        .send({
+          paymentMethod: 'CREDITO',
+          customerId,
+          items: [{ productId, presentationId, quantityCommercial: 1 }],
+        });
+      expect(saleRes.status).toBe(201);
+
+      const receivable = await prisma.receivable.findUniqueOrThrow({
+        where: { saleId: saleRes.body.id },
+      });
+      await request(app.getHttpServer())
+        .post(`/api/v1/receivables/${receivable.id}/payments`)
+        .set('Cookie', supervisorCookie)
+        .send({ amount: 2000, paymentMethod: 'EFECTIVO' })
+        .expect(201);
+      const payment = await prisma.receivablePayment.findFirstOrThrow({
+        where: { receivableId: receivable.id },
+      });
+
+      return { saleId: saleRes.body.id as string, receivableId: receivable.id, paymentId: payment.id };
+    }
+
+    it('rechaza anular una venta a crédito con abonos vigentes sin tocar lotes ni cartera', async () => {
+      const { saleId, receivableId } = await confirmCreditSaleWithPayment();
+      const cashMovementsBefore = await prisma.cashMovement.count();
+
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/sales/${saleId}/cancel`)
+        .set('Cookie', supervisorCookie)
+        .send({ reason: 'Cliente desiste de la compra' });
+      expect(res.status).toBe(409);
+
+      const sale = await prisma.sale.findUniqueOrThrow({ where: { id: saleId } });
+      expect(sale.status).toBe('COMPLETED');
+      const lot1 = await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lot1Id } });
+      expect(lot1.currentQuantity).toBe(0);
+      const receivable = await prisma.receivable.findUniqueOrThrow({ where: { id: receivableId } });
+      expect(receivable.status).toBe('PENDIENTE');
+      expect(Number(receivable.amountPaid)).toBe(2000);
+      expect(await prisma.cashMovement.count()).toBe(cashMovementsBefore);
+    });
+
+    it('permite anular la venta una vez revertidos sus abonos', async () => {
+      const { saleId, receivableId, paymentId } = await confirmCreditSaleWithPayment();
+
+      await request(app.getHttpServer())
+        .post(`/api/v1/receivables/${receivableId}/payments/${paymentId}/reverse`)
+        .set('Cookie', supervisorCookie)
+        .send({ reason: 'Abono registrado por error' })
+        .expect(200);
+
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/sales/${saleId}/cancel`)
+        .set('Cookie', supervisorCookie)
+        .send({ reason: 'Cliente desiste de la compra' });
+      expect(res.status).toBe(200);
+
+      const receivable = await prisma.receivable.findUniqueOrThrow({ where: { id: receivableId } });
+      expect(receivable.status).toBe('CANCELADA');
+      const lot1 = await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lot1Id } });
+      expect(lot1.currentQuantity).toBe(10);
+    });
+
+    it('un abono y una anulación simultáneos nunca dejan una venta anulada con abonos vigentes', async () => {
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const saleRes = await request(app.getHttpServer())
+          .post('/api/v1/sales/confirm')
+          .set('Idempotency-Key', randomUUID())
+          .set('Cookie', cajeroCookie)
+          .send({
+            paymentMethod: 'CREDITO',
+            customerId,
+            items: [{ productId, quantityCommercial: 1 }],
+          });
+        expect(saleRes.status).toBe(201);
+        const saleId = saleRes.body.id as string;
+        const receivable = await prisma.receivable.findUniqueOrThrow({ where: { saleId } });
+
+        await Promise.all([
+          request(app.getHttpServer())
+            .post(`/api/v1/sales/${saleId}/cancel`)
+            .set('Cookie', supervisorCookie)
+            .send({ reason: 'Anulación concurrente' }),
+          request(app.getHttpServer())
+            .post(`/api/v1/receivables/${receivable.id}/payments`)
+            .set('Cookie', supervisorCookie)
+            .send({ amount: 100, paymentMethod: 'EFECTIVO' }),
+        ]);
+
+        const sale = await prisma.sale.findUniqueOrThrow({ where: { id: saleId } });
+        const activePayments = await prisma.receivablePayment.count({
+          where: { receivableId: receivable.id, isReversed: false },
+        });
+        expect(sale.status === 'CANCELLED' && activePayments > 0).toBe(false);
+      }
+    });
+
+    it('no reabre una cuenta por cobrar CANCELADA al revertir un abono', async () => {
+      const { receivableId, paymentId } = await confirmCreditSaleWithPayment();
+      // Estado heredado: cuenta cancelada con un abono vigente, anterior a esta corrección
+      await prisma.receivable.update({
+        where: { id: receivableId },
+        data: { status: 'CANCELADA' },
+      });
+
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/receivables/${receivableId}/payments/${paymentId}/reverse`)
+        .set('Cookie', supervisorCookie)
+        .send({ reason: 'Intento de reversión sobre cuenta cancelada' });
+      expect(res.status).toBe(409);
+
+      const receivable = await prisma.receivable.findUniqueOrThrow({ where: { id: receivableId } });
+      expect(receivable.status).toBe('CANCELADA');
+      const payment = await prisma.receivablePayment.findUniqueOrThrow({ where: { id: paymentId } });
+      expect(payment.isReversed).toBe(false);
+    });
+  });
+
   it('rechaza operaciones si el usuario carece de los permisos correspondientes (403)', async () => {
     // Usuario sin permisos intentando vender
     const resCreate = await request(app.getHttpServer())

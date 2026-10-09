@@ -30,6 +30,15 @@ export class SaleHasCreditNotesException extends Error {
   }
 }
 
+export class SaleHasReceivablePaymentsException extends Error {
+  constructor(invoiceNumber: string, paymentsCount: number) {
+    super(
+      `La venta a crédito con comprobante '${invoiceNumber}' tiene ${paymentsCount} abono(s) vigente(s) y no puede anularse; revierta primero los abonos en cartera.`
+    );
+    this.name = 'SaleHasReceivablePaymentsException';
+  }
+}
+
 export class IdempotencyConflictException extends Error {
   constructor(key: string) {
     super(`Conflicto de idempotencia: La clave '${key}' ya fue procesada con un contenido de solicitud diferente.`);

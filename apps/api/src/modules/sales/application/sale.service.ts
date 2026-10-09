@@ -13,6 +13,7 @@ import {
   InsufficientStockException,
   SaleAlreadyCancelledException,
   SaleHasCreditNotesException,
+  SaleHasReceivablePaymentsException,
 } from '../domain/sale.exceptions';
 import { IdempotencyService } from '../infrastructure/idempotency.service';
 import { AuditService } from '../../audit/application/services/audit.service';
@@ -541,6 +542,17 @@ export class SaleService {
       const creditNotesCount = await tx.creditNote.count({ where: { saleId: id } });
       if (creditNotesCount > 0) {
         throw new SaleHasCreditNotesException(sale.invoiceNumber, creditNotesCount);
+      }
+      // Anular con abonos vigentes dejaría dinero recibido sin devolver ni reversar
+      if (sale.paymentMethod === 'CREDITO') {
+        // Mismo bloqueo de fila que toma el registro de abonos: serializa abono y anulación
+        await tx.$queryRaw`SELECT id FROM receivables WHERE sale_id = ${id}::uuid FOR UPDATE`;
+        const activePayments = await tx.receivablePayment.count({
+          where: { receivable: { saleId: id }, isReversed: false },
+        });
+        if (activePayments > 0) {
+          throw new SaleHasReceivablePaymentsException(sale.invoiceNumber, activePayments);
+        }
       }
       sale.cancel();
       await this.saleRepository.save(sale, tx);

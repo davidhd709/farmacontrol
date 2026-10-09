@@ -43,6 +43,7 @@ import {
   InsufficientStockException,
   SaleAlreadyCancelledException,
   SaleHasCreditNotesException,
+  SaleHasReceivablePaymentsException,
   IdempotencyConflictException,
 } from '../../domain/sale.exceptions';
 
@@ -127,7 +128,10 @@ export class SaleController {
       if (error instanceof SaleAlreadyCancelledException) {
         throw new BadRequestException(error.message);
       }
-      if (error instanceof SaleHasCreditNotesException) {
+      if (
+        error instanceof SaleHasCreditNotesException ||
+        error instanceof SaleHasReceivablePaymentsException
+      ) {
         throw new ConflictException(error.message);
       }
       if (error instanceof Error) {
