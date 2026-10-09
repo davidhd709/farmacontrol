@@ -2,7 +2,7 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    projects: ['apps/api', 'apps/web', 'packages/database'],
+    projects: ['apps/api', 'apps/web', 'apps/worker', 'packages/database'],
     fileParallelism: false,
     maxWorkers: 1,
     minWorkers: 1,
