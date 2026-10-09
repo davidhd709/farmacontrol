@@ -436,7 +436,7 @@ El archivo `docs/PUC_FARMACIA_PROPUESTA.xlsx` contiene una selección de referen
   - Contrato de servicio interno listo para ser consumido por el módulo de Ventas.
 - **Slices implementables:**
   - `Slice 010.1` (IMPLEMENTADO): Algoritmo puro de dominio FEFO `FefoAllocationEngine` para cálculo y distribución de lotes ordenados por vencimiento (`expiration_date ASC`), soporte para fraccionamiento automático (*split allocation*), exclusión de vencidos y pruebas unitarias (4/4 pasadas).
-  - `Slice 010.2` (IMPLEMENTADO): Método de infraestructura `allocateStockFefoTransactional` con SQL nativo parametrizado y bloqueo de fila pesimista `SELECT ... FOR UPDATE` en PostgreSQL nativo, deducción atómica de saldos, registro en Kardex y endpoint REST `POST /api/v1/inventory/products/:id/allocate-fefo`.
+  - `Slice 010.2` (IMPLEMENTADO): Método de infraestructura `allocateStockFefoTransactional` con SQL nativo parametrizado y bloqueo de fila pesimista `SELECT ... FOR UPDATE` en PostgreSQL nativo, deducción atómica de saldos, registro en Kardex y endpoint REST `POST /api/v1/inventory/products/:id/allocate-fefo`. *Retirado en AUD-004 (2026-10-08): descontaba stock sin venta ni caja; la venta conserva su propia asignación FEFO transaccional.*
   - `Slice 010.3` (IMPLEMENTADO): Suite de pruebas automatizadas de concurrencia e integración ejecutando 10 peticiones simultáneas sobre el mismo lote con PostgreSQL 18 real, garantizando serialización estricta, prevención de saldos negativos y total consistencia en el Kardex.
 
 #### Historia HU-011: Ajustes Manuales de Inventario con Permisos de Supervisor

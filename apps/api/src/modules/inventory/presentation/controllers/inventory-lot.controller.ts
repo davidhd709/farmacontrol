@@ -76,26 +76,6 @@ export class InventoryLotController {
     return { success: true, data };
   }
 
-  @Post('products/:productId/allocate-fefo')
-  @RequirePermissions(SYSTEM_PERMISSIONS.SALES_CREATE)
-  @HttpCode(HttpStatus.OK)
-  public async allocateFefo(
-    @Param('productId', ParseUUIDPipe) productId: string,
-    @Body() body: { quantityBaseUnits: number; notes?: string; referenceDocumentId?: string },
-    @Req() req: Request,
-    @CurrentUser() user: AuthenticatedUserContext,
-  ) {
-    const data = await this.inventoryLotService.allocateFefoStock(
-      productId,
-      body.quantityBaseUnits,
-      'VENTA',
-      body.referenceDocumentId,
-      user.id,
-      body.notes,
-    );
-    return { success: true, data };
-  }
-
   @Post('lots')
   @RequirePermissions(SYSTEM_PERMISSIONS.INVENTORY_LOTS_MANAGE)
   @HttpCode(HttpStatus.CREATED)

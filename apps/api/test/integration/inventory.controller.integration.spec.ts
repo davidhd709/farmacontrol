@@ -117,6 +117,72 @@ describe('Inventory controllers (Integration with PostgreSQL & RBAC)', () => {
     expect(audit.userId).toBe(supervisorId);
   });
 
+  describe('AUD-004: ningún endpoint mueve stock sin documento ni kardex', () => {
+    it('no expone la asignación FEFO directa fuera de una venta', async () => {
+      await request(app.getHttpServer())
+        .post(`/api/v1/inventory/products/${productId}/allocate-fefo`)
+        .set('Cookie', supervisorCookie)
+        .send({ quantityBaseUnits: 5 })
+        .expect(404);
+
+      const lot = await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lotId } });
+      expect(lot.currentQuantity).toBe(50);
+    });
+
+    it('no expone el registro genérico de movimientos de cualquier tipo', async () => {
+      await request(app.getHttpServer())
+        .post('/api/v1/inventory/movements')
+        .set('Cookie', supervisorCookie)
+        .send({ productId, lotId, movementType: 'ENTRADA_COMPRA', quantityBaseUnits: 10 })
+        .expect(404);
+
+      const lot = await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lotId } });
+      expect(lot.currentQuantity).toBe(50);
+    });
+
+    it('registra en el kardex la cantidad inicial de un lote nuevo, con autor', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/inventory/lots')
+        .set('Cookie', supervisorCookie)
+        .send({
+          productId,
+          locationId,
+          lotNumber: 'LOT-HTTP-02',
+          expirationDate: '2030-01-31',
+          initialQuantity: 20,
+        })
+        .expect(201);
+
+      const newLotId = res.body.data.id;
+      const lot = await prisma.inventoryLot.findUniqueOrThrow({ where: { id: newLotId } });
+      expect(lot.currentQuantity).toBe(20);
+
+      const movements = await prisma.inventoryMovement.findMany({ where: { lotId: newLotId } });
+      expect(movements).toHaveLength(1);
+      expect(movements[0]).toMatchObject({
+        movementType: 'AJUSTE_POSITIVO',
+        quantityBaseUnits: 20,
+        balanceAfterBaseUnits: 20,
+        referenceDocumentType: 'LOTE_INICIAL',
+        referenceDocumentId: newLotId,
+        createdByUserId: supervisorId,
+      });
+    });
+
+    it('no genera movimiento cuando el lote nuevo no tiene cantidad inicial', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/inventory/lots')
+        .set('Cookie', supervisorCookie)
+        .send({ productId, locationId, lotNumber: 'LOT-HTTP-03', expirationDate: '2030-01-31' })
+        .expect(201);
+
+      const movements = await prisma.inventoryMovement.count({
+        where: { lotId: res.body.data.id },
+      });
+      expect(movements).toBe(0);
+    });
+  });
+
   it('registra al usuario autenticado en la auditoría al crear una ubicación', async () => {
     const res = await request(app.getHttpServer())
       .post('/api/v1/inventory/locations')

@@ -54,55 +54,6 @@ export class InventoryMovementController {
     return { success: true, ...result };
   }
 
-  @Post()
-  @RequirePermissions(SYSTEM_PERMISSIONS.INVENTORY_ADJUST)
-  @HttpCode(HttpStatus.CREATED)
-  public async recordMovement(
-    @Body() body: any,
-    @Req() req: Request,
-    @CurrentUser() user: AuthenticatedUserContext,
-  ) {
-    if (!body || typeof body !== 'object') {
-      throw new BadRequestException('El cuerpo de la solicitud no es válido.');
-    }
-
-    if (!body.productId || !UUID_REGEX.test(body.productId)) {
-      throw new BadRequestException('productId inválido.');
-    }
-    if (!body.lotId || !UUID_REGEX.test(body.lotId)) {
-      throw new BadRequestException('lotId inválido.');
-    }
-    if (!body.movementType) {
-      throw new BadRequestException('movementType es obligatorio.');
-    }
-    if (typeof body.quantityBaseUnits !== 'number' || !Number.isInteger(body.quantityBaseUnits)) {
-      throw new BadRequestException('quantityBaseUnits debe ser un entero.');
-    }
-
-    const ipAddress = req.ip || req.socket.remoteAddress;
-    const correlationId = req.headers['x-correlation-id'] as string;
-
-    const data = await this.movementService.recordMovement(
-      {
-        movementType: body.movementType,
-        productId: body.productId,
-        lotId: body.lotId,
-        presentationId: body.presentationId,
-        quantityBaseUnits: body.quantityBaseUnits,
-        presentationFactorHistorical: body.presentationFactorHistorical,
-        quantityCommercial: body.quantityCommercial,
-        referenceDocumentType: body.referenceDocumentType,
-        referenceDocumentId: body.referenceDocumentId,
-        notes: body.notes,
-      },
-      user.id,
-      ipAddress,
-      correlationId,
-    );
-
-    return { success: true, data };
-  }
-
   @Post('adjust')
   @RequirePermissions(SYSTEM_PERMISSIONS.INVENTORY_ADJUST)
   @HttpCode(HttpStatus.CREATED)

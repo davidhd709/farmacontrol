@@ -84,16 +84,6 @@ export async function fetchInventoryMovements(
   });
 }
 
-export async function recordInventoryMovement(
-  payload: any,
-): Promise<any> {
-  const res = await apiRequest<{ data: any }>('inventory/movements', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-  return res.data;
-}
-
 export async function adjustInventory(
   payload: {
     productId: string;
