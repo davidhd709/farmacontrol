@@ -423,9 +423,14 @@ export interface CreditNoteDto {
 export const fetchSaleCreditNotes = (saleId: string) =>
   apiRequest<CreditNoteDto[]>(`sales/${encodeURIComponent(saleId)}/credit-notes`);
 
-export const createSaleCreditNote = (saleId: string, payload: CreateCreditNotePayload) =>
+export const createSaleCreditNote = (
+  saleId: string,
+  payload: CreateCreditNotePayload,
+  idempotencyKey: string,
+) =>
   apiRequest<CreditNoteDto>(`sales/${encodeURIComponent(saleId)}/credit-notes`, {
     method: 'POST',
+    headers: { 'Idempotency-Key': idempotencyKey },
     body: JSON.stringify(payload),
   });
 

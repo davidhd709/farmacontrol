@@ -215,6 +215,7 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
           ],
         },
         adminUserId,
+        randomUUID(),
       );
 
       expect(nc).toBeDefined();
@@ -330,6 +331,7 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
             items: [{ saleLineId: saleLine.id, quantityCommercial: 5 }],
           },
           adminUserId,
+          randomUUID(),
         ),
       ).rejects.toThrow('excede el saldo disponible');
     });
@@ -415,6 +417,7 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
           items: [{ saleLineId, quantityCommercial: 1 }],
         },
         adminUserId,
+        randomUUID(),
       );
     }
 
@@ -708,6 +711,106 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
       expect(cogs?.credit.toString()).toBe('5000');
       const inventory = entry.lines.find((l) => l.account.code === '143501');
       expect(inventory?.debit.toString()).toBe('5000');
+    });
+
+    describe('autorización, validación e idempotencia', () => {
+      async function cashSaleOfTwo() {
+        return confirmSale({
+          paymentMethod: 'EFECTIVO',
+          items: [{ productId, presentationId, quantityCommercial: 2 }],
+        });
+      }
+
+      it('exige el permiso de notas crédito: un cajero con sales:create recibe 403', async () => {
+        const { saleId, saleLineId } = await cashSaleOfTwo();
+        const admin = await prisma.user.findUniqueOrThrow({ where: { id: adminUserId } });
+        const cashier = await prisma.user.create({
+          data: { username: 'cajero_nc', passwordHash: admin.passwordHash, isActive: true },
+        });
+        const cajeroRole = await prisma.role.findUniqueOrThrow({ where: { name: 'cajero' } });
+        await prisma.userRole.create({ data: { userId: cashier.id, roleId: cajeroRole.id } });
+        const login = await auth.login('cajero_nc', 'AdminPassword#2026');
+
+        await request(app.getHttpServer())
+          .post(`/api/v1/sales/${saleId}/credit-notes`)
+          .set('Idempotency-Key', randomUUID())
+          .set('Cookie', `${SESSION_COOKIE_NAME}=${login.rawToken}`)
+          .send({ saleId, reason: 'Devolución', items: [{ saleLineId, quantityCommercial: 1 }] })
+          .expect(403);
+        expect(await prisma.creditNote.count()).toBe(0);
+      });
+
+      it('exige Idempotency-Key', async () => {
+        const { saleId, saleLineId } = await cashSaleOfTwo();
+        await request(app.getHttpServer())
+          .post(`/api/v1/sales/${saleId}/credit-notes`)
+          .set('Cookie', cookie)
+          .send({ saleId, reason: 'Devolución', items: [{ saleLineId, quantityCommercial: 1 }] })
+          .expect(400);
+        expect(await prisma.creditNote.count()).toBe(0);
+      });
+
+      it('valida el cuerpo antes de tocar inventario o dinero', async () => {
+        const { saleId, saleLineId } = await cashSaleOfTwo();
+        for (const body of [
+          { reason: 'Devolución', items: [{ saleLineId, quantityCommercial: 'uno' }] },
+          { reason: '   ', items: [{ saleLineId, quantityCommercial: 1 }] },
+          { reason: 'Devolución', items: [{ saleLineId: 'no-es-uuid', quantityCommercial: 1 }] },
+          { reason: 'Devolución', restock: 'si', items: [{ saleLineId, quantityCommercial: 1 }] },
+        ]) {
+          const res = await postCreditNote(saleId, body);
+          expect(res.status, JSON.stringify(body)).toBe(400);
+        }
+        expect(await prisma.creditNote.count()).toBe(0);
+      });
+
+      it('un reintento con la misma clave devuelve la misma nota sin duplicar devolución ni reembolso', async () => {
+        const { saleId, saleLineId } = await cashSaleOfTwo();
+        const key = randomUUID();
+        const send = () =>
+          request(app.getHttpServer())
+            .post(`/api/v1/sales/${saleId}/credit-notes`)
+            .set('Idempotency-Key', key)
+            .set('Cookie', cookie)
+            .send({
+              saleId,
+              reason: 'Devolución',
+              refundMethod: 'EFECTIVO',
+              items: [{ saleLineId, quantityCommercial: 1 }],
+            });
+
+        const [first, second] = await Promise.all([send(), send()]);
+        const third = await send();
+        expect(first.status, JSON.stringify(first.body)).toBe(201);
+        expect(second.status, JSON.stringify(second.body)).toBe(201);
+        expect(third.status).toBe(201);
+        expect(second.body.id).toBe(first.body.id);
+        expect(third.body.id).toBe(first.body.id);
+
+        expect(await prisma.creditNote.count()).toBe(1);
+        expect(
+          await prisma.cashMovement.count({ where: { referenceDocumentType: 'CREDIT_NOTE' } }),
+        ).toBe(1);
+      });
+
+      it('la misma clave con otro contenido es un conflicto', async () => {
+        const { saleId, saleLineId } = await cashSaleOfTwo();
+        const key = randomUUID();
+        const body = { saleId, reason: 'Devolución', items: [{ saleLineId, quantityCommercial: 1 }] };
+        await request(app.getHttpServer())
+          .post(`/api/v1/sales/${saleId}/credit-notes`)
+          .set('Idempotency-Key', key)
+          .set('Cookie', cookie)
+          .send(body)
+          .expect(201);
+        await request(app.getHttpServer())
+          .post(`/api/v1/sales/${saleId}/credit-notes`)
+          .set('Idempotency-Key', key)
+          .set('Cookie', cookie)
+          .send({ ...body, reason: 'Otro motivo' })
+          .expect(409);
+        expect(await prisma.creditNote.count()).toBe(1);
+      });
     });
 
     it('rechaza abonar a cartera más que el saldo pendiente en vez de perder el excedente', async () => {

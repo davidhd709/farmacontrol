@@ -13,6 +13,7 @@ import {
 } from '@farmacia/contracts';
 import { AccountingEngineService } from '../../accounting/application/accounting-engine.service';
 import { AuditService } from '../../audit/application/services/audit.service';
+import { IdempotencyService } from '../infrastructure/idempotency.service';
 import { parseMoneyToCents, centsToMoneyString } from '../../treasury/domain/treasury-rules';
 import { calculateNewCashBalanceCents } from '../../cash/domain/cash-rules';
 import { recordSourceBankMovement } from '../../treasury/application/record-source-bank-movement';
@@ -87,6 +88,7 @@ export class CreditNotesService {
     @Optional() customClient?: PrismaClient,
     @Optional() private readonly accountingEngine?: AccountingEngineService,
     @Optional() private readonly auditService?: AuditService,
+    @Optional() private readonly idempotencyService: IdempotencyService = new IdempotencyService(),
   ) {
     this.client = customClient ?? prisma;
   }
@@ -95,7 +97,18 @@ export class CreditNotesService {
     saleId: string,
     payload: CreateCreditNotePayload,
     userId: string,
+    idempotencyKey?: string,
   ): Promise<CreditNoteDto> {
+    const key = idempotencyKey?.trim();
+    if (!key) {
+      throw new BadRequestException('Idempotency-Key es obligatorio para emitir una nota crédito.');
+    }
+    if (key.length > 100) {
+      throw new BadRequestException('Idempotency-Key debe tener entre 1 y 100 caracteres.');
+    }
+    const endpoint = `/api/v1/sales/${saleId}/credit-notes`;
+    const requestHash = this.idempotencyService.computeHash(endpoint, userId, payload);
+
     if (!payload.items || payload.items.length === 0) {
       throw new BadRequestException('La nota crédito debe incluir al menos una línea a devolver.');
     }
@@ -109,6 +122,12 @@ export class CreditNotesService {
         async (tx) => {
           // Serializa con la anulación y con otras notas crédito de la misma venta
           await tx.$queryRaw`SELECT id FROM sales WHERE id = ${saleId}::uuid FOR UPDATE`;
+
+          // Un reintento con la misma clave devuelve la nota ya emitida sin repetir efectos
+          const cached = await this.idempotencyService.getRecord(key, requestHash, tx);
+          if (cached) {
+            return cached.responseBody as CreditNoteDto;
+          }
 
           // 1. Obtener venta con sus líneas y lotes asignados
           const sale = await tx.sale.findUnique({
@@ -454,7 +473,19 @@ export class CreditNotesService {
             );
           }
 
-          return this.mapToDto(creditNote);
+          const dto = this.mapToDto(creditNote);
+          await this.idempotencyService.saveRecord(
+            {
+              key,
+              userId,
+              endpoint,
+              requestHash,
+              responseStatus: 201,
+              responseBody: dto,
+            },
+            tx,
+          );
+          return dto;
         },
         {
           isolationLevel: Prisma.TransactionIsolationLevel.Serializable,

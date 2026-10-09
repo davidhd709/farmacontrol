@@ -6,6 +6,9 @@ import {
   Param,
   UseGuards,
   Query,
+  Headers,
+  ParseUUIDPipe,
+  ConflictException,
 } from '@nestjs/common';
 import { CreditNotesService } from '../../application/credit-notes.service';
 import {
@@ -20,6 +23,8 @@ import {
 import { PermissionsGuard } from '../../../identity/presentation/guards/permissions.guard';
 import { RequirePermissions } from '../../../identity/presentation/decorators/require-permissions.decorator';
 import { CurrentUser } from '../../../identity/presentation/decorators/current-user.decorator';
+import { CreateCreditNoteValidationPipe } from '../dtos/create-credit-note.dto';
+import { IdempotencyConflictException } from '../../domain/sale.exceptions';
 
 @Controller()
 @UseGuards(SessionAuthGuard, PermissionsGuard)
@@ -27,14 +32,26 @@ export class CreditNotesController {
   constructor(private readonly creditNotesService: CreditNotesService) {}
 
   @Post('sales/:saleId/credit-notes')
-  @RequirePermissions(SYSTEM_PERMISSIONS.SALES_CREATE)
+  @RequirePermissions(SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE)
   async createForSale(
-    @Param('saleId') saleId: string,
-    @Body() payload: CreateCreditNotePayload,
+    @Param('saleId', ParseUUIDPipe) saleId: string,
+    @Body(CreateCreditNoteValidationPipe) payload: CreateCreditNotePayload,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
     @CurrentUser() user: AuthenticatedUserContext,
   ): Promise<CreditNoteDto> {
-    const userId = user.id || '00000000-0000-0000-0000-000000000000';
-    return this.creditNotesService.createCreditNote(saleId, payload, userId);
+    try {
+      return await this.creditNotesService.createCreditNote(
+        saleId,
+        payload,
+        user.id,
+        idempotencyKey,
+      );
+    } catch (error) {
+      if (error instanceof IdempotencyConflictException) {
+        throw new ConflictException(error.message);
+      }
+      throw error;
+    }
   }
 
   @Get('sales/:saleId/credit-notes')

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Button,
@@ -54,9 +54,12 @@ export const CreditNoteDialog: React.FC<Props> = ({ open, sale, onClose, onCreat
   const [refundMethod, setRefundMethod] = useState<RefundMethod>('EFECTIVO');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Un reintento del mismo contenido reutiliza la clave para no emitir la nota dos veces
+  const retryRef = useRef<{ fingerprint: string; key: string } | null>(null);
 
   useEffect(() => {
     if (open && sale) {
+      retryRef.current = null;
       setQuantities({});
       setReason('');
       setRestock(true);
@@ -92,13 +95,18 @@ export const CreditNoteDialog: React.FC<Props> = ({ open, sale, onClose, onCreat
     setSubmitting(true);
     setError(null);
     try {
-      const nc = await createSaleCreditNote(sale.id, {
+      const payload = {
         saleId: sale.id,
         reason: reason.trim(),
         restock,
         refundMethod,
         items,
-      });
+      };
+      const fingerprint = JSON.stringify(payload);
+      if (retryRef.current?.fingerprint !== fingerprint) {
+        retryRef.current = { fingerprint, key: crypto.randomUUID() };
+      }
+      const nc = await createSaleCreditNote(sale.id, payload, retryRef.current.key);
       onCreated(nc.creditNoteNumber);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo registrar la nota crédito.');
