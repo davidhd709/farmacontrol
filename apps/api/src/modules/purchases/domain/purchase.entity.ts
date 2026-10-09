@@ -28,6 +28,7 @@ export interface ReconstitutePurchaseLineProps {
   lotNumber: string;
   expirationDate: Date;
   quantityCommercial: number;
+  conversionFactor: number;
   quantityBaseUnits: number;
   unitCost: number;
   subtotal: number;
@@ -45,6 +46,7 @@ export class PurchaseLine {
   private readonly _lotNumber: string;
   private readonly _expirationDate: Date;
   private readonly _quantityCommercial: number;
+  private readonly _conversionFactor: number;
   private readonly _quantityBaseUnits: number;
   private readonly _unitCost: number;
   private readonly _subtotal: number;
@@ -61,6 +63,7 @@ export class PurchaseLine {
     this._lotNumber = props.lotNumber;
     this._expirationDate = props.expirationDate;
     this._quantityCommercial = props.quantityCommercial;
+    this._conversionFactor = props.conversionFactor;
     this._quantityBaseUnits = props.quantityBaseUnits;
     this._unitCost = props.unitCost;
     this._subtotal = props.subtotal;
@@ -99,9 +102,14 @@ export class PurchaseLine {
       throw new Error('El costo unitario no puede ser negativo');
     }
 
-    const quantityBaseUnits =
-      props.quantityBaseUnits ??
-      Math.round(props.quantityCommercial * props.conversionFactor);
+    const exactBaseUnits = props.quantityCommercial * props.conversionFactor;
+    const quantityBaseUnits = props.quantityBaseUnits ?? Math.round(exactBaseUnits);
+    // El inventario se lleva en unidades base enteras: no se redondea en silencio
+    if (props.quantityBaseUnits === undefined && Math.abs(exactBaseUnits - quantityBaseUnits) > 1e-6) {
+      throw new Error(
+        `La cantidad ${props.quantityCommercial} con factor ${props.conversionFactor} no equivale a unidades base enteras.`,
+      );
+    }
 
     if (quantityBaseUnits <= 0) {
       throw new Error('La cantidad en unidades base calculada debe ser mayor a 0');
@@ -123,6 +131,7 @@ export class PurchaseLine {
       lotNumber: props.lotNumber.trim().toUpperCase(),
       expirationDate: props.expirationDate,
       quantityCommercial: props.quantityCommercial,
+      conversionFactor: props.conversionFactor,
       quantityBaseUnits,
       unitCost: props.unitCost,
       subtotal,
@@ -148,6 +157,7 @@ export class PurchaseLine {
   public get lotNumber(): string { return this._lotNumber; }
   public get expirationDate(): Date { return this._expirationDate; }
   public get quantityCommercial(): number { return this._quantityCommercial; }
+  public get conversionFactor(): number { return this._conversionFactor; }
   public get quantityBaseUnits(): number { return this._quantityBaseUnits; }
   public get unitCost(): number { return this._unitCost; }
   public get subtotal(): number { return this._subtotal; }

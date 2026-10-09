@@ -239,4 +239,88 @@ describe('PurchaseController (Integration with PostgreSQL, Inventory & RBAC)', (
     expect(res.body.items).toHaveLength(1);
     expect(res.body.items[0].invoiceNumber).toBe('FAC-LIST-1');
   });
+
+  describe('AUD-008: la recepción no altera lotes existentes ni duplica facturas', () => {
+    const otherDate = new Date(validFutureDate);
+    otherDate.setMonth(otherDate.getMonth() + 3);
+    const otherDateStr = otherDate.toISOString().split('T')[0];
+
+    function receive(invoiceNumber: string, line: Record<string, unknown>) {
+      return request(app.getHttpServer())
+        .post('/api/v1/purchases/receive')
+        .set('Cookie', [adminCookie])
+        .send({
+          supplierId,
+          invoiceNumber,
+          purchaseDate: '2026-09-26',
+          lines: [
+            {
+              productId,
+              presentationId,
+              lotNumber: 'LOTE-AUD008',
+              expirationDate: validFutureDateStr,
+              quantityCommercial: 1,
+              unitCost: 12000,
+              locationId,
+              ...line,
+            },
+          ],
+        });
+    }
+
+    it('suma a un lote existente con el mismo vencimiento', async () => {
+      expect((await receive('FAC-A1', {})).status).toBe(201);
+      expect((await receive('FAC-A2', {})).status).toBe(201);
+      const lot = await prisma.inventoryLot.findFirstOrThrow({ where: { lotNumber: 'LOTE-AUD008' } });
+      expect(lot.currentQuantity).toBe(100);
+    });
+
+    it('rechaza un lote existente con otro vencimiento sin sobrescribirlo', async () => {
+      expect((await receive('FAC-B1', {})).status).toBe(201);
+      const res = await receive('FAC-B2', { expirationDate: otherDateStr });
+      expect(res.status).toBe(409);
+
+      const lot = await prisma.inventoryLot.findFirstOrThrow({ where: { lotNumber: 'LOTE-AUD008' } });
+      expect(lot.expirationDate.toISOString().split('T')[0]).toBe(validFutureDateStr);
+      expect(lot.currentQuantity).toBe(50);
+      expect(await prisma.purchase.count()).toBe(1);
+    });
+
+    it('rechaza recibir en un lote inactivo sin reactivarlo', async () => {
+      expect((await receive('FAC-C1', {})).status).toBe(201);
+      await prisma.inventoryLot.updateMany({
+        where: { lotNumber: 'LOTE-AUD008' },
+        data: { isActive: false },
+      });
+
+      const res = await receive('FAC-C2', {});
+      expect(res.status).toBe(409);
+      const lot = await prisma.inventoryLot.findFirstOrThrow({ where: { lotNumber: 'LOTE-AUD008' } });
+      expect(lot.isActive).toBe(false);
+      expect(lot.currentQuantity).toBe(50);
+    });
+
+    it('rechaza la misma factura del mismo proveedor, también en envíos simultáneos', async () => {
+      expect((await receive('FAC-D1', {})).status).toBe(201);
+      expect((await receive('fac-d1', {})).status).toBe(409);
+
+      const [a, b] = await Promise.all([receive('FAC-D2', {}), receive('FAC-D2', {})]);
+      expect([a.status, b.status].sort()).toEqual([201, 409]);
+
+      expect(await prisma.purchase.count()).toBe(2);
+      const lot = await prisma.inventoryLot.findFirstOrThrow({ where: { lotNumber: 'LOTE-AUD008' } });
+      expect(lot.currentQuantity).toBe(100);
+    });
+
+    it('guarda el factor de la presentación y rechaza cantidades que no dan unidades base enteras', async () => {
+      const ok = await receive('FAC-E1', { quantityCommercial: 0.3, unitCost: 1000 });
+      expect(ok.status).toBe(201);
+      const line = await prisma.purchaseLine.findFirstOrThrow({ where: { purchaseId: ok.body.id } });
+      expect(line.presentationFactorHistorical).toBe(50);
+      expect(line.quantityBaseUnits).toBe(15);
+
+      const bad = await receive('FAC-E2', { quantityCommercial: 0.33 });
+      expect(bad.status).toBe(400);
+    });
+  });
 });

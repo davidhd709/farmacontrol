@@ -2,6 +2,12 @@ import { Injectable, Optional } from '@nestjs/common';
 import { prisma, PrismaClient, Prisma } from '@farmacia/database';
 import { IPurchaseRepository } from '../domain/purchase.repository';
 import { Purchase, PurchaseLine } from '../domain/purchase.entity';
+import {
+  DuplicatePurchaseInvoiceException,
+  LotConflictException,
+} from '../domain/purchase.exceptions';
+
+const toDateOnly = (date: Date) => date.toISOString().slice(0, 10);
 import { PurchaseQueryFilters } from '@farmacia/contracts';
 
 @Injectable()
@@ -13,6 +19,23 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
   }
 
   async saveTransactional(
+    purchase: Purchase,
+    defaultLocationId: string,
+    actorUserId: string | null,
+    afterSaveTx?: (tx: any, savedPurchase: Purchase) => Promise<void>,
+  ): Promise<Purchase> {
+    try {
+      return await this.saveInTransaction(purchase, defaultLocationId, actorUserId, afterSaveTx);
+    } catch (error) {
+      // UNIQUE (supplier_id, invoice_number): también cubre dos recepciones simultáneas
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new DuplicatePurchaseInvoiceException(purchase.invoiceNumber);
+      }
+      throw error;
+    }
+  }
+
+  private async saveInTransaction(
     purchase: Purchase,
     defaultLocationId: string,
     actorUserId: string | null,
@@ -54,29 +77,42 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
 
       // 2. Procesar cada línea de compra y afectar inventario
       for (const line of purchase.lines) {
-        // Buscar o crear lote en la ubicación
-        let lot = await tx.inventoryLot.findUnique({
-          where: {
-            productId_locationId_lotNumber: {
-              productId: line.productId,
-              locationId: defaultLocationId,
-              lotNumber: line.lotNumber,
-            },
-          },
-        });
+        // Buscar y bloquear el lote en la ubicación
+        const existingLots = await tx.$queryRaw<
+          Array<{ id: string; expiration_date: Date; is_active: boolean }>
+        >`
+          SELECT id, expiration_date, is_active
+          FROM inventory_lots
+          WHERE product_id = ${line.productId}::uuid
+            AND location_id = ${defaultLocationId}::uuid
+            AND lot_number = ${line.lotNumber}
+          FOR UPDATE
+        `;
 
+        let lot: { id: string };
         let newBalance = line.quantityBaseUnits;
-        if (lot) {
+        if (existingLots.length > 0) {
+          const existing = existingLots[0];
+          // Un lote es un único vencimiento: la recepción no lo reescribe ni lo reactiva
+          if (toDateOnly(existing.expiration_date) !== toDateOnly(line.expirationDate)) {
+            throw new LotConflictException(
+              `El lote "${line.lotNumber}" ya existe con vencimiento ${toDateOnly(existing.expiration_date)}; la factura indica ${toDateOnly(line.expirationDate)}.`,
+            );
+          }
+          if (!existing.is_active) {
+            throw new LotConflictException(
+              `El lote "${line.lotNumber}" está inactivo; no se puede recibir mercancía en él.`,
+            );
+          }
           const updatedLot = await tx.inventoryLot.update({
-            where: { id: lot.id },
+            where: { id: existing.id },
             data: {
               currentQuantity: { increment: line.quantityBaseUnits },
-              expirationDate: line.expirationDate,
-              isActive: true,
             },
           });
           newBalance = updatedLot.currentQuantity;
-          line.setLotId(lot.id);
+          lot = updatedLot;
+          line.setLotId(existing.id);
         } else {
           lot = await tx.inventoryLot.create({
             data: {
@@ -92,10 +128,7 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
           line.setLotId(lot.id);
         }
 
-        const factorHistorical =
-          line.quantityCommercial > 0
-            ? Math.round(line.quantityBaseUnits / line.quantityCommercial)
-            : 1;
+        const factorHistorical = line.conversionFactor;
 
         // Insertar línea de compra
         await tx.purchaseLine.create({
@@ -244,6 +277,7 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
         lotNumber: l.lotNumber,
         expirationDate: l.expirationDate,
         quantityCommercial: Number(l.quantityCommercial),
+        conversionFactor: l.presentationFactorHistorical,
         quantityBaseUnits: l.quantityBaseUnits,
         unitCost: Number(l.unitCost),
         subtotal: Number(l.subtotal),
