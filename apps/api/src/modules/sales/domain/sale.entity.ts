@@ -95,6 +95,8 @@ export interface SaleLineProps {
   taxRate: number;
   taxAmount: number;
   total: number;
+  /** Costo por unidad base al confirmar la venta (decimal en texto); null en ventas antiguas */
+  unitCostBase?: string | null;
   lotAllocations?: SaleLotAllocation[];
   createdAt?: Date;
 }
@@ -115,6 +117,7 @@ export class SaleLine {
     unitPrice: number;
     discount?: number;
     taxRate?: number;
+    unitCostBase?: string | null;
     lotAllocations?: SaleLotAllocation[];
     createdAt?: Date;
   }): SaleLine {
@@ -150,6 +153,7 @@ export class SaleLine {
       taxRate,
       taxAmount,
       total,
+      unitCostBase: payload.unitCostBase ?? null,
       lotAllocations: payload.lotAllocations ?? [],
       createdAt: payload.createdAt ?? new Date(),
     });
@@ -194,6 +198,10 @@ export class SaleLine {
   }
   public get discount(): number {
     return this.props.discount;
+  }
+
+  public get unitCostBase(): string | null {
+    return this.props.unitCostBase ?? null;
   }
   public get subtotal(): number {
     return this.props.subtotal;

@@ -318,6 +318,7 @@ export class SaleService {
           quantityCommercial: item.quantityCommercial,
           unitPrice,
           discount: item.discount ?? 0,
+          unitCostBase: new Prisma.Decimal(product.baseCost).toFixed(2),
           lotAllocations: lineAllocations,
         });
 

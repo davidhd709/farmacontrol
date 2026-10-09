@@ -683,6 +683,33 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
       expect(after.status).toBe('PENDIENTE');
     });
 
+    it('revierte el costo con que se vendió aunque el costo del producto haya cambiado', async () => {
+      const { saleId, saleLineId } = await confirmSale({
+        paymentMethod: 'EFECTIVO',
+        items: [{ productId, presentationId, quantityCommercial: 2 }],
+      });
+      const saleLine = await prisma.saleLine.findUniqueOrThrow({ where: { id: saleLineId } });
+      expect(saleLine.unitCostBase?.toString()).toBe('5000');
+
+      await prisma.product.update({ where: { id: productId }, data: { baseCost: 7000 } });
+
+      const res = await postCreditNote(saleId, {
+        refundMethod: 'EFECTIVO',
+        restock: true,
+        items: [{ saleLineId, quantityCommercial: 1 }],
+      });
+      expect(res.status, JSON.stringify(res.body)).toBe(201);
+
+      const entry = await prisma.journalEntry.findFirstOrThrow({
+        where: { sourceType: 'CREDIT_NOTE', sourceId: res.body.id },
+        include: { lines: { include: { account: true } } },
+      });
+      const cogs = entry.lines.find((l) => l.account.code === '613501');
+      expect(cogs?.credit.toString()).toBe('5000');
+      const inventory = entry.lines.find((l) => l.account.code === '143501');
+      expect(inventory?.debit.toString()).toBe('5000');
+    });
+
     it('rechaza abonar a cartera más que el saldo pendiente en vez de perder el excedente', async () => {
       const { saleId, saleLineId } = await confirmSale({
         paymentMethod: 'CREDITO',

@@ -236,7 +236,8 @@ export class CreditNotesService {
             totalSubtotalCents += returnSubtotalCents;
             totalTaxCents += returnTaxCents;
 
-            const unitCostCents = toCents(line.product.baseCost, 'Costo base');
+            // Costo con que se vendió; las ventas anteriores a su registro usan el costo vigente
+            const unitCostCents = toCents(line.unitCostBase ?? line.product.baseCost, 'Costo base');
             totalCostCents += BigInt(quantityBaseUnits) * unitCostCents;
 
             const portions = splitReturnAcrossLots(
