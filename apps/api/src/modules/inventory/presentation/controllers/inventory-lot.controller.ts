@@ -14,6 +14,8 @@ import {
 import type { Request } from 'express';
 import { SessionAuthGuard } from '../../../identity/presentation/guards/session-auth.guard';
 import { PermissionsGuard } from '../../../identity/presentation/guards/permissions.guard';
+import { CurrentUser } from '../../../identity/presentation/decorators/current-user.decorator';
+import type { AuthenticatedUserContext } from '../../../identity/presentation/guards/session-auth.guard';
 import { RequirePermissions } from '../../../identity/presentation/decorators/require-permissions.decorator';
 import { SYSTEM_PERMISSIONS } from '@farmacia/contracts';
 import { InventoryLotService } from '../../application/services/inventory-lot.service';
@@ -81,14 +83,14 @@ export class InventoryLotController {
     @Param('productId', ParseUUIDPipe) productId: string,
     @Body() body: { quantityBaseUnits: number; notes?: string; referenceDocumentId?: string },
     @Req() req: Request,
+    @CurrentUser() user: AuthenticatedUserContext,
   ) {
-    const session = (req as any).session;
     const data = await this.inventoryLotService.allocateFefoStock(
       productId,
       body.quantityBaseUnits,
       'VENTA',
       body.referenceDocumentId,
-      session?.userId,
+      user.id,
       body.notes,
     );
     return { success: true, data };
@@ -100,14 +102,14 @@ export class InventoryLotController {
   public async createLot(
     @Body(CreateInventoryLotValidationPipe) dto: CreateInventoryLotDto,
     @Req() req: Request,
+    @CurrentUser() user: AuthenticatedUserContext,
   ) {
-    const session = (req as any).session;
     const ipAddress = req.ip || req.socket.remoteAddress;
     const correlationId = req.headers['x-correlation-id'] as string;
 
     const data = await this.inventoryLotService.createLot(
       dto,
-      session?.userId,
+      user.id,
       ipAddress,
       correlationId,
     );
@@ -127,14 +129,14 @@ export class InventoryLotController {
   public async createLocation(
     @Body(CreateLocationValidationPipe) dto: CreateLocationDto,
     @Req() req: Request,
+    @CurrentUser() user: AuthenticatedUserContext,
   ) {
-    const session = (req as any).session;
     const ipAddress = req.ip || req.socket.remoteAddress;
     const correlationId = req.headers['x-correlation-id'] as string;
 
     const data = await this.inventoryLotService.createLocation(
       dto,
-      session?.userId,
+      user.id,
       ipAddress,
       correlationId,
     );

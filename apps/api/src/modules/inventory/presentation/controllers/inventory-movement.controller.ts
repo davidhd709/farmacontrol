@@ -13,6 +13,8 @@ import {
 import type { Request } from 'express';
 import { SessionAuthGuard } from '../../../identity/presentation/guards/session-auth.guard';
 import { PermissionsGuard } from '../../../identity/presentation/guards/permissions.guard';
+import { CurrentUser } from '../../../identity/presentation/decorators/current-user.decorator';
+import type { AuthenticatedUserContext } from '../../../identity/presentation/guards/session-auth.guard';
 import { RequirePermissions } from '../../../identity/presentation/decorators/require-permissions.decorator';
 import { SYSTEM_PERMISSIONS, InventoryMovementType } from '@farmacia/contracts';
 import { InventoryMovementService } from '../../application/services/inventory-movement.service';
@@ -58,6 +60,7 @@ export class InventoryMovementController {
   public async recordMovement(
     @Body() body: any,
     @Req() req: Request,
+    @CurrentUser() user: AuthenticatedUserContext,
   ) {
     if (!body || typeof body !== 'object') {
       throw new BadRequestException('El cuerpo de la solicitud no es válido.');
@@ -76,7 +79,6 @@ export class InventoryMovementController {
       throw new BadRequestException('quantityBaseUnits debe ser un entero.');
     }
 
-    const session = (req as any).session;
     const ipAddress = req.ip || req.socket.remoteAddress;
     const correlationId = req.headers['x-correlation-id'] as string;
 
@@ -93,7 +95,7 @@ export class InventoryMovementController {
         referenceDocumentId: body.referenceDocumentId,
         notes: body.notes,
       },
-      session?.userId,
+      user.id,
       ipAddress,
       correlationId,
     );
@@ -107,6 +109,7 @@ export class InventoryMovementController {
   public async adjustInventory(
     @Body() body: any,
     @Req() req: Request,
+    @CurrentUser() user: AuthenticatedUserContext,
   ) {
     if (!body || typeof body !== 'object') {
       throw new BadRequestException('El cuerpo de la solicitud no es válido.');
@@ -127,7 +130,6 @@ export class InventoryMovementController {
       throw new BadRequestException('reason (motivo justificado) es obligatorio.');
     }
 
-    const session = (req as any).session;
     const ipAddress = req.ip || req.socket.remoteAddress;
     const correlationId = req.headers['x-correlation-id'] as string;
 
@@ -140,7 +142,7 @@ export class InventoryMovementController {
         reason: body.reason.trim(),
         notes: body.notes,
       },
-      session?.userId,
+      user.id,
       ipAddress,
       correlationId,
     );
