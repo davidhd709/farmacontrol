@@ -373,6 +373,22 @@ export class JournalService {
 
   async canPostForPurposes(purposes: DbPurpose[], date = new Date(), tx?: Tx): Promise<boolean> {
     const client = tx ?? prisma;
+    // El período cerrado se valida antes que los mapeos: una operación sin asiento
+    // por falta de configuración tampoco puede registrarse en un período cerrado.
+    const day = parseJournalDate(date.toISOString().slice(0, 10));
+    const closedPeriod = await client.fiscalPeriod.findFirst({
+      where: {
+        status: 'CLOSED',
+        startDate: { lte: day },
+        endDate: { gte: day },
+      },
+    });
+    if (closedPeriod) {
+      throw new AccountingValidationError(
+        `No es posible registrar operaciones en el período cerrado ${closedPeriod.name} (${closedPeriod.year}-${String(closedPeriod.month).padStart(2, '0')}).`,
+      );
+    }
+
     for (const purpose of new Set(purposes)) {
       const mapping = await client.companyAccountingMapping.findFirst({
         where: {

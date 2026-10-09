@@ -607,6 +607,37 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
     ).toBe('0');
   });
 
+  it('rechaza una venta en período contable cerrado aunque falten mapeos contables', async () => {
+    const today = new Date();
+    const year = today.getUTCFullYear();
+    const month = today.getUTCMonth() + 1;
+    await prisma.fiscalPeriod.create({
+      data: {
+        year,
+        month,
+        name: `Período ${year}-${month}`,
+        startDate: new Date(Date.UTC(year, month - 1, 1)),
+        endDate: new Date(Date.UTC(year, month, 0)),
+        status: 'CLOSED',
+      },
+    });
+
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/sales/confirm')
+      .set('Idempotency-Key', randomUUID())
+      .set('Cookie', cajeroCookie)
+      .send({
+        paymentMethod: 'EFECTIVO',
+        items: [{ productId, presentationId, quantityCommercial: 1 }],
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/período cerrado/);
+    expect(await prisma.sale.count()).toBe(0);
+    const lot1 = await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lot1Id } });
+    expect(lot1.currentQuantity).toBe(10);
+  });
+
   describe('AUD-011: precio y descuento manual requieren permiso y límites', () => {
     function confirm(cookie: string, item: Record<string, unknown>) {
       return request(app.getHttpServer())
