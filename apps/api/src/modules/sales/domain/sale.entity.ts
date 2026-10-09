@@ -146,7 +146,15 @@ export class SaleLine {
     const taxRateBasisPoints = toHundredths(payload.taxRate ?? 0, 'La tarifa de IVA');
 
     const grossCents = divideHalfUp(quantityHundredths * unitPriceCents, 100n);
-    const subtotalCents = grossCents > discountCents ? grossCents - discountCents : 0n;
+    if (discountCents < 0n) {
+      throw new Error('El descuento no puede ser negativo.');
+    }
+    if (discountCents > grossCents) {
+      throw new Error(
+        `El descuento (${centsToNumber(discountCents)}) supera el valor de la línea (${centsToNumber(grossCents)}).`,
+      );
+    }
+    const subtotalCents = grossCents - discountCents;
     const taxCents = divideHalfUp(subtotalCents * taxRateBasisPoints, 10000n);
 
     const discount = centsToNumber(discountCents);

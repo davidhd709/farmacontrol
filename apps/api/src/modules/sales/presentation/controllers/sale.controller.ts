@@ -13,6 +13,7 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  HttpException,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import {
@@ -68,10 +69,14 @@ export class SaleController {
           userId: user.id,
           ipAddress: req.ip,
           correlationId: req.headers['x-correlation-id'] as string | undefined,
+          permissions: user.permissions,
         },
         idempotencyKey
       );
     } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
       if (error instanceof InsufficientStockException) {
         throw new BadRequestException(error.message);
       }

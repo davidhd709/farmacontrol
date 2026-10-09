@@ -39,6 +39,8 @@ export const BASE_PERMISSIONS: PermissionDefinition[] = [
   { name: SYSTEM_PERMISSIONS.SALES_CREATE, description: 'Registrar ventas en punto de venta con asignación FEFO' },
   { name: SYSTEM_PERMISSIONS.SALES_CANCEL, description: 'Anular ventas y revertir lotes asignados' },
   { name: SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE, description: 'Emitir notas crédito por devoluciones de ventas' },
+  { name: SYSTEM_PERMISSIONS.SALES_PRICE_OVERRIDE, description: 'Cambiar el precio unitario de lista en una venta' },
+  { name: SYSTEM_PERMISSIONS.SALES_DISCOUNT, description: 'Aplicar descuento manual en una venta' },
 
   // Caja
   { name: SYSTEM_PERMISSIONS.CASH_READ, description: 'Consultar estado y saldo de caja' },
@@ -114,6 +116,8 @@ export const BASE_ROLES: RoleDefinition[] = [
       SYSTEM_PERMISSIONS.SALES_CREATE,
       SYSTEM_PERMISSIONS.SALES_CANCEL,
       SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE,
+      SYSTEM_PERMISSIONS.SALES_PRICE_OVERRIDE,
+      SYSTEM_PERMISSIONS.SALES_DISCOUNT,
       SYSTEM_PERMISSIONS.CASH_READ,
       SYSTEM_PERMISSIONS.CASH_OPEN,
       SYSTEM_PERMISSIONS.CASH_CLOSE,
@@ -147,6 +151,8 @@ export const BASE_ROLES: RoleDefinition[] = [
     permissions: [
       SYSTEM_PERMISSIONS.SALES_READ,
       SYSTEM_PERMISSIONS.SALES_CREATE,
+      // Conserva el descuento manual que ya usaba en el POS hasta que se apruebe la política (T-19)
+      SYSTEM_PERMISSIONS.SALES_DISCOUNT,
       SYSTEM_PERMISSIONS.PRODUCTS_READ,
       SYSTEM_PERMISSIONS.CATEGORIES_READ,
       SYSTEM_PERMISSIONS.INVENTORY_READ,

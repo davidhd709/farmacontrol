@@ -1,10 +1,17 @@
-import { BadRequestException, Inject, Injectable, Optional } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Inject,
+  Injectable,
+  Optional,
+} from '@nestjs/common';
 import { prisma, PrismaClient, Prisma } from '@farmacia/database';
 import {
   SaleDto,
   ConfirmSalePayload,
   SaleQueryFilters,
   PaginatedResponse,
+  SYSTEM_PERMISSIONS,
 } from '@farmacia/contracts';
 import { ISaleRepository, SALE_REPOSITORY } from '../domain/sale.repository';
 import { Sale, SaleLine, SaleLotAllocation } from '../domain/sale.entity';
@@ -32,6 +39,8 @@ export interface AuditContext {
   userId?: string | null;
   ipAddress?: string | null;
   correlationId?: string | null;
+  /** Permisos efectivos del usuario autenticado; se exigen para precio y descuento manual */
+  permissions?: readonly string[];
 }
 
 /**
@@ -122,6 +131,20 @@ export class SaleService {
     }
     if (key.length > 100) {
       throw new BadRequestException('Idempotency-Key debe tener entre 1 y 100 caracteres.');
+    }
+    // Precio y descuento manual se autorizan en backend, no solo ocultando campos en el POS
+    const permissions = auditCtx.permissions ?? [];
+    if (
+      payload.items.some((item) => item.unitPriceOverride !== undefined) &&
+      !permissions.includes(SYSTEM_PERMISSIONS.SALES_PRICE_OVERRIDE)
+    ) {
+      throw new ForbiddenException('No tiene permiso para cambiar el precio unitario de venta.');
+    }
+    if (
+      payload.items.some((item) => (item.discount ?? 0) !== 0) &&
+      !permissions.includes(SYSTEM_PERMISSIONS.SALES_DISCOUNT)
+    ) {
+      throw new ForbiddenException('No tiene permiso para aplicar descuentos manuales.');
     }
     if (payload.paymentMethod === 'TRANSFERENCIA') {
       requirePaymentBankAccountId(payload.bankAccountId);
@@ -223,7 +246,7 @@ export class SaleService {
           presentationName = presentation.name;
         }
 
-        if (item.unitPriceOverride !== undefined && item.unitPriceOverride >= 0) {
+        if (item.unitPriceOverride !== undefined) {
           unitPrice = item.unitPriceOverride;
         }
 

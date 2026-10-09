@@ -418,7 +418,8 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
     });
     const res = await request(app.getHttpServer())
       .post('/api/v1/sales/confirm')
-      .set('Cookie', cajeroCookie)
+      // Cambiar el precio de lista exige sales:price_override (AUD-011)
+      .set('Cookie', supervisorCookie)
       .set('Idempotency-Key', 'decimal-bank-sale')
       .send({
         paymentMethod: 'TRANSFERENCIA',
@@ -604,6 +605,61 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
         await prisma.bankAccount.findUniqueOrThrow({ where: { id: bank.id } })
       ).currentBalance.toString(),
     ).toBe('0');
+  });
+
+  describe('AUD-011: precio y descuento manual requieren permiso y límites', () => {
+    function confirm(cookie: string, item: Record<string, unknown>) {
+      return request(app.getHttpServer())
+        .post('/api/v1/sales/confirm')
+        .set('Idempotency-Key', randomUUID())
+        .set('Cookie', cookie)
+        .send({
+          paymentMethod: 'EFECTIVO',
+          items: [{ productId, presentationId, quantityCommercial: 1, ...item }],
+        });
+    }
+
+    it('un cajero no puede cambiar el precio unitario (403) y no se crea la venta', async () => {
+      const res = await confirm(cajeroCookie, { unitPriceOverride: 1 });
+      expect(res.status).toBe(403);
+      expect(await prisma.sale.count()).toBe(0);
+      const lot1 = await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lot1Id } });
+      expect(lot1.currentQuantity).toBe(10);
+    });
+
+    it('un usuario con permiso de precio puede cambiarlo', async () => {
+      const res = await confirm(supervisorCookie, { unitPriceOverride: 4000 });
+      expect(res.status, JSON.stringify(res.body)).toBe(201);
+      expect(res.body.total).toBe(4000);
+    });
+
+    it('el cajero conserva el descuento manual mientras tenga el permiso', async () => {
+      const res = await confirm(cajeroCookie, { discount: 800 });
+      expect(res.status, JSON.stringify(res.body)).toBe(201);
+      expect(res.body.total).toBe(4000);
+    });
+
+    it('sin el permiso de descuento se rechaza (403)', async () => {
+      const cajeroRole = await prisma.role.findUniqueOrThrow({ where: { name: 'cajero' } });
+      const discountPermission = await prisma.permission.findUniqueOrThrow({
+        where: { name: 'sales:discount' },
+      });
+      await prisma.rolePermission.delete({
+        where: {
+          roleId_permissionId: { roleId: cajeroRole.id, permissionId: discountPermission.id },
+        },
+      });
+
+      const res = await confirm(cajeroCookie, { discount: 800 });
+      expect(res.status).toBe(403);
+      expect(await prisma.sale.count()).toBe(0);
+    });
+
+    it('rechaza un descuento mayor que el valor bruto de la línea en vez de dejarla en cero', async () => {
+      const res = await confirm(supervisorCookie, { discount: 5000 });
+      expect(res.status).toBe(400);
+      expect(await prisma.sale.count()).toBe(0);
+    });
   });
 
   describe('AUD-006: anulación de ventas a crédito con abonos', () => {
