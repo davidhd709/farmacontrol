@@ -464,6 +464,254 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
     });
   });
 
+  describe('AUD-007: montos, lotes y efectos financieros de la nota crédito', () => {
+    let productId: string;
+    let presentationId: string;
+    let soonLotId: string;
+    let lateLotId: string;
+    let customerId: string;
+
+    beforeEach(async () => {
+      await setupStandardPucAndMappings();
+      await prisma.customer.create({
+        data: {
+          documentType: 'CC',
+          documentNumber: '222222222222',
+          name: 'Consumidor Final',
+          isDefault: true,
+          isActive: true,
+        },
+      });
+      const customer = await prisma.customer.create({
+        data: { documentType: 'CC', documentNumber: '1099887766', name: 'Cliente Crédito' },
+      });
+      customerId = customer.id;
+      await prisma.cashMovement.create({
+        data: {
+          movementType: 'APERTURA',
+          amount: new Prisma.Decimal(100000),
+          paymentMethod: 'EFECTIVO',
+          reason: 'Apertura de caja',
+          balanceAfter: new Prisma.Decimal(100000),
+          createdByUserId: adminUserId,
+        },
+      });
+
+      const location = await prisma.location.findFirstOrThrow();
+      const category = await prisma.category.create({ data: { name: 'Categoría AUD-007' } });
+      const product = await prisma.product.create({
+        data: {
+          code: 'AUD007',
+          name: 'Producto AUD-007',
+          basePrice: 10000,
+          baseCost: 5000,
+          categoryId: category.id,
+          requiresLotControl: true,
+        },
+      });
+      productId = product.id;
+      const presentation = await prisma.productPresentation.create({
+        data: {
+          productId,
+          name: 'Unidad',
+          conversionFactor: 1,
+          price: new Prisma.Decimal('10000.00'),
+          cost: new Prisma.Decimal('5000.00'),
+          isDefault: true,
+        },
+      });
+      presentationId = presentation.id;
+      // FEFO: la venta toma primero 1 unidad del lote que vence antes y el resto del otro
+      soonLotId = (
+        await prisma.inventoryLot.create({
+          data: {
+            productId,
+            locationId: location.id,
+            lotNumber: 'LOT-SOON',
+            expirationDate: new Date('2027-06-30'),
+            currentQuantity: 1,
+          },
+        })
+      ).id;
+      lateLotId = (
+        await prisma.inventoryLot.create({
+          data: {
+            productId,
+            locationId: location.id,
+            lotNumber: 'LOT-LATE',
+            expirationDate: new Date('2028-12-31'),
+            currentQuantity: 10,
+          },
+        })
+      ).id;
+    });
+
+    async function confirmSale(payload: Record<string, unknown>) {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/sales/confirm')
+        .set('Idempotency-Key', randomUUID())
+        .set('Cookie', cookie)
+        .send(payload);
+      expect(res.status, JSON.stringify(res.body)).toBe(201);
+      const saleLine = await prisma.saleLine.findFirstOrThrow({ where: { saleId: res.body.id } });
+      return { saleId: res.body.id as string, saleLineId: saleLine.id };
+    }
+
+    function postCreditNote(saleId: string, body: Record<string, unknown>) {
+      return request(app.getHttpServer())
+        .post(`/api/v1/sales/${saleId}/credit-notes`)
+        .set('Idempotency-Key', randomUUID())
+        .set('Cookie', cookie)
+        .send({ saleId, reason: 'Devolución de cliente', ...body });
+    }
+
+    it('reembolsa el valor neto del descuento aplicado en la venta', async () => {
+      const { saleId, saleLineId } = await confirmSale({
+        paymentMethod: 'EFECTIVO',
+        items: [{ productId, presentationId, quantityCommercial: 2, discount: 2000 }],
+      });
+
+      const res = await postCreditNote(saleId, {
+        refundMethod: 'EFECTIVO',
+        restock: true,
+        items: [{ saleLineId, quantityCommercial: 1 }],
+      });
+      expect(res.status, JSON.stringify(res.body)).toBe(201);
+      expect(res.body.total).toBe(9000);
+
+      const refund = await prisma.cashMovement.findFirstOrThrow({
+        where: { referenceDocumentType: 'CREDIT_NOTE' },
+      });
+      expect(Number(refund.amount)).toBe(9000);
+
+      // La segunda unidad devuelve exactamente el resto: nunca más que lo cobrado
+      const second = await postCreditNote(saleId, {
+        refundMethod: 'EFECTIVO',
+        restock: true,
+        items: [{ saleLineId, quantityCommercial: 1 }],
+      });
+      expect(second.status, JSON.stringify(second.body)).toBe(201);
+      expect(second.body.total).toBe(9000);
+    });
+
+    it('reintegra cada unidad al lote del que salió, no todo al primero', async () => {
+      const { saleId, saleLineId } = await confirmSale({
+        paymentMethod: 'EFECTIVO',
+        items: [{ productId, presentationId, quantityCommercial: 3 }],
+      });
+      expect((await prisma.inventoryLot.findUniqueOrThrow({ where: { id: soonLotId } })).currentQuantity).toBe(0);
+      expect((await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lateLotId } })).currentQuantity).toBe(8);
+
+      const res = await postCreditNote(saleId, {
+        refundMethod: 'EFECTIVO',
+        restock: true,
+        items: [{ saleLineId, quantityCommercial: 3 }],
+      });
+      expect(res.status, JSON.stringify(res.body)).toBe(201);
+
+      expect((await prisma.inventoryLot.findUniqueOrThrow({ where: { id: soonLotId } })).currentQuantity).toBe(1);
+      expect((await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lateLotId } })).currentQuantity).toBe(10);
+
+      const movements = await prisma.inventoryMovement.findMany({
+        where: { referenceDocumentType: 'CREDIT_NOTE' },
+        orderBy: { quantityBaseUnits: 'asc' },
+      });
+      expect(movements.map((m) => [m.lotId, m.quantityBaseUnits, m.referenceDocumentId])).toEqual([
+        [soonLotId, 1, res.body.creditNoteNumber],
+        [lateLotId, 2, res.body.creditNoteNumber],
+      ]);
+    });
+
+    it('devuelve por transferencia desde la cuenta bancaria de la venta, sin tocar caja', async () => {
+      const bank = await prisma.bankAccount.create({
+        data: {
+          bankName: 'Banco NC',
+          accountType: 'AHORROS',
+          accountNumber: 'NC-001',
+          name: 'Recaudos NC',
+          createdById: adminUserId,
+        },
+      });
+      const { saleId, saleLineId } = await confirmSale({
+        paymentMethod: 'TRANSFERENCIA',
+        bankAccountId: bank.id,
+        items: [{ productId, presentationId, quantityCommercial: 2 }],
+      });
+      const cashBefore = await prisma.cashMovement.count();
+
+      const res = await postCreditNote(saleId, {
+        restock: true,
+        items: [{ saleLineId, quantityCommercial: 1 }],
+      });
+      expect(res.status, JSON.stringify(res.body)).toBe(201);
+      expect(res.body.refundMethod).toBe('TRANSFERENCIA');
+
+      expect(await prisma.cashMovement.count()).toBe(cashBefore);
+      const withdrawal = await prisma.bankMovement.findFirstOrThrow({
+        where: { referenceDocumentType: 'CREDIT_NOTE', referenceDocumentId: res.body.creditNoteNumber },
+      });
+      expect(withdrawal.movementType).toBe('WITHDRAWAL');
+      expect(Number(withdrawal.amount)).toBe(10000);
+      const account = await prisma.bankAccount.findUniqueOrThrow({ where: { id: bank.id } });
+      expect(account.currentBalance.toString()).toBe('10000');
+    });
+
+    it('en crédito reduce total y saldo de la cartera y conserva saldo = total - abonado', async () => {
+      const { saleId, saleLineId } = await confirmSale({
+        paymentMethod: 'CREDITO',
+        customerId,
+        items: [{ productId, presentationId, quantityCommercial: 2 }],
+      });
+      const receivable = await prisma.receivable.findUniqueOrThrow({ where: { saleId } });
+      await request(app.getHttpServer())
+        .post(`/api/v1/receivables/${receivable.id}/payments`)
+        .set('Cookie', cookie)
+        .send({ amount: 5000, paymentMethod: 'EFECTIVO' })
+        .expect(201);
+
+      const res = await postCreditNote(saleId, {
+        refundMethod: 'CREDITO_CARTERA',
+        restock: true,
+        items: [{ saleLineId, quantityCommercial: 1 }],
+      });
+      expect(res.status, JSON.stringify(res.body)).toBe(201);
+
+      const after = await prisma.receivable.findUniqueOrThrow({ where: { id: receivable.id } });
+      expect(after.totalAmount.toString()).toBe('10000');
+      expect(after.amountPaid.toString()).toBe('5000');
+      expect(after.balance.toString()).toBe('5000');
+      expect(after.status).toBe('PENDIENTE');
+    });
+
+    it('rechaza abonar a cartera más que el saldo pendiente en vez de perder el excedente', async () => {
+      const { saleId, saleLineId } = await confirmSale({
+        paymentMethod: 'CREDITO',
+        customerId,
+        items: [{ productId, presentationId, quantityCommercial: 2 }],
+      });
+      const receivable = await prisma.receivable.findUniqueOrThrow({ where: { saleId } });
+      await request(app.getHttpServer())
+        .post(`/api/v1/receivables/${receivable.id}/payments`)
+        .set('Cookie', cookie)
+        .send({ amount: 15000, paymentMethod: 'EFECTIVO' })
+        .expect(201);
+      const lateBefore = await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lateLotId } });
+
+      const res = await postCreditNote(saleId, {
+        refundMethod: 'CREDITO_CARTERA',
+        restock: true,
+        items: [{ saleLineId, quantityCommercial: 1 }],
+      });
+      expect(res.status).toBe(409);
+
+      expect(await prisma.creditNote.count()).toBe(0);
+      const after = await prisma.receivable.findUniqueOrThrow({ where: { id: receivable.id } });
+      expect(after.balance.toString()).toBe('5000');
+      const lateAfter = await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lateLotId } });
+      expect(lateAfter.currentQuantity).toBe(lateBefore.currentQuantity);
+    });
+  });
+
   describe('RF-033: Notas Débito (Devoluciones en Compras a Proveedores)', () => {
     it('crea nota débito a proveedor descontando inventario, reduciendo cuenta por pagar y asiento contable balanceado', async () => {
       await setupStandardPucAndMappings();

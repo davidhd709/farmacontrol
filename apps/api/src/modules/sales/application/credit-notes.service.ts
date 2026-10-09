@@ -1,4 +1,10 @@
-import { Injectable, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+  Optional,
+} from '@nestjs/common';
 import { prisma, PrismaClient, Prisma } from '@farmacia/database';
 import {
   CreditNoteDto,
@@ -9,6 +15,17 @@ import { AccountingEngineService } from '../../accounting/application/accounting
 import { AuditService } from '../../audit/application/services/audit.service';
 import { parseMoneyToCents, centsToMoneyString } from '../../treasury/domain/treasury-rules';
 import { calculateNewCashBalanceCents } from '../../cash/domain/cash-rules';
+import { recordSourceBankMovement } from '../../treasury/application/record-source-bank-movement';
+import {
+  prorateCents,
+  resolveRefundMethod,
+  sortAllocationsFefo,
+  splitReturnAcrossLots,
+} from '../domain/credit-note-rules';
+
+function toCents(value: Prisma.Decimal | string | number, label: string): bigint {
+  return parseMoneyToCents(new Prisma.Decimal(value).toFixed(2), label);
+}
 
 type Tx = Parameters<Parameters<PrismaClient['$transaction']>[0]>[0];
 
@@ -82,10 +99,17 @@ export class CreditNotesService {
     if (!payload.items || payload.items.length === 0) {
       throw new BadRequestException('La nota crédito debe incluir al menos una línea a devolver.');
     }
+    const lineIds = payload.items.map((item) => item.saleLineId);
+    if (new Set(lineIds).size !== lineIds.length) {
+      throw new BadRequestException('Cada línea de venta debe aparecer una sola vez en la nota crédito.');
+    }
 
     return executeWithRetry(async () => {
       return this.client.$transaction(
         async (tx) => {
+          // Serializa con la anulación y con otras notas crédito de la misma venta
+          await tx.$queryRaw`SELECT id FROM sales WHERE id = ${saleId}::uuid FOR UPDATE`;
+
           // 1. Obtener venta con sus líneas y lotes asignados
           const sale = await tx.sale.findUnique({
             where: { id: saleId },
@@ -115,24 +139,44 @@ export class CreditNotesService {
             );
           }
 
-          // 2. Validar cantidades devueltas por línea
+          const refundMethod = resolveRefundMethod(sale.paymentMethod, payload.refundMethod);
+          if (!refundMethod) {
+            throw new BadRequestException(
+              `Medio de reembolso no soportado: '${payload.refundMethod}'. Use EFECTIVO, TRANSFERENCIA o CREDITO_CARTERA.`,
+            );
+          }
+          if (refundMethod === 'TRANSFERENCIA' && !sale.bankAccountId) {
+            throw new BadRequestException(
+              'La devolución por transferencia solo aplica a ventas pagadas por transferencia.',
+            );
+          }
+          if (refundMethod === 'CREDITO_CARTERA' && sale.paymentMethod !== 'CREDITO') {
+            throw new BadRequestException(
+              'La devolución a cartera solo aplica a ventas a crédito.',
+            );
+          }
+
+          // 2. Consecutivo de Nota Crédito: referencia de kardex, caja y banco
+          const count = await tx.creditNote.count();
+          const creditNoteNumber = `NC-${String(count + 1).padStart(6, '0')}`;
+          const shouldRestock = payload.restock !== false;
+
+          // 3. Validar cantidades y calcular montos por línea y por lote
           const creditLinesData: Array<{
             saleLineId: string;
             productId: string;
             lotId: string | null;
-            quantityCommercial: number;
+            quantityCommercial: Prisma.Decimal;
             quantityBaseUnits: number;
             unitPrice: Prisma.Decimal;
             subtotal: Prisma.Decimal;
             taxRate: Prisma.Decimal;
             taxAmount: Prisma.Decimal;
             total: Prisma.Decimal;
-            costBaseUnit: Prisma.Decimal;
           }> = [];
 
           let totalSubtotalCents = 0n;
           let totalTaxCents = 0n;
-          let totalReturnCents = 0n;
           let totalCostCents = 0n;
 
           for (const item of payload.items) {
@@ -143,125 +187,182 @@ export class CreditNotesService {
               );
             }
 
-            if (item.quantityCommercial <= 0) {
+            if (!(item.quantityCommercial > 0)) {
               throw new BadRequestException(
                 `La cantidad a devolver debe ser mayor a cero para el producto ${line.product.name}.`,
               );
             }
 
-            // Sumar cantidades ya acreditadas en notas crédito previas
-            let alreadyCredited = 0;
+            const factor = line.presentationFactorHistorical || 1;
+            const quantityBaseUnits = Math.round(item.quantityCommercial * factor);
+            if (Math.abs(item.quantityCommercial * factor - quantityBaseUnits) > 1e-6) {
+              throw new BadRequestException(
+                `La cantidad a devolver de ${line.product.name} debe equivaler a unidades base enteras.`,
+              );
+            }
+
+            // Lo ya acreditado se mide en unidades base y centavos, sin redondeos acumulados
+            let creditedBaseUnits = 0;
+            let creditedSubtotalCents = 0n;
+            let creditedTaxCents = 0n;
             for (const cn of sale.creditNotes) {
               for (const cnl of cn.lines) {
                 if (cnl.saleLineId === line.id) {
-                  alreadyCredited += Number(cnl.quantityCommercial);
+                  creditedBaseUnits += cnl.quantityBaseUnits;
+                  creditedSubtotalCents += toCents(cnl.subtotal, 'Subtotal acreditado');
+                  creditedTaxCents += toCents(cnl.taxAmount, 'IVA acreditado');
                 }
               }
             }
 
-            const maxAvailable = Number(line.quantityCommercial) - alreadyCredited;
-            if (item.quantityCommercial > maxAvailable + 0.0001) {
+            const remainingBaseUnits = line.quantityBaseUnits - creditedBaseUnits;
+            if (quantityBaseUnits > remainingBaseUnits) {
               throw new BadRequestException(
-                `Cantidad a devolver (${item.quantityCommercial}) excede el saldo disponible (${maxAvailable}) para ${line.product.name}.`,
+                `Cantidad a devolver (${item.quantityCommercial}) excede el saldo disponible (${remainingBaseUnits / factor}) para ${line.product.name}.`,
               );
             }
 
-            const factor = line.presentationFactorHistorical || 1;
-            const quantityBaseUnits = Math.round(item.quantityCommercial * factor);
+            // Prorrateo sobre los valores ya netos de descuento; la última devolución toma el resto exacto
+            const lineSubtotalCents = toCents(line.subtotal, 'Subtotal línea');
+            const lineTaxCents = toCents(line.taxAmount, 'IVA línea');
+            const isLastReturn = quantityBaseUnits === remainingBaseUnits;
+            const returnSubtotalCents = isLastReturn
+              ? lineSubtotalCents - creditedSubtotalCents
+              : prorateCents(lineSubtotalCents, quantityBaseUnits, line.quantityBaseUnits);
+            const returnTaxCents = isLastReturn
+              ? lineTaxCents - creditedTaxCents
+              : prorateCents(lineTaxCents, quantityBaseUnits, line.quantityBaseUnits);
 
-            // Seleccionar lote asignado originalmente
-            const lotId =
-              line.lotAllocations.length > 0 ? line.lotAllocations[0].lotId : null;
+            totalSubtotalCents += returnSubtotalCents;
+            totalTaxCents += returnTaxCents;
 
-            const unitPrice = new Prisma.Decimal(line.unitPrice);
-            const lineSubtotal = unitPrice.mul(new Prisma.Decimal(item.quantityCommercial));
-            const lineTaxRate = new Prisma.Decimal(line.taxRate);
-            const lineTax = lineSubtotal.mul(lineTaxRate).div(100);
-            const lineTotal = lineSubtotal.add(lineTax);
+            const unitCostCents = toCents(line.product.baseCost, 'Costo base');
+            totalCostCents += BigInt(quantityBaseUnits) * unitCostCents;
 
-            const lineSubCents = parseMoneyToCents(lineSubtotal.toFixed(2), 'Subtotal línea');
-            const lineTaxCents = parseMoneyToCents(lineTax.toFixed(2), 'IVA línea');
-            const lineTotCents = lineSubCents + lineTaxCents;
-
-            totalSubtotalCents += lineSubCents;
-            totalTaxCents += lineTaxCents;
-            totalReturnCents += lineTotCents;
-
-            const costPerUnit = new Prisma.Decimal(line.product.baseCost);
-            const lineCostCents = BigInt(quantityBaseUnits) * parseMoneyToCents(costPerUnit.toFixed(2), 'Costo base');
-            totalCostCents += lineCostCents;
-
-            creditLinesData.push({
-              saleLineId: line.id,
-              productId: line.productId,
-              lotId,
-              quantityCommercial: item.quantityCommercial,
+            const portions = splitReturnAcrossLots(
+              sortAllocationsFefo(line.lotAllocations),
+              creditedBaseUnits,
               quantityBaseUnits,
-              unitPrice,
-              subtotal: new Prisma.Decimal(centsToMoneyString(lineSubCents)),
-              taxRate: lineTaxRate,
-              taxAmount: new Prisma.Decimal(centsToMoneyString(lineTaxCents)),
-              total: new Prisma.Decimal(centsToMoneyString(lineTotCents)),
-              costBaseUnit: costPerUnit,
+            );
+
+            let assignedSubtotalCents = 0n;
+            let assignedTaxCents = 0n;
+            portions.forEach((portion, index) => {
+              const isLastPortion = index === portions.length - 1;
+              const subtotalCents = isLastPortion
+                ? returnSubtotalCents - assignedSubtotalCents
+                : prorateCents(returnSubtotalCents, portion.quantityBaseUnits, quantityBaseUnits);
+              const taxCents = isLastPortion
+                ? returnTaxCents - assignedTaxCents
+                : prorateCents(returnTaxCents, portion.quantityBaseUnits, quantityBaseUnits);
+              assignedSubtotalCents += subtotalCents;
+              assignedTaxCents += taxCents;
+
+              creditLinesData.push({
+                saleLineId: line.id,
+                productId: line.productId,
+                lotId: portion.lotId,
+                quantityCommercial: new Prisma.Decimal(portion.quantityBaseUnits)
+                  .div(factor)
+                  .toDecimalPlaces(2),
+                quantityBaseUnits: portion.quantityBaseUnits,
+                unitPrice: new Prisma.Decimal(line.unitPrice),
+                subtotal: new Prisma.Decimal(centsToMoneyString(subtotalCents)),
+                taxRate: new Prisma.Decimal(line.taxRate),
+                taxAmount: new Prisma.Decimal(centsToMoneyString(taxCents)),
+                total: new Prisma.Decimal(centsToMoneyString(subtotalCents + taxCents)),
+              });
             });
 
-            // 3. Reintegro a Inventario si restock === true
-            const shouldRestock = payload.restock !== false;
-            if (shouldRestock && lotId) {
-              const updatedLot = await tx.inventoryLot.update({
-                where: { id: lotId },
-                data: {
-                  currentQuantity: { increment: quantityBaseUnits },
-                },
-              });
+            // 4. Reintegro a cada lote de origen si restock === true
+            if (shouldRestock) {
+              for (const portion of portions) {
+                if (!portion.lotId) continue;
+                await tx.$queryRaw`SELECT id FROM inventory_lots WHERE id = ${portion.lotId}::uuid FOR UPDATE`;
+                const updatedLot = await tx.inventoryLot.update({
+                  where: { id: portion.lotId },
+                  data: {
+                    currentQuantity: { increment: portion.quantityBaseUnits },
+                  },
+                });
 
-              await tx.inventoryMovement.create({
-                data: {
-                  movementType: 'ENTRADA_DEVOLUCION_VENTA',
-                  productId: line.productId,
-                  lotId,
-                  presentationId: line.presentationId || null,
-                  quantityBaseUnits,
-                  presentationFactorHistorical: line.presentationFactorHistorical,
-                  balanceAfterBaseUnits: updatedLot.currentQuantity,
-                  referenceDocumentType: 'CREDIT_NOTE',
-                  referenceDocumentId: sale.invoiceNumber,
-                  notes: `Reintegro por devolución en venta ${sale.invoiceNumber} (${payload.reason})`,
-                  createdByUserId: userId,
-                },
-              });
+                await tx.inventoryMovement.create({
+                  data: {
+                    movementType: 'ENTRADA_DEVOLUCION_VENTA',
+                    productId: line.productId,
+                    lotId: portion.lotId,
+                    presentationId: line.presentationId || null,
+                    quantityBaseUnits: portion.quantityBaseUnits,
+                    presentationFactorHistorical: line.presentationFactorHistorical,
+                    balanceAfterBaseUnits: updatedLot.currentQuantity,
+                    referenceDocumentType: 'CREDIT_NOTE',
+                    referenceDocumentId: creditNoteNumber,
+                    notes: `Reintegro por devolución en venta ${sale.invoiceNumber} (${payload.reason})`,
+                    createdByUserId: userId,
+                  },
+                });
+              }
             }
           }
 
-          // 4. Consecutivo de Nota Crédito
-          const count = await tx.creditNote.count();
-          const creditNoteNumber = `NC-${String(count + 1).padStart(6, '0')}`;
-
-          const refundMethod =
-            payload.refundMethod ||
-            (sale.paymentMethod === 'CREDITO' ? 'CREDITO_CARTERA' : 'EFECTIVO');
+          const totalReturnCents = totalSubtotalCents + totalTaxCents;
 
           // 5. Ajuste financiero según método de reembolso
           if (refundMethod === 'CREDITO_CARTERA') {
-            const receivable = await tx.receivable.findUnique({
-              where: { saleId: sale.id },
-            });
-            if (receivable) {
-              const currentBalance = new Prisma.Decimal(receivable.balance);
-              const returnAmount = new Prisma.Decimal(centsToMoneyString(totalReturnCents));
-              const newBalance = currentBalance.sub(returnAmount);
-              const finalBalance = newBalance.lt(0) ? new Prisma.Decimal(0) : newBalance;
-
-              await tx.receivable.update({
-                where: { id: receivable.id },
-                data: {
-                  balance: finalBalance,
-                  status: finalBalance.isZero() ? 'PAGADA' : receivable.status,
-                  notes: `${receivable.notes || ''} [Nota Crédito ${creditNoteNumber}: -${returnAmount.toFixed(2)}]`.trim(),
-                },
-              });
+            const receivables = await tx.$queryRaw<
+              Array<{
+                id: string;
+                total_amount: Prisma.Decimal;
+                balance: Prisma.Decimal;
+                status: string;
+                notes: string | null;
+              }>
+            >`
+              SELECT id, total_amount, balance, status, notes
+              FROM receivables
+              WHERE sale_id = ${sale.id}::uuid
+              FOR UPDATE
+            `;
+            if (!receivables.length) {
+              throw new BadRequestException(
+                `La venta ${sale.invoiceNumber} no tiene cuenta por cobrar asociada.`,
+              );
             }
-          } else if (refundMethod === 'EFECTIVO') {
+            const receivable = receivables[0];
+            if (receivable.status === 'CANCELADA') {
+              throw new ConflictException(
+                `La cuenta por cobrar de la venta ${sale.invoiceNumber} está CANCELADA.`,
+              );
+            }
+            const balanceCents = toCents(receivable.balance, 'Saldo de cartera');
+            if (totalReturnCents > balanceCents) {
+              throw new ConflictException(
+                `La devolución (${centsToMoneyString(totalReturnCents)}) supera el saldo pendiente en cartera (${centsToMoneyString(balanceCents)}).`,
+              );
+            }
+            // Se reduce lo adeudado: total y saldo bajan juntos y lo abonado no cambia
+            const newTotalCents = toCents(receivable.total_amount, 'Total de cartera') - totalReturnCents;
+            const newBalanceCents = balanceCents - totalReturnCents;
+            await tx.receivable.update({
+              where: { id: receivable.id },
+              data: {
+                totalAmount: new Prisma.Decimal(centsToMoneyString(newTotalCents)),
+                balance: new Prisma.Decimal(centsToMoneyString(newBalanceCents)),
+                status: newBalanceCents === 0n ? 'PAGADA' : receivable.status,
+                notes: `${receivable.notes || ''} [Nota Crédito ${creditNoteNumber}: -${centsToMoneyString(totalReturnCents)}]`.trim(),
+              },
+            });
+          } else if (refundMethod === 'TRANSFERENCIA') {
+            await recordSourceBankMovement(tx, {
+              bankAccountId: sale.bankAccountId!,
+              movementType: 'WITHDRAWAL',
+              amount: centsToMoneyString(totalReturnCents),
+              concept: `Reembolso por Nota Crédito ${creditNoteNumber} de venta ${sale.invoiceNumber}`,
+              referenceDocumentType: 'CREDIT_NOTE',
+              referenceDocumentId: creditNoteNumber,
+              createdById: userId,
+            });
+          } else {
             await tx.$executeRaw`SELECT pg_advisory_xact_lock(742189321)`;
 
             const lastRows = await tx.$queryRaw<Array<{ balance_after: Prisma.Decimal }>>`
@@ -307,21 +408,10 @@ export class CreditNotesService {
               taxTotal: new Prisma.Decimal(centsToMoneyString(totalTaxCents)),
               total: new Prisma.Decimal(centsToMoneyString(totalReturnCents)),
               refundMethod,
-              restock: payload.restock !== false,
+              restock: shouldRestock,
               createdById: userId,
               lines: {
-                create: creditLinesData.map((cl) => ({
-                  saleLineId: cl.saleLineId,
-                  productId: cl.productId,
-                  lotId: cl.lotId,
-                  quantityCommercial: cl.quantityCommercial,
-                  quantityBaseUnits: cl.quantityBaseUnits,
-                  unitPrice: cl.unitPrice,
-                  subtotal: cl.subtotal,
-                  taxRate: cl.taxRate,
-                  taxAmount: cl.taxAmount,
-                  total: cl.total,
-                })),
+                create: creditLinesData,
               },
             },
             include: {

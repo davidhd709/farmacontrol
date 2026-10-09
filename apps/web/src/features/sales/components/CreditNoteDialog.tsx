@@ -36,6 +36,14 @@ interface Props {
 
 type RefundMethod = NonNullable<CreateCreditNotePayload['refundMethod']>;
 
+// El dinero vuelve por el mismo medio con el que se pagó la venta
+const defaultRefundMethod = (paymentMethod: string): RefundMethod =>
+  paymentMethod === 'CREDITO'
+    ? 'CREDITO_CARTERA'
+    : paymentMethod === 'TRANSFERENCIA'
+      ? 'TRANSFERENCIA'
+      : 'EFECTIVO';
+
 const money = (n: number) =>
   `$${n.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -52,7 +60,7 @@ export const CreditNoteDialog: React.FC<Props> = ({ open, sale, onClose, onCreat
       setQuantities({});
       setReason('');
       setRestock(true);
-      setRefundMethod(sale.paymentMethod === 'CREDITO' ? 'CREDITO_CARTERA' : 'EFECTIVO');
+      setRefundMethod(defaultRefundMethod(sale.paymentMethod));
       setError(null);
     }
   }, [open, sale]);
@@ -62,8 +70,8 @@ export const CreditNoteDialog: React.FC<Props> = ({ open, sale, onClose, onCreat
     return sale.lines.reduce((acc, line) => {
       const q = Number(quantities[line.id] || 0);
       if (!q || q <= 0) return acc;
-      const sub = Number(line.unitPrice) * q;
-      return acc + sub + (sub * Number(line.taxRate)) / 100;
+      // Valor neto de descuento e IVA, proporcional a lo devuelto
+      return acc + (Number(line.total) * q) / Number(line.quantityCommercial);
     }, 0);
   }, [sale, quantities]);
 
@@ -169,9 +177,12 @@ export const CreditNoteDialog: React.FC<Props> = ({ open, sale, onClose, onCreat
                 onChange={(e) => setRefundMethod(e.target.value as RefundMethod)}
               >
                 <MenuItem value="EFECTIVO">Efectivo (egreso de caja)</MenuItem>
-                <MenuItem value="CREDITO_CARTERA">Abono a cartera del cliente</MenuItem>
-                <MenuItem value="TRANSFERENCIA">Transferencia</MenuItem>
-                <MenuItem value="SALDO_A_FAVOR">Saldo a favor</MenuItem>
+                {sale.paymentMethod === 'CREDITO' && (
+                  <MenuItem value="CREDITO_CARTERA">Abono a cartera del cliente</MenuItem>
+                )}
+                {sale.paymentMethod === 'TRANSFERENCIA' && (
+                  <MenuItem value="TRANSFERENCIA">Transferencia (retiro de la cuenta de la venta)</MenuItem>
+                )}
               </Select>
             </FormControl>
             <FormControlLabel
@@ -189,6 +200,8 @@ export const CreditNoteDialog: React.FC<Props> = ({ open, sale, onClose, onCreat
               {restock ? ', reintegro de inventario y reversión del costo' : ''}).
               {refundMethod === 'EFECTIVO' && ' Se registrará un egreso en caja.'}
               {refundMethod === 'CREDITO_CARTERA' && ' Se reducirá el saldo de la cuenta por cobrar.'}
+              {refundMethod === 'TRANSFERENCIA' &&
+                ' Se registrará un retiro en la cuenta bancaria de la venta.'}
             </Typography>
           </Alert>
 

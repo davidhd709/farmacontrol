@@ -376,7 +376,7 @@ export interface CreateCreditNoteLinePayload {
 export interface CreateCreditNotePayload {
   saleId: string;
   reason: string;
-  refundMethod?: 'EFECTIVO' | 'CREDITO_CARTERA' | 'TRANSFERENCIA' | 'SALDO_A_FAVOR';
+  refundMethod?: 'EFECTIVO' | 'CREDITO_CARTERA' | 'TRANSFERENCIA';
   restock?: boolean;
   items: CreateCreditNoteLinePayload[];
 }
