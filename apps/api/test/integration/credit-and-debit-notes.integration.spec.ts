@@ -983,6 +983,110 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
       expect(codes).toContain('143501'); // Inventario reducido (Crédito)
     });
 
+    describe('AUD-009: la nota débito conserva saldo = total - pagado en la cuenta por pagar', () => {
+      async function receivedPurchaseWithPayable(amountPaid: number) {
+        await setupStandardPucAndMappings();
+        const location = await prisma.location.findFirstOrThrow();
+        const supplier = await prisma.supplier.create({
+          data: { taxId: '900555444-1', name: 'Proveedor AUD-009' },
+        });
+        const category = await prisma.category.create({ data: { name: 'Categoría AUD-009' } });
+        const product = await prisma.product.create({
+          data: { code: 'AUD009', name: 'Producto AUD-009', basePrice: 2000, baseCost: 1000, categoryId: category.id },
+        });
+        const lot = await prisma.inventoryLot.create({
+          data: {
+            productId: product.id,
+            locationId: location.id,
+            lotNumber: 'LOT-AUD009',
+            expirationDate: new Date('2029-06-30'),
+            currentQuantity: 10,
+          },
+        });
+        const purchase = await prisma.purchase.create({
+          data: {
+            supplierId: supplier.id,
+            invoiceNumber: 'FAC-AUD009',
+            status: 'RECEIVED',
+            purchaseDate: new Date('2026-10-01'),
+            totalAmount: 10000,
+            receivedByUserId: adminUserId,
+          },
+        });
+        const purchaseLine = await prisma.purchaseLine.create({
+          data: {
+            purchaseId: purchase.id,
+            productId: product.id,
+            lotId: lot.id,
+            quantityCommercial: 10,
+            quantityBaseUnits: 10,
+            unitCost: 1000,
+            subtotal: 10000,
+            lotNumber: 'LOT-AUD009',
+            expirationDate: new Date('2029-06-30'),
+          },
+        });
+        const payable = await prisma.payable.create({
+          data: {
+            purchaseId: purchase.id,
+            supplierId: supplier.id,
+            totalAmount: 10000,
+            amountPaid,
+            balance: 10000 - amountPaid,
+            status: amountPaid === 10000 ? 'PAGADA' : 'PENDIENTE',
+            dueDate: new Date('2026-11-01'),
+          },
+        });
+        const returnUnits = (quantityCommercial: number) =>
+          debitNotesService.createDebitNote(
+            purchase.id,
+            {
+              purchaseId: purchase.id,
+              reason: 'Unidades defectuosas',
+              items: [{ purchaseLineId: purchaseLine.id, quantityCommercial }],
+            },
+            adminUserId,
+          );
+        return { payableId: payable.id, lotId: lot.id, returnUnits };
+      }
+
+      it('reduce total y saldo juntos y no toca lo pagado', async () => {
+        const { payableId, returnUnits } = await receivedPurchaseWithPayable(2000);
+
+        await returnUnits(3);
+
+        const payable = await prisma.payable.findUniqueOrThrow({ where: { id: payableId } });
+        expect(payable.totalAmount.toString()).toBe('7000');
+        expect(payable.amountPaid.toString()).toBe('2000');
+        expect(payable.balance.toString()).toBe('5000');
+        expect(payable.status).toBe('PENDIENTE');
+      });
+
+      it('marca la cuenta como PAGADA cuando la devolución cubre exactamente el saldo', async () => {
+        const { payableId, returnUnits } = await receivedPurchaseWithPayable(7000);
+
+        await returnUnits(3);
+
+        const payable = await prisma.payable.findUniqueOrThrow({ where: { id: payableId } });
+        expect(payable.totalAmount.toString()).toBe('7000');
+        expect(payable.balance.toString()).toBe('0');
+        expect(payable.status).toBe('PAGADA');
+      });
+
+      it('rechaza una devolución mayor al saldo pendiente sin mover inventario ni cartera', async () => {
+        const { payableId, lotId, returnUnits } = await receivedPurchaseWithPayable(8000);
+
+        await expect(returnUnits(3)).rejects.toThrow(/saldo pendiente/);
+
+        const payable = await prisma.payable.findUniqueOrThrow({ where: { id: payableId } });
+        expect(payable.totalAmount.toString()).toBe('10000');
+        expect(payable.balance.toString()).toBe('2000');
+        const lot = await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lotId } });
+        expect(lot.currentQuantity).toBe(10);
+        expect(await prisma.debitNote.count()).toBe(0);
+      });
+    });
+
     it('bloquea nota débito cuando el inventario del lote es insuficiente para devolver', async () => {
       await setupStandardPucAndMappings();
       const location = await prisma.location.findFirstOrThrow();

@@ -1,4 +1,10 @@
-import { Injectable, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+  Optional,
+} from '@nestjs/common';
 import { prisma, PrismaClient, Prisma } from '@farmacia/database';
 import {
   DebitNoteDto,
@@ -233,26 +239,47 @@ export class DebitNotesService {
           const count = await tx.debitNote.count();
           const debitNoteNumber = `ND-${String(count + 1).padStart(6, '0')}`;
 
-          // 4. Ajuste en Cuentas por Pagar (Payables) si existe
-          const payable = await tx.payable.findUnique({
-            where: { purchaseId: purchase.id },
-          });
-
-          if (payable) {
-            const currentBalance = new Prisma.Decimal(payable.balance);
-            const debitAmount = new Prisma.Decimal(centsToMoneyString(totalDebitCents));
-            const newBalance = currentBalance.sub(debitAmount);
-            const finalBalance = newBalance.lt(0) ? new Prisma.Decimal(0) : newBalance;
-
-            await tx.payable.update({
-              where: { id: payable.id },
-              data: {
-                balance: finalBalance,
-                status: finalBalance.isZero() ? 'PAGADA' : payable.status,
-                notes: `${payable.notes || ''} [Nota Débito ${debitNoteNumber}: -${debitAmount.toFixed(2)}]`.trim(),
-              },
-            });
+          // 4. Ajuste en Cuentas por Pagar: lo adeudado baja y lo pagado no cambia
+          const payables = await tx.$queryRaw<
+            Array<{
+              id: string;
+              total_amount: Prisma.Decimal;
+              balance: Prisma.Decimal;
+              status: string;
+              notes: string | null;
+            }>
+          >`
+            SELECT id, total_amount, balance, status, notes
+            FROM payables
+            WHERE purchase_id = ${purchase.id}::uuid
+            FOR UPDATE
+          `;
+          if (!payables.length) {
+            throw new BadRequestException(
+              `La compra ${purchase.invoiceNumber} no tiene cuenta por pagar asociada.`,
+            );
           }
+          const payable = payables[0];
+          const balanceCents = parseMoneyToCents(payable.balance.toString(), 'Saldo por pagar');
+          if (totalDebitCents > balanceCents) {
+            // El asiento debita Proveedores por el total: recortar el saldo descuadraría la cartera
+            throw new ConflictException(
+              `La devolución (${centsToMoneyString(totalDebitCents)}) supera el saldo pendiente de la cuenta por pagar (${centsToMoneyString(balanceCents)}).`,
+            );
+          }
+          const newTotalCents =
+            parseMoneyToCents(payable.total_amount.toString(), 'Total por pagar') - totalDebitCents;
+          const newBalanceCents = balanceCents - totalDebitCents;
+
+          await tx.payable.update({
+            where: { id: payable.id },
+            data: {
+              totalAmount: new Prisma.Decimal(centsToMoneyString(newTotalCents)),
+              balance: new Prisma.Decimal(centsToMoneyString(newBalanceCents)),
+              status: newBalanceCents === 0n ? 'PAGADA' : payable.status,
+              notes: `${payable.notes || ''} [Nota Débito ${debitNoteNumber}: -${centsToMoneyString(totalDebitCents)}]`.trim(),
+            },
+          });
 
           // 5. Guardar la Nota Débito y sus líneas
           const debitNote = await tx.debitNote.create({
