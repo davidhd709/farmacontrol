@@ -5,6 +5,7 @@ import {
   SaleLineDto,
   SaleLotAllocationDto,
 } from '@farmacia/contracts';
+import { centsToNumber, divideHalfUp, toHundredths } from './sale-money';
 
 export interface SaleLotAllocationProps {
   id: string;
@@ -129,12 +130,30 @@ export class SaleLine {
     }
 
     const factor = payload.presentationFactorHistorical ?? 1;
-    const quantityBaseUnits = Math.round(payload.quantityCommercial * factor);
-    const discount = payload.discount ?? 0;
-    const subtotal = Math.max(0, payload.quantityCommercial * payload.unitPrice - discount);
+    const exactBaseUnits = payload.quantityCommercial * factor;
+    const quantityBaseUnits = Math.round(exactBaseUnits);
+    // El inventario se lleva en unidades base enteras: no se redondea en silencio
+    if (Math.abs(exactBaseUnits - quantityBaseUnits) > 1e-6) {
+      throw new Error(
+        `La cantidad ${payload.quantityCommercial} con factor ${factor} no equivale a unidades base enteras.`,
+      );
+    }
+
+    // Importes en centavos exactos; IVA en puntos básicos (tarifa con dos decimales)
+    const quantityHundredths = toHundredths(payload.quantityCommercial, 'La cantidad vendida');
+    const unitPriceCents = toHundredths(payload.unitPrice, 'El precio unitario');
+    const discountCents = toHundredths(payload.discount ?? 0, 'El descuento');
+    const taxRateBasisPoints = toHundredths(payload.taxRate ?? 0, 'La tarifa de IVA');
+
+    const grossCents = divideHalfUp(quantityHundredths * unitPriceCents, 100n);
+    const subtotalCents = grossCents > discountCents ? grossCents - discountCents : 0n;
+    const taxCents = divideHalfUp(subtotalCents * taxRateBasisPoints, 10000n);
+
+    const discount = centsToNumber(discountCents);
+    const subtotal = centsToNumber(subtotalCents);
     const taxRate = payload.taxRate ?? 0;
-    const taxAmount = Math.round(subtotal * (taxRate / 100) * 100) / 100;
-    const total = subtotal + taxAmount;
+    const taxAmount = centsToNumber(taxCents);
+    const total = centsToNumber(subtotalCents + taxCents);
 
     return new SaleLine({
       id: payload.id ?? crypto.randomUUID(),
@@ -289,18 +308,33 @@ export class Sale {
       throw new Error('Una venta debe contener al menos un producto');
     }
 
-    const subtotal = payload.lines.reduce((acc, l) => acc + l.subtotal, 0);
-    const taxTotal = payload.lines.reduce((acc, l) => acc + l.taxAmount, 0);
-    const discountTotal = payload.lines.reduce((acc, l) => acc + l.discount, 0);
-    const total = payload.lines.reduce((acc, l) => acc + l.total, 0);
+    const sumCents = (pick: (l: SaleLine) => number, label: string) =>
+      payload.lines.reduce((acc, l) => acc + toHundredths(pick(l), label), 0n);
+    const subtotalCents = sumCents((l) => l.subtotal, 'Subtotal de línea');
+    const taxTotalCents = sumCents((l) => l.taxAmount, 'IVA de línea');
+    const discountTotalCents = sumCents((l) => l.discount, 'Descuento de línea');
+    const totalCents = sumCents((l) => l.total, 'Total de línea');
 
-    const amountPaid = payload.amountPaid !== undefined ? payload.amountPaid : total;
-    if (payload.paymentMethod === 'EFECTIVO' && amountPaid < total) {
+    const amountPaidCents =
+      payload.amountPaid !== undefined
+        ? toHundredths(payload.amountPaid, 'El monto recibido')
+        : totalCents;
+    if (payload.paymentMethod === 'EFECTIVO' && amountPaidCents < totalCents) {
       throw new Error(
-        `El monto recibido ($${amountPaid}) no cubre el valor total de la venta ($${total})`,
+        `El monto recibido ($${centsToNumber(amountPaidCents)}) no cubre el valor total de la venta ($${centsToNumber(totalCents)})`,
       );
     }
-    const changeGiven = payload.paymentMethod === 'EFECTIVO' ? Math.max(0, amountPaid - total) : 0;
+    const changeCents =
+      payload.paymentMethod === 'EFECTIVO' && amountPaidCents > totalCents
+        ? amountPaidCents - totalCents
+        : 0n;
+
+    const subtotal = centsToNumber(subtotalCents);
+    const taxTotal = centsToNumber(taxTotalCents);
+    const discountTotal = centsToNumber(discountTotalCents);
+    const total = centsToNumber(totalCents);
+    const amountPaid = centsToNumber(amountPaidCents);
+    const changeGiven = centsToNumber(changeCents);
 
     const now = new Date();
     return new Sale({
