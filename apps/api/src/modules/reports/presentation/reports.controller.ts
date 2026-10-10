@@ -1,10 +1,5 @@
-import {
-  Controller,
-  Get,
-  Query,
-  Res,
-  UseGuards,
-} from '@nestjs/common';
+import { QueryFieldValidationPipe } from '../../../common/pagination/request-shape.pipe';
+import { Controller, Get, Query, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import { ReportsService } from '../application/reports.service';
 import { SYSTEM_PERMISSIONS } from '@farmacia/contracts';
@@ -24,7 +19,7 @@ export class ReportsController {
    */
   @Get('inventory-valuation')
   async getInventoryValuation(
-    @Query('format') format: string | undefined,
+    @Query('format', new QueryFieldValidationPipe('format', 'text?')) format: string | undefined,
     @Res() res: Response,
   ) {
     const data = await this.reportsService.getInventoryValuationReport();
@@ -48,7 +43,7 @@ export class ReportsController {
    */
   @Get('expirations')
   async getExpirations(
-    @Query('format') format: string | undefined,
+    @Query('format', new QueryFieldValidationPipe('format', 'text?')) format: string | undefined,
     @Res() res: Response,
   ) {
     const data = await this.reportsService.getExpirationsReport();
@@ -72,7 +67,7 @@ export class ReportsController {
    */
   @Get('supplier-returns')
   async getSupplierReturns(
-    @Query('format') format: string | undefined,
+    @Query('format', new QueryFieldValidationPipe('format', 'text?')) format: string | undefined,
     @Res() res: Response,
   ) {
     const data = await this.reportsService.getSupplierReturnsReport();
@@ -96,9 +91,10 @@ export class ReportsController {
    */
   @Get('sales')
   async getSales(
-    @Query('fromDate') fromDate: string | undefined,
-    @Query('toDate') toDate: string | undefined,
-    @Query('format') format: string | undefined,
+    @Query('fromDate', new QueryFieldValidationPipe('fromDate', 'date?'))
+    fromDate: string | undefined,
+    @Query('toDate', new QueryFieldValidationPipe('toDate', 'date?')) toDate: string | undefined,
+    @Query('format', new QueryFieldValidationPipe('format', 'text?')) format: string | undefined,
     @Res() res: Response,
   ) {
     const data = await this.reportsService.getSalesReport({ fromDate, toDate });
@@ -122,9 +118,10 @@ export class ReportsController {
    */
   @Get('cash-summary')
   async getCashSummary(
-    @Query('fromDate') fromDate: string | undefined,
-    @Query('toDate') toDate: string | undefined,
-    @Query('format') format: string | undefined,
+    @Query('fromDate', new QueryFieldValidationPipe('fromDate', 'date?'))
+    fromDate: string | undefined,
+    @Query('toDate', new QueryFieldValidationPipe('toDate', 'date?')) toDate: string | undefined,
+    @Query('format', new QueryFieldValidationPipe('format', 'text?')) format: string | undefined,
     @Res() res: Response,
   ) {
     const data = await this.reportsService.getCashSummaryReport({ fromDate, toDate });

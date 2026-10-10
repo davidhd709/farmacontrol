@@ -1,4 +1,9 @@
 import {
+  RequestShapeValidationPipe,
+  QueryShapeValidationPipe,
+} from '../../../common/pagination/request-shape.pipe';
+import { PaginationQueryPipe } from '../../../common/pagination/pagination';
+import {
   BadRequestException,
   Body,
   ConflictException,
@@ -9,6 +14,7 @@ import {
   Post,
   Query,
   UseGuards,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import {
   SYSTEM_PERMISSIONS,
@@ -43,7 +49,19 @@ export class JournalController {
 
   @Get()
   @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_READ)
-  async findAll(@Query() query: JournalEntryQueryFilters): Promise<PaginatedResponse<JournalEntryDto>> {
+  async findAll(
+    @Query(
+      new QueryShapeValidationPipe({
+        fromDate: 'date?',
+        toDate: 'date?',
+        sourceType: 'text?',
+        status: 'text?',
+        search: 'text?',
+      }),
+      PaginationQueryPipe,
+    )
+    query: JournalEntryQueryFilters,
+  ): Promise<PaginatedResponse<JournalEntryDto>> {
     try {
       return await this.journalService.findAll(query);
     } catch (error) {
@@ -53,7 +71,7 @@ export class JournalController {
 
   @Get(':id')
   @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_READ)
-  async findById(@Param('id') id: string): Promise<JournalEntryDto> {
+  async findById(@Param('id', ParseUUIDPipe) id: string): Promise<JournalEntryDto> {
     try {
       return await this.journalService.findById(id);
     } catch (error) {
@@ -64,8 +82,9 @@ export class JournalController {
   @Post(':id/reverse')
   @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_MANAGE)
   async reverse(
-    @Param('id') id: string,
-    @Body() body: ReverseJournalEntryPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new RequestShapeValidationPipe({ entryDate: 'date?', reason: 'text' }))
+    body: ReverseJournalEntryPayload,
     @CurrentUser() user: AuthenticatedUserContext,
   ): Promise<JournalEntryDto> {
     try {

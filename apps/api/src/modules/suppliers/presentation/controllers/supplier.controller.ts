@@ -1,3 +1,4 @@
+import { QueryShapeValidationPipe } from '../../../../common/pagination/request-shape.pipe';
 import {
   Controller,
   Get,
@@ -15,6 +16,7 @@ import {
   ConflictException,
   BadRequestException,
   ForbiddenException,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { SYSTEM_PERMISSIONS, SupplierDto, PaginatedResponse } from '@farmacia/contracts';
@@ -69,14 +71,18 @@ export class SupplierController {
   @Get()
   @RequirePermissions(SYSTEM_PERMISSIONS.SUPPLIERS_READ)
   public async findAll(
-    @Query(SupplierQueryValidationPipe) query: any,
+    @Query(
+      new QueryShapeValidationPipe({ search: 'text?', isActive: 'booleanString?' }),
+      SupplierQueryValidationPipe,
+    )
+    query: any,
   ): Promise<PaginatedResponse<SupplierDto>> {
     return this.supplierService.getSuppliers(query);
   }
 
   @Get(':id')
   @RequirePermissions(SYSTEM_PERMISSIONS.SUPPLIERS_READ)
-  public async findOne(@Param('id') id: string): Promise<SupplierDto> {
+  public async findOne(@Param('id', ParseUUIDPipe) id: string): Promise<SupplierDto> {
     try {
       const supplier = await this.supplierService.getSupplierById(id);
       return supplier.toDto();
@@ -91,7 +97,7 @@ export class SupplierController {
   @Put(':id')
   @RequirePermissions(SYSTEM_PERMISSIONS.SUPPLIERS_MANAGE)
   public async update(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body(UpdateSupplierValidationPipe) dto: UpdateSupplierDto,
     @CurrentUser() user: AuthenticatedUserContext,
     @Req() req: Request,
@@ -125,7 +131,7 @@ export class SupplierController {
   @HttpCode(HttpStatus.OK)
   @RequirePermissions(SYSTEM_PERMISSIONS.SUPPLIERS_MANAGE)
   public async deactivate(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: AuthenticatedUserContext,
     @Req() req: Request,
   ): Promise<SupplierDto> {

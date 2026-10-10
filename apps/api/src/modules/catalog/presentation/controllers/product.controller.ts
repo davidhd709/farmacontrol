@@ -1,3 +1,5 @@
+import { QueryFieldValidationPipe } from '../../../../common/pagination/request-shape.pipe';
+import { parsePaginationValue } from '../../../../common/pagination/pagination';
 import {
   BadRequestException,
   Body,
@@ -14,22 +16,13 @@ import {
   Query,
   Req,
   UseGuards,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import {
-  type PaginatedResponse,
-  type ProductDto,
-  SYSTEM_PERMISSIONS,
-} from '@farmacia/contracts';
+import { type PaginatedResponse, type ProductDto, SYSTEM_PERMISSIONS } from '@farmacia/contracts';
 import { ProductService } from '../../application/services/product.service';
-import {
-  CreateProductDto,
-  CreateProductValidationPipe,
-} from '../dtos/create-product.dto';
-import {
-  UpdateProductDto,
-  UpdateProductValidationPipe,
-} from '../dtos/update-product.dto';
+import { CreateProductDto, CreateProductValidationPipe } from '../dtos/create-product.dto';
+import { UpdateProductDto, UpdateProductValidationPipe } from '../dtos/update-product.dto';
 import {
   type AuthenticatedUserContext,
   SessionAuthGuard,
@@ -94,10 +87,15 @@ export class ProductController {
   @HttpCode(HttpStatus.OK)
   @RequirePermissions(SYSTEM_PERMISSIONS.PRODUCTS_READ)
   public async list(
-    @Query('search') search?: string,
-    @Query('categoryId') categoryId?: string,
-    @Query('requiresLotControl') requiresLotControl?: string,
-    @Query('isActive') isActive?: string,
+    @Query('search', new QueryFieldValidationPipe('search', 'text?')) search?: string,
+    @Query('categoryId', new QueryFieldValidationPipe('categoryId', 'uuid?')) categoryId?: string,
+    @Query(
+      'requiresLotControl',
+      new QueryFieldValidationPipe('requiresLotControl', 'booleanString?'),
+    )
+    requiresLotControl?: string,
+    @Query('isActive', new QueryFieldValidationPipe('isActive', 'booleanString?'))
+    isActive?: string,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
   ): Promise<PaginatedResponse<ProductDto>> {
@@ -109,8 +107,8 @@ export class ProductController {
     if (requiresLotControl === 'true') parsedRequiresLotControl = true;
     if (requiresLotControl === 'false') parsedRequiresLotControl = false;
 
-    const parsedPage = page ? parseInt(page, 10) : undefined;
-    const parsedPageSize = pageSize ? parseInt(pageSize, 10) : undefined;
+    const parsedPage = parsePaginationValue(page, 'page');
+    const parsedPageSize = parsePaginationValue(pageSize, 'pageSize');
 
     return this.productService.listProducts({
       search,
@@ -129,7 +127,7 @@ export class ProductController {
   @Get(':id')
   @HttpCode(HttpStatus.OK)
   @RequirePermissions(SYSTEM_PERMISSIONS.PRODUCTS_READ)
-  public async getById(@Param('id') id: string): Promise<ProductDto> {
+  public async getById(@Param('id', ParseUUIDPipe) id: string): Promise<ProductDto> {
     try {
       return await this.productService.getProductDtoById(id);
     } catch (err) {
@@ -148,7 +146,7 @@ export class ProductController {
   @HttpCode(HttpStatus.OK)
   @RequirePermissions(SYSTEM_PERMISSIONS.PRODUCTS_MANAGE)
   public async update(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body(UpdateProductValidationPipe) dto: UpdateProductDto,
     @CurrentUser() user: AuthenticatedUserContext,
     @Req() req: Request,
@@ -189,7 +187,7 @@ export class ProductController {
   @HttpCode(HttpStatus.OK)
   @RequirePermissions(SYSTEM_PERMISSIONS.PRODUCTS_MANAGE)
   public async deactivate(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: AuthenticatedUserContext,
     @Req() req: Request,
   ): Promise<ProductDto> {

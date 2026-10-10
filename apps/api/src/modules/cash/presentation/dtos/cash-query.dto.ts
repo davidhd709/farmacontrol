@@ -1,9 +1,6 @@
+import { parsePaginationValue } from '../../../../common/pagination/pagination';
 import { PipeTransform, Injectable } from '@nestjs/common';
-import {
-  CashMovementType,
-  PaymentMethod,
-  CashMovementQueryFilters,
-} from '@farmacia/contracts';
+import { CashMovementType, PaymentMethod, CashMovementQueryFilters } from '@farmacia/contracts';
 
 export class CashMovementQueryDto implements CashMovementQueryFilters {
   movementType?: CashMovementType;
@@ -41,17 +38,11 @@ export class CashMovementQueryValidationPipe implements PipeTransform {
     }
 
     if (query.page !== undefined) {
-      const page = parseInt(String(query.page), 10);
-      if (!isNaN(page) && page > 0) {
-        result.page = page;
-      }
+      result.page = parsePaginationValue(query.page, 'page');
     }
 
     if (query.limit !== undefined) {
-      const limit = parseInt(String(query.limit), 10);
-      if (!isNaN(limit) && limit > 0) {
-        result.limit = limit;
-      }
+      result.limit = parsePaginationValue(query.limit, 'limit');
     }
 
     return result;

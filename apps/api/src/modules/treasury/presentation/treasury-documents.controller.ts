@@ -1,3 +1,5 @@
+import { QueryFieldValidationPipe } from '../../../common/pagination/request-shape.pipe';
+import { parsePaginationValue } from '../../../common/pagination/pagination';
 import {
   BadRequestException,
   Controller,
@@ -6,6 +8,7 @@ import {
   Param,
   Query,
   UseGuards,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import {
   SYSTEM_PERMISSIONS,
@@ -34,10 +37,10 @@ export class TreasuryDocumentsController {
   @Get()
   @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_READ)
   async list(
-    @Query('type') type?: TreasuryDocumentType,
-    @Query('fromDate') fromDate?: string,
-    @Query('toDate') toDate?: string,
-    @Query('search') search?: string,
+    @Query('type', new QueryFieldValidationPipe('type', 'text?')) type?: TreasuryDocumentType,
+    @Query('fromDate', new QueryFieldValidationPipe('fromDate', 'date?')) fromDate?: string,
+    @Query('toDate', new QueryFieldValidationPipe('toDate', 'date?')) toDate?: string,
+    @Query('search', new QueryFieldValidationPipe('search', 'text?')) search?: string,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
   ): Promise<PaginatedResponse<TreasuryDocumentDto>> {
@@ -47,8 +50,8 @@ export class TreasuryDocumentsController {
         fromDate,
         toDate,
         search,
-        page: page ? Number(page) : undefined,
-        pageSize: pageSize ? Number(pageSize) : undefined,
+        page: parsePaginationValue(page, 'page'),
+        pageSize: parsePaginationValue(pageSize, 'pageSize'),
       });
     } catch (error) {
       toHttp(error);
@@ -57,7 +60,7 @@ export class TreasuryDocumentsController {
 
   @Get(':id')
   @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_READ)
-  async getById(@Param('id') id: string): Promise<TreasuryDocumentDto> {
+  async getById(@Param('id', ParseUUIDPipe) id: string): Promise<TreasuryDocumentDto> {
     try {
       return await this.documentsService.getById(id);
     } catch (error) {

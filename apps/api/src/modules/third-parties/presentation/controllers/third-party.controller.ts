@@ -1,3 +1,4 @@
+import { QueryShapeValidationPipe } from '../../../../common/pagination/request-shape.pipe';
 import {
   Controller,
   Get,
@@ -14,6 +15,7 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import {
@@ -79,14 +81,18 @@ export class ThirdPartyController {
   @Get()
   @RequirePermissions(SYSTEM_PERMISSIONS.THIRD_PARTIES_READ)
   public async findPaginated(
-    @Query(ThirdPartyQueryValidationPipe) filters: ThirdPartyQueryFilters,
+    @Query(
+      new QueryShapeValidationPipe({ search: 'text?', role: 'text?', isActive: 'booleanString?' }),
+      ThirdPartyQueryValidationPipe,
+    )
+    filters: ThirdPartyQueryFilters,
   ): Promise<PaginatedResponse<ThirdPartyDto>> {
     return this.thirdPartyService.findPaginated(filters);
   }
 
   @Get(':id')
   @RequirePermissions(SYSTEM_PERMISSIONS.THIRD_PARTIES_READ)
-  public async getById(@Param('id') id: string): Promise<ThirdPartyDto> {
+  public async getById(@Param('id', ParseUUIDPipe) id: string): Promise<ThirdPartyDto> {
     try {
       const thirdParty = await this.thirdPartyService.getThirdPartyById(id);
       return thirdParty.toDto();
@@ -101,7 +107,7 @@ export class ThirdPartyController {
   @Put(':id')
   @RequirePermissions(SYSTEM_PERMISSIONS.THIRD_PARTIES_MANAGE)
   public async update(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body(UpdateThirdPartyValidationPipe) dto: UpdateThirdPartyDto,
     @CurrentUser() user: AuthenticatedUserContext,
     @Req() req: Request,
@@ -130,7 +136,7 @@ export class ThirdPartyController {
   @Patch(':id/deactivate')
   @RequirePermissions(SYSTEM_PERMISSIONS.THIRD_PARTIES_MANAGE)
   public async deactivate(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: AuthenticatedUserContext,
     @Req() req: Request,
   ): Promise<ThirdPartyDto> {
@@ -152,7 +158,7 @@ export class ThirdPartyController {
   @Patch(':id/activate')
   @RequirePermissions(SYSTEM_PERMISSIONS.THIRD_PARTIES_MANAGE)
   public async activate(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: AuthenticatedUserContext,
     @Req() req: Request,
   ): Promise<ThirdPartyDto> {

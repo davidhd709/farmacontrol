@@ -1,3 +1,4 @@
+import { RequestShapeValidationPipe } from '../../../common/pagination/request-shape.pipe';
 import {
   BadRequestException,
   Body,
@@ -29,7 +30,16 @@ export class ManualNotesController {
   @Post()
   @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_MANAGE)
   async create(
-    @Body() body: CreateManualNotePayload,
+    @Body(
+      new RequestShapeValidationPipe({
+        entryDate: 'date',
+        description: 'text',
+        lines: {
+          arrayOf: { accountId: 'uuid', debit: 'decimal', credit: 'decimal', description: 'text?' },
+        },
+      }),
+    )
+    body: CreateManualNotePayload,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
     @CurrentUser() user: AuthenticatedUserContext,
   ): Promise<ManualNoteCreatedDto> {
@@ -37,7 +47,10 @@ export class ManualNotesController {
       return await this.manualNotesService.create(body, user.id, idempotencyKey);
     } catch (error) {
       if (error instanceof AccountingValidationError) throw new BadRequestException(error.message);
-      if (error instanceof AccountingConflictError || error instanceof IdempotencyConflictException) {
+      if (
+        error instanceof AccountingConflictError ||
+        error instanceof IdempotencyConflictException
+      ) {
         throw new ConflictException(error.message);
       }
       throw error;

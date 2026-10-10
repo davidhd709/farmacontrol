@@ -1,4 +1,8 @@
 import {
+  RequestShapeValidationPipe,
+  QueryFieldValidationPipe,
+} from '../../../common/pagination/request-shape.pipe';
+import {
   BadRequestException,
   Body,
   ConflictException,
@@ -10,6 +14,7 @@ import {
   Post,
   Query,
   UseGuards,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { Prisma } from '@farmacia/database';
 import {
@@ -50,7 +55,18 @@ export class ProductTaxProfileController {
   @Post()
   @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_MANAGE)
   async create(
-    @Body() body: ProductTaxProfileInput,
+    @Body(
+      new RequestShapeValidationPipe({
+        productId: 'uuid',
+        operation: { values: ['SALE', 'PURCHASE'] },
+        treatment: { values: ['GRAVADO', 'EXENTO', 'EXCLUIDO', 'NO_APLICA'] },
+        ratePct: 'decimal?',
+        effectiveFrom: 'date',
+        effectiveTo: 'date?',
+        documentReference: 'text?',
+      }),
+    )
+    body: ProductTaxProfileInput,
     @CurrentUser() user: AuthenticatedUserContext,
   ): Promise<ProductTaxProfileDto> {
     try {
@@ -63,8 +79,8 @@ export class ProductTaxProfileController {
   @Get()
   @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_READ)
   async list(
-    @Query('productId') productId: string,
-    @Query('operation') operation?: string,
+    @Query('productId', new QueryFieldValidationPipe('productId', 'uuid')) productId: string,
+    @Query('operation', new QueryFieldValidationPipe('operation', 'text?')) operation?: string,
   ): Promise<ProductTaxProfileDto[]> {
     try {
       return await this.service.list(productId, operation);
@@ -76,9 +92,9 @@ export class ProductTaxProfileController {
   @Get('effective')
   @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_READ)
   async effective(
-    @Query('productId') productId: string,
-    @Query('operation') operation: string,
-    @Query('date') date: string,
+    @Query('productId', new QueryFieldValidationPipe('productId', 'uuid')) productId: string,
+    @Query('operation', new QueryFieldValidationPipe('operation', 'text')) operation: string,
+    @Query('date', new QueryFieldValidationPipe('date', 'date')) date: string,
   ): Promise<ProductTaxProfileDto> {
     try {
       return await this.service.effective(productId, operation, date);
@@ -90,8 +106,17 @@ export class ProductTaxProfileController {
   @Patch(':id')
   @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_MANAGE)
   async update(
-    @Param('id') id: string,
-    @Body() body: UpdateProductTaxProfileInput,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(
+      new RequestShapeValidationPipe({
+        treatment: { values: ['GRAVADO', 'EXENTO', 'EXCLUIDO', 'NO_APLICA'], optional: true },
+        ratePct: 'decimal?',
+        effectiveFrom: 'date?',
+        effectiveTo: 'date?',
+        documentReference: 'text?',
+      }),
+    )
+    body: UpdateProductTaxProfileInput,
     @CurrentUser() user: AuthenticatedUserContext,
   ): Promise<ProductTaxProfileDto> {
     try {
@@ -104,7 +129,7 @@ export class ProductTaxProfileController {
   @Post(':id/activate')
   @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_MANAGE)
   async activate(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() body: unknown,
     @CurrentUser() user: AuthenticatedUserContext,
   ): Promise<ProductTaxProfileDto> {

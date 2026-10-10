@@ -1,11 +1,5 @@
-import {
-  BadRequestException,
-  Controller,
-  Get,
-  Query,
-  Res,
-  UseGuards,
-} from '@nestjs/common';
+import { QueryFieldValidationPipe } from '../../../common/pagination/request-shape.pipe';
+import { BadRequestException, Controller, Get, Query, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import {
   SYSTEM_PERMISSIONS,
@@ -28,8 +22,8 @@ export class AccountingReportsController {
   @Get('trial-balance')
   @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_READ)
   async getTrialBalance(
-    @Query('fromDate') fromDate: string,
-    @Query('toDate') toDate: string,
+    @Query('fromDate', new QueryFieldValidationPipe('fromDate', 'date')) fromDate: string,
+    @Query('toDate', new QueryFieldValidationPipe('toDate', 'date')) toDate: string,
   ): Promise<TrialBalanceReportDto> {
     if (!fromDate || !toDate) {
       throw new BadRequestException('fromDate y toDate son obligatorios.');
@@ -40,9 +34,9 @@ export class AccountingReportsController {
   @Get('general-ledger')
   @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_READ)
   async getGeneralLedger(
-    @Query('accountId') accountId: string,
-    @Query('fromDate') fromDate: string,
-    @Query('toDate') toDate: string,
+    @Query('accountId', new QueryFieldValidationPipe('accountId', 'uuid')) accountId: string,
+    @Query('fromDate', new QueryFieldValidationPipe('fromDate', 'date')) fromDate: string,
+    @Query('toDate', new QueryFieldValidationPipe('toDate', 'date')) toDate: string,
   ): Promise<GeneralLedgerReportDto> {
     if (!accountId || !fromDate || !toDate) {
       throw new BadRequestException('accountId, fromDate y toDate son obligatorios.');
@@ -53,8 +47,8 @@ export class AccountingReportsController {
   @Get('income-statement')
   @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_READ)
   async getIncomeStatement(
-    @Query('fromDate') fromDate: string,
-    @Query('toDate') toDate: string,
+    @Query('fromDate', new QueryFieldValidationPipe('fromDate', 'date')) fromDate: string,
+    @Query('toDate', new QueryFieldValidationPipe('toDate', 'date')) toDate: string,
   ): Promise<IncomeStatementReportDto> {
     if (!fromDate || !toDate) {
       throw new BadRequestException('fromDate y toDate son obligatorios.');
@@ -65,7 +59,7 @@ export class AccountingReportsController {
   @Get('balance-sheet')
   @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_READ)
   async getBalanceSheet(
-    @Query('asOfDate') asOfDate: string,
+    @Query('asOfDate', new QueryFieldValidationPipe('asOfDate', 'date')) asOfDate: string,
   ): Promise<BalanceSheetReportDto> {
     if (!asOfDate) {
       throw new BadRequestException('asOfDate es obligatorio.');
@@ -76,8 +70,8 @@ export class AccountingReportsController {
   @Get('trial-balance/export')
   @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_READ)
   async exportTrialBalance(
-    @Query('fromDate') fromDate: string,
-    @Query('toDate') toDate: string,
+    @Query('fromDate', new QueryFieldValidationPipe('fromDate', 'date')) fromDate: string,
+    @Query('toDate', new QueryFieldValidationPipe('toDate', 'date')) toDate: string,
     @Res() res: Response,
   ): Promise<void> {
     if (!fromDate || !toDate) {
@@ -98,8 +92,8 @@ export class AccountingReportsController {
   @Get('income-statement/export')
   @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_READ)
   async exportIncomeStatement(
-    @Query('fromDate') fromDate: string,
-    @Query('toDate') toDate: string,
+    @Query('fromDate', new QueryFieldValidationPipe('fromDate', 'date')) fromDate: string,
+    @Query('toDate', new QueryFieldValidationPipe('toDate', 'date')) toDate: string,
     @Res() res: Response,
   ): Promise<void> {
     if (!fromDate || !toDate) {
@@ -120,7 +114,7 @@ export class AccountingReportsController {
   @Get('balance-sheet/export')
   @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_READ)
   async exportBalanceSheet(
-    @Query('asOfDate') asOfDate: string,
+    @Query('asOfDate', new QueryFieldValidationPipe('asOfDate', 'date')) asOfDate: string,
     @Res() res: Response,
   ): Promise<void> {
     if (!asOfDate) {
@@ -131,21 +125,19 @@ export class AccountingReportsController {
       'Content-Type',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     );
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="balance_general_${asOfDate}.xlsx"`,
-    );
+    res.setHeader('Content-Disposition', `attachment; filename="balance_general_${asOfDate}.xlsx"`);
     res.send(buffer);
   }
 
   @Get('third-parties')
   @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_READ)
   async getThirdParties(
-    @Query('fromDate') fromDate?: string,
-    @Query('toDate') toDate?: string,
-    @Query('accountId') accountId?: string,
-    @Query('thirdPartyId') thirdPartyId?: string,
-    @Query('search') search?: string,
+    @Query('fromDate', new QueryFieldValidationPipe('fromDate', 'date?')) fromDate?: string,
+    @Query('toDate', new QueryFieldValidationPipe('toDate', 'date?')) toDate?: string,
+    @Query('accountId', new QueryFieldValidationPipe('accountId', 'uuid?')) accountId?: string,
+    @Query('thirdPartyId', new QueryFieldValidationPipe('thirdPartyId', 'uuid?'))
+    thirdPartyId?: string,
+    @Query('search', new QueryFieldValidationPipe('search', 'text?')) search?: string,
   ): Promise<ThirdPartyReportDto> {
     return this.reportsService.getThirdPartyReport({
       fromDate,
@@ -159,11 +151,14 @@ export class AccountingReportsController {
   @Get('third-parties/export')
   @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_READ)
   async exportThirdParties(
-    @Query('fromDate') fromDate: string | undefined,
-    @Query('toDate') toDate: string | undefined,
-    @Query('accountId') accountId: string | undefined,
-    @Query('thirdPartyId') thirdPartyId: string | undefined,
-    @Query('search') search: string | undefined,
+    @Query('fromDate', new QueryFieldValidationPipe('fromDate', 'date?'))
+    fromDate: string | undefined,
+    @Query('toDate', new QueryFieldValidationPipe('toDate', 'date?')) toDate: string | undefined,
+    @Query('accountId', new QueryFieldValidationPipe('accountId', 'uuid?'))
+    accountId: string | undefined,
+    @Query('thirdPartyId', new QueryFieldValidationPipe('thirdPartyId', 'uuid?'))
+    thirdPartyId: string | undefined,
+    @Query('search', new QueryFieldValidationPipe('search', 'text?')) search: string | undefined,
     @Res() res: Response,
   ): Promise<void> {
     const buffer = await this.reportsService.exportThirdPartyReportExcel({
@@ -184,4 +179,3 @@ export class AccountingReportsController {
     res.send(buffer);
   }
 }
-
