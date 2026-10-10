@@ -17,7 +17,7 @@ import {
   TextField,
 } from '@mui/material';
 import { ApiError } from '../../../api/http-client';
-import type { AccountDto, AccountPayload, AccountType } from '../api/accounting.api';
+import type { AccountDto, AccountNature, AccountPayload, AccountType } from '../api/accounting.api';
 import { useCreateAccount, useUpdateAccount } from '../hooks/useAccounting';
 
 const accountTypes = [
@@ -40,10 +40,16 @@ export const accountTypeLabels: Record<AccountType, string> = {
   ORDER_DEBTOR: 'Cuentas de orden deudoras',
   ORDER_CREDITOR: 'Cuentas de orden acreedoras',
 };
+export const accountNatureLabels: Record<AccountNature, string> = {
+  DEBIT: 'Débito',
+  CREDIT: 'Crédito',
+};
 const schema = z.object({
   code: z.string().trim().min(1, 'Ingresa el código.'),
   name: z.string().trim().min(1, 'Ingresa el nombre.'),
   type: z.enum(accountTypes),
+  // '' = la API la infiere del tipo, del nombre (DB)/(CR) y de la cuenta padre
+  nature: z.enum(['', 'DEBIT', 'CREDIT']),
   parentId: z.string(),
   allowsMovement: z.boolean(),
   isActive: z.boolean(),
@@ -78,6 +84,7 @@ export function AccountFormDialog({
       code: '',
       name: '',
       type: 'ASSET',
+      nature: '',
       parentId: '',
       allowsMovement: true,
       isActive: true,
@@ -90,6 +97,7 @@ export function AccountFormDialog({
       code: account?.code ?? '',
       name: account?.name ?? '',
       type: account?.type ?? 'ASSET',
+      nature: account?.nature ?? '',
       parentId: account?.parentId ?? '',
       allowsMovement: account?.allowsMovement ?? true,
       isActive: account?.isActive ?? true,
@@ -128,6 +136,7 @@ export function AccountFormDialog({
       code: values.code.trim(),
       name: values.name.trim(),
       type: values.type,
+      ...(values.nature ? { nature: values.nature } : {}),
       parentId: values.parentId || null,
       allowsMovement: values.allowsMovement,
       isActive: values.isActive,
@@ -210,6 +219,26 @@ export function AccountFormDialog({
                       {accountTypeLabels[type]}
                     </MenuItem>
                   ))}
+                </TextField>
+              )}
+            />
+            <Controller
+              name="nature"
+              control={control}
+              render={({ field }) => (
+                <TextField
+                  {...field}
+                  select
+                  label="Naturaleza"
+                  fullWidth
+                  disabled={busy}
+                  helperText="Lado por el que aumenta la cuenta. Define el signo de su saldo en auxiliares y balances."
+                >
+                  {!account && (
+                    <MenuItem value="">Automática (según tipo, nombre y cuenta padre)</MenuItem>
+                  )}
+                  <MenuItem value="DEBIT">{accountNatureLabels.DEBIT}</MenuItem>
+                  <MenuItem value="CREDIT">{accountNatureLabels.CREDIT}</MenuItem>
                 </TextField>
               )}
             />

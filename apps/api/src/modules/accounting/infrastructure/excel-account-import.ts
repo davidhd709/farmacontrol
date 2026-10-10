@@ -5,6 +5,7 @@ import {
   AccountImportRowDto,
   ACCOUNT_TYPES,
   ACCOUNTING_PURPOSES,
+  AccountNature,
   AccountType,
   AccountingPurpose,
 } from '@farmacia/contracts';
@@ -18,7 +19,20 @@ const REQUIRED_STANDARD_HEADERS = [
   'Permite Movimiento',
   'Estado',
 ];
-const ALL_HEADERS = [...REQUIRED_STANDARD_HEADERS, 'Propósito Contable'];
+const ALL_HEADERS = [...REQUIRED_STANDARD_HEADERS, 'Propósito Contable', 'Naturaleza'];
+
+/** Columna opcional "Naturaleza": DEBITO/DÉBITO/DEBIT/D o CREDITO/CRÉDITO/CREDIT/C. */
+function parseNature(raw: string): AccountNature | null | 'INVALID' {
+  const norm = raw
+    .trim()
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  if (!norm) return null;
+  if (['DEBITO', 'DEBIT', 'D', 'DB'].includes(norm)) return 'DEBIT';
+  if (['CREDITO', 'CREDIT', 'C', 'CR'].includes(norm)) return 'CREDIT';
+  return 'INVALID';
+}
 
 const MAX_ZIP_ENTRIES = 64;
 const MAX_UNCOMPRESSED_BYTES = 25 * 1024 * 1024;
@@ -314,6 +328,7 @@ export async function parseAccountWorkbook(
         code: item.code,
         name: item.name,
         type: inferredType ?? 'ASSET',
+        nature: null,
         parentCode,
         allowsMovement,
         isActive,
@@ -341,7 +356,11 @@ export async function parseAccountWorkbook(
       const purpose = rawHeaders.includes('Propósito Contable')
         ? value(source, 'Propósito Contable').toUpperCase() || null
         : null;
+      const parsedNature = rawHeaders.includes('Naturaleza')
+        ? parseNature(value(source, 'Naturaleza'))
+        : null;
       const errors: string[] = [];
+      if (parsedNature === 'INVALID') errors.push('Naturaleza inválida: use Débito o Crédito.');
       if (!/^[0-9A-Za-z.-]{1,32}$/.test(code)) errors.push('Código inválido o vacío.');
       if (!name || name.length > 255) errors.push('Nombre requerido (máximo 255 caracteres).');
       if (!ACCOUNT_TYPES.includes(type as (typeof ACCOUNT_TYPES)[number]))
@@ -355,6 +374,7 @@ export async function parseAccountWorkbook(
         code,
         name,
         type,
+        nature: parsedNature === 'INVALID' ? null : parsedNature,
         parentCode,
         allowsMovement,
         isActive,

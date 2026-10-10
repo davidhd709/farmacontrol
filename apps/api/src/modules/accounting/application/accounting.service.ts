@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import {
   AccountInput,
   AccountDto,
+  AccountNature,
   AccountType,
   AccountingPurpose,
   AccountImportPreviewDto,
@@ -15,7 +16,9 @@ import { AccountingRepository } from '../infrastructure/accounting.repository';
 import {
   AccountingConflictError,
   AccountingValidationError,
+  inferAccountNature,
   validateAccountFields,
+  validateAccountNature,
   validatePurpose,
 } from '../domain/accounting-rules';
 import {
@@ -59,6 +62,7 @@ export class AccountingService {
       code: raw.code.trim(),
       name: raw.name.trim(),
       type: raw.type,
+      nature: raw.nature === undefined ? undefined : validateAccountNature(raw.nature),
       parentId: raw.parentId ?? null,
       allowsMovement: raw.allowsMovement,
       isActive: raw.isActive ?? true,
@@ -82,6 +86,7 @@ export class AccountingService {
       throw new AccountingValidationError('Nombre inválido.');
     if (raw.type !== undefined && !ACCOUNT_TYPES.includes(raw.type))
       throw new AccountingValidationError('Tipo inválido.');
+    if (raw.nature !== undefined) validateAccountNature(raw.nature);
     if (raw.allowsMovement !== undefined && typeof raw.allowsMovement !== 'boolean')
       throw new AccountingValidationError('Permite Movimiento inválido.');
     if (raw.isActive !== undefined && typeof raw.isActive !== 'boolean')
@@ -155,7 +160,27 @@ export class AccountingService {
       }
     };
     for (const row of rows) visit(row, new Set());
+    this.fillNatures(rows, byCode);
     return rows;
+  }
+
+  /** Completa la naturaleza de las filas que no la traen, padres antes que hijos. */
+  private fillNatures(rows: AccountImportRowDto[], existing: Map<string, AccountDto>): void {
+    const natures = new Map<string, AccountNature>(
+      [...existing.values()].map((account) => [account.code, account.nature]),
+    );
+    const ordered = [...rows].sort((a, b) => a.code.length - b.code.length);
+    for (const row of ordered) {
+      if (!row.nature && ACCOUNT_TYPES.includes(row.type as AccountType)) {
+        row.nature = inferAccountNature({
+          code: row.code,
+          name: row.name,
+          type: row.type as AccountType,
+          parentNature: row.parentCode ? (natures.get(row.parentCode) ?? null) : null,
+        });
+      }
+      if (row.nature) natures.set(row.code, row.nature);
+    }
   }
 
   async preview(buffer: Buffer): Promise<AccountImportPreviewDto> {
@@ -213,6 +238,7 @@ export class AccountingService {
               code,
               name: row.name,
               type: row.type as (typeof ACCOUNT_TYPES)[number],
+              nature: row.nature ?? undefined,
               parentId: row.parentCode ? ids.get(row.parentCode)! : null,
               allowsMovement: row.allowsMovement!,
               isActive: row.isActive!,

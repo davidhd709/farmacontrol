@@ -36,7 +36,11 @@ import {
   type AccountType,
   type ImportPreview,
 } from '../api/accounting.api';
-import { AccountFormDialog, accountTypeLabels } from '../components/AccountFormDialog';
+import {
+  AccountFormDialog,
+  accountNatureLabels,
+  accountTypeLabels,
+} from '../components/AccountFormDialog';
 import {
   useAccounts,
   useConfigurationStatus,
@@ -270,6 +274,7 @@ export function AccountsPage() {
                     <TableRow>
                       <TableCell>Cuenta</TableCell>
                       <TableCell>Tipo</TableCell>
+                      <TableCell>Naturaleza</TableCell>
                       <TableCell>Movimiento</TableCell>
                       <TableCell>Estado</TableCell>
                       <TableCell align="right">Acciones</TableCell>
@@ -278,7 +283,7 @@ export function AccountsPage() {
                   <TableBody>
                     {filtered.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={5} align="center" sx={{ py: 5 }}>
+                        <TableCell colSpan={6} align="center" sx={{ py: 5 }}>
                           {accounts.length === 0
                             ? 'Aún no hay cuentas. Crea una o importa un plan.'
                             : 'No hay cuentas con estos filtros.'}
@@ -317,6 +322,7 @@ export function AccountsPage() {
                         <TableCell>
                           {accountTypeLabels[account.type as AccountType] ?? account.type}
                         </TableCell>
+                        <TableCell>{accountNatureLabels[account.nature] ?? account.nature}</TableCell>
                         <TableCell>{account.allowsMovement ? 'Sí' : 'Agrupadora'}</TableCell>
                         <TableCell>
                           <Chip
@@ -680,6 +686,7 @@ export function ImportAccountsPage() {
                         <TableCell>Código</TableCell>
                         <TableCell>Nombre</TableCell>
                         <TableCell>Tipo</TableCell>
+                        <TableCell>Naturaleza</TableCell>
                         <TableCell>Padre</TableCell>
                         <TableCell>Movimiento</TableCell>
                         <TableCell>Estado</TableCell>
@@ -694,6 +701,9 @@ export function ImportAccountsPage() {
                           <TableCell>{row.code}</TableCell>
                           <TableCell>{row.name}</TableCell>
                           <TableCell>{row.type}</TableCell>
+                          <TableCell>
+                            {row.nature ? accountNatureLabels[row.nature] : '—'}
+                          </TableCell>
                           <TableCell>{row.parentCode || '—'}</TableCell>
                           <TableCell>
                             {row.allowsMovement === null

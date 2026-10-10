@@ -684,6 +684,11 @@ enum AccountType {
   ORDER_CREDITOR
 }
 
+enum AccountNature {
+  DEBIT
+  CREDIT
+}
+
 enum AccountingPurpose {
   CASH
   BANK
@@ -715,6 +720,7 @@ model Account {
   code           String      @unique @db.VarChar(32)
   name           String      @db.VarChar(255)
   type           AccountType
+  nature         AccountNature @default(dbgenerated())
   parentId       String?     @map("parent_id") @db.Uuid
   level          Int
   allowsMovement Boolean     @default(false) @map("allows_movement")

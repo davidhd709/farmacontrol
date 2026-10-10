@@ -9,11 +9,13 @@ export type AccountType =
   | 'COST'
   | 'ORDER_DEBTOR'
   | 'ORDER_CREDITOR';
+export type AccountNature = 'DEBIT' | 'CREDIT';
 export interface AccountDto {
   id: string;
   code: string;
   name: string;
   type: AccountType;
+  nature: AccountNature;
   parentId: string | null;
   level: number;
   allowsMovement: boolean;
@@ -25,6 +27,7 @@ export interface AccountPayload {
   code: string;
   name: string;
   type: AccountType;
+  nature?: AccountNature;
   parentId?: string | null;
   allowsMovement?: boolean;
   isActive?: boolean;
@@ -46,6 +49,7 @@ export interface ImportRow {
   code: string;
   name: string;
   type: string;
+  nature?: AccountNature | null;
   parentCode: string | null;
   allowsMovement: boolean | null;
   isActive: boolean | null;

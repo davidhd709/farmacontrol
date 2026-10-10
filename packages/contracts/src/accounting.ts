@@ -10,6 +10,10 @@ export const ACCOUNT_TYPES = [
 ] as const;
 export type AccountType = (typeof ACCOUNT_TYPES)[number];
 
+/** Naturaleza: lado por el que aumenta la cuenta. Define el signo de su saldo. */
+export const ACCOUNT_NATURES = ['DEBIT', 'CREDIT'] as const;
+export type AccountNature = (typeof ACCOUNT_NATURES)[number];
+
 export const ACCOUNTING_PURPOSES = [
   'CASH',
   'BANK',
@@ -36,6 +40,7 @@ export interface AccountDto {
   code: string;
   name: string;
   type: AccountType;
+  nature: AccountNature;
   parentId: string | null;
   level: number;
   allowsMovement: boolean;
@@ -48,6 +53,8 @@ export interface AccountInput {
   code: string;
   name: string;
   type: AccountType;
+  /** Si se omite se infiere del tipo, del nombre (DB)/(CR) y de la cuenta padre. */
+  nature?: AccountNature;
   parentId?: string | null;
   allowsMovement: boolean;
   isActive?: boolean;
@@ -72,6 +79,7 @@ export interface AccountImportRowDto {
   code: string;
   name: string;
   type: string;
+  nature: AccountNature | null;
   parentCode: string | null;
   allowsMovement: boolean | null;
   isActive: boolean | null;
@@ -144,6 +152,7 @@ export interface TrialBalanceRowDto {
   accountCode: string;
   accountName: string;
   accountType: AccountType;
+  accountNature: AccountNature;
   initialBalance: string;
   totalDebit: string;
   totalCredit: string;
@@ -175,6 +184,7 @@ export interface GeneralLedgerReportDto {
   accountId: string;
   accountCode: string;
   accountName: string;
+  accountNature: AccountNature;
   fromDate: string;
   toDate: string;
   initialBalance: string;

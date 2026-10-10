@@ -16,6 +16,7 @@ import {
   AccountingConflictError,
   AccountingNotFoundError,
   AccountingValidationError,
+  inferAccountNature,
   validateParent,
   validatePurposeAccountType,
 } from '../domain/accounting-rules';
@@ -35,6 +36,7 @@ function dto(account: AccountRecord): AccountDto {
     code: account.code,
     name: account.name,
     type: account.type,
+    nature: account.nature,
     parentId: account.parentId,
     level: account.level,
     allowsMovement: account.allowsMovement,
@@ -70,6 +72,14 @@ export class AccountingRepository {
         code: input.code,
         name: input.name,
         type: input.type as DbAccountType,
+        nature:
+          input.nature ??
+          inferAccountNature({
+            code: input.code,
+            name: input.name,
+            type: input.type,
+            parentNature: parent?.nature ?? null,
+          }),
         parentId: input.parentId ?? null,
         level: parent ? parent.level + 1 : 1,
         allowsMovement: input.allowsMovement,
@@ -150,6 +160,9 @@ export class AccountingRepository {
         code: next.code,
         name: next.name,
         type: next.type,
+        // Cambiar la naturaleza solo cambia el signo con que se presenta el saldo; los
+        // asientos no se tocan. Queda en la auditoría (before/after).
+        nature: next.nature,
         parentId: next.parentId,
         level: parent ? parent.level + 1 : 1,
         allowsMovement: next.allowsMovement,

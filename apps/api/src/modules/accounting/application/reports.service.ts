@@ -18,9 +18,6 @@ import {
 import { parseJournalDate, normalizeJournalAmount } from '../domain/journal-rules';
 import ExcelJS from 'exceljs';
 
-function isNormalDebit(type: AccountType): boolean {
-  return type === 'ASSET' || type === 'EXPENSE' || type === 'COST' || type === 'ORDER_DEBTOR';
-}
 
 function centsToString(cents: bigint): string {
   const isNegative = cents < 0n;
@@ -123,7 +120,8 @@ export class AccountingReportsService {
       totalPeriodDebitCents += period.debitCents;
       totalPeriodCreditCents += period.creditCents;
 
-      const debitNature = isNormalDebit(acc.type as AccountType);
+      // El saldo de cada cuenta sigue su naturaleza (4175 es débito aunque sea ingreso)
+      const debitNature = acc.nature === 'DEBIT';
 
       // Saldo inicial según naturaleza contable
       const initBalanceCents = debitNature
@@ -140,6 +138,7 @@ export class AccountingReportsService {
         accountCode: acc.code,
         accountName: acc.name,
         accountType: acc.type as AccountType,
+        accountNature: acc.nature,
         initialBalance: centsToString(initBalanceCents),
         totalDebit: centsToString(period.debitCents),
         totalCredit: centsToString(period.creditCents),
@@ -179,7 +178,7 @@ export class AccountingReportsService {
       throw new BadRequestException('La fecha inicial no puede ser mayor a la fecha final.');
     }
     const toEnd = new Date(`${toDate}T23:59:59.999Z`);
-    const debitNature = isNormalDebit(account.type as AccountType);
+    const debitNature = account.nature === 'DEBIT';
 
     // 1. Saldo inicial acumulado
     const priorLines = await prisma.journalEntryLine.findMany({
@@ -257,6 +256,7 @@ export class AccountingReportsService {
       accountId: account.id,
       accountCode: account.code,
       accountName: account.name,
+      accountNature: account.nature,
       fromDate,
       toDate,
       initialBalance: centsToString(initialCents),
