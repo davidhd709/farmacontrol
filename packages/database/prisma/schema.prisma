@@ -39,6 +39,7 @@ model User {
   debitNotesCreated     DebitNote[]         @relation("DebitNotesCreated")
 
   @@map("users")
+  documentLocksCreated DocumentLock[] @relation("DocumentLocksCreated")
 }
 
 model Role {
@@ -807,6 +808,20 @@ model JournalEntryLine {
   @@unique([journalEntryId, position])
   @@index([accountId])
   @@map("journal_entry_lines")
+}
+
+model DocumentLock {
+  id            String    @id @default(uuid()) @db.Uuid
+  lockedThrough DateTime? @map("locked_through") @db.Date
+  reason        String    @db.VarChar(500)
+  createdById   String    @map("created_by_id") @db.Uuid
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  createdBy     User      @relation("DocumentLocksCreated", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([createdAt])
+  @@index([createdById])
+  @@map("document_locks")
 }
 
 enum FiscalPeriodStatus {

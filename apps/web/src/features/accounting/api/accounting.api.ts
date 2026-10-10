@@ -297,6 +297,31 @@ export const reopenFiscalPeriod = (id: string, payload: ReopenFiscalPeriodPayloa
     body: JSON.stringify(payload),
   });
 
+// ===== BLOQUEO DE DOCUMENTOS POR FECHA =====
+
+export interface DocumentLockDto {
+  id: string;
+  lockedThrough: string | null;
+  reason: string;
+  createdById: string;
+  createdByName: string | null;
+  createdAt: string;
+}
+
+export interface DocumentLockStatusDto {
+  current: DocumentLockDto | null;
+  history: DocumentLockDto[];
+}
+
+export const fetchDocumentLock = () =>
+  apiRequest<DocumentLockStatusDto>('accounting/document-lock');
+
+export const setDocumentLock = (payload: { lockedThrough: string | null; reason: string }) =>
+  apiRequest<DocumentLockDto>('accounting/document-lock', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
 // ===== REPORTE AUXILIAR DE TERCEROS / MEDIOS MAGNÉTICOS (RF-034) =====
 
 export interface ThirdPartyReportFilters {

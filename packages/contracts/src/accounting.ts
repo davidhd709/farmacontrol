@@ -355,3 +355,26 @@ export interface ThirdPartyReportFilters {
 }
 
 
+
+// ===== BLOQUEO DE DOCUMENTOS POR FECHA =====
+
+export interface DocumentLockDto {
+  id: string;
+  /** null = sin bloqueo */
+  lockedThrough: string | null;
+  reason: string;
+  createdById: string;
+  createdByName: string | null;
+  createdAt: string;
+}
+
+export interface DocumentLockStatusDto {
+  current: DocumentLockDto | null;
+  history: DocumentLockDto[];
+}
+
+export interface SetDocumentLockPayload {
+  /** YYYY-MM-DD; null retira el bloqueo */
+  lockedThrough: string | null;
+  reason: string;
+}

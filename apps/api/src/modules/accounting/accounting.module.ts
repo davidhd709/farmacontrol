@@ -15,6 +15,8 @@ import { JournalController } from './presentation/journal.controller';
 import { AccountingReportsController } from './presentation/reports.controller';
 import { FiscalPeriodsService } from './application/fiscal-periods.service';
 import { FiscalPeriodsController } from './presentation/fiscal-periods.controller';
+import { DocumentLockService } from './application/document-lock.service';
+import { DocumentLockController } from './presentation/document-lock.controller';
 
 @Module({
   imports: [IdentityModule],
@@ -25,6 +27,7 @@ import { FiscalPeriodsController } from './presentation/fiscal-periods.controlle
     JournalController,
     AccountingReportsController,
     FiscalPeriodsController,
+    DocumentLockController,
   ],
   providers: [
     AccountingService,
@@ -34,6 +37,7 @@ import { FiscalPeriodsController } from './presentation/fiscal-periods.controlle
     AccountingEngineService,
     AccountingReportsService,
     FiscalPeriodsService,
+    DocumentLockService,
   ],
   exports: [
     AccountingService,

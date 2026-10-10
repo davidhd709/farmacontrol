@@ -155,18 +155,7 @@ export class JournalService {
 
     const date = parseJournalDate(input.entryDate);
 
-    const closedPeriod = await tx.fiscalPeriod.findFirst({
-      where: {
-        status: 'CLOSED',
-        startDate: { lte: date },
-        endDate: { gte: date },
-      },
-    });
-    if (closedPeriod) {
-      throw new AccountingValidationError(
-        `No es posible registrar asientos en el período cerrado ${closedPeriod.name} (${closedPeriod.year}-${String(closedPeriod.month).padStart(2, '0')}).`,
-      );
-    }
+    await this.assertDateWritable(date, 'registrar asientos', tx);
 
     const accounts = new Map<DbPurpose, string>();
     const purposesToLookup = new Set<DbPurpose>();
@@ -288,18 +277,7 @@ export class JournalService {
       return existing;
     }
 
-    const closedPeriod = await tx.fiscalPeriod.findFirst({
-      where: {
-        status: 'CLOSED',
-        startDate: { lte: date },
-        endDate: { gte: date },
-      },
-    });
-    if (closedPeriod) {
-      throw new AccountingValidationError(
-        `No es posible reversar asientos en el período cerrado ${closedPeriod.name} (${closedPeriod.year}-${String(closedPeriod.month).padStart(2, '0')}).`,
-      );
-    }
+    await this.assertDateWritable(date, 'reversar asientos', tx);
 
     const entry = await tx.journalEntry.create({
       data: {
@@ -376,18 +354,7 @@ export class JournalService {
     // El período cerrado se valida antes que los mapeos: una operación sin asiento
     // por falta de configuración tampoco puede registrarse en un período cerrado.
     const day = parseJournalDate(date.toISOString().slice(0, 10));
-    const closedPeriod = await client.fiscalPeriod.findFirst({
-      where: {
-        status: 'CLOSED',
-        startDate: { lte: day },
-        endDate: { gte: day },
-      },
-    });
-    if (closedPeriod) {
-      throw new AccountingValidationError(
-        `No es posible registrar operaciones en el período cerrado ${closedPeriod.name} (${closedPeriod.year}-${String(closedPeriod.month).padStart(2, '0')}).`,
-      );
-    }
+    await this.assertDateWritable(day, 'registrar operaciones', client);
 
     for (const purpose of new Set(purposes)) {
       const mapping = await client.companyAccountingMapping.findFirst({
@@ -406,6 +373,32 @@ export class JournalService {
       if (!mapping) return false;
     }
     return true;
+  }
+
+  /**
+   * Una fecha admite asientos si no cae en un período cerrado ni en el bloqueo de
+   * documentos vigente (fecha igual o anterior a lockedThrough). Son controles distintos:
+   * el bloqueo protege un corte revisado aunque el período siga abierto.
+   */
+  private async assertDateWritable(day: Date, action: string, client: Tx | typeof prisma) {
+    const closedPeriod = await client.fiscalPeriod.findFirst({
+      where: {
+        status: 'CLOSED',
+        startDate: { lte: day },
+        endDate: { gte: day },
+      },
+    });
+    if (closedPeriod) {
+      throw new AccountingValidationError(
+        `No es posible ${action} en el período cerrado ${closedPeriod.name} (${closedPeriod.year}-${String(closedPeriod.month).padStart(2, '0')}).`,
+      );
+    }
+    const lock = await client.documentLock.findFirst({ orderBy: { createdAt: 'desc' } });
+    if (lock?.lockedThrough && day.getTime() <= lock.lockedThrough.getTime()) {
+      throw new AccountingValidationError(
+        `No es posible ${action} con fecha ${day.toISOString().slice(0, 10)}: los documentos están bloqueados hasta el ${lock.lockedThrough.toISOString().slice(0, 10)}.`,
+      );
+    }
   }
 
   async findAll(filters: JournalEntryQueryFilters = {}) {
