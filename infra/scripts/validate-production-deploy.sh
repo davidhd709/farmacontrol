@@ -52,6 +52,20 @@ else
     echo "  [ERROR] Caddyfile incompleto o faltan directivas de reverse_proxy" >&2
     FAILED=1
   fi
+  for header in "Content-Security-Policy" "Strict-Transport-Security" "X-Frame-Options" "X-Content-Type-Options"; do
+    if grep -q "${header}" "${CADDYFILE}"; then
+      echo "  [OK] Cabecera de seguridad configurada: ${header}"
+    else
+      echo "  [ERROR] Falta la cabecera de seguridad en Caddy: ${header}" >&2
+      FAILED=1
+    fi
+  done
+fi
+
+# Caddy es el único proxy: una configuración nginx de host contradiría la topología
+if [ -d "${ROOT_DIR}/infra/nginx" ]; then
+  echo "  [ERROR] infra/nginx existe: la topología aprobada usa solo Caddy" >&2
+  FAILED=1
 fi
 
 # 3. Validar Nginx SPA & Caching

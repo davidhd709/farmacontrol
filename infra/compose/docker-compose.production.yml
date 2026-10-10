@@ -73,7 +73,9 @@ services:
       API_PORT: 3000
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}?schema=public
       SESSION_SECRET: ${SESSION_SECRET}
-      CORS_ALLOWED_ORIGINS: https://${DOMAIN:-localhost},http://${DOMAIN:-localhost}
+      CORS_ALLOWED_ORIGINS: https://${DOMAIN:-localhost}
+      # Caddy es el único proxy delante de la API: req.ip es la IP real del cliente
+      TRUST_PROXY: 1
       PGHOST: postgres
       PGPORT: 5432
       PGUSER: ${DB_USER}
