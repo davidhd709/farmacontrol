@@ -55,6 +55,8 @@ const PHARMACY_DEFAULT_PURPOSES: Record<string, AccountingPurpose> = {
   '417506': 'SALES_DISCOUNTS', // Descuentos condicionados
   '3130': 'CAPITAL', // Capital de personas naturales
   '360505': 'CURRENT_YEAR_RESULT', // Utilidad del ejercicio
+  '370505': 'RETAINED_EARNINGS', // Utilidades acumuladas (cierre anual)
+  '371005': 'ACCUMULATED_LOSSES', // Pérdidas acumuladas (cierre anual)
 };
 
 /** Rechaza ZIPs con expansión excesiva antes de que ExcelJS descomprima el XLSX. */

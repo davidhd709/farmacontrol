@@ -32,6 +32,8 @@ export const ACCOUNTING_PURPOSES = [
   'SALES_DISCOUNTS',
   'CAPITAL',
   'CURRENT_YEAR_RESULT',
+  'RETAINED_EARNINGS',
+  'ACCUMULATED_LOSSES',
 ] as const;
 export type AccountingPurpose = (typeof ACCOUNTING_PURPOSES)[number];
 
@@ -399,4 +401,33 @@ export interface CreateManualNotePayload {
 export interface ManualNoteCreatedDto {
   journalEntryId: string;
   noteNumber: string;
+}
+
+// ===== CIERRE ANUAL =====
+
+export interface AnnualClosingLineDto {
+  accountId: string;
+  accountCode: string;
+  accountName: string;
+  debit: string;
+  credit: string;
+}
+
+export interface AnnualClosingPreviewDto {
+  year: number;
+  /** Fecha del asiento: 31 de diciembre del año */
+  entryDate: string;
+  /** Positivo = utilidad (a utilidades acumuladas); negativo = pérdida (a pérdidas acumuladas) */
+  netResult: string;
+  destinationPurpose: 'RETAINED_EARNINGS' | 'ACCUMULATED_LOSSES' | null;
+  destinationAccount: { id: string; code: string; name: string } | null;
+  lines: AnnualClosingLineDto[];
+  /** Asiento de cierre vigente del año, si ya se cerró */
+  existingEntryId: string | null;
+}
+
+export interface AnnualClosingResultDto {
+  year: number;
+  journalEntryId: string;
+  netResult: string;
 }

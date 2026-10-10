@@ -42,6 +42,7 @@ import {
   type FiscalPeriodStatus,
 } from '../api/accounting.api';
 import { DocumentLockCard } from '../components/DocumentLockCard';
+import { AnnualClosingCard } from '../components/AnnualClosingCard';
 
 function formatMoney(value: string | number): string {
   const num = typeof value === 'number' ? value : Number(value);
@@ -167,6 +168,7 @@ export const FiscalPeriodsPage = () => {
         )}
 
         <DocumentLockCard canManage={canManage} />
+        <AnnualClosingCard canManage={canManage} />
 
         {/* Filtros de Año y Estado */}
         <Paper sx={{ p: 2 }}>

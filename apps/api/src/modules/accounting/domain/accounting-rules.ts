@@ -75,6 +75,8 @@ const PURPOSE_ACCOUNT_TYPES: Record<AccountingPurpose, readonly AccountType[]> =
   SALES_DISCOUNTS: ['INCOME'],
   CAPITAL: ['EQUITY'],
   CURRENT_YEAR_RESULT: ['EQUITY'],
+  RETAINED_EARNINGS: ['EQUITY'],
+  ACCUMULATED_LOSSES: ['EQUITY'],
 };
 
 export function validatePurposeAccountType(

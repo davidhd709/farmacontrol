@@ -319,6 +319,28 @@ export const createManualNote = (payload: CreateManualNotePayload, idempotencyKe
     body: JSON.stringify(payload),
   });
 
+// ===== CIERRE ANUAL =====
+
+export interface AnnualClosingPreviewDto {
+  year: number;
+  entryDate: string;
+  netResult: string;
+  destinationPurpose: 'RETAINED_EARNINGS' | 'ACCUMULATED_LOSSES' | null;
+  destinationAccount: { id: string; code: string; name: string } | null;
+  lines: Array<{ accountId: string; accountCode: string; accountName: string; debit: string; credit: string }>;
+  existingEntryId: string | null;
+}
+
+export const fetchAnnualClosingPreview = (year: number) =>
+  apiRequest<AnnualClosingPreviewDto>(`accounting/annual-closings/preview?year=${year}`);
+
+export const closeYear = (year: number, idempotencyKey: string) =>
+  apiRequest<{ year: number; journalEntryId: string; netResult: string }>('accounting/annual-closings', {
+    method: 'POST',
+    headers: { 'Idempotency-Key': idempotencyKey },
+    body: JSON.stringify({ year }),
+  });
+
 // ===== BLOQUEO DE DOCUMENTOS POR FECHA =====
 
 export interface DocumentLockDto {
