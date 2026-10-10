@@ -179,7 +179,7 @@ describe('ReportsController (Integration with PostgreSQL & CSV Exports — HU-02
     // Movimientos de caja
     await prisma.cashMovement.create({
       data: {
-        movementType: 'VENTA',
+        movementType: 'INGRESO_VENTA',
         amount: '25000',
         paymentMethod: 'EFECTIVO',
         reason: 'Pago de venta en efectivo',
@@ -192,7 +192,7 @@ describe('ReportsController (Integration with PostgreSQL & CSV Exports — HU-02
 
     await prisma.cashMovement.create({
       data: {
-        movementType: 'EGRESO',
+        movementType: 'EGRESO_MANUAL',
         amount: '5000',
         paymentMethod: 'EFECTIVO',
         reason: 'Gasto menor insumos',
@@ -322,7 +322,12 @@ describe('ReportsController (Integration with PostgreSQL & CSV Exports — HU-02
         .expect(200);
 
       expect(res.headers['content-type']).toContain('text/csv');
-      expect(res.text).toContain('Fecha y Hora,Tipo Flujo,Concepto / Descripción,Monto ($)');
+      expect(res.text).toContain(
+        'Fecha y Hora,Tipo Flujo,Concepto / Descripción,Débito ($),Crédito ($),Saldo ($)',
+      );
+      // Débito positivo y crédito negativo
+      expect(res.text).toMatch(/INGRESO,[^\r\n]*,25000\.00,0\.00,/);
+      expect(res.text).toMatch(/EGRESO,[^\r\n]*,0\.00,-5000\.00,/);
       expect(res.text).toContain('INGRESO');
       expect(res.text).toContain('EGRESO');
     });

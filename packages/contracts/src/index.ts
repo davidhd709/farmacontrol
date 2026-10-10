@@ -1019,6 +1019,12 @@ export interface CashMovementReportItemDto {
   movementType: 'IN' | 'OUT';
   concept: string;
   amount: number;
+  /** Entrada de dinero (positiva) */
+  debit: number;
+  /** Salida de dinero (negativa), como pidió la contadora */
+  credit: number;
+  /** Saldo de caja después del movimiento */
+  balanceAfter: number;
   paymentMethod: string;
   referenceDocumentType: string | null;
   referenceDocumentId: string | null;

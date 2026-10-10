@@ -305,7 +305,13 @@ export class ReportsService {
 
     const items: CashMovementReportItemDto[] = movements.map((m: any) => {
       const amount = Number(m.amount);
-      const isIngreso = m.movementType === 'INGRESO' || m.movementType === 'VENTA' || m.movementType === 'APERTURA';
+      // Tipos reales: INGRESO_VENTA, INGRESO_MANUAL, EGRESO_MANUAL, EGRESO_PAGO_PROVEEDOR.
+      // Antes solo se reconocían 'INGRESO', 'VENTA' y 'APERTURA', así que toda venta en
+      // efectivo salía como egreso. Se aceptan también esos nombres por datos antiguos.
+      const isIngreso =
+        String(m.movementType).startsWith('INGRESO') ||
+        m.movementType === 'VENTA' ||
+        m.movementType === 'APERTURA';
 
       if (isIngreso) {
         totalInflows += amount;
@@ -319,6 +325,9 @@ export class ReportsService {
         movementType: isIngreso ? 'IN' : 'OUT',
         concept: m.reason || m.movementType,
         amount,
+        debit: isIngreso ? amount : 0,
+        credit: isIngreso ? 0 : -amount,
+        balanceAfter: Number(m.balanceAfter),
         paymentMethod: m.paymentMethod,
         referenceDocumentType: m.referenceDocumentType,
         referenceDocumentId: m.referenceDocumentId,
@@ -344,7 +353,10 @@ export class ReportsService {
         { header: 'Fecha y Hora', accessor: (i: CashMovementReportItemDto) => i.createdAt },
         { header: 'Tipo Flujo', accessor: (i: CashMovementReportItemDto) => (i.movementType === 'IN' ? 'INGRESO' : 'EGRESO') },
         { header: 'Concepto / Descripción', accessor: (i: CashMovementReportItemDto) => i.concept },
-        { header: 'Monto ($)', accessor: (i: CashMovementReportItemDto) => i.amount.toFixed(2) },
+        // Acuerdo del 4 de octubre: débitos positivos, créditos negativos y saldo
+        { header: 'Débito ($)', accessor: (i: CashMovementReportItemDto) => i.debit.toFixed(2) },
+        { header: 'Crédito ($)', accessor: (i: CashMovementReportItemDto) => i.credit.toFixed(2) },
+        { header: 'Saldo ($)', accessor: (i: CashMovementReportItemDto) => i.balanceAfter.toFixed(2) },
         { header: 'Medio de Pago', accessor: (i: CashMovementReportItemDto) => i.paymentMethod },
         { header: 'Doc. Referencia', accessor: (i: CashMovementReportItemDto) => i.referenceDocumentType ? `${i.referenceDocumentType} ${i.referenceDocumentId || ''}` : 'N/A' },
         { header: 'Usuario', accessor: (i: CashMovementReportItemDto) => i.userName || 'Sistema' },
