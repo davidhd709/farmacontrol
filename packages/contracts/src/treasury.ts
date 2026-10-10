@@ -89,3 +89,36 @@ export interface BankAccountsSummaryDto {
   totalAccountsCount: number;
   currency: string;
 }
+
+// ===== RECIBOS DE CAJA Y COMPROBANTES DE EGRESO =====
+
+export type TreasuryDocumentType = 'RECIBO_CAJA' | 'COMPROBANTE_EGRESO';
+
+export interface TreasuryDocumentDto {
+  id: string;
+  documentType: TreasuryDocumentType;
+  /** RC-000001 o CE-000001 */
+  documentNumber: string;
+  documentDate: string;
+  amount: string;
+  paymentMethod: string;
+  /** Auxiliar al que pertenece: caja o la cuenta bancaria */
+  source: 'CAJA' | 'BANCO';
+  bankAccountName: string | null;
+  concept: string;
+  referenceDocumentType: string | null;
+  referenceDocumentId: string | null;
+  /** Cliente, proveedor o beneficiario, cuando el origen lo identifica */
+  thirdPartyName: string | null;
+  createdByName: string | null;
+  createdAt: string;
+}
+
+export interface TreasuryDocumentFilters {
+  type?: TreasuryDocumentType;
+  fromDate?: string;
+  toDate?: string;
+  search?: string;
+  page?: number;
+  pageSize?: number;
+}

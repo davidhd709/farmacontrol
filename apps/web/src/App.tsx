@@ -25,6 +25,8 @@ const PurchasesListPage = lazy(() => import('./features/purchases/pages/Purchase
 const ReceivePurchasePage = lazy(() => import('./features/purchases/pages/ReceivePurchasePage').then((m) => ({ default: m.ReceivePurchasePage })));
 const CashPage = lazy(() => import('./features/cash/pages/CashPage').then((m) => ({ default: m.CashPage })));
 const TreasuryBankAccountsPage = lazy(() => import('./features/treasury/pages/TreasuryBankAccountsPage').then((m) => ({ default: m.TreasuryBankAccountsPage })));
+const CashReceiptsPage = lazy(() => import('./features/treasury/pages/TreasuryDocumentsPage').then((m) => ({ default: m.CashReceiptsPage })));
+const DisbursementVouchersPage = lazy(() => import('./features/treasury/pages/TreasuryDocumentsPage').then((m) => ({ default: m.DisbursementVouchersPage })));
 const ReceivablesPage = lazy(() => import('./features/receivables/pages/ReceivablesPage').then((m) => ({ default: m.ReceivablesPage })));
 const PayablesPage = lazy(() => import('./features/payables/pages/PayablesPage').then((m) => ({ default: m.PayablesPage })));
 const ExpensesPage = lazy(() => import('./features/expenses/pages/ExpensesPage').then((m) => ({ default: m.ExpensesPage })));
@@ -74,6 +76,8 @@ export const App = () => {
             <Route path="/purchases/receive" element={<ReceivePurchasePage />} />
             <Route path="/cash" element={<CashPage />} />
             <Route path="/treasury/bank-accounts" element={<TreasuryBankAccountsPage />} />
+            <Route path="/treasury/receipts" element={<CashReceiptsPage />} />
+            <Route path="/treasury/disbursements" element={<DisbursementVouchersPage />} />
             <Route path="/receivables" element={<ReceivablesPage />} />
             <Route path="/payables" element={<PayablesPage />} />
             <Route path="/expenses" element={<ExpensesPage />} />

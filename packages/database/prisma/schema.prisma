@@ -40,6 +40,7 @@ model User {
 
   @@map("users")
   documentLocksCreated DocumentLock[] @relation("DocumentLocksCreated")
+  treasuryDocumentsCreated TreasuryDocument[] @relation("TreasuryDocumentsCreated")
 }
 
 model Role {
@@ -391,6 +392,7 @@ model CashMovement {
   balanceAfter          Decimal  @map("balance_after") @db.Decimal(12, 2)
   createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz
   createdByUserId       String   @map("created_by_user_id") @db.Uuid
+  treasuryDocument      TreasuryDocument?
 
   createdByUser         User     @relation(fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
@@ -931,6 +933,7 @@ model BankAccount {
   @@index([bankName])
   @@index([createdById])
   @@map("bank_accounts")
+  treasuryDocuments TreasuryDocument[]
 }
 
 model BankMovement {
@@ -947,6 +950,7 @@ model BankMovement {
   movementDate          DateTime    @default(now()) @map("movement_date") @db.Timestamptz
   createdById           String      @map("created_by_id") @db.Uuid
   createdAt             DateTime    @default(now()) @map("created_at") @db.Timestamptz
+  treasuryDocument      TreasuryDocument?
 
   bankAccount           BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   createdByUser         User        @relation("UserBankMovements", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
@@ -956,6 +960,41 @@ model BankMovement {
   @@index([referenceDocumentType, referenceDocumentId])
   @@index([createdById])
   @@map("bank_movements")
+}
+
+/// Recibo de caja (RC) o comprobante de egreso (CE). Lo generan triggers al insertar
+/// movimientos de caja o banco; ver docs/adr/ADR-002.
+model TreasuryDocument {
+  id                    String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  documentType          String        @map("document_type") @db.VarChar(30)
+  documentNumber        String        @unique @map("document_number") @db.VarChar(20)
+  documentDate          DateTime      @map("document_date") @db.Date
+  amount                Decimal       @db.Decimal(14, 2)
+  paymentMethod         String        @map("payment_method") @db.VarChar(50)
+  concept               String        @db.VarChar(255)
+  referenceDocumentType String?       @map("reference_document_type") @db.VarChar(50)
+  referenceDocumentId   String?       @map("reference_document_id") @db.VarChar(100)
+  cashMovementId        String?       @unique @map("cash_movement_id") @db.Uuid
+  bankMovementId        String?       @unique @map("bank_movement_id") @db.Uuid
+  bankAccountId         String?       @map("bank_account_id") @db.Uuid
+  createdById           String        @map("created_by_id") @db.Uuid
+  createdAt             DateTime      @default(now()) @map("created_at") @db.Timestamptz
+
+  cashMovement          CashMovement? @relation(fields: [cashMovementId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  bankMovement          BankMovement? @relation(fields: [bankMovementId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  bankAccount           BankAccount?  @relation(fields: [bankAccountId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdBy             User          @relation("TreasuryDocumentsCreated", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([documentType, documentDate], map: "treasury_documents_type_date_idx")
+  @@index([referenceDocumentType, referenceDocumentId], map: "treasury_documents_reference_idx")
+  @@map("treasury_documents")
+}
+
+model TreasuryDocumentSequence {
+  documentType String @id @map("document_type") @db.VarChar(30)
+  lastValue    BigInt @default(0) @map("last_value")
+
+  @@map("treasury_document_sequences")
 }
 
 model ExpenseCategory {

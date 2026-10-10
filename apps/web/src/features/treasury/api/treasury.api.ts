@@ -5,6 +5,9 @@ import type {
   BankMovementDto,
   CreateBankAccountDto,
   CreateBankMovementDto,
+  PaginatedResponse,
+  TreasuryDocumentDto,
+  TreasuryDocumentFilters,
   UpdateBankAccountDto,
 } from '@farmacia/contracts';
 import { apiRequest } from '../../../api/http-client';
@@ -81,4 +84,16 @@ export async function createBankMovement(
       body: JSON.stringify(data),
     },
   );
+}
+
+// ===== RECIBOS DE CAJA Y COMPROBANTES DE EGRESO =====
+
+export async function getTreasuryDocuments(
+  params: TreasuryDocumentFilters,
+): Promise<PaginatedResponse<TreasuryDocumentDto>> {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== '') query.set(key, String(value));
+  }
+  return apiRequest<PaginatedResponse<TreasuryDocumentDto>>(`treasury/documents?${query.toString()}`);
 }

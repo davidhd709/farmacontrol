@@ -181,6 +181,18 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ open, onClose }) => {
           permission: SYSTEM_PERMISSIONS.TREASURY_READ,
         },
         {
+          title: 'Recibos de Caja',
+          path: '/treasury/receipts',
+          icon: <ReceiptLongIcon fontSize="small" />,
+          permission: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
+        },
+        {
+          title: 'Comprobantes de Egreso',
+          path: '/treasury/disbursements',
+          icon: <PaymentsIcon fontSize="small" />,
+          permission: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
+        },
+        {
           title: 'Cuentas por Cobrar',
           path: '/receivables',
           icon: <MonetizationOnIcon fontSize="small" />,
