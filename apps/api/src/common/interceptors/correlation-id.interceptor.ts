@@ -1,10 +1,4 @@
-import {
-  Injectable,
-  NestInterceptor,
-  ExecutionContext,
-  CallHandler,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, NestInterceptor, ExecutionContext, CallHandler, Logger } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
 import type { Request, Response } from 'express';
@@ -19,8 +13,7 @@ export class CorrelationIdInterceptor implements NestInterceptor {
     const res = http.getResponse<Response>();
 
     if (req && !req.correlationId) {
-      const rawHeader =
-        req.headers['x-correlation-id'] || req.headers['X-Correlation-Id'];
+      const rawHeader = req.headers['x-correlation-id'] || req.headers['X-Correlation-Id'];
       const headerValue = Array.isArray(rawHeader) ? rawHeader[0] : rawHeader;
 
       const correlationId =
@@ -49,17 +42,17 @@ export class CorrelationIdInterceptor implements NestInterceptor {
           const durationMs = Date.now() - startTime;
           const statusCode = res?.statusCode || 200;
           this.logger.log(
-            `${method} ${url} ${statusCode} +${durationMs}ms [corr=${correlationId}]`
+            `${method} ${url} ${statusCode} +${durationMs}ms [corr=${correlationId}]`,
           );
         },
         error: (err) => {
           const durationMs = Date.now() - startTime;
           const statusCode = err?.status || err?.statusCode || 500;
           this.logger.warn(
-            `${method} ${url} ${statusCode} +${durationMs}ms [corr=${correlationId}] - ${err?.message || 'Error'}`
+            `${method} ${url} ${statusCode} +${durationMs}ms [corr=${correlationId}] - ${err?.message || 'Error'}`,
           );
         },
-      })
+      }),
     );
   }
 }
