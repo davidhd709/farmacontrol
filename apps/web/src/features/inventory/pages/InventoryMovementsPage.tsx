@@ -29,6 +29,7 @@ import type {
 } from '@farmacia/contracts';
 import { fetchInventoryMovements } from '../api/inventory.api';
 import { fetchProducts } from '../../catalog/api/products.api';
+import { formatSignedQuantity, movementDirection } from '../movement-direction';
 
 export const InventoryMovementsPage = () => {
   const [movements, setMovements] = useState<InventoryMovementDto[]>([]);
@@ -80,13 +81,14 @@ export const InventoryMovementsPage = () => {
   }, [loadMovements]);
 
   const getMovementMeta = (type: string) => {
-    if (type.startsWith('ENTRADA') || type.startsWith('AJUSTE_POSITIVO')) {
+    const direction = movementDirection(type);
+    if (direction === 'in') {
       return {
         color: 'success' as const,
         icon: <ArrowDownwardIcon fontSize="small" />,
       };
     }
-    if (type.startsWith('SALIDA') || type.startsWith('AJUSTE_NEGATIVO')) {
+    if (direction === 'out') {
       return {
         color: 'error' as const,
         icon: <ArrowUpwardIcon fontSize="small" />,
@@ -250,7 +252,7 @@ export const InventoryMovementsPage = () => {
                           </Typography>
                         </TableCell>
                         <TableCell align="right" sx={{ fontWeight: 700 }}>
-                          {m.quantityBaseUnits > 0 ? `+${m.quantityBaseUnits}` : m.quantityBaseUnits}
+                          {formatSignedQuantity(m.movementType, m.quantityBaseUnits)}
                         </TableCell>
                         <TableCell align="right" sx={{ fontWeight: 700 }}>
                           {m.balanceAfterBaseUnits}
