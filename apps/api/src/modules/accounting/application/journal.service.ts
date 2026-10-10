@@ -160,7 +160,9 @@ export class JournalService {
     const accounts = new Map<DbPurpose, string>();
     const purposesToLookup = new Set<DbPurpose>();
     for (const line of input.lines) {
-      if (line.purpose) purposesToLookup.add(line.purpose as DbPurpose);
+      // Una línea con cuenta explícita (p. ej. la subcuenta PUC de un banco) conserva su
+      // propósito como etiqueta y no necesita el mapeo genérico
+      if (line.purpose && !line.accountId) purposesToLookup.add(line.purpose as DbPurpose);
     }
 
     for (const purpose of purposesToLookup) {

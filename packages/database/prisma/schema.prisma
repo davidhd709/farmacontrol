@@ -736,6 +736,7 @@ model Account {
   mappings CompanyAccountingMapping[]
   journalEntryLines JournalEntryLine[]
   expenseCategories ExpenseCategory[]
+  bankAccounts   BankAccount[] @relation("BankAccountLedger")
 
   @@index([parentId])
   @@index([name])
@@ -911,10 +912,12 @@ model BankAccount {
   currency       String         @default("COP") @db.VarChar(10)
   isActive       Boolean        @default(true) @map("is_active")
   notes          String?        @db.VarChar(500)
+  ledgerAccountId String?       @unique @map("ledger_account_id") @db.Uuid
   createdById    String         @map("created_by_id") @db.Uuid
   createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz
   updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz
 
+  ledgerAccount  Account?       @relation("BankAccountLedger", fields: [ledgerAccountId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   createdByUser  User           @relation("UserBankAccounts", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
   movements      BankMovement[]
   sales          Sale[]

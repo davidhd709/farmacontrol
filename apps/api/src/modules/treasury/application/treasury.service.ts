@@ -33,7 +33,41 @@ export interface MovementFilter {
   limit?: number;
 }
 
-function mapAccountToDto(account: BankAccount): BankAccountDto {
+const LEDGER_INCLUDE = { ledgerAccount: { select: { code: true, name: true } } } as const;
+type BankAccountWithLedger = BankAccount & { ledgerAccount?: { code: string; name: string } | null };
+
+/**
+ * La subcuenta del PUC de una cuenta bancaria debe ser del disponible (grupo 11, sin la caja
+ * 1105), activa e imputable, y no estar asignada a otra cuenta bancaria.
+ */
+async function validateLedgerAccount(
+  client: Prisma.TransactionClient | typeof prisma,
+  ledgerAccountId: unknown,
+  bankAccountId?: string,
+): Promise<string> {
+  const id = validateUuid(ledgerAccountId, 'Subcuenta del PUC');
+  const account = await client.account.findUnique({ where: { id } });
+  if (!account) throw new TreasuryValidationError('La subcuenta del PUC no existe.');
+  if (account.type !== 'ASSET' || !account.code.startsWith('11') || account.code.startsWith('1105')) {
+    throw new TreasuryValidationError(
+      'La cuenta bancaria debe vincularse a una subcuenta de bancos del PUC (grupo 11, distinta de caja 1105).',
+    );
+  }
+  if (!account.isActive || !account.allowsMovement) {
+    throw new TreasuryValidationError('La subcuenta del PUC debe estar activa y permitir movimientos.');
+  }
+  const taken = await client.bankAccount.findFirst({
+    where: { ledgerAccountId: id, ...(bankAccountId ? { id: { not: bankAccountId } } : {}) },
+  });
+  if (taken) {
+    throw new TreasuryConflictError(
+      `La subcuenta ${account.code} ya está asignada a la cuenta bancaria '${taken.name}'.`,
+    );
+  }
+  return id;
+}
+
+function mapAccountToDto(account: BankAccountWithLedger): BankAccountDto {
   return {
     id: account.id,
     bankName: account.bankName,
@@ -45,6 +79,9 @@ function mapAccountToDto(account: BankAccount): BankAccountDto {
     currency: account.currency,
     isActive: account.isActive,
     notes: account.notes,
+    ledgerAccountId: account.ledgerAccountId,
+    ledgerAccountCode: account.ledgerAccount?.code ?? null,
+    ledgerAccountName: account.ledgerAccount?.name ?? null,
     createdById: account.createdById,
     createdAt: account.createdAt.toISOString(),
     updatedAt: account.updatedAt.toISOString(),
@@ -93,7 +130,6 @@ export class TreasuryService {
     const initialBalanceStr = dto.initialBalance ?? '0.00';
     const initialBalanceCents = parseMoneyToCents(initialBalanceStr, 'Saldo inicial');
     const notes = typeof dto.notes === 'string' ? dto.notes.trim() || null : null;
-
     const existing = await prisma.bankAccount.findUnique({
       where: {
         bankName_accountNumber: {
@@ -109,6 +145,8 @@ export class TreasuryService {
       );
     }
 
+    const ledgerAccountId = await validateLedgerAccount(prisma, dto.ledgerAccountId);
+
     return prisma.$transaction(async (tx) => {
       const initialBalanceDecimal = new Prisma.Decimal(centsToMoneyString(initialBalanceCents));
       const created = await tx.bankAccount.create({
@@ -122,8 +160,10 @@ export class TreasuryService {
           currency: 'COP',
           isActive: true,
           notes,
+          ledgerAccountId,
           createdById: userId,
         },
+        include: LEDGER_INCLUDE,
       });
 
       if (initialBalanceCents > 0n) {
@@ -152,6 +192,7 @@ export class TreasuryService {
             accountType,
             accountNumber,
             name,
+            ledgerAccountId,
             initialBalance: centsToMoneyString(initialBalanceCents),
           } as unknown as Prisma.InputJsonValue,
         },
@@ -165,6 +206,7 @@ export class TreasuryService {
     const accounts = await prisma.bankAccount.findMany({
       where: includeInactive ? {} : { isActive: true },
       orderBy: [{ isActive: 'desc' }, { bankName: 'asc' }, { name: 'asc' }],
+      include: LEDGER_INCLUDE,
     });
     return accounts.map(mapAccountToDto);
   }
@@ -173,6 +215,7 @@ export class TreasuryService {
     validateUuid(id, 'ID de cuenta bancaria');
     const account = await prisma.bankAccount.findUnique({
       where: { id },
+      include: LEDGER_INCLUDE,
     });
     if (!account) {
       throw new TreasuryNotFoundError('Cuenta bancaria no encontrada.');
@@ -205,6 +248,10 @@ export class TreasuryService {
       }
       data.isActive = dto.isActive;
     }
+    if (dto.ledgerAccountId !== undefined) {
+      // Afecta solo los asientos posteriores; los ya registrados conservan su cuenta
+      data.ledgerAccount = { connect: { id: await validateLedgerAccount(prisma, dto.ledgerAccountId, id) } };
+    }
 
     if (Object.keys(data).length === 0) {
       throw new TreasuryValidationError('No se especificaron campos válidos para actualizar.');
@@ -213,6 +260,7 @@ export class TreasuryService {
     const updated = await prisma.bankAccount.update({
       where: { id },
       data,
+      include: LEDGER_INCLUDE,
     });
 
     await prisma.auditEvent.create({
@@ -222,8 +270,18 @@ export class TreasuryService {
         entityId: id,
         userId,
         details: {
-          before: { name: current.name, isActive: current.isActive, notes: current.notes },
-          after: { name: updated.name, isActive: updated.isActive, notes: updated.notes },
+          before: {
+            name: current.name,
+            isActive: current.isActive,
+            notes: current.notes,
+            ledgerAccountId: current.ledgerAccountId,
+          },
+          after: {
+            name: updated.name,
+            isActive: updated.isActive,
+            notes: updated.notes,
+            ledgerAccountId: updated.ledgerAccountId,
+          },
         } as unknown as Prisma.InputJsonValue,
       },
     });

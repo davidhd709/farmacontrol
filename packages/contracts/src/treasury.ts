@@ -22,6 +22,10 @@ export interface BankAccountDto {
   currency: string;
   isActive: boolean;
   notes: string | null;
+  /** Subcuenta del PUC que representa esta cuenta (p. ej. 11200501) */
+  ledgerAccountId: string | null;
+  ledgerAccountCode: string | null;
+  ledgerAccountName: string | null;
   createdById: string;
   createdAt: string;
   updatedAt: string;
@@ -41,12 +45,16 @@ export interface CreateBankAccountDto {
   name: string;
   initialBalance?: string;
   notes?: string | null;
+  /** Obligatoria: la cuenta bancaria se crea a partir de su subcuenta del PUC */
+  ledgerAccountId: string;
 }
 
 export interface UpdateBankAccountDto {
   name?: string;
   notes?: string | null;
   isActive?: boolean;
+  /** Vincula o cambia la subcuenta del PUC; afecta solo los asientos posteriores */
+  ledgerAccountId?: string;
 }
 
 export interface BankMovementDto {

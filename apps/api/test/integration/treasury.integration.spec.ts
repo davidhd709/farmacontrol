@@ -66,17 +66,33 @@ describe('Treasury & Bank Accounts (Slice 11.4 Integration with PostgreSQL)', ()
 
   const root = '/api/v1/treasury/bank-accounts';
 
+  // Acuerdo del 4 de octubre: cada cuenta bancaria se crea desde su subcuenta del PUC
+  let ledgerSeq = 0;
+  async function ledger(): Promise<string> {
+    ledgerSeq += 1;
+    const account = await prisma.account.create({
+      data: {
+        code: `112005${String(ledgerSeq).padStart(2, '0')}`,
+        name: `Cuenta de ahorro ${ledgerSeq}`,
+        type: 'ASSET',
+        level: 1,
+        allowsMovement: true,
+      },
+    });
+    return account.id;
+  }
+
   it('permite al cajero seleccionar cuentas activas sin exponer saldo ni número completo', async () => {
     const created = await request(app.getHttpServer())
       .post(root)
       .set('Cookie', adminCookie)
-      .send({ bankName: 'Banco Operativo', accountType: 'AHORROS', accountNumber: '1234567890', name: 'Recaudos' });
+      .send({ bankName: 'Banco Operativo', accountType: 'AHORROS', accountNumber: '1234567890', name: 'Recaudos', ledgerAccountId: await ledger() });
     expect(created.status).toBe(201);
 
     const shortNumber = await request(app.getHttpServer())
       .post(root)
       .set('Cookie', adminCookie)
-      .send({ bankName: 'Medio Corto', accountType: 'DIGITAL', accountNumber: '123', name: 'Billetera' });
+      .send({ bankName: 'Medio Corto', accountType: 'DIGITAL', accountNumber: '123', name: 'Billetera', ledgerAccountId: await ledger() });
     expect(shortNumber.status).toBe(201);
 
     const res = await request(app.getHttpServer())
@@ -107,6 +123,7 @@ describe('Treasury & Bank Accounts (Slice 11.4 Integration with PostgreSQL)', ()
       .post(root)
       .set('Cookie', cashierCookie)
       .send({
+        ledgerAccountId: await ledger(),
         bankName: 'Bancolombia',
         accountType: 'AHORROS',
         accountNumber: '1234567890',
@@ -120,6 +137,7 @@ describe('Treasury & Bank Accounts (Slice 11.4 Integration with PostgreSQL)', ()
       .post(root)
       .set('Cookie', adminCookie)
       .send({
+        ledgerAccountId: await ledger(),
         bankName: 'Bancolombia',
         accountType: 'AHORROS',
         accountNumber: '9876543210',
@@ -155,6 +173,7 @@ describe('Treasury & Bank Accounts (Slice 11.4 Integration with PostgreSQL)', ()
 
   it('rechaza con 409 Conflict si se intenta registrar una cuenta bancaria duplicada', async () => {
     const body = {
+      ledgerAccountId: await ledger(),
       bankName: 'Davivienda',
       accountType: 'CORRIENTE',
       accountNumber: '1122334455',
@@ -181,6 +200,7 @@ describe('Treasury & Bank Accounts (Slice 11.4 Integration with PostgreSQL)', ()
       .post(root)
       .set('Cookie', adminCookie)
       .send({
+        ledgerAccountId: await ledger(),
         bankName: 'Nequi',
         accountType: 'DIGITAL',
         accountNumber: '3001234567',
@@ -241,6 +261,7 @@ describe('Treasury & Bank Accounts (Slice 11.4 Integration with PostgreSQL)', ()
       .post(root)
       .set('Cookie', adminCookie)
       .send({
+        ledgerAccountId: await ledger(),
         bankName: 'Bancolombia',
         accountType: 'AHORROS',
         accountNumber: '4455667788',
@@ -279,6 +300,7 @@ describe('Treasury & Bank Accounts (Slice 11.4 Integration with PostgreSQL)', ()
       .post(root)
       .set('Cookie', adminCookie)
       .send({
+        ledgerAccountId: await ledger(),
         bankName: 'Banco Precisión',
         accountType: 'AHORROS',
         accountNumber: '990000001',
@@ -310,6 +332,7 @@ describe('Treasury & Bank Accounts (Slice 11.4 Integration with PostgreSQL)', ()
       .post(root)
       .set('Cookie', adminCookie)
       .send({
+        ledgerAccountId: await ledger(),
         bankName: 'Banco 1',
         accountType: 'AHORROS',
         accountNumber: '111',
@@ -321,6 +344,7 @@ describe('Treasury & Bank Accounts (Slice 11.4 Integration with PostgreSQL)', ()
       .post(root)
       .set('Cookie', adminCookie)
       .send({
+        ledgerAccountId: await ledger(),
         bankName: 'Banco 2',
         accountType: 'CORRIENTE',
         accountNumber: '222',

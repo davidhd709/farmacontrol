@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Autocomplete,
   Button,
   Dialog,
   DialogActions,
@@ -14,6 +15,8 @@ import {
   TextField,
 } from '@mui/material';
 import type { BankAccountDto, BankAccountType, CreateBankAccountDto, UpdateBankAccountDto } from '@farmacia/contracts';
+import { useAccounts } from '../../accounting/hooks/useAccounting';
+import type { AccountDto } from '../../accounting/api/accounting.api';
 
 interface BankAccountDialogProps {
   open: boolean;
@@ -52,7 +55,25 @@ export const BankAccountDialog: React.FC<BankAccountDialogProps> = ({
   const [initialBalance, setInitialBalance] = useState('0.00');
   const [notes, setNotes] = useState('');
   const [isActive, setIsActive] = useState(true);
+  const [ledgerAccountId, setLedgerAccountId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Acuerdo del 4 de octubre: la cuenta bancaria se crea desde su subcuenta del PUC
+  // (disponible 11, sin la caja 1105). El servidor valida de nuevo.
+  const { data: accounts = [] } = useAccounts();
+  const ledgerOptions = useMemo(
+    () =>
+      accounts.filter(
+        (a) =>
+          a.type === 'ASSET' &&
+          a.isActive &&
+          a.allowsMovement &&
+          a.code.startsWith('11') &&
+          !a.code.startsWith('1105'),
+      ),
+    [accounts],
+  );
+  const selectedLedger = ledgerOptions.find((a) => a.id === ledgerAccountId) ?? null;
 
   useEffect(() => {
     if (accountToEdit) {
@@ -63,6 +84,7 @@ export const BankAccountDialog: React.FC<BankAccountDialogProps> = ({
       setInitialBalance(accountToEdit.initialBalance);
       setNotes(accountToEdit.notes ?? '');
       setIsActive(accountToEdit.isActive);
+      setLedgerAccountId(accountToEdit.ledgerAccountId);
     } else {
       setBankName('');
       setAccountType('AHORROS');
@@ -71,6 +93,7 @@ export const BankAccountDialog: React.FC<BankAccountDialogProps> = ({
       setInitialBalance('0.00');
       setNotes('');
       setIsActive(true);
+      setLedgerAccountId(null);
     }
     setErrorMessage(null);
   }, [accountToEdit, open]);
@@ -90,6 +113,9 @@ export const BankAccountDialog: React.FC<BankAccountDialogProps> = ({
           name: name.trim(),
           notes: notes.trim() || null,
           isActive,
+          ...(ledgerAccountId && ledgerAccountId !== accountToEdit?.ledgerAccountId
+            ? { ledgerAccountId }
+            : {}),
         });
       } else {
         if (!bankName.trim()) {
@@ -100,6 +126,10 @@ export const BankAccountDialog: React.FC<BankAccountDialogProps> = ({
           setErrorMessage('El número de cuenta es obligatorio.');
           return;
         }
+        if (!ledgerAccountId) {
+          setErrorMessage('Seleccione la subcuenta del PUC que representa esta cuenta bancaria.');
+          return;
+        }
         await onSubmit({
           bankName: bankName.trim(),
           accountType,
@@ -107,6 +137,7 @@ export const BankAccountDialog: React.FC<BankAccountDialogProps> = ({
           name: name.trim(),
           initialBalance: initialBalance.trim() || '0.00',
           notes: notes.trim() || null,
+          ledgerAccountId,
         });
       }
       onClose();
@@ -192,6 +223,26 @@ export const BankAccountDialog: React.FC<BankAccountDialogProps> = ({
                 disabled
               />
             )}
+
+            <Autocomplete<AccountDto>
+              options={ledgerOptions}
+              value={selectedLedger}
+              onChange={(_, value) => setLedgerAccountId(value?.id ?? null)}
+              getOptionLabel={(a) => `${a.code} — ${a.name}`}
+              isOptionEqualToValue={(a, b) => a.id === b.id}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  // Sin `required` nativo: la validación propia muestra un mensaje claro
+                  label={isEditing ? 'Subcuenta del PUC' : 'Subcuenta del PUC *'}
+                  helperText={
+                    isEditing && !accountToEdit?.ledgerAccountId
+                      ? 'Esta cuenta aún no está vinculada al PUC; sus asientos usan la cuenta general de bancos.'
+                      : 'Si no existe, créela primero en Contabilidad › Plan de cuentas (grupo 11).'
+                  }
+                />
+              )}
+            />
 
             <TextField
               label="Nombre Descriptivo de la Cuenta"

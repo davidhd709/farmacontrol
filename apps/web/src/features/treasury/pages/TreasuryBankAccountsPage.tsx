@@ -260,6 +260,11 @@ export function TreasuryBankAccountsPage() {
                         <Typography variant="caption" color="text.secondary">
                           {acc.accountNumber} • {acc.accountType}
                         </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                          {acc.ledgerAccountCode
+                            ? `PUC ${acc.ledgerAccountCode}`
+                            : 'Sin subcuenta del PUC: edítela para vincularla'}
+                        </Typography>
                       </Box>
                       <Chip
                         label={acc.isActive ? 'Activa' : 'Inactiva'}

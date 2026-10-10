@@ -464,6 +464,7 @@ export class CreditNotesService {
                 taxTotal: creditNote.taxTotal,
                 total: creditNote.total,
                 refundMethod: creditNote.refundMethod,
+                bankAccountId: creditNote.refundMethod === 'TRANSFERENCIA' ? sale.bankAccountId : null,
                 restock: creditNote.restock,
                 costTotal: centsToMoneyString(totalCostCents),
                 createdById: userId,

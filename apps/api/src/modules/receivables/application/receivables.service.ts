@@ -267,6 +267,7 @@ export class ReceivablesService {
             receivableId,
             amount: payment.amount,
             paymentMethod: method,
+            bankAccountId: method === 'TRANSFERENCIA' ? payload.bankAccountId : null,
             createdByUserId: userId,
             customerName: updated.customer?.name,
             invoiceNumber: updated.sale?.invoiceNumber,

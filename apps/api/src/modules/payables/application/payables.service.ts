@@ -281,6 +281,7 @@ export class PayablesService {
             payableId,
             amount: payment.amount,
             paymentMethod: method,
+            bankAccountId: method === 'TRANSFERENCIA' ? payload.bankAccountId : null,
             createdByUserId: userId,
             supplierName: updated.supplier?.name,
             invoiceNumber: updated.purchase?.invoiceNumber,

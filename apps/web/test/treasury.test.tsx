@@ -7,8 +7,23 @@ import { SYSTEM_PERMISSIONS, SYSTEM_ROLES } from '@farmacia/contracts';
 import { AuthContext, type AuthContextValue } from '../src/features/auth/context/auth-context';
 import * as treasuryApi from '../src/features/treasury/api/treasury.api';
 import { TreasuryBankAccountsPage } from '../src/features/treasury/pages/TreasuryBankAccountsPage';
+import * as accountingApi from '../src/features/accounting/api/accounting.api';
 
 vi.mock('../src/features/treasury/api/treasury.api');
+
+const pucAccount = (id: string, code: string, name: string): accountingApi.AccountDto => ({
+  id,
+  code,
+  name,
+  type: 'ASSET',
+  nature: 'DEBIT',
+  parentId: null,
+  level: 4,
+  allowsMovement: true,
+  isActive: true,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+});
 
 const mockAccounts = [
   {
@@ -118,6 +133,10 @@ describe('TreasuryBankAccountsPage (Slice 11.4 Frontend)', () => {
     vi.mocked(treasuryApi.getBankAccounts).mockResolvedValue(mockAccounts as any);
     vi.mocked(treasuryApi.getBankAccountSummary).mockResolvedValue(mockSummary as any);
     vi.mocked(treasuryApi.getBankMovements).mockResolvedValue(mockMovements as any);
+    vi.spyOn(accountingApi, 'fetchAccounts').mockResolvedValue([
+      pucAccount('caja', '110505', 'Caja general'),
+      pucAccount('davivienda', '11100502', 'Davivienda corriente'),
+    ]);
   });
 
   it('muestra mensaje de advertencia si el usuario no tiene permisos de lectura', async () => {
@@ -187,6 +206,16 @@ describe('TreasuryBankAccountsPage (Slice 11.4 Frontend)', () => {
     fireEvent.change(nameInput, { target: { value: 'Cuenta Pagos' } });
 
     const submitBtn = screen.getByTestId('submit-bank-account-btn');
+    // Sin subcuenta del PUC no se crea (acuerdo del 4 de octubre)
+    fireEvent.click(submitBtn);
+    expect(await screen.findByText(/Seleccione la subcuenta del PUC/)).toBeInTheDocument();
+    expect(treasuryApi.createBankAccount).not.toHaveBeenCalled();
+
+    const ledgerInput = screen.getByRole('combobox', { name: /Subcuenta del PUC/ });
+    fireEvent.mouseDown(ledgerInput);
+    // La caja no se ofrece como subcuenta bancaria
+    expect(screen.queryByRole('option', { name: /110505/ })).toBeNull();
+    fireEvent.click(await screen.findByRole('option', { name: '11100502 — Davivienda corriente' }));
     fireEvent.click(submitBtn);
 
     await waitFor(() => {
@@ -195,6 +224,7 @@ describe('TreasuryBankAccountsPage (Slice 11.4 Frontend)', () => {
           bankName: 'Davivienda',
           accountNumber: '9988776655',
           name: 'Cuenta Pagos',
+          ledgerAccountId: 'davivienda',
         }),
       );
     });

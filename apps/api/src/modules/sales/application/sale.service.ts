@@ -457,6 +457,7 @@ export class SaleService {
             taxTotal: sale.taxTotal,
             discountTotal: sale.discountTotal,
             paymentMethod: sale.paymentMethod,
+            bankAccountId: sale.bankAccountId ?? null,
             createdById: sale.createdById,
             createdAt: sale.createdAt,
             lines: sale.lines.map((l) => ({

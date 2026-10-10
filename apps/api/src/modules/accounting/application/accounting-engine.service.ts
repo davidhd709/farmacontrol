@@ -27,6 +27,8 @@ export interface SaleEventInput {
       quantityBaseUnits: number;
     }>;
   }>;
+  /** Cuenta bancaria del movimiento: si está vinculada al PUC se usa su subcuenta */
+  bankAccountId?: string | null;
 }
 
 export interface PurchaseEventInput {
@@ -46,6 +48,8 @@ export interface ReceivablePaymentEventInput {
   createdByUserId?: string | null;
   customerName?: string;
   invoiceNumber?: string;
+  /** Cuenta bancaria del movimiento: si está vinculada al PUC se usa su subcuenta */
+  bankAccountId?: string | null;
 }
 
 export interface PayablePaymentEventInput {
@@ -56,6 +60,8 @@ export interface PayablePaymentEventInput {
   createdByUserId?: string | null;
   supplierName?: string;
   invoiceNumber?: string;
+  /** Cuenta bancaria del movimiento: si está vinculada al PUC se usa su subcuenta */
+  bankAccountId?: string | null;
 }
 
 export interface ExpenseEventInput {
@@ -70,6 +76,8 @@ export interface ExpenseEventInput {
   status: string;
   expenseDate: Date | string;
   createdById?: string | null;
+  /** Cuenta bancaria del movimiento: si está vinculada al PUC se usa su subcuenta */
+  bankAccountId?: string | null;
 }
 
 export interface ExpensePaymentEventInput {
@@ -82,6 +90,8 @@ export interface ExpensePaymentEventInput {
   documentNumber?: string | null;
   createdById?: string | null;
   paymentDate: Date | string;
+  /** Cuenta bancaria del movimiento: si está vinculada al PUC se usa su subcuenta */
+  bankAccountId?: string | null;
 }
 
 export interface CreditNoteEventInput {
@@ -100,6 +110,8 @@ export interface CreditNoteEventInput {
   costTotal?: number | string | Prisma.Decimal;
   createdById?: string | null;
   createdAt?: Date | string;
+  /** Cuenta bancaria del movimiento: si está vinculada al PUC se usa su subcuenta */
+  bankAccountId?: string | null;
 }
 
 export interface DebitNoteEventInput {
@@ -122,6 +134,30 @@ export class AccountingEngineService {
   private readonly logger = new Logger(AccountingEngineService.name);
 
   constructor(private readonly journalService: JournalService) {}
+
+  /**
+   * Subcuenta del PUC de la cuenta bancaria (acuerdo del 4 de octubre). Sin vínculo se usa el
+   * propósito genérico BANK, como antes.
+   */
+  private async bankLedger(bankAccountId: string | null | undefined, client: Tx | typeof prisma) {
+    if (!bankAccountId) return null;
+    const bank = await client.bankAccount.findUnique({
+      where: { id: bankAccountId },
+      select: { ledgerAccountId: true },
+    });
+    return bank?.ledgerAccountId ?? null;
+  }
+
+  /** Con subcuenta propia, el asiento no depende del mapeo genérico BANK. */
+  private withoutBank(purposes: DbPurpose[], ledger: string | null): DbPurpose[] {
+    return ledger ? purposes.filter((purpose) => purpose !== 'BANK') : purposes;
+  }
+
+  private bindBank(lines: JournalLineInput[], ledger: string | null): JournalLineInput[] {
+    return ledger
+      ? lines.map((line) => (line.purpose === 'BANK' ? { ...line, accountId: ledger } : line))
+      : lines;
+  }
 
   /**
    * Genera el asiento contable automático al confirmar una venta en POS.
@@ -216,7 +252,12 @@ export class AccountingEngineService {
     }
     const salesCreditCents = separateDiscount ? subtotalCents + discountCents : subtotalCents;
 
-    const canPost = await this.journalService.canPostForPurposes(requiredPurposes, entryDate, client);
+    const bankLedger = await this.bankLedger(sale.bankAccountId, client);
+    const canPost = await this.journalService.canPostForPurposes(
+      this.withoutBank(requiredPurposes, bankLedger),
+      entryDate,
+      client,
+    );
     if (!canPost) {
       this.logger.warn(
         `Venta ${sale.invoiceNumber}: propósitos contables pendientes de mapeo. Se omite asiento automático.`,
@@ -290,7 +331,7 @@ export class AccountingEngineService {
         sourceType: 'SALE',
         sourceId: sale.id,
         createdById: sale.createdById ?? undefined,
-        lines,
+        lines: this.bindBank(lines, bankLedger),
       },
       tx,
     );
@@ -394,8 +435,9 @@ export class AccountingEngineService {
       payment.paymentMethod === 'EFECTIVO' ? 'CASH' : 'BANK';
 
     const now = new Date();
+    const bankLedger = await this.bankLedger(payment.bankAccountId, client);
     const canPost = await this.journalService.canPostForPurposes(
-      [paymentPurpose, 'CUSTOMERS'],
+      this.withoutBank([paymentPurpose, 'CUSTOMERS'], bankLedger),
       now,
       client,
     );
@@ -429,7 +471,7 @@ export class AccountingEngineService {
         sourceType: 'RECEIVABLE_PAYMENT',
         sourceId: payment.id,
         createdById: payment.createdByUserId ?? undefined,
-        lines,
+        lines: this.bindBank(lines, bankLedger),
       },
       tx,
     );
@@ -478,8 +520,9 @@ export class AccountingEngineService {
       payment.paymentMethod === 'EFECTIVO' ? 'CASH' : 'BANK';
 
     const now = new Date();
+    const bankLedger = await this.bankLedger(payment.bankAccountId, client);
     const canPost = await this.journalService.canPostForPurposes(
-      ['SUPPLIERS', paymentPurpose],
+      this.withoutBank(['SUPPLIERS', paymentPurpose], bankLedger),
       now,
       client,
     );
@@ -513,7 +556,7 @@ export class AccountingEngineService {
         sourceType: 'PAYABLE_PAYMENT',
         sourceId: payment.id,
         createdById: payment.createdByUserId ?? undefined,
-        lines,
+        lines: this.bindBank(lines, bankLedger),
       },
       tx,
     );
@@ -567,7 +610,12 @@ export class AccountingEngineService {
       : DbPurpose.SUPPLIERS;
 
     // Verificar si se puede postear con la contrapartida requerida
-    const canPost = await this.journalService.canPostForPurposes([contraPurpose], date, tx);
+    const bankLedger = isPaid ? await this.bankLedger(expense.bankAccountId, tx ?? prisma) : null;
+    const canPost = await this.journalService.canPostForPurposes(
+      this.withoutBank([contraPurpose], bankLedger),
+      date,
+      tx,
+    );
     if (!canPost) {
       this.logger.warn(
         `[Contabilidad Automática] Asiento de gasto omitido por falta de mapeo contable activo para ${contraPurpose}.`,
@@ -599,7 +647,7 @@ export class AccountingEngineService {
         sourceType: 'EXPENSE',
         sourceId: expense.id,
         createdById: expense.createdById ?? undefined,
-        lines,
+        lines: this.bindBank(lines, bankLedger),
       },
       tx,
     );
@@ -645,8 +693,9 @@ export class AccountingEngineService {
     const isBank = payment.paymentMethod === 'TRANSFERENCIA';
     const paymentPurpose = isBank ? DbPurpose.BANK : DbPurpose.CASH;
 
+    const bankLedger = await this.bankLedger(payment.bankAccountId, tx ?? prisma);
     const canPost = await this.journalService.canPostForPurposes(
-      [DbPurpose.SUPPLIERS, paymentPurpose],
+      this.withoutBank([DbPurpose.SUPPLIERS, paymentPurpose], bankLedger),
       date,
       tx,
     );
@@ -679,7 +728,7 @@ export class AccountingEngineService {
         sourceType: 'EXPENSE_PAYMENT',
         sourceId: payment.id,
         createdById: payment.createdById ?? undefined,
-        lines,
+        lines: this.bindBank(lines, bankLedger),
       },
       tx,
     );
@@ -755,8 +804,9 @@ export class AccountingEngineService {
 
     const entryDate = note.createdAt ? new Date(note.createdAt) : new Date();
 
+    const bankLedger = await this.bankLedger(note.bankAccountId, client);
     const canPost = await this.journalService.canPostForPurposes(
-      requiredPurposes,
+      this.withoutBank(requiredPurposes, bankLedger),
       entryDate,
       client,
     );
@@ -818,7 +868,7 @@ export class AccountingEngineService {
         sourceType: 'CREDIT_NOTE',
         sourceId: note.id,
         createdById: note.createdById ?? undefined,
-        lines,
+        lines: this.bindBank(lines, bankLedger),
       },
       tx,
     );
