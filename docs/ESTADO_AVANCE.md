@@ -11,14 +11,14 @@ Este documento resume qué se corrigió desde la auditoría técnica, qué falta
 | 0 | Higiene de base: pruebas estables, worker en la suite, README | **IMPLEMENTADO** |
 | 1 | Integridad de datos y dinero (P0, P1 de backend y P2 de integridad) | **IMPLEMENTADO** (cerrada el 10 de octubre); lo que depende del cliente quedó con la opción conservadora (sección 4) |
 | 2 | Producción y seguridad | **IMPLEMENTADO** (10 de octubre); falta que el cliente provea el destino externo de respaldos (sección 3) |
-| 3 | Acuerdos de la reunión del 4 de octubre | PENDIENTE |
+| 3 | Acuerdos de la reunión del 4 de octubre | **IMPLEMENTADO** (10 de octubre), salvo el botón de recordatorio de pago (bloqueado por la decisión 15) |
 | 4 | Contrato de API y estabilidad | PENDIENTE |
 | 5 | Frontend y UX | PENDIENTE |
 | 6 | Pruebas de cierre (E2E, concurrencia, permisos) | PENDIENTE |
 | 7 | Decisiones del cliente | EN PROGRESO: preguntas identificadas, sin respuesta |
 | 8 | Aceptación (UAT) y release v1.0.0 | PENDIENTE |
 
-**Calidad al corte:** typecheck sin errores, lint sin errores (advertencias `any` preexistentes), **783 pruebas en 115 archivos, todas en verde** (una corrida previa tuvo 1 falla intermitente que no se repitió).
+**Calidad al corte:** typecheck sin errores, lint sin errores (advertencias `any` preexistentes), **826 pruebas en 127 archivos, todas en verde**.
 
 ## 2. Qué se hizo
 
@@ -67,6 +67,24 @@ Además: cantidades que no dan unidades base enteras se rechazan en compras y ve
 
 Verificación de infraestructura: `caddy validate`; Caddy real delante de servicios simulados (cabeceras, `X-Forwarded-For` falsificado descartado, 413 sobre 10 MB); imagen de la API construida y probada contra `postgres:18` (migraciones, `/health` 200/503, SIGTERM en 1 s, respaldo como usuario `node`); `tests/infra/run-backup-e2e.sh` (19 verificaciones); el bundle de la SPA no usa `eval` ni `new Function`.
 
+### Fase 3 — Acuerdos del 4 de octubre
+
+| Acuerdo | Qué hace ahora | Commit |
+|---|---|---|
+| Naturaleza débito/crédito | Cada cuenta tiene naturaleza (tipo, sufijo `(DB)`/`(CR)` heredado, correctoras del activo); auxiliares y balance de comprobación firman el saldo por naturaleza; editable en el PUC | `46eb995` |
+| Estado de resultados | **Corregido:** las ventas de 413595 (ventas excluidas) se mostraban como descuentos | `86c808a` |
+| Bloqueo de documentos | Corte por fecha, distinto del cierre de período, con historial y motivo; aplica a todo asiento y reversión | `fafb791` |
+| Notas contables manuales | Asiento libre con fecha elegida, consecutivo `NTC-`, idempotente; desde el libro diario | `067aace` |
+| Cierre anual | Vista previa y asiento al 31 de diciembre que lleva el resultado a 3705 o 3710; una vez por año, reversible | `5db56cd` |
+| Descuentos en 4175 (T-31) | La venta se registra bruta y el descuento en `SALES_DISCOUNTS` | `ba7101a` |
+| Bancos desde el PUC | Cada cuenta bancaria tiene su subcuenta del PUC; los asientos de sus movimientos la usan | `b9bb453` |
+| Caja y bancos D/C/Saldo | Columnas Débito (positivo), Crédito (negativo) y Saldo en caja, bancos y reporte de caja. **Corregido:** el reporte de caja mostraba las ventas en efectivo como egresos | `4d74712`, `7619021` |
+| Recibos de caja y comprobantes de egreso | Todo movimiento de caja o banco genera su RC o CE con consecutivo, en la misma transacción (ADR-002); apartados independientes e imprimibles | `0ef1990` |
+| Filtros rápidos de fecha | Hoy, este mes, mes anterior y año a la fecha en todos los reportes. **Corregido:** "Hoy" y las fechas por defecto de gastos y pagos saltaban al día siguiente desde las 7 p. m. | `55f72e8` |
+| Terceros unificado | Clientes y proveedores se registran siempre como terceros; las pantallas separadas se retiraron | `2aee17c` |
+| Aviso a proveedor 110–120 días | Reporte de lotes por vencer con proveedor y estado (avisar, atrasado, fuera de plazo) | `7bc296a` |
+| Botón manual de recordatorio de pago | **BLOQUEADO:** falta definir el canal (decisión 15) | — |
+
 ## 3. Pasos obligatorios al desplegar estos cambios
 
 1. **Respaldo** de la base antes de migrar.
@@ -86,6 +104,13 @@ Fase 2:
 8. Levantar `backup-scheduler`, forzar un respaldo y hacer el **primer simulacro** desde la copia externa.
 9. Verificar en el navegador del servidor de pruebas que la SPA carga sin errores de CSP en la consola.
 
+Fase 3 (6 migraciones nuevas; se probaron sobre una copia de la base de desarrollo):
+
+10. Tras migrar, revisar la naturaleza de las cuentas correctoras y de las que traen `(DB)`/`(CR)` en el PUC; corregir en el Plan de cuentas las que la contadora indique.
+11. Configurar los propósitos `RETAINED_EARNINGS` (370505) y `ACCUMULATED_LOSSES` (371005) antes del primer cierre anual, y `SALES_DISCOUNTS` (417506) para que los descuentos se registren aparte.
+12. Vincular cada cuenta bancaria existente con su subcuenta del PUC (Tesorería › editar cuenta); mientras no se vincule, sus asientos usan la cuenta general de bancos.
+13. Los movimientos de caja y banco existentes ya reciben su recibo o comprobante, numerados en orden cronológico.
+
 ## 4. Decisiones del cliente pendientes
 
 Ninguna se implementó por supuesto; las que se tocaron quedaron con la opción conservadora.
@@ -103,7 +128,7 @@ Ninguna se implementó por supuesto; las que se tocaron quedaron con la opción 
 | 9 | Cupo y plazo de crédito | HU-BLOQ-02 | No existe |
 | 10 | Excepción a FEFO | HU-BLOQ-01 | FEFO obligatorio |
 | 11 | Matriz completa acción × rol | T-18 | Seed actual |
-| 12 | Datos legales y consecutivo del comprobante | T-03 | Comprobante sin datos legales |
+| 12 | Datos legales y consecutivo del comprobante | T-03 | Comprobante sin datos legales. Los prefijos `RC-`, `CE-` y `NTC-` son provisionales |
 | 13 | Proceso de devolución a proveedor y descuento de compra | T-12, T-15 | No existe |
 | 14 | Reglas de promociones | T-37 a T-39 | No existe |
 | 15 | Canal del recordatorio de pago y franja "Corriente" en cartera | Fase 3 | No existe / franja extra |
@@ -113,18 +138,7 @@ Ninguna se implementó por supuesto; las que se tocaron quedaron con la opción 
 ## 5. Qué falta por fase
 
 ### Fase 3 — Acuerdos del 4 de octubre
-- Naturaleza débito/crédito en el PUC.
-- Bloqueo de documentos por fecha (distinto del cierre de período).
-- Notas contables manuales con fecha elegida.
-- Cierre anual hacia 3705/3710.
-- Recibos de caja y comprobantes de egreso con consecutivo, ligados a caja y bancos.
-- Columnas Débito / Crédito / Saldo en caja y bancos.
-- Cuentas bancarias vinculadas a cuentas del PUC.
-- Descuentos de venta contabilizados en 4175 (T-31).
-- Filtros rápidos de fecha en todos los reportes.
-- Terceros unificado: retirar pantallas separadas de clientes y proveedores.
-- Botón manual de recordatorio de pago.
-- Aviso a proveedor a 110–120 días del vencimiento.
+- Botón manual de recordatorio de pago: bloqueado hasta definir el canal (decisión 15).
 
 ### Fase 4 — API y estabilidad
 - OpenAPI en `/api/v1/docs`.
@@ -161,8 +175,11 @@ Ninguna se implementó por supuesto; las que se tocaron quedaron con la opción 
 - **Rate limit en memoria:** válido con una sola instancia de la API. Un ataque distribuido contra una cuenta solo lo frena el límite por IP y el costo de Argon2.
 - **RPO de 24 horas:** no hay archivado continuo de WAL (PITR).
 - **Límite por IP en la farmacia:** si todos los equipos salen por la misma IP pública, 20 fallos en 15 minutos bloquean el login en la sede; ajustable con `AUTH_RATE_LIMIT_IP_MAX_ATTEMPTS`.
+- **Terceros:** `ThirdPartyService.createThirdParty` crea el cliente o proveedor y el tercero sin una transacción común; editar un cliente o proveedor no actualiza su tercero. Las líneas de notas contables no llevan tercero.
+- **Notas crédito y descuentos:** la devolución se registra neta del descuento en `SALES_RETURNS`; no se revierte la parte proporcional en `SALES_DISCOUNTS`.
+- **Fechas en el frontend:** quedan usos de `toISOString()` como fecha de negocio fuera de las pantallas tocadas (nombres de archivos exportados, otras pantallas); revisar con la fase 4 de fechas en America/Bogota.
 - 128 advertencias de lint por `any` y componentes de más de 600 líneas, a reducir solo cuando se toquen.
 
 ## 7. Siguiente paso recomendado
 
-Enviar al cliente las decisiones de la sección 4 junto con el pedido del destino externo de respaldos (fase 2, paso 7) y seguir con la **Fase 3** (acuerdos del 4 de octubre, ya aprobados por el cliente salvo el canal del recordatorio, decisión 15) o la **Fase 4** (contrato de API y estabilidad), que no depende de ninguna decisión.
+Validar con la contadora, en el ambiente de pruebas, la naturaleza de las cuentas, el cierre anual y los recibos/comprobantes; enviarle las decisiones de la sección 4 (incluido el canal del recordatorio de pago) junto con el pedido del destino externo de respaldos. En paralelo, seguir con la **Fase 4** (contrato de API y estabilidad), que no depende de ninguna decisión.
