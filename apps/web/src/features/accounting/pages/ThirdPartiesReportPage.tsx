@@ -35,6 +35,7 @@ import {
   type ThirdPartyRowDto,
 } from '../api/accounting.api';
 import { ThirdPartyAutocomplete } from '../../third-parties/components/ThirdPartyAutocomplete';
+import { QuickDateRange, quickRange } from '../../../components/QuickDateRange';
 
 function formatMoney(value: string | number): string {
   const num = typeof value === 'number' ? value : Number(value);
@@ -53,9 +54,7 @@ export const ThirdPartiesReportPage = () => {
   const { hasPermission } = usePermissions();
   const navigate = useNavigate();
 
-  const now = new Date();
-  const firstDayOfYear = new Date(now.getFullYear(), 0, 1).toISOString().slice(0, 10);
-  const today = now.toISOString().slice(0, 10);
+  const { from: firstDayOfYear, to: today } = quickRange('ytd');
 
   const [fromDate, setFromDate] = useState(firstDayOfYear);
   const [toDate, setToDate] = useState(today);
@@ -160,6 +159,12 @@ export const ThirdPartiesReportPage = () => {
                 Exportar Excel (.xlsx)
               </Button>
             </Stack>
+            <QuickDateRange
+              onSelect={({ from, to }) => {
+                setFromDate(from);
+                setToDate(to);
+              }}
+            />
 
             {selectedThirdParty && (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, bgcolor: 'action.hover', p: 1, borderRadius: 1 }}>

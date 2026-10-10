@@ -23,6 +23,7 @@ import { useQuery } from '@tanstack/react-query';
 import { SYSTEM_PERMISSIONS, type BalanceSheetCategoryGroupDto } from '@farmacia/contracts';
 import { usePermissions } from '../../auth/hooks/usePermissions';
 import { fetchBalanceSheet, exportBalanceSheetExcel } from '../api/accounting.api';
+import { localIsoDate } from '../../../components/QuickDateRange';
 
 function formatMoney(value: string | number | undefined | null): string {
   if (value === undefined || value === null) return '$0.00';
@@ -75,7 +76,7 @@ const CategoryGroupTable = ({ group }: GroupTableProps) => {
 export const BalanceSheetPage = () => {
   const { hasPermission } = usePermissions();
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localIsoDate(new Date());
   const [asOfDate, setAsOfDate] = useState(today);
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
@@ -89,12 +90,12 @@ export const BalanceSheetPage = () => {
   const handleShortcut = (type: 'today' | 'last_month_end' | 'last_year_end') => {
     const d = new Date();
     if (type === 'today') {
-      setAsOfDate(d.toISOString().slice(0, 10));
+      setAsOfDate(localIsoDate(d));
     } else if (type === 'last_month_end') {
-      const endLastMonth = new Date(d.getFullYear(), d.getMonth(), 0).toISOString().slice(0, 10);
+      const endLastMonth = localIsoDate(new Date(d.getFullYear(), d.getMonth(), 0));
       setAsOfDate(endLastMonth);
     } else if (type === 'last_year_end') {
-      const endLastYear = new Date(d.getFullYear() - 1, 11, 31).toISOString().slice(0, 10);
+      const endLastYear = localIsoDate(new Date(d.getFullYear() - 1, 11, 31));
       setAsOfDate(endLastYear);
     }
   };

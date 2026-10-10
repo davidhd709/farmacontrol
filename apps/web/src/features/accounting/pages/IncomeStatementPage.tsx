@@ -25,6 +25,7 @@ import { useQuery } from '@tanstack/react-query';
 import { SYSTEM_PERMISSIONS } from '@farmacia/contracts';
 import { usePermissions } from '../../auth/hooks/usePermissions';
 import { fetchIncomeStatement, exportIncomeStatementExcel } from '../api/accounting.api';
+import { QuickDateRange, quickRange } from '../../../components/QuickDateRange';
 
 function formatMoney(value: string | number | undefined | null): string {
   if (value === undefined || value === null) return '$0.00';
@@ -36,11 +37,7 @@ function formatMoney(value: string | number | undefined | null): string {
 export const IncomeStatementPage = () => {
   const { hasPermission } = usePermissions();
 
-  const now = new Date();
-  const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-    .toISOString()
-    .slice(0, 10);
-  const today = now.toISOString().slice(0, 10);
+  const { from: firstDayOfMonth, to: today } = quickRange('this_month');
 
   const [fromDate, setFromDate] = useState(firstDayOfMonth);
   const [toDate, setToDate] = useState(today);
@@ -52,30 +49,6 @@ export const IncomeStatementPage = () => {
     queryFn: () => fetchIncomeStatement(fromDate, toDate),
     enabled: Boolean(fromDate && toDate),
   });
-
-  const handleShortcut = (type: 'today' | 'this_month' | 'last_month' | 'ytd') => {
-    const d = new Date();
-    if (type === 'today') {
-      const t = d.toISOString().slice(0, 10);
-      setFromDate(t);
-      setToDate(t);
-    } else if (type === 'this_month') {
-      const f = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
-      const t = d.toISOString().slice(0, 10);
-      setFromDate(f);
-      setToDate(t);
-    } else if (type === 'last_month') {
-      const f = new Date(d.getFullYear(), d.getMonth() - 1, 1).toISOString().slice(0, 10);
-      const t = new Date(d.getFullYear(), d.getMonth(), 0).toISOString().slice(0, 10);
-      setFromDate(f);
-      setToDate(t);
-    } else if (type === 'ytd') {
-      const f = new Date(d.getFullYear(), 0, 1).toISOString().slice(0, 10);
-      const t = d.toISOString().slice(0, 10);
-      setFromDate(f);
-      setToDate(t);
-    }
-  };
 
   const handleExport = async () => {
     try {
@@ -149,20 +122,12 @@ export const IncomeStatementPage = () => {
               </Button>
             </Stack>
 
-            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
-              <Button size="small" variant="text" onClick={() => handleShortcut('today')}>
-                Hoy
-              </Button>
-              <Button size="small" variant="text" onClick={() => handleShortcut('this_month')}>
-                Este Mes
-              </Button>
-              <Button size="small" variant="text" onClick={() => handleShortcut('last_month')}>
-                Mes Anterior
-              </Button>
-              <Button size="small" variant="text" onClick={() => handleShortcut('ytd')}>
-                Año a la Fecha
-              </Button>
-            </Stack>
+            <QuickDateRange
+              onSelect={({ from, to }) => {
+                setFromDate(from);
+                setToDate(to);
+              }}
+            />
           </Stack>
         </Paper>
 

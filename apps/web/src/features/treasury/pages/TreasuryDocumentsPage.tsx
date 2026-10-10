@@ -25,6 +25,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import type { TreasuryDocumentDto, TreasuryDocumentType } from '@farmacia/contracts';
 import { getTreasuryDocuments } from '../api/treasury.api';
+import { QuickDateRange } from '../../../components/QuickDateRange';
 
 const LABELS: Record<TreasuryDocumentType, { title: string; singular: string; description: string }> = {
   RECIBO_CAJA: {
@@ -113,6 +114,15 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
               sx={{ flexGrow: 1 }}
             />
           </Stack>
+          <Box sx={{ mt: 1.5 }}>
+            <QuickDateRange
+              onSelect={({ from, to }) => {
+                setFromDate(from);
+                setToDate(to);
+                setPage(0);
+              }}
+            />
+          </Box>
         </Paper>
 
         {isError && <Alert severity="error">{(error as Error).message}</Alert>}

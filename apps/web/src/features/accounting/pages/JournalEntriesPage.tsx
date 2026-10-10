@@ -35,6 +35,7 @@ import {
   reverseJournalEntry,
 } from '../api/accounting.api';
 import { ManualNoteDialog } from '../components/ManualNoteDialog';
+import { QuickDateRange, localIsoDate } from '../../../components/QuickDateRange';
 
 const sourceTypeLabels: Record<string, { label: string; color: 'primary' | 'secondary' | 'success' | 'warning' | 'info' | 'default' }> = {
   SALE: { label: 'Venta', color: 'success' },
@@ -62,7 +63,7 @@ export const JournalEntriesPage = () => {
   const [reversalReason, setReversalReason] = useState('');
   const [noteOpen, setNoteOpen] = useState(false);
   const [createdNote, setCreatedNote] = useState<string | null>(null);
-  const [reversalDate, setReversalDate] = useState(new Date().toISOString().slice(0, 10));
+  const [reversalDate, setReversalDate] = useState(localIsoDate(new Date()));
   const [actionError, setActionError] = useState<string | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
@@ -112,7 +113,7 @@ export const JournalEntriesPage = () => {
 
   const handleOpenReverse = (entry: JournalEntryDto) => {
     setReversingEntry(entry);
-    setReversalDate(new Date().toISOString().slice(0, 10));
+    setReversalDate(localIsoDate(new Date()));
     setReversalReason('');
     setActionError(null);
   };
@@ -225,6 +226,15 @@ export const JournalEntriesPage = () => {
               Filtrar
             </Button>
           </Stack>
+          <Box sx={{ mt: 1.5 }}>
+            <QuickDateRange
+              onSelect={({ from, to }) => {
+                setFromDate(from);
+                setToDate(to);
+                setPage(0);
+              }}
+            />
+          </Box>
         </Paper>
 
         {/* Tabla de Asientos */}

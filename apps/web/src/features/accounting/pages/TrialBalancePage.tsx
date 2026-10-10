@@ -28,6 +28,7 @@ import { useQuery } from '@tanstack/react-query';
 import { SYSTEM_PERMISSIONS, type AccountType } from '@farmacia/contracts';
 import { usePermissions } from '../../auth/hooks/usePermissions';
 import { fetchTrialBalance, fetchGeneralLedger } from '../api/accounting.api';
+import { QuickDateRange, quickRange } from '../../../components/QuickDateRange';
 
 const accountTypeNames: Record<AccountType, string> = {
   ASSET: 'Activo',
@@ -49,11 +50,7 @@ function formatMoney(value: string | number): string {
 export const TrialBalancePage = () => {
   const { hasPermission } = usePermissions();
 
-  const now = new Date();
-  const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-    .toISOString()
-    .slice(0, 10);
-  const today = now.toISOString().slice(0, 10);
+  const { from: firstDayOfMonth, to: today } = quickRange('this_month');
 
   const [fromDate, setFromDate] = useState(firstDayOfMonth);
   const [toDate, setToDate] = useState(today);
@@ -120,6 +117,12 @@ export const TrialBalancePage = () => {
               Consultar Balance
             </Button>
           </Stack>
+          <QuickDateRange
+            onSelect={({ from, to }) => {
+              setFromDate(from);
+              setToDate(to);
+            }}
+          />
         </Paper>
 
         {/* Estado de Partida Doble */}

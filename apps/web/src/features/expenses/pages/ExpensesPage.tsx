@@ -57,6 +57,7 @@ import {
   fetchActiveBankAccounts,
 } from '../api/expenses.api';
 import { ExpenseCategoriesModal } from '../components/ExpenseCategoriesModal';
+import { localIsoDate } from '../../../components/QuickDateRange';
 
 function formatCurrency(val: string | number | undefined): string {
   if (val === undefined || val === null) return '$0.00';
@@ -104,7 +105,7 @@ export const ExpensesPage: React.FC = () => {
   const [newDescription, setNewDescription] = useState('');
   const [newDocumentNumber, setNewDocumentNumber] = useState('');
   const [newAmount, setNewAmount] = useState('');
-  const [newExpenseDate, setNewExpenseDate] = useState(new Date().toISOString().slice(0, 10));
+  const [newExpenseDate, setNewExpenseDate] = useState(localIsoDate(new Date()));
   const [newDueDate, setNewDueDate] = useState('');
   const [newPaymentMethod, setNewPaymentMethod] = useState<ExpensePaymentMethod>('EFECTIVO');
   const [newBankAccountId, setNewBankAccountId] = useState('');
@@ -113,7 +114,7 @@ export const ExpensesPage: React.FC = () => {
 
   // Campos para pagar gasto
   const [payAmount, setPayAmount] = useState('');
-  const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10));
+  const [payDate, setPayDate] = useState(localIsoDate(new Date()));
   const [payMethod, setPayMethod] = useState<'EFECTIVO' | 'TRANSFERENCIA'>('EFECTIVO');
   const [payBankAccountId, setPayBankAccountId] = useState('');
   const [payNotes, setPayNotes] = useState('');
@@ -176,7 +177,7 @@ export const ExpensesPage: React.FC = () => {
 
   // Acciones de presets de fechas
   const setTodayPreset = () => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localIsoDate(new Date());
     setStartDate(today);
     setEndDate(today);
     setPage(1);
@@ -184,8 +185,8 @@ export const ExpensesPage: React.FC = () => {
 
   const setMonthPreset = () => {
     const now = new Date();
-    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
+    const firstDay = localIsoDate(new Date(now.getFullYear(), now.getMonth(), 1));
+    const lastDay = localIsoDate(new Date(now.getFullYear(), now.getMonth() + 1, 0));
     setStartDate(firstDay);
     setEndDate(lastDay);
     setPage(1);
@@ -209,7 +210,7 @@ export const ExpensesPage: React.FC = () => {
     setNewDescription('');
     setNewDocumentNumber('');
     setNewAmount('');
-    setNewExpenseDate(new Date().toISOString().slice(0, 10));
+    setNewExpenseDate(localIsoDate(new Date()));
     setNewDueDate('');
     setNewPaymentMethod('EFECTIVO');
     setNewBankAccountId(bankAccounts.length > 0 ? bankAccounts[0].id : '');
@@ -270,7 +271,7 @@ export const ExpensesPage: React.FC = () => {
   const handleOpenPay = (exp: ExpenseDto) => {
     setSelectedExpense(exp);
     setPayAmount(exp.balance);
-    setPayDate(new Date().toISOString().slice(0, 10));
+    setPayDate(localIsoDate(new Date()));
     setPayMethod('EFECTIVO');
     setPayBankAccountId(bankAccounts.length > 0 ? bankAccounts[0].id : '');
     setPayNotes('');

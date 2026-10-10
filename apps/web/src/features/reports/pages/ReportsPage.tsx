@@ -29,6 +29,7 @@ import {
   fetchInventoryValuationReport,
   fetchSalesReport,
 } from '../api/reports.api';
+import { QuickDateRange } from '../../../components/QuickDateRange';
 
 type ReportTab = 'valuation' | 'expirations' | 'sales' | 'cash';
 
@@ -188,6 +189,12 @@ export function ReportsPage() {
                 </Button>
               )}
             </Stack>
+            <QuickDateRange
+              onSelect={({ from, to }) => {
+                setFromDate(from);
+                setToDate(to);
+              }}
+            />
           </Paper>
         )}
 
