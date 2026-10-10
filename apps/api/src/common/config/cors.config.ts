@@ -11,7 +11,9 @@ export function getCorsConfig(): CorsOptions {
     .map((origin) => origin.trim())
     .filter(Boolean);
 
-  const defaultOrigins = [
+  // Los orígenes de desarrollo local nunca se aceptan en producción
+  const isProduction = process.env.NODE_ENV === 'production';
+  const developmentOrigins = [
     'http://localhost:5173',
     'http://127.0.0.1:5173',
     'http://localhost:3000',
@@ -20,7 +22,9 @@ export function getCorsConfig(): CorsOptions {
     'http://127.0.0.1:4173',
   ];
 
-  const allowedOrigins = Array.from(new Set([...defaultOrigins, ...envOrigins]));
+  const allowedOrigins = Array.from(
+    new Set([...(isProduction ? [] : developmentOrigins), ...envOrigins]),
+  );
 
   return {
     origin: (requestOrigin, callback) => {
@@ -33,10 +37,8 @@ export function getCorsConfig(): CorsOptions {
         return callback(null, true);
       }
 
-      return callback(
-        new Error(`Origen '${requestOrigin}' no autorizado por la política CORS`),
-        false
-      );
+      // Sin cabeceras CORS el navegador bloquea la respuesta; lanzar un Error daría un 500
+      return callback(null, false);
     },
     credentials: true,
     methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
@@ -47,6 +49,7 @@ export function getCorsConfig(): CorsOptions {
       'x-correlation-id',
       'Accept',
       'Origin',
+      'Idempotency-Key',
     ],
     exposedHeaders: ['X-Correlation-Id', 'x-correlation-id', 'Retry-After'],
     maxAge: 86400, // Cache de preflight por 24 horas

@@ -240,6 +240,51 @@ describe('Security Hardening — Cabeceras OWASP, CORS y Fuerza Bruta (Integrati
     });
   });
 
+  describe('2b. CORS en producción', () => {
+    function isAllowed(origin: string): Promise<boolean> {
+      const config = getCorsConfig();
+      return new Promise((resolve, reject) => {
+        (config.origin as (o: string, cb: (err: Error | null, allow?: boolean) => void) => void)(
+          origin,
+          (err, allow) => (err ? reject(err) : resolve(Boolean(allow))),
+        );
+      });
+    }
+
+    it('solo admite los orígenes configurados, no los de desarrollo local', async () => {
+      const previousEnv = process.env.NODE_ENV;
+      const previousOrigins = process.env.CORS_ALLOWED_ORIGINS;
+      process.env.NODE_ENV = 'production';
+      process.env.CORS_ALLOWED_ORIGINS = 'https://farmacia.example.com';
+      try {
+        await expect(isAllowed('https://farmacia.example.com')).resolves.toBe(true);
+        await expect(isAllowed('http://localhost:5173')).resolves.toBe(false);
+        await expect(isAllowed('http://farmacia.example.com')).resolves.toBe(false);
+      } finally {
+        process.env.NODE_ENV = previousEnv;
+        if (previousOrigins === undefined) delete process.env.CORS_ALLOWED_ORIGINS;
+        else process.env.CORS_ALLOWED_ORIGINS = previousOrigins;
+      }
+    });
+
+    it('rechaza un origen no autorizado sin convertirlo en error 500', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/health')
+        .set('Origin', 'http://sitio-malicioso-ataque.com');
+      expect(response.status).toBe(200);
+      expect(response.headers['access-control-allow-origin']).toBeUndefined();
+    });
+
+    it('permite la cabecera Idempotency-Key en el preflight', async () => {
+      const response = await request(app.getHttpServer())
+        .options('/api/v1/sales/confirm')
+        .set('Origin', 'http://localhost:5173')
+        .set('Access-Control-Request-Method', 'POST')
+        .set('Access-Control-Request-Headers', 'idempotency-key');
+      expect(response.headers['access-control-allow-headers']).toContain('Idempotency-Key');
+    });
+  });
+
   describe('4. Confianza en el proxy (TRUST_PROXY)', () => {
     it('sin configurar no confía en ningún proxy: X-Forwarded-For del cliente se ignora', () => {
       expect(parseTrustProxy(undefined)).toBe(false);
