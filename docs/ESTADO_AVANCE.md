@@ -10,7 +10,7 @@ Este documento resume qué se corrigió desde la auditoría técnica, qué falta
 |---|---|---|
 | 0 | Higiene de base: pruebas estables, worker en la suite, README | **IMPLEMENTADO** |
 | 1 | Integridad de datos y dinero (P0, P1 de backend y P2 de integridad) | **IMPLEMENTADO** (cerrada el 10 de octubre); lo que depende del cliente quedó con la opción conservadora (sección 4) |
-| 2 | Producción y seguridad | PENDIENTE |
+| 2 | Producción y seguridad | **IMPLEMENTADO** (10 de octubre); falta que el cliente provea el destino externo de respaldos (sección 3) |
 | 3 | Acuerdos de la reunión del 4 de octubre | PENDIENTE |
 | 4 | Contrato de API y estabilidad | PENDIENTE |
 | 5 | Frontend y UX | PENDIENTE |
@@ -18,7 +18,7 @@ Este documento resume qué se corrigió desde la auditoría técnica, qué falta
 | 7 | Decisiones del cliente | EN PROGRESO: preguntas identificadas, sin respuesta |
 | 8 | Aceptación (UAT) y release v1.0.0 | PENDIENTE |
 
-**Calidad al corte:** typecheck sin errores, lint sin errores (advertencias `any` preexistentes), **772 pruebas en 114 archivos, todas en verde**.
+**Calidad al corte:** typecheck sin errores, lint sin errores (advertencias `any` preexistentes), **783 pruebas en 115 archivos, todas en verde** (una corrida previa tuvo 1 falla intermitente que no se repitió).
 
 ## 2. Qué se hizo
 
@@ -53,6 +53,20 @@ Este documento resume qué se corrigió desde la auditoría técnica, qué falta
 
 Además: cantidades que no dan unidades base enteras se rechazan en compras y ventas, en lugar de redondearse en silencio.
 
+### Fase 2 — Producción y seguridad
+
+| Hallazgo | Qué pasaba | Qué hace ahora | Commit |
+|---|---|---|---|
+| AUD-012 | Sin `trust proxy`, 5 fallos de cualquiera bloqueaban el login de todos; el bloqueo por cuenta dejaba a cualquiera bloquear al `admin` | `TRUST_PROXY=1` detrás de Caddy; bloqueo por IP+usuario (5) y por IP (20, `AUTH_RATE_LIMIT_IP_MAX_ATTEMPTS`) | `5ab4a01` |
+| Producción | Sin `enableShutdownHooks`; `/health` respondía 200 con la base caída | Apagado ordenado con SIGTERM; `/health` hace `SELECT 1` y responde 503 sin exponer el error | `5ab4a01`, `5e2525a` |
+| CORS | Producción aceptaba los orígenes `localhost` y `http://`; un origen rechazado daba 500 | Solo los orígenes configurados en `https`; rechazo sin cabeceras CORS | `308f08d`, `d1635ab` |
+| Cabeceras SPA | La SPA salía sin CSP, HSTS ni X-Frame-Options; dos topologías de proxy contradictorias | CSP estricta, HSTS, X-Frame-Options, COOP y Permissions-Policy en Caddy; tope de 10 MB en la API; se retiró `infra/nginx` | `d1635ab` |
+| AUD-013 | **`pg_dump` 17 contra PostgreSQL 18: todo respaldo en producción fallaba**; respaldos manuales, sin cifrar, en el mismo servidor; runbook con rutas del equipo de desarrollo | Cliente PostgreSQL 18; respaldo diario programado con copia cifrada (`age`) fuera del servidor (`rclone`); `restore-drill.sh`; errores de `pg_dump`/`pg_restore` ya no se ocultan; runbook reescrito | `c857ecb`, `b9213be`, `b063338` |
+| CSV | Un texto que empezaba por `=`, `+`, `-` o `@` se ejecutaba como fórmula al abrir el reporte | Se neutraliza con un apóstrofo; los números no cambian | `7db3cda` |
+| Dependencias | `multer` con 4 avisos altos; `mysql2` y `source-map-js` vulnerables | Overrides a versiones parcheadas; ver sección 6 lo que queda | ver `git log` |
+
+Verificación de infraestructura: `caddy validate`; Caddy real delante de servicios simulados (cabeceras, `X-Forwarded-For` falsificado descartado, 413 sobre 10 MB); imagen de la API construida y probada contra `postgres:18` (migraciones, `/health` 200/503, SIGTERM en 1 s, respaldo como usuario `node`); `tests/infra/run-backup-e2e.sh` (19 verificaciones); el bundle de la SPA no usa `eval` ni `new Function`.
+
 ## 3. Pasos obligatorios al desplegar estos cambios
 
 1. **Respaldo** de la base antes de migrar.
@@ -64,6 +78,13 @@ Además: cantidades que no dan unidades base enteras se rechazan en compras y ve
 3. `prisma migrate deploy` (3 migraciones nuevas: costo histórico en líneas de venta, UNIQUE de facturas, inmutabilidad de movimientos).
 4. `pnpm db:seed:rbac` para crear los permisos nuevos (`sales:credit_note`, `sales:price_override`, `sales:discount`, `purchases:debit_note`) y asignarlos a los roles.
 5. Revisar si hay cuentas por cobrar `CANCELADA` con abonos vigentes (de antes de AUD-006): ya no se reabren, pero ese dinero no se devolvió.
+
+Fase 2:
+
+6. **Reconstruir las imágenes** (`docker compose ... build`): cambian la base de Node y el cliente de PostgreSQL.
+7. **Respaldo externo:** generar el par de claves `age` fuera del servidor, crear el destino (bucket u otro servidor) y completar `infra/compose/backup.env` (ver `docs/runbooks/backup-restore.md`). Hasta entonces el respaldo diario se genera en local y el job reporta error.
+8. Levantar `backup-scheduler`, forzar un respaldo y hacer el **primer simulacro** desde la copia externa.
+9. Verificar en el navegador del servidor de pruebas que la SPA carga sin errores de CSP en la consola.
 
 ## 4. Decisiones del cliente pendientes
 
@@ -90,12 +111,6 @@ Ninguna se implementó por supuesto; las que se tocaron quedaron con la opción 
 | 17 | Participantes, duración y criterio de la UAT | T-40, T-41 | — |
 
 ## 5. Qué falta por fase
-
-### Fase 2 — Producción y seguridad
-- `trust proxy` y rate limit del login por IP+usuario sin bloquear al `admin` (AUD-012); `enableShutdownHooks`.
-- Backups programados, cifrados y fuera del host, con restauración probada; corregir el runbook (AUD-013).
-- Cabeceras CSP, HSTS, X-Frame-Options en Caddy; una sola topología de proxy; CORS de producción.
-- `/health` con consulta a la base; protección contra inyección de fórmulas en CSV; `pnpm audit` (multer).
 
 ### Fase 3 — Acuerdos del 4 de octubre
 - Naturaleza débito/crédito en el PUC.
@@ -142,8 +157,12 @@ Ninguna se implementó por supuesto; las que se tocaron quedaron con la opción 
 - **Tipos de movimiento de caja:** sin restricción; las pruebas usan valores fuera del contrato (`APERTURA`, `EGRESO`). Revisar datos reales antes de restringirlos.
 - **Auditoría fuera de la transacción** en varios servicios (lotes, compras).
 - **Prueba intermitente:** el `beforeEach` de `product-tax-profile` puede superar 30 s con el disco lento.
+- **`pnpm audit` restante:** `vitest` 3 arrastra `tinypool` (2 críticas) y `@vitest/mocker`: solo desarrollo, no llegan a la imagen; requiere migrar a Vitest 4 como tarea aparte. `deepmerge-ts` (alta) viene fijado por `prisma` 7.10 y solo lo usa la CLI al leer su configuración. `uuid` 8 en `exceljs`: el aviso afecta a v3/v5/v6 con búfer y `exceljs` solo usa `v4()`.
+- **Rate limit en memoria:** válido con una sola instancia de la API. Un ataque distribuido contra una cuenta solo lo frena el límite por IP y el costo de Argon2.
+- **RPO de 24 horas:** no hay archivado continuo de WAL (PITR).
+- **Límite por IP en la farmacia:** si todos los equipos salen por la misma IP pública, 20 fallos en 15 minutos bloquean el login en la sede; ajustable con `AUTH_RATE_LIMIT_IP_MAX_ATTEMPTS`.
 - 128 advertencias de lint por `any` y componentes de más de 600 líneas, a reducir solo cuando se toquen.
 
 ## 7. Siguiente paso recomendado
 
-Enviar al cliente las decisiones de la sección 4 y, en paralelo, empezar la **Fase 2** (preparación para producción), que no depende de ellas.
+Enviar al cliente las decisiones de la sección 4 junto con el pedido del destino externo de respaldos (fase 2, paso 7) y seguir con la **Fase 3** (acuerdos del 4 de octubre, ya aprobados por el cliente salvo el canal del recordatorio, decisión 15) o la **Fase 4** (contrato de API y estabilidad), que no depende de ninguna decisión.
