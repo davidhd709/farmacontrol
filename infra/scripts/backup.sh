@@ -15,6 +15,13 @@ PGDATABASE="${PGDATABASE:-farmacia_test}"
 BACKUP_DIR="${BACKUP_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/backups}"
 RETENTION_DAYS="${RETENTION_DAYS:-30}"
 
+# Copia fuera del servidor (AUD-013). BACKUP_REMOTE es un destino de rclone (ej. "offsite:farmacia");
+# BACKUP_AGE_RECIPIENT es la clave pública age: el servidor cifra pero no puede descifrar.
+BACKUP_REMOTE="${BACKUP_REMOTE:-}"
+BACKUP_AGE_RECIPIENT="${BACKUP_AGE_RECIPIENT:-}"
+BACKUP_REQUIRE_OFFSITE="${BACKUP_REQUIRE_OFFSITE:-false}"
+REMOTE_RETENTION_DAYS="${REMOTE_RETENTION_DAYS:-90}"
+
 export PGPASSWORD
 
 TIMESTAMP="$(date -u +"%Y%m%d_%H%M%S")"
@@ -41,14 +48,18 @@ fi
 
 # 4. Ejecutar el volcado lógico en formato binario custom (-Fc)
 echo " [BACKUP] Extrayendo volcado lógico con pg_dump..."
-pg_dump \
+# Un pg_dump fallido puede dejar un archivo parcial: su código de salida decide, no el tamaño
+if ! pg_dump \
   -h "${PGHOST}" \
   -p "${PGPORT}" \
   -U "${PGUSER}" \
   -d "${PGDATABASE}" \
   -Fc \
-  --verbose \
-  --file="${BACKUP_FILEPATH}" 2>&1 | grep -v "^pg_dump: saving" || true
+  --file="${BACKUP_FILEPATH}"; then
+  rm -f "${BACKUP_FILEPATH}"
+  echo " [ERROR] pg_dump falló; no se conserva el archivo parcial." >&2
+  exit 1
+fi
 
 if [ ! -s "${BACKUP_FILEPATH}" ]; then
   echo " [ERROR] El archivo de respaldo no se generó o está vacío: ${BACKUP_FILEPATH}" >&2
@@ -72,7 +83,45 @@ if ! pg_restore --list "${BACKUP_FILEPATH}" >/dev/null 2>&1; then
 fi
 echo " [BACKUP] Verificación de integridad superada exitosamente."
 
-# 7. Generar archivo de metadatos JSON
+# 7. Copia cifrada fuera del servidor
+OFFSITE_LOCATION=""
+if [ -n "${BACKUP_REMOTE}" ]; then
+  if [ -z "${BACKUP_AGE_RECIPIENT}" ]; then
+    echo " [ERROR] BACKUP_REMOTE está configurado pero falta BACKUP_AGE_RECIPIENT: nunca se sube un respaldo sin cifrar." >&2
+    exit 1
+  fi
+  ENCRYPTED_FILEPATH="${BACKUP_FILEPATH}.age"
+  echo " [BACKUP] Cifrando copia externa con age..."
+  age --encrypt --recipient "${BACKUP_AGE_RECIPIENT}" --output "${ENCRYPTED_FILEPATH}" "${BACKUP_FILEPATH}"
+
+  echo " [BACKUP] Subiendo copia cifrada a ${BACKUP_REMOTE}..."
+  # El .sha256 es del volcado en claro: permite verificarlo después de descifrar
+  if ! rclone copyto "${ENCRYPTED_FILEPATH}" "${BACKUP_REMOTE}/${BACKUP_FILENAME}.age" \
+    || ! rclone copyto "${SHA256_FILEPATH}" "${BACKUP_REMOTE}/${BACKUP_FILENAME}.sha256"; then
+    rm -f "${ENCRYPTED_FILEPATH}"
+    echo " [ERROR] No se pudo subir la copia externa. El respaldo local se conserva." >&2
+    exit 1
+  fi
+  rm -f "${ENCRYPTED_FILEPATH}"
+  OFFSITE_LOCATION="${BACKUP_REMOTE}/${BACKUP_FILENAME}.age"
+  echo " [BACKUP] Copia externa cifrada: ${OFFSITE_LOCATION}"
+
+  echo " [BACKUP] Retención externa (${REMOTE_RETENTION_DAYS} días)..."
+  if ! rclone delete --min-age "${REMOTE_RETENTION_DAYS}d" --include "farmacia_*" "${BACKUP_REMOTE}"; then
+    echo " [AVISO] No se pudo aplicar la retención externa; la copia de hoy sí quedó subida." >&2
+  fi
+elif [ "${BACKUP_REQUIRE_OFFSITE}" = "true" ]; then
+  echo " [ERROR] BACKUP_REQUIRE_OFFSITE=true pero BACKUP_REMOTE no está configurado. El respaldo quedó solo en este servidor." >&2
+  exit 1
+fi
+
+if [ -n "${OFFSITE_LOCATION}" ]; then
+  OFFSITE_JSON="\"${OFFSITE_LOCATION}\""
+else
+  OFFSITE_JSON="null"
+fi
+
+# 8. Generar archivo de metadatos JSON
 ISO_DATE="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 PG_VERSION="$(pg_dump --version | head -n1)"
 
@@ -85,14 +134,15 @@ cat <<EOF > "${META_FILEPATH}"
   "sizeBytes": ${FILE_SIZE_BYTES},
   "sha256": "${SHA256_HASH}",
   "verified": true,
-  "pgVersion": "${PG_VERSION}"
+  "pgVersion": "${PG_VERSION}",
+  "offsite": ${OFFSITE_JSON}
 }
 EOF
 
 # Actualizar el puntero del último respaldo
 cp "${META_FILEPATH}" "${LATEST_META_FILEPATH}"
 
-# 8. Política de retención: rotación de backups antiguos (> RETENTION_DAYS días)
+# 9. Política de retención: rotación de backups antiguos (> RETENTION_DAYS días)
 echo " [BACKUP] Aplicando política de retención (${RETENTION_DAYS} días)..."
 find "${BACKUP_DIR}" -type f \( -name "*.dump" -o -name "*.sha256" -o -name "*.meta.json" \) \
   ! -name "latest_backup.json" -mtime +"${RETENTION_DAYS}" -exec rm -f {} + 2>/dev/null || true
@@ -104,4 +154,5 @@ echo " Tamaño:     ${FILE_SIZE_BYTES} bytes"
 echo " SHA-256:    ${SHA256_HASH}"
 echo " Fecha:      ${ISO_DATE}"
 echo " Metadatos:  ${META_FILEPATH}"
+echo " Externa:    ${OFFSITE_LOCATION:-no configurada}"
 echo "=================================================================="

@@ -133,19 +133,47 @@ services:
     networks:
       - frontend
 
-  backup-job:
+  # Respaldo diario a BACKUP_TIME: volcado local + copia cifrada fuera del servidor.
+  # Destino y clave pública en backup.env (ver backup.env.example); sin ellos falla a propósito.
+  backup-scheduler:
     build:
       context: ../..
       dockerfile: infra/docker/Dockerfile
       target: api
-    environment:
+    restart: unless-stopped
+    env_file:
+      - path: backup.env
+        required: false
+    environment: &backup-environment
       NODE_ENV: production
+      TZ: ${TZ:-America/Bogota}
       PGHOST: postgres
       PGPORT: 5432
       PGUSER: ${DB_USER}
       PGPASSWORD: ${DB_PASSWORD}
       PGDATABASE: ${DB_NAME}
       RETENTION_DAYS: ${RETENTION_DAYS:-30}
+      BACKUP_REQUIRE_OFFSITE: 'true'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - farmacontrol_backups:/app/infra/backups
+    networks:
+      - backend
+    command: ['/app/infra/scripts/backup-scheduler.sh']
+
+  # Respaldo inmediato (antes de migrar o desplegar):
+  #   docker compose --profile backup run --rm backup-job
+  backup-job:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile
+      target: api
+    env_file:
+      - path: backup.env
+        required: false
+    environment: *backup-environment
     depends_on:
       postgres:
         condition: service_healthy

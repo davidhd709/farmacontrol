@@ -39,3 +39,6 @@ infra/backups/*.sha256
 infra/backups/*.meta.json
 infra/backups/latest_backup.json
 !infra/backups/.gitkeep
+
+# Destino y credenciales del respaldo externo
+infra/compose/backup.env

@@ -1,203 +1,133 @@
-# Runbook Operativo: Copias de Seguridad, Resiliencia y Protocolo de Restauración
+# Runbook: respaldos y restauración
 
-**Documento:** Runbook de Continuidad de Negocio y Recuperación ante Desastres (DR)  
-**Épica Relacionada:** ÉPICA 10 (`HU-024`)  
-**Requerimientos:** `RF-026`, `RNF-002`, `CA-006`  
-**Referencia Arquitectónica:** `docs/arquitectura-software-farmacia.md` (Secciones 19 y 20)  
+**Requerimientos:** `HU-024`, `RF-026`, `RNF-002`, `CA-006` · **Hallazgo:** AUD-013 · **Actualizado:** 10 de octubre de 2026
 
----
+Todos los comandos se ejecutan en el servidor, desde la raíz del repositorio desplegado (por ejemplo `/opt/farmacontrol`), con el stack de `infra/compose/docker-compose.production.yml`.
 
-## 1. Objetivos del Negocio y Resiliencia
+```bash
+cd /opt/farmacontrol
+alias fc='docker compose --env-file infra/compose/.env -f infra/compose/docker-compose.production.yml'
+```
 
-El sistema de gestión de la farmacia maneja transacciones de venta en tiempo real, trazabilidad de lotes bajo regla FEFO, control de caja y cartera de clientes. La pérdida de datos o la indisponibilidad prolongada paraliza la dispensación física de medicamentos.
+## 1. Qué protege y qué no
 
-| Métrica | Objetivo Comprometido | Definición Operativa |
+| Objetivo | Valor | Cómo se cumple |
 |---|---|---|
-| **RPO (Recovery Point Objective)** | **≤ 15 minutos** | Máxima pérdida de datos tolerable ante fallo catastrófico (garantizado en producción mediante archivado continuo WAL / PITR y respaldos lógicos diarios). |
-| **RTO (Recovery Time Objective)** | **≤ 4 horas** | Tiempo máximo para restaurar completamente el servicio y reanudar la atención al público en la farmacia. |
-| **Integridad Criptográfica** | **100% verificada** | Ningún volcado se considera válido sin su respectivo hash SHA-256 contrastado y validación estructural del catálogo de PostgreSQL. |
+| RPO | ≤ 24 horas | Respaldo diario a `BACKUP_TIME` (02:00, hora de Bogotá) |
+| RTO | ≤ 4 horas | Restauración con `restore.sh`; el simulacro mide el tiempo real |
+| Integridad | Verificada | SHA-256 del volcado y `pg_restore --list` antes de darlo por bueno |
+| Fuera del servidor | Sí | Copia cifrada con `age` en un destino de `rclone` de otro proveedor |
 
----
+**Limitación conocida:** el RPO es de un día. Lo que se registre entre el último respaldo y una falla total del servidor se pierde. Un RPO de minutos requiere archivado continuo de WAL (PITR), que no está implementado.
 
-## 2. Estrategia de Copias de Seguridad
+## 2. Cómo funciona
 
-1. **Formato:** PostgreSQL Custom Format (`-Fc`), comprimido, portable, compatible con restauración concurrente (`pg_restore -j`) y validación de catálogo sin volcar a disco.
-2. **Checksum:** Cada respaldo genera un archivo complementario `.dump.sha256` y metadatos estructurados `.meta.json`.
-3. **Frecuencia:**
-   - Respaldo lógico diario automatizado (a las 02:00 UTC).
-   - Respaldo lógico manual obligatorio **antes de cualquier migración de Prisma o despliegue a producción**.
-4. **Retención Local y Externa:**
-   - 30 días de retención en almacenamiento local / servidor principal (`RETENTION_DAYS=30`).
-   - Replicación a almacenamiento de objetos secundario (S3 / R2 / Backup VPS) fuera del proveedor primario.
+1. El servicio `backup-scheduler` (siempre activo, `restart: unless-stopped`) ejecuta `infra/scripts/backup.sh` una vez al día a `BACKUP_TIME`.
+2. `backup.sh`:
+   - genera el volcado con `pg_dump -Fc` (cliente PostgreSQL 18, igual al servidor; un cliente más viejo se niega a respaldar);
+   - calcula el SHA-256 y verifica el volcado con `pg_restore --list`;
+   - cifra una copia con la **clave pública** `age` y la sube a `BACKUP_REMOTE` junto con el `.sha256`;
+   - borra en el destino externo lo que tenga más de `REMOTE_RETENTION_DAYS` (90) y en local lo que tenga más de `RETENTION_DAYS` (30).
+3. El volumen local `farmacontrol_backups` guarda los volcados **sin cifrar**, con el mismo nivel de exposición que el volumen de la base. La copia que sale del servidor siempre va cifrada: `backup.sh` falla si hay destino pero no clave.
+4. El servidor solo tiene la clave pública: quien lo comprometa no puede leer las copias externas.
 
----
+Si el destino externo no está configurado, el respaldo local se genera igual, pero el job termina con error (`BACKUP_REQUIRE_OFFSITE=true`) y queda en los logs.
 
-## 3. Herramientas y Scripts en el Repositorio
+## 3. Puesta en marcha (una sola vez)
 
-Los scripts se encuentran versionados en [infra/scripts/](file:///run/media/ingenierohenrydavid/0E05E2BD5C0F60A7/HENRY/PROYECTOS/Farmacia/infra/scripts):
+1. **Generar el par de claves en un equipo seguro, no en el servidor:**
+   ```bash
+   age-keygen -o farmacontrol-backup.key
+   # Muestra "Public key: age1..."
+   ```
+   Guardar `farmacontrol-backup.key` en el gestor de contraseñas del administrador y en una segunda copia fuera de línea (USB o impresa). **Sin esta clave los respaldos externos no se pueden restaurar.**
+2. **Crear el destino externo** en un proveedor distinto al del servidor (bucket S3/R2/B2 o servidor SFTP), con credenciales limitadas a ese bucket.
+3. **Configurar** `infra/compose/backup.env` a partir de `backup.env.example`: clave pública, destino y credenciales de `rclone`. Este archivo no se versiona.
+4. **Levantar el programador y probar:**
+   ```bash
+   fc up -d backup-scheduler
+   fc --profile backup run --rm backup-job      # respaldo inmediato
+   fc logs backup-job backup-scheduler
+   ```
+   El resumen debe mostrar `Externa: <destino>/farmacia_<base>_<fecha>.dump.age`.
+5. **Hacer el primer simulacro** (sección 6) antes de dar el sistema por listo.
 
-- `infra/scripts/backup.sh`: Genera volcado lógico, calcula SHA-256, valida integridad física, genera metadatos JSON y rota archivos antiguos.
-- `infra/scripts/verify-backup.sh`: Valida el hash SHA-256 y verifica la tabla de contenido interna de un archivo `.dump`.
-- `infra/scripts/restore.sh`: Valida la integridad, crea la base si no existe y restaura el esquema y los datos mediante `pg_restore`.
+## 4. Operación diaria
 
-### Variables de Entorno Utilizadas
+- **Revisar:** la pantalla *Respaldos* del sistema marca el RPO en rojo si el último respaldo tiene más de 24 horas.
+- **Logs:** `fc logs --since 48h backup-scheduler`. Cada ejecución termina en `Respaldo programado completado` o en `[ERROR]`.
+- **Antes de migrar o desplegar:** `fc --profile backup run --rm backup-job`.
+
+## 5. Restauración
+
+### 5.1 Desde el respaldo local (la base se dañó, el servidor sigue)
 
 ```bash
-PGHOST="localhost"                                   # Servidor PostgreSQL
-PGPORT="5434"                                        # Puerto de conexión
-PGUSER="farmacia_user"                               # Usuario con permisos de lectura/escritura
-PGPASSWORD="farmacia_dev_password_change_me"         # Contraseña
-PGDATABASE="farmacia_db"                             # Base de datos a respaldar
-BACKUP_DIR="/var/backups/farmacia"                   # Directorio persistente de copias
-RETENTION_DAYS="30"                                  # Días de retención
+fc stop api worker
+fc run --rm --entrypoint bash backup-job -c 'ls -t /app/infra/backups/*.dump | head'
+fc run --rm --entrypoint bash backup-job -c \
+  '/app/infra/scripts/restore.sh /app/infra/backups/<archivo>.dump --target-db "$PGDATABASE" --confirm-overwrite'
+fc start api worker
 ```
 
----
+### 5.2 Desde la copia externa (servidor perdido)
 
-## 4. Automatización con Cron o Systemd Timer
+1. Provisionar el servidor nuevo, clonar el repositorio y crear `infra/compose/.env` y `infra/compose/backup.env`.
+2. `fc up -d postgres` y esperar a que esté `healthy`.
+3. Copiar la clave privada al servidor **solo durante la restauración**, por ejemplo en `/root/restore.key`.
+4. Descargar, descifrar y restaurar:
+   ```bash
+   fc run --rm -v /root/restore.key:/run/restore.key:ro --entrypoint bash backup-job -c '
+     set -e
+     LATEST=$(rclone lsf --files-only --include "farmacia_*.dump.age" "$BACKUP_REMOTE" | sort | tail -n 1)
+     cd /tmp
+     rclone copyto "$BACKUP_REMOTE/$LATEST" "$LATEST"
+     rclone copyto "$BACKUP_REMOTE/${LATEST%.age}.sha256" "${LATEST%.age}.sha256"
+     age --decrypt --identity /run/restore.key --output "${LATEST%.age}" "$LATEST"
+     /app/infra/scripts/restore.sh "/tmp/${LATEST%.age}" --target-db "$PGDATABASE" --confirm-overwrite'
+   ```
+5. `shred -u /root/restore.key`, luego `fc up -d` y completar la sección 7.
 
-Para programar la ejecución desatendida del respaldo diario a las 02:00 AM hora local:
+`restore.sh` verifica el SHA-256 y el catálogo antes de tocar la base, y se detiene ante el primer error de `pg_restore`.
+
+## 6. Simulacro de restauración
+
+`infra/scripts/restore-drill.sh` restaura en una base temporal (`farmacia_restore_drill_<marca>`), compara las tablas restauradas con las del respaldo, comprueba las migraciones, mide el tiempo y borra la base temporal. No toca la base de producción.
 
 ```bash
-# Editar crontab del usuario de despliegue
-crontab -e
+# Desde la copia externa: prueba también el descifrado y la clave guardada
+fc run --rm -v /root/restore.key:/run/restore.key:ro -e AGE_IDENTITY_FILE=/run/restore.key \
+  --entrypoint /app/infra/scripts/restore-drill.sh backup-job --from-remote
 
-# Agregar la siguiente línea (ajustar paths y variables de entorno):
-0 2 * * * /run/media/ingenierohenrydavid/0E05E2BD5C0F60A7/HENRY/PROYECTOS/Farmacia/infra/scripts/backup.sh >> /var/log/farmacia_backup.log 2>&1
+# Desde un respaldo local
+fc run --rm --entrypoint /app/infra/scripts/restore-drill.sh backup-job /app/infra/backups/<archivo>.dump
 ```
 
----
+Termina en `[SIMULACRO SUPERADO]` o `[SIMULACRO FALLIDO]` (código de salida 1).
 
-## 5. Procedimiento de Ejecución Manual
+**Frecuencia:** al poner el sistema en marcha, después de cambiar el destino o la clave, y cada tres meses. Anotar fecha, respaldo usado, tiempo total y responsable.
 
-### 5.1 Generar un respaldo inmediato (pre-despliegue)
+## 7. Verificación después de restaurar
 
-```bash
-cd /run/media/ingenierohenrydavid/0E05E2BD5C0F60A7/HENRY/PROYECTOS/Farmacia
-./infra/scripts/backup.sh
-```
-
-Salida esperada:
-```text
-==================================================================
- [BACKUP COMPLETADO EXITOSAMENTE]
- Archivo:    farmacia_farmacia_db_20260927_044324.dump
- Tamaño:     92918 bytes
- SHA-256:    fb910231a3a3f9eec5bdf3cc0beb90a52ca20f773884766a83b4c2e4112dcd0e
- Fecha:      2026-09-27T04:43:24Z
- Metadatos:  infra/backups/farmacia_farmacia_db_20260927_044324.dump.meta.json
-==================================================================
-```
-
-### 5.2 Verificar la integridad de un respaldo existente
-
-```bash
-./infra/scripts/verify-backup.sh infra/backups/farmacia_farmacia_db_20260927_044324.dump
-```
-
----
-
-## 6. Protocolo de Restauración ante Desastres (Disaster Recovery)
-
-### Escenario A: Corrupción o Pérdida de Datos en el Servidor Activo
-
-1. **Detener el tráfico de entrada:**
-   Poner la aplicación en modo mantenimiento o detener los contenedores `api` y `worker` para evitar inconsistencias:
-   ```bash
-   docker compose stop api worker
-   ```
-
-2. **Identificar el último respaldo íntegro:**
-   Consultar `infra/backups/latest_backup.json` o listar los archivos disponibles:
-   ```bash
-   cat infra/backups/latest_backup.json
-   ```
-
-3. **Verificar el archivo de respaldo seleccionado:**
-   ```bash
-   ./infra/scripts/verify-backup.sh infra/backups/farmacia_farmacia_db_20260927_044324.dump
-   ```
-
-4. **Ejecutar la restauración sobre la base de datos principal:**
-   ```bash
-   ./infra/scripts/restore.sh \
-     infra/backups/farmacia_farmacia_db_20260927_044324.dump \
-     --target-db farmacia_db \
-     --confirm-overwrite
-   ```
-
-5. **Ejecutar la suite de validación post-restauración (Ver Sección 7).**
-
-6. **Reanudar los servicios de la aplicación:**
-   ```bash
-   docker compose start api worker
-   ```
-
----
-
-### Escenario B: Recuperación en Servidor Nuevo (Bare Metal / Reemplazo Catastrófico)
-
-1. **Provisionar el nuevo nodo:**
-   Instalar Docker y Docker Compose según la guía de infraestructura.
-
-2. **Clonar el repositorio y configurar variables de entorno:**
-   ```bash
-   git clone <URL_REPOSITORIO> /opt/farmacia
-   cd /opt/farmacia
-   cp .env.example .env
-   # Configurar contraseñas seguras y rutas de producción
-   ```
-
-3. **Copiar los archivos de respaldo desde el almacenamiento secundario:**
-   ```bash
-   mkdir -p infra/backups
-   scp backup_server:/remote/backups/farmacia_*.dump* infra/backups/
-   ```
-
-4. **Iniciar el motor PostgreSQL:**
-   ```bash
-   docker compose up -d postgres
-   # Esperar a que el healthcheck de postgres indique 'healthy'
-   ```
-
-5. **Restaurar la base de datos completa:**
-   ```bash
-   ./infra/scripts/restore.sh \
-     infra/backups/farmacia_backup_reciente.dump \
-     --target-db farmacia_db \
-     --confirm-overwrite
-   ```
-
-6. **Iniciar el resto del stack:**
-   ```bash
-   docker compose up -d --build
-   ```
-
----
-
-## 7. Checklist de Validación Post-Restauración
-
-Antes de entregar el sistema recuperado al equipo de farmacia, el oficial técnico o administrador debe ejecutar y documentar las siguientes verificaciones:
-
-- [ ] **Esquema de Base de Datos:** Las 29 tablas del modelo Prisma están presentes en el esquema `public`.
-- [ ] **Usuarios y Seguridad:** El usuario administrador puede iniciar sesión y los roles/permisos RBAC están intactos.
-- [ ] **Catálogo:** Conteo de productos, presentaciones y categorías concuerda con el inventario físico previo al fallo.
-- [ ] **Lotes y FEFO:** Los lotes activos (`isArchived: false`) conservan existencias, fechas de vencimiento y trazabilidad.
-- [ ] **Última Venta Registrada:** Consultar la tabla `sales` para identificar el último comprobante emitido antes del incidente:
+- [ ] El administrador inicia sesión y los roles conservan sus permisos.
+- [ ] La última venta coincide con el último comprobante físico:
   ```sql
   SELECT invoice_number, total, created_at FROM sales ORDER BY created_at DESC LIMIT 1;
   ```
-- [ ] **Caja:** El saldo y los movimientos de caja coinciden con el arqueo reportado.
-- [ ] **Auditoría:** La tabla `audit_events` permanece inmutable y se registra el evento de restauración.
+- [ ] Existencias de dos o tres productos de alta rotación coinciden con el conteo físico.
+- [ ] Saldo de caja coincide con el último arqueo.
+- [ ] `GET /api/v1/health` responde `200` con `"database": "up"`.
+- [ ] Registrar en la bitácora qué respaldo se usó y qué datos se perdieron desde ese momento.
 
----
+## 8. Variables
 
-## 8. Calendario de Simulacros (DR Drills)
-
-- **Frecuencia:** Obligatorio de manera semestral (cada 6 meses).
-- **Procedimiento del simulacro:**
-  1. Tomar un respaldo del entorno de staging o producción.
-  2. Restaurarlo en un entorno aislado sin conexión a la red de producción.
-  3. Cronometrar el RTO real transcurrido.
-  4. Ejecutar la suite completa de pruebas de integración (`pnpm --filter @farmacia/api test`).
-  5. Levantar acta técnica firmada con observaciones y lecciones aprendidas.
+| Variable | Dónde | Valor por defecto | Uso |
+|---|---|---|---|
+| `BACKUP_TIME` | `backup.env` | `02:00` | Hora diaria del respaldo (TZ del contenedor) |
+| `TZ` | `.env` | `America/Bogota` | Zona horaria del programador |
+| `BACKUP_AGE_RECIPIENT` | `backup.env` | — | Clave pública `age` |
+| `BACKUP_REMOTE` | `backup.env` | — | Destino `rclone` (`remoto:bucket`) |
+| `RCLONE_CONFIG_<REMOTO>_*` | `backup.env` | — | Definición del remoto de `rclone` |
+| `RETENTION_DAYS` | `.env` | `30` | Retención local |
+| `REMOTE_RETENTION_DAYS` | `backup.env` | `90` | Retención externa |
+| `AGE_IDENTITY_FILE` | al restaurar | — | Clave privada, solo durante restauración o simulacro |

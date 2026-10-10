@@ -105,7 +105,8 @@ fi
 
 # 5. Ejecutar la restauración
 echo " [RESTORE] Restaurando esquema y datos..."
-pg_restore \
+# Cualquier error detiene la restauración: una base a medias no debe darse por restaurada
+if ! pg_restore \
   -h "${PGHOST}" \
   -p "${PGPORT}" \
   -U "${PGUSER}" \
@@ -114,7 +115,11 @@ pg_restore \
   --if-exists \
   --no-owner \
   --no-privileges \
-  "${BACKUP_FILE}" 2>&1 | grep -v "^pg_restore: warning:" || true
+  --exit-on-error \
+  "${BACKUP_FILE}"; then
+  echo "[ERROR] pg_restore falló; la base '${TARGET_DB}' puede haber quedado incompleta." >&2
+  exit 1
+fi
 
 # 6. Verificación post-restauración
 echo " [RESTORE] Realizando comprobaciones de consistencia post-restauración..."

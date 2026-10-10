@@ -31,10 +31,11 @@ else
       FAILED=1
     fi
   done
-  if grep -q "postgresql-client" "${DOCKERFILE}"; then
-    echo "  [OK] Herramientas postgresql-client instaladas en la etapa api"
+  # pg_dump se niega a respaldar un servidor de versión mayor: el cliente debe ser 18
+  if grep -q "postgresql18-client" "${DOCKERFILE}" && grep -q "image: postgres:18" "${ROOT_DIR}/infra/compose/docker-compose.production.yml"; then
+    echo "  [OK] Cliente PostgreSQL 18 instalado para el servidor postgres:18"
   else
-    echo "  [ERROR] postgresql-client no encontrado en Dockerfile" >&2
+    echo "  [ERROR] La versión del cliente PostgreSQL del Dockerfile no coincide con el servidor de compose" >&2
     FAILED=1
   fi
 fi
@@ -85,7 +86,7 @@ fi
 
 # 4. Validar sintaxis de scripts de respaldo y recuperación
 echo " [4/5] Verificando scripts bash de infraestructura..."
-for script in backup.sh verify-backup.sh restore.sh create-test-db.sh; do
+for script in backup.sh backup-scheduler.sh restore-drill.sh verify-backup.sh restore.sh create-test-db.sh; do
   SCRIPT_PATH="${ROOT_DIR}/infra/scripts/${script}"
   if [ -f "${SCRIPT_PATH}" ]; then
     if bash -n "${SCRIPT_PATH}"; then
@@ -106,7 +107,7 @@ if [ ! -f "${COMPOSE_FILE}" ]; then
   echo "  [ERROR] No se encontró ${COMPOSE_FILE}" >&2
   FAILED=1
 else
-  for svc in "caddy:" "postgres:" "api:" "worker:" "web:" "migrate:" "backup-job:"; do
+  for svc in "caddy:" "postgres:" "api:" "worker:" "web:" "migrate:" "backup-job:" "backup-scheduler:"; do
     if grep -q "${svc}" "${COMPOSE_FILE}"; then
       echo "  [OK] Servicio configurado: ${svc}"
     else
