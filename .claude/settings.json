@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(codex exec:*)",
+      "Bash(gemini --approval-mode default:*)",
+      "Bash(git diff:*)",
+      "Bash(git status:*)",
+      "Bash(git worktree:*)",
+      "Bash(pnpm lint:*)",
+      "Bash(pnpm typecheck:*)",
+      "Bash(pnpm test:*)",
+      "Bash(pnpm --filter:*)"
+    ],
+    "deny": [
+      "Bash(gemini --yolo:*)",
+      "Bash(gemini -y:*)",
+      "Bash(gemini --approval-mode yolo:*)",
+      "Bash(codex --dangerously-bypass-approvals-and-sandbox:*)",
+      "Bash(codex exec --dangerously-bypass-approvals-and-sandbox:*)",
+      "Bash(codex exec --sandbox danger-full-access:*)"
+    ]
+  }
+}
