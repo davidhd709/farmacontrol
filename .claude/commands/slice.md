@@ -1,6 +1,6 @@
 ---
 description: Ejecuta un slice completo con el equipo multiagente (Claude orquesta, Codex implementa, Gemini audita)
-argument-hint: <descripción del slice o ítem del plan, por ejemplo "Fase 2 - AUD-012 rate limit de login">
+argument-hint: <descripción del slice o ítem del plan, por ejemplo "Fase 4 - fechas de negocio en America/Bogota">
 ---
 
 Actúa como orquestador según `CLAUDE.md`, `.agents/rules/agente-orquestador.md` y `docs/ORQUESTACION_AGENTES.md`.
