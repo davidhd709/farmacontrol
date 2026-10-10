@@ -585,7 +585,9 @@ export function ReportsPage() {
                       <TableCell sx={{ fontWeight: 700 }}>Fecha y Hora</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Tipo Flujo</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Concepto</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }} align="right">Monto</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }} align="right">Débito</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }} align="right">Crédito</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }} align="right">Saldo</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Medio Pago</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Doc. Referencia</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Usuario</TableCell>
@@ -594,13 +596,13 @@ export function ReportsPage() {
                   <TableBody>
                     {cashQuery.isLoading ? (
                       <TableRow>
-                        <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
+                        <TableCell colSpan={9} align="center" sx={{ py: 6 }}>
                           <CircularProgress size={32} />
                         </TableCell>
                       </TableRow>
                     ) : cashQuery.data?.items.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
+                        <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
                           <Typography color="text.secondary">No hay movimientos de caja en el período.</Typography>
                         </TableCell>
                       </TableRow>
@@ -620,9 +622,14 @@ export function ReportsPage() {
                             </Typography>
                           </TableCell>
                           <TableCell>{row.concept}</TableCell>
+                          {/* Débitos positivos y créditos negativos (acuerdo del 4 de octubre) */}
                           <TableCell align="right" sx={{ fontWeight: 700 }}>
-                            {formatCurrency(row.amount)}
+                            {row.debit ? formatCurrency(row.debit) : ''}
                           </TableCell>
+                          <TableCell align="right" sx={{ fontWeight: 700 }}>
+                            {row.credit ? `-${formatCurrency(-row.credit)}` : ''}
+                          </TableCell>
+                          <TableCell align="right">{formatCurrency(row.balanceAfter)}</TableCell>
                           <TableCell>{row.paymentMethod}</TableCell>
                           <TableCell>
                             {row.referenceDocumentType ? `${row.referenceDocumentType} ${row.referenceDocumentId || ''}` : 'N/A'}

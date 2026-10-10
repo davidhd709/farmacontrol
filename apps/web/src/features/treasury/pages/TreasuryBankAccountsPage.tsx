@@ -396,13 +396,13 @@ export function TreasuryBankAccountsPage() {
                   <TableCell sx={{ fontWeight: 700 }}>Concepto</TableCell>
                   <TableCell sx={{ fontWeight: 700 }}>Referencia / Voucher</TableCell>
                   <TableCell align="right" sx={{ fontWeight: 700 }}>
-                    Entrada (+)
+                    Débito
                   </TableCell>
                   <TableCell align="right" sx={{ fontWeight: 700 }}>
-                    Salida (-)
+                    Crédito
                   </TableCell>
                   <TableCell align="right" sx={{ fontWeight: 700 }}>
-                    Saldo Resultante
+                    Saldo
                   </TableCell>
                 </TableRow>
               </TableHead>
@@ -451,13 +451,13 @@ export function TreasuryBankAccountsPage() {
                           {mov.externalReference || mov.referenceDocumentId || '—'}
                         </TableCell>
                         <TableCell align="right" sx={{ color: 'success.main', fontWeight: 600 }}>
-                          {isCredit ? `+$${amountNum.toLocaleString('es-CO')}` : '—'}
+                          {isCredit ? `$${amountNum.toLocaleString('es-CO', { minimumFractionDigits: 2 })}` : ''}
                         </TableCell>
                         <TableCell align="right" sx={{ color: 'error.main', fontWeight: 600 }}>
-                          {!isCredit ? `-$${amountNum.toLocaleString('es-CO')}` : '—'}
+                          {!isCredit ? `-$${amountNum.toLocaleString('es-CO', { minimumFractionDigits: 2 })}` : ''}
                         </TableCell>
                         <TableCell align="right" sx={{ fontWeight: 700 }}>
-                          ${balAfterNum.toLocaleString('es-CO')}
+                          ${balAfterNum.toLocaleString('es-CO', { minimumFractionDigits: 2 })}
                         </TableCell>
                       </TableRow>
                     );

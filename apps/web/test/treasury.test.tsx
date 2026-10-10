@@ -169,7 +169,8 @@ describe('TreasuryBankAccountsPage (Slice 11.4 Frontend)', () => {
     ).toBeInTheDocument();
     expect(await screen.findByText('Consignación ventas POS')).toBeInTheDocument();
     expect(screen.getByText('TRX-1010')).toBeInTheDocument();
-    expect(screen.getByText('+$250.000')).toBeInTheDocument();
+    // Débito positivo sin signo, en la columna Débito
+    expect(screen.getByText('$250.000,00')).toBeInTheDocument();
   });
 
   it('permite abrir el diálogo de nueva cuenta bancaria y crearla', async () => {

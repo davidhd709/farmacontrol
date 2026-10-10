@@ -313,14 +313,15 @@ export const CashPage: React.FC = () => {
               <TableCell sx={{ fontWeight: 600 }}>Motivo / Justificación</TableCell>
               <TableCell sx={{ fontWeight: 600 }}>Medio de Pago</TableCell>
               <TableCell sx={{ fontWeight: 600 }}>Usuario</TableCell>
-              <TableCell align="right" sx={{ fontWeight: 600 }}>Monto</TableCell>
-              <TableCell align="right" sx={{ fontWeight: 600 }}>Saldo Resultante</TableCell>
+              <TableCell align="right" sx={{ fontWeight: 600 }}>Débito</TableCell>
+              <TableCell align="right" sx={{ fontWeight: 600 }}>Crédito</TableCell>
+              <TableCell align="right" sx={{ fontWeight: 600 }}>Saldo</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
+                <TableCell colSpan={8} align="center" sx={{ py: 6 }}>
                   <CircularProgress size={36} />
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
                     Cargando movimientos de caja...
@@ -329,7 +330,7 @@ export const CashPage: React.FC = () => {
               </TableRow>
             ) : movements.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
+                <TableCell colSpan={8} align="center" sx={{ py: 6 }}>
                   <Typography variant="body1" color="text.secondary">
                     No se encontraron movimientos de caja registrados con los filtros seleccionados.
                   </Typography>
@@ -362,8 +363,12 @@ export const CashPage: React.FC = () => {
                     <TableCell>
                       {mov.createdByUsername || 'Sistema'}
                     </TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 700, color: income ? 'success.main' : 'error.main' }}>
-                      {`${income ? '+' : '-'}${formatCurrency(mov.amount)}`}
+                    {/* Débitos positivos (entradas) y créditos negativos (salidas) */}
+                    <TableCell align="right" sx={{ fontWeight: 700, color: 'success.main' }}>
+                      {income ? formatCurrency(mov.amount) : ''}
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700, color: 'error.main' }}>
+                      {income ? '' : `-${formatCurrency(mov.amount)}`}
                     </TableCell>
                     <TableCell align="right" sx={{ fontWeight: 600 }}>
                       {formatCurrency(mov.balanceAfter)}
