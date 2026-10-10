@@ -5,9 +5,10 @@ import { CUSTOMER_REPOSITORY } from './domain/customer.repository';
 import { PrismaCustomerRepository } from './infrastructure/prisma-customer.repository';
 import { AuditModule } from '../audit/audit.module';
 import { IdentityModule } from '../identity/identity.module';
+import { ThirdPartiesModule } from '../third-parties/third-parties.module';
 
 @Module({
-  imports: [AuditModule, IdentityModule],
+  imports: [AuditModule, IdentityModule, ThirdPartiesModule],
   controllers: [CustomerController],
   providers: [
     CustomerService,

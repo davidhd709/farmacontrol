@@ -25,7 +25,6 @@ import CategoryIcon from '@mui/icons-material/Category';
 import StraightenIcon from '@mui/icons-material/Straighten';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import ShoppingBagIcon from '@mui/icons-material/ShoppingBag';
-import StorefrontIcon from '@mui/icons-material/Storefront';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
@@ -87,12 +86,6 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ open, onClose }) => {
           icon: <ReceiptLongIcon fontSize="small" />,
           permission: SYSTEM_PERMISSIONS.SALES_READ,
         },
-        {
-          title: 'Clientes',
-          path: '/customers',
-          icon: <PeopleAltIcon fontSize="small" />,
-          permission: SYSTEM_PERMISSIONS.CUSTOMERS_READ,
-        },
       ],
     },
     {
@@ -139,12 +132,6 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ open, onClose }) => {
           path: '/purchases',
           icon: <ShoppingBagIcon fontSize="small" />,
           permission: SYSTEM_PERMISSIONS.PURCHASES_READ,
-        },
-        {
-          title: 'Proveedores',
-          path: '/suppliers',
-          icon: <StorefrontIcon fontSize="small" />,
-          permission: SYSTEM_PERMISSIONS.SUPPLIERS_READ,
         },
         {
           title: 'Alertas de Vencimiento',

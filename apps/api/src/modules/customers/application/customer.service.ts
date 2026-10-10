@@ -16,6 +16,7 @@ import {
   CustomerDocumentChangeForbiddenException,
 } from '../domain/customer.exceptions';
 import { AuditService } from '../../audit/application/services/audit.service';
+import { ThirdPartyService } from '../../third-parties/application/third-party.service';
 
 export interface AuditContext {
   userId?: string | null;
@@ -31,6 +32,8 @@ export class CustomerService {
     private readonly customerRepository: ICustomerRepository,
     @Optional()
     private readonly auditService?: AuditService,
+    @Optional()
+    private readonly thirdPartyService?: ThirdPartyService,
   ) {}
 
   async createCustomer(input: CreateCustomerPayload, auditCtx?: AuditContext): Promise<Customer> {
@@ -50,6 +53,16 @@ export class CustomerService {
     });
 
     await this.customerRepository.save(customer);
+    // Terceros unificado: el cliente creado en el POS también queda como tercero
+    await this.thirdPartyService?.registerRole('customer', {
+      id: customer.id,
+      documentType: customer.documentType,
+      documentNumber: customer.documentNumber,
+      name: customer.name,
+      phone: customer.phone,
+      email: customer.email,
+      address: customer.address,
+    });
 
     if (this.auditService) {
       await this.auditService.recordEvent({

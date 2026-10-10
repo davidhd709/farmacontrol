@@ -15,6 +15,7 @@ import {
   SupplierTaxIdChangeForbiddenException,
 } from '../domain/supplier.exceptions';
 import { AuditService } from '../../audit/application/services/audit.service';
+import { ThirdPartyService } from '../../third-parties/application/third-party.service';
 
 export interface AuditContext {
   userId?: string | null;
@@ -30,6 +31,8 @@ export class SupplierService {
     private readonly supplierRepository: ISupplierRepository,
     @Optional()
     private readonly auditService?: AuditService,
+    @Optional()
+    private readonly thirdPartyService?: ThirdPartyService,
   ) {}
 
   async createSupplier(input: CreateSupplierPayload, auditCtx?: AuditContext): Promise<Supplier> {
@@ -48,6 +51,16 @@ export class SupplierService {
     });
 
     await this.supplierRepository.save(supplier);
+    // Terceros unificado: el proveedor también queda como tercero
+    await this.thirdPartyService?.registerRole('supplier', {
+      id: supplier.id,
+      documentNumber: supplier.taxId,
+      name: supplier.name,
+      contactName: supplier.contactName,
+      phone: supplier.phone,
+      email: supplier.email,
+      address: supplier.address,
+    });
 
     if (this.auditService) {
       await this.auditService.recordEvent({

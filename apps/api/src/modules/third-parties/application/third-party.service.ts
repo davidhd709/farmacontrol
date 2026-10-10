@@ -136,6 +136,53 @@ export class ThirdPartyService {
     return thirdParty;
   }
 
+  /**
+   * Terceros unificado (acuerdo del 4 de octubre): todo cliente o proveedor es un tercero.
+   * Cuando se crean desde el POS o desde compras, se registra su tercero o se le agrega el
+   * rol si ya existía con el mismo documento (p. ej. un proveedor que también compra).
+   */
+  async registerRole(
+    role: 'customer' | 'supplier',
+    record: {
+      id: string;
+      documentType?: string | null;
+      documentNumber: string;
+      name: string;
+      contactName?: string | null;
+      phone?: string | null;
+      email?: string | null;
+      address?: string | null;
+    },
+  ): Promise<void> {
+    const documentNumber = record.documentNumber.trim();
+    const existing = await this.db.thirdParty.findUnique({ where: { documentNumber } });
+    if (existing) {
+      await this.db.thirdParty.update({
+        where: { id: existing.id },
+        data:
+          role === 'customer'
+            ? { isCustomer: true, customerId: existing.customerId ?? record.id }
+            : { isSupplier: true, supplierId: existing.supplierId ?? record.id },
+      });
+      return;
+    }
+    await this.db.thirdParty.create({
+      data: {
+        documentType: record.documentType || (role === 'supplier' ? 'NIT' : 'CC'),
+        documentNumber,
+        name: record.name,
+        contactName: record.contactName ?? null,
+        phone: record.phone ?? null,
+        email: record.email ?? null,
+        address: record.address ?? null,
+        isCustomer: role === 'customer',
+        isSupplier: role === 'supplier',
+        customerId: role === 'customer' ? record.id : null,
+        supplierId: role === 'supplier' ? record.id : null,
+      },
+    });
+  }
+
   async updateThirdParty(
     id: string,
     input: UpdateThirdPartyPayload,
