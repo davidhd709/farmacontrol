@@ -1,4 +1,4 @@
-FROM node:22.14.0-alpine AS build
+FROM node:22.23.3-alpine3.23 AS build
 
 WORKDIR /app
 RUN npm install --global pnpm@12.5.1
@@ -22,14 +22,14 @@ RUN pnpm --filter @farmacia/database exec prisma generate \
   && pnpm --filter @farmacia/worker build \
   && pnpm --filter @farmacia/web build
 
-FROM node:22.14.0-alpine AS api
+FROM node:22.23.3-alpine3.23 AS api
 
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Instalar bash y herramientas cliente de PostgreSQL (pg_dump, pg_restore, pg_isready)
-# requeridas para las operaciones automatizadas de respaldo y verificación
-RUN apk add --no-cache bash postgresql-client \
+# bash y cliente de PostgreSQL 18 (pg_dump debe ser >= versión del servidor postgres:18);
+# age cifra la copia externa, rclone la sube y tzdata da la hora local del programador
+RUN apk add --no-cache bash postgresql18-client age rclone tzdata \
   && mkdir -p /app/infra/scripts /app/infra/backups \
   && chown -R node:node /app/infra
 
@@ -44,12 +44,12 @@ USER node
 EXPOSE 3000
 CMD ["node", "apps/api/dist/main.js"]
 
-FROM node:22.14.0-alpine AS worker
+FROM node:22.23.3-alpine3.23 AS worker
 
 WORKDIR /app
 ENV NODE_ENV=production
 
-RUN apk add --no-cache bash postgresql-client \
+RUN apk add --no-cache bash postgresql18-client \
   && mkdir -p /app/infra/scripts /app/infra/backups \
   && chown -R node:node /app/infra
 
