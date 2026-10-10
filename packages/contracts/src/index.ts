@@ -496,7 +496,9 @@ export type InventoryMovementType =
   | 'DEVOLUCION_CLIENTE'
   | 'DEVOLUCION_PROVEEDOR'
   | 'TRASLADO_ENTRADA'
-  | 'TRASLADO_SALIDA';
+  | 'TRASLADO_SALIDA'
+  | 'ENTRADA_DEVOLUCION_VENTA'
+  | 'SALIDA_DEVOLUCION_COMPRA';
 
 export interface InventoryMovementDto {
   id: string;
