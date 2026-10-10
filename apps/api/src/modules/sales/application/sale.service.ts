@@ -455,6 +455,7 @@ export class SaleService {
             total: sale.total,
             subtotal: sale.subtotal,
             taxTotal: sale.taxTotal,
+            discountTotal: sale.discountTotal,
             paymentMethod: sale.paymentMethod,
             createdById: sale.createdById,
             createdAt: sale.createdAt,

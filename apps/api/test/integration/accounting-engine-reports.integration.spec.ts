@@ -255,6 +255,62 @@ describe('Accounting Engine, Double-Entry, Journal & Reports Integration (Postgr
       expect(reversal!.reversalOfId).toBe(posted!.id);
     });
 
+    describe('T-31: descuentos de venta en 4175', () => {
+      async function discountedSale(id: string) {
+        const category = await prisma.category.create({ data: { name: `Cat ${id}` } });
+        const product = await prisma.product.create({
+          data: { code: `DESC-${id}`, name: 'Producto con descuento', basePrice: 30000, baseCost: 0, categoryId: category.id },
+        });
+        // Precio 30.000, descuento 2.000: la venta neta es 28.000 (ejemplo del documento contable)
+        return engineService.handleSaleConfirmed({
+          id,
+          invoiceNumber: `FAC-${id.slice(0, 4)}`,
+          total: '28000.00',
+          subtotal: '28000.00',
+          taxTotal: '0.00',
+          discountTotal: '2000.00',
+          paymentMethod: 'EFECTIVO',
+          createdById: adminUserId,
+          createdAt: new Date('2026-10-05T15:00:00Z'),
+          lines: [{ productId: product.id, quantityCommercial: 1, quantityBaseUnits: 1 }],
+        });
+      }
+
+      it('registra la venta bruta y el descuento en la cuenta de descuentos', async () => {
+        await setupStandardPucAndMappings();
+        const discounts = await prisma.account.create({
+          data: { code: '417506', name: 'DESCUENTOS CONDICIONADOS (DB)', type: 'INCOME', level: 1, allowsMovement: true },
+        });
+        await prisma.companyAccountingMapping.create({
+          data: { purpose: 'SALES_DISCOUNTS', accountId: discounts.id, status: 'ACTIVE', effectiveFrom: new Date('2020-01-01') },
+        });
+
+        const posted = await discountedSale('22222222-2222-2222-2222-222222222222');
+        const lines = await prisma.journalEntryLine.findMany({
+          where: { journalEntryId: posted!.id },
+          include: { account: true },
+        });
+        const byCode = (code: string) => lines.find((l) => l.account.code === code)!;
+        expect(byCode('110505').debit.toFixed(2)).toBe('28000.00');
+        expect(byCode('413502').credit.toFixed(2)).toBe('30000.00');
+        expect(byCode('417506').debit.toFixed(2)).toBe('2000.00');
+        expect(byCode('417506').purpose).toBe('SALES_DISCOUNTS');
+
+        const statement = await reportsService.getIncomeStatement('2026-10-01', '2026-10-31');
+        expect(statement.grossSales).toBe('30000.00');
+        expect(statement.discounts).toBe('2000.00');
+        expect(statement.netSales).toBe('28000.00');
+      });
+
+      it('sin cuenta de descuentos configurada conserva el registro neto', async () => {
+        await setupStandardPucAndMappings();
+        const posted = await discountedSale('33333333-3333-3333-3333-333333333333');
+        const dto = await journalService.findById(posted!.id);
+        expect(dto.totalDebit).toBe('28000.00');
+        expect(dto.lines.some((l) => l.purpose === 'SALES_DISCOUNTS')).toBe(false);
+      });
+    });
+
     it('contabiliza recepción de compras afectando INVENTORY vs SUPPLIERS', async () => {
       await setupStandardPucAndMappings();
 

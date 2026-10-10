@@ -12,6 +12,8 @@ export interface SaleEventInput {
   total: number | string | Prisma.Decimal;
   subtotal?: number | string | Prisma.Decimal;
   taxTotal?: number | string | Prisma.Decimal;
+  /** Descuento comercial otorgado; se contabiliza aparte en SALES_DISCOUNTS (4175) */
+  discountTotal?: number | string | Prisma.Decimal;
   paymentMethod: string;
   createdById?: string | null;
   createdAt?: Date | string;
@@ -126,7 +128,8 @@ export class AccountingEngineService {
    * Partida doble balanceada:
    * Débito: CAJA o BANCOS (por el total)
    * Crédito: IVA GENERADO (si aplica)
-   * Crédito: VENTAS GRAVADAS o VENTAS EXCLUIDAS (por el subtotal)
+   * Crédito: VENTAS GRAVADAS o VENTAS EXCLUIDAS (valor bruto, antes del descuento)
+   * Débito: DESCUENTOS EN VENTAS 4175 (si hubo descuento)
    * Débito: COSTO DE VENTAS (si costo > 0)
    * Crédito: INVENTARIOS (si costo > 0)
    */
@@ -142,6 +145,9 @@ export class AccountingEngineService {
       ? parseMoneyToCents(new Prisma.Decimal(sale.taxTotal).toFixed(2), 'IVA de venta')
       : 0n;
     const subtotalCents = totalCents - taxCents;
+    const discountCents = sale.discountTotal
+      ? parseMoneyToCents(new Prisma.Decimal(sale.discountTotal).toFixed(2), 'Descuento de venta')
+      : 0n;
 
     const paymentPurpose: DbPurpose =
       sale.paymentMethod === 'EFECTIVO'
@@ -197,6 +203,19 @@ export class AccountingEngineService {
 
     const entryDate = sale.createdAt ? new Date(sale.createdAt) : new Date();
 
+    // Acuerdo del 4 de octubre: la venta se registra por su valor bruto y el descuento en
+    // 4175, para que el estado de resultados muestre ventas brutas, descuentos y netas.
+    // Sin cuenta de descuentos configurada se conserva el registro neto anterior.
+    const separateDiscount =
+      discountCents > 0n &&
+      (await this.journalService.canPostForPurposes(['SALES_DISCOUNTS'], entryDate, client));
+    if (discountCents > 0n && !separateDiscount) {
+      this.logger.warn(
+        `Venta ${sale.invoiceNumber}: propósito SALES_DISCOUNTS sin mapeo; la venta se registra neta del descuento.`,
+      );
+    }
+    const salesCreditCents = separateDiscount ? subtotalCents + discountCents : subtotalCents;
+
     const canPost = await this.journalService.canPostForPurposes(requiredPurposes, entryDate, client);
     if (!canPost) {
       this.logger.warn(
@@ -226,15 +245,24 @@ export class AccountingEngineService {
       lines.push({
         purpose: 'SALES_TAXED',
         debit: '0.00',
-        credit: centsToMoneyString(subtotalCents),
+        credit: centsToMoneyString(salesCreditCents),
         description: `Venta gravada factura ${sale.invoiceNumber}`,
       });
     } else {
       lines.push({
         purpose: 'SALES_EXCLUDED',
         debit: '0.00',
-        credit: centsToMoneyString(subtotalCents),
+        credit: centsToMoneyString(salesCreditCents),
         description: `Venta excluida factura ${sale.invoiceNumber}`,
+      });
+    }
+
+    if (separateDiscount) {
+      lines.push({
+        purpose: 'SALES_DISCOUNTS',
+        debit: centsToMoneyString(discountCents),
+        credit: '0.00',
+        description: `Descuento otorgado factura ${sale.invoiceNumber}`,
       });
     }
 
