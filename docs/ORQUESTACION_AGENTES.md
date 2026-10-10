@@ -139,38 +139,44 @@ Usa el equipo multiagente para implementar este slice. Haz que arquitecto valide
 
 Codex carga la configuración del proyecto al iniciar una sesión. Después de cambiar `.codex/config.toml` o `.codex/agents/*.toml`, inicia una sesión nueva para asegurar que los perfiles estén disponibles.
 
-## 11. Orquestación con tres proveedores (Claude, Codex y Gemini)
+## 11. Orquestación con Claude Code y Codex
 
-Los roles de este documento no cambian; lo que cambia es el motor que ejecuta cada uno. Claude Code orquesta y delega en los CLIs de Codex y Gemini, cada uno autenticado con su propia suscripción (sin claves de API).
+Los roles de este documento no cambian; lo que cambia es el motor que ejecuta cada uno. Claude Code orquesta y delega en Codex CLI, autenticado con la suscripción de ChatGPT (sin claves de API).
 
-| Rol                                                                     | Motor                      | Cómo se invoca                                                                         |
-| ----------------------------------------------------------------------- | -------------------------- | -------------------------------------------------------------------------------------- |
-| Orquestador y arquitecto                                                | Claude Code (Claude Pro)   | Sesión principal; `CLAUDE.md` y comando `/slice`                                       |
-| `database`, `backend_fefo`, `frontend_pos`, `qa_concurrencia`, `devops` | Codex CLI (ChatGPT Plus)   | Subagente `.claude/agents/codex-dev.md` → `codex exec --sandbox workspace-write`       |
-| `auditor_seguridad`                                                     | Gemini CLI (Google AI Pro) | Subagente `.claude/agents/gemini-auditor.md` → diff por entrada estándar, sólo lectura |
-| Lectura de documentos y exploración amplia                              | Gemini CLI (Google AI Pro) | Subagente `.claude/agents/gemini-analista.md`, sólo lectura                            |
+| Rol                                                                     | Motor                    | Cómo se invoca                                                                   |
+| ----------------------------------------------------------------------- | ------------------------ | -------------------------------------------------------------------------------- |
+| Orquestador y arquitecto                                                | Claude Code (Claude Pro) | Sesión principal; `CLAUDE.md` y comando `/slice`                                 |
+| `database`, `backend_fefo`, `frontend_pos`, `qa_concurrencia`, `devops` | Codex CLI (ChatGPT Plus) | Subagente `.claude/agents/codex-dev.md` → `codex exec --sandbox workspace-write` |
+| `auditor_seguridad`                                                     | Codex CLI (ChatGPT Plus) | Subagente `.claude/agents/codex-auditor.md` → `codex exec --sandbox read-only`   |
+| Lectura de documentos y exploración amplia                              | Claude Code              | Subagente integrado `Explore`, sólo lectura                                      |
 
 Motivos del reparto:
 
-- La auditoría la hace un modelo distinto al que escribió el código, para que la revisión sea realmente independiente.
-- Codex ya tiene los perfiles de implementación en `.codex/agents/` y los reutiliza tal cual.
-- Gemini descarga del hilo del orquestador la lectura de documentos largos (`PLAN_DESARROLLO.md`, requerimientos, auditorías).
+- La auditoría la hace un modelo distinto al que orquesta e integra, y en una ejecución separada de la que implementó, para que la revisión sea independiente.
+- Codex ya tiene los perfiles de implementación y auditoría en `.codex/agents/` y los reutiliza tal cual.
+
+### Por qué Gemini no está en el flujo automático
+
+- Desde el 18 de junio de 2026, Gemini CLI dejó de atender a cuentas personales de Google AI Pro; su reemplazo es Antigravity CLI (`agy`).
+- En procesadores AMD Zen+ (por ejemplo, Ryzen 5 3450U), `agy` se cae de forma intermitente al arrancar con `CRNGT failed` (error conocido de Antigravity, sin corrección publicada al 10 de octubre de 2026).
+- Los términos de Antigravity restringen el acceso al servicio mediante software de terceros, y no hay una aclaración oficial sobre invocar `agy` desde otro agente.
+
+Gemini se usa de forma manual (gemini.google.com o `agy`, cuando funcione) para segundas opiniones, siguiendo `GEMINI.md`. Si Google corrige el fallo y aclara los términos, se puede volver a evaluar un subagente de Gemini.
 
 ### Requisitos en la máquina de desarrollo
 
 ```bash
-npm install -g @anthropic-ai/claude-code @openai/codex @google/gemini-cli
+npm install -g @anthropic-ai/claude-code @openai/codex
 claude          # iniciar sesión con la cuenta de Claude Pro
 codex login     # "Sign in with ChatGPT"
-gemini          # "Login with Google" con la cuenta de Google AI Pro
 ```
 
-Abre el repositorio con `claude` desde la raíz y verifica con `/agents` que aparecen `codex-dev`, `gemini-auditor` y `gemini-analista`.
+Abre el repositorio con `claude` desde la raíz y verifica con `/agents` que aparecen `codex-dev` y `codex-auditor`.
 
 ### Reglas adicionales
 
 - Las reglas de las secciones 2 a 9 aplican igual: contrato de delegación, handoff, un escritor por archivo y Definition of Done.
 - Si dos subagentes de Codex escriben en paralelo, cada uno trabaja en su propio `git worktree`; el orquestador integra.
-- Prohibido `--yolo`, `--approval-mode yolo`, `--dangerously-bypass-approvals-and-sandbox` y `--sandbox danger-full-access` (bloqueados también en `.claude/settings.json`).
-- Cada CLI consume la cuota de su suscripción. Si un subagente devuelve `BLOQUEADO` por límite de uso, el orquestador decide si espera la ventana o hace el trabajo él mismo, y lo informa.
+- Prohibido `--dangerously-bypass-approvals-and-sandbox` y `--sandbox danger-full-access` (bloqueados también en `.claude/settings.json`).
+- Implementación y auditoría consumen la misma cuota de Codex (ventana de 5 horas y límite semanal). Si un subagente devuelve `BLOQUEADO` por límite de uso, el orquestador decide si espera la ventana o hace el trabajo él mismo, y lo informa.
 - El flujo con Codex como orquestador (sección 10) sigue disponible; no se usan los dos esquemas a la vez sobre la misma rama.

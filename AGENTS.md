@@ -555,7 +555,7 @@ El agente principal actúa como orquestador y debe seguir:
 
 Los agentes personalizados ejecutables están en `.codex/agents/` y sus reglas de dominio en `.agents/rules/`.
 
-Cuando Claude Code es el orquestador, los roles se reparten entre Claude, Codex y Gemini según la sección 11 de `docs/ORQUESTACION_AGENTES.md`.
+Cuando Claude Code es el orquestador, los roles se reparten entre Claude y Codex según la sección 11 de `docs/ORQUESTACION_AGENTES.md`.
 
 Delegar cuando existan subtareas independientes que puedan investigarse, implementarse o validarse en paralelo. Mantener el trabajo local en el agente principal cuando sea pequeño o secuencial.
 
