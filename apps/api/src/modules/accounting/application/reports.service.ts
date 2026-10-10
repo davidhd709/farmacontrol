@@ -306,10 +306,12 @@ export class AccountingReportsService {
 
       if (line.account.type === 'INCOME') {
         const netCents = cCents - dCents;
-        if (line.account.code.startsWith('4175') || line.purpose === 'SALES_RETURNS') {
-          returnsCents += dCents - cCents;
-        } else if (line.account.code.startsWith('413595') || line.purpose === 'SALES_DISCOUNTS') {
+        // Las cuentas de ingreso de naturaleza débito (4175) restan de las ventas; el
+        // propósito con que se registró la línea separa descuentos de devoluciones.
+        if (line.purpose === 'SALES_DISCOUNTS') {
           discountsCents += dCents - cCents;
+        } else if (line.purpose === 'SALES_RETURNS' || line.account.nature === 'DEBIT') {
+          returnsCents += dCents - cCents;
         } else {
           grossSalesCents += netCents;
         }
