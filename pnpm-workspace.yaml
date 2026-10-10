@@ -8,3 +8,9 @@ allowBuilds:
   argon2: true
   esbuild: true
   prisma: true
+
+# Parches de seguridad en dependencias transitivas (pnpm audit, 2026-10-10)
+overrides:
+  multer: ^2.4.0
+  mysql2: ^3.24.5
+  source-map-js: ^1.2.2
