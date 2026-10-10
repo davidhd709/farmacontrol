@@ -34,6 +34,7 @@ import {
   fetchJournalEntryById,
   reverseJournalEntry,
 } from '../api/accounting.api';
+import { ManualNoteDialog } from '../components/ManualNoteDialog';
 
 const sourceTypeLabels: Record<string, { label: string; color: 'primary' | 'secondary' | 'success' | 'warning' | 'info' | 'default' }> = {
   SALE: { label: 'Venta', color: 'success' },
@@ -41,6 +42,7 @@ const sourceTypeLabels: Record<string, { label: string; color: 'primary' | 'seco
   RECEIVABLE_PAYMENT: { label: 'Cobro Cartera', color: 'info' },
   PAYABLE_PAYMENT: { label: 'Pago Proveedor', color: 'warning' },
   REVERSAL: { label: 'Reversión', color: 'secondary' },
+  MANUAL_NOTE: { label: 'Nota contable', color: 'default' },
 };
 
 export const JournalEntriesPage = () => {
@@ -58,6 +60,8 @@ export const JournalEntriesPage = () => {
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
   const [reversingEntry, setReversingEntry] = useState<JournalEntryDto | null>(null);
   const [reversalReason, setReversalReason] = useState('');
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [createdNote, setCreatedNote] = useState<string | null>(null);
   const [reversalDate, setReversalDate] = useState(new Date().toISOString().slice(0, 10));
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -130,14 +134,36 @@ export const JournalEntriesPage = () => {
     <Container component="main" maxWidth="xl" sx={{ py: 4 }}>
       <Stack spacing={3}>
         {/* Cabecera */}
-        <Box>
-          <Typography component="h1" variant="h4" sx={{ fontWeight: 700 }}>
-            Libro Diario
-          </Typography>
-          <Typography color="text.secondary">
-            Registro cronológico inmutable de comprobantes contables y motor de partida doble.
-          </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2 }}>
+          <Box>
+            <Typography component="h1" variant="h4" sx={{ fontWeight: 700 }}>
+              Libro Diario
+            </Typography>
+            <Typography color="text.secondary">
+              Registro cronológico inmutable de comprobantes contables y motor de partida doble.
+            </Typography>
+          </Box>
+          {hasPermission(SYSTEM_PERMISSIONS.ACCOUNTING_MANAGE) && (
+            <Button variant="contained" onClick={() => setNoteOpen(true)}>
+              Nueva nota contable
+            </Button>
+          )}
         </Box>
+        {createdNote && (
+          <Alert severity="success" onClose={() => setCreatedNote(null)}>
+            Nota contable {createdNote} registrada.
+          </Alert>
+        )}
+        <ManualNoteDialog
+          open={noteOpen}
+          onClose={() => setNoteOpen(false)}
+          onCreated={(noteNumber) => {
+            setNoteOpen(false);
+            setCreatedNote(noteNumber);
+            queryClient.invalidateQueries({ queryKey: ['journal-entries'] });
+            queryClient.invalidateQueries({ queryKey: ['trial-balance'] });
+          }}
+        />
 
         {/* Barra de Filtros */}
         <Paper sx={{ p: 2 }}>
@@ -173,6 +199,7 @@ export const JournalEntriesPage = () => {
                 <MenuItem value="RECEIVABLE_PAYMENT">Cobro de Cartera</MenuItem>
                 <MenuItem value="PAYABLE_PAYMENT">Pago Proveedores</MenuItem>
                 <MenuItem value="REVERSAL">Reversiones</MenuItem>
+                <MenuItem value="MANUAL_NOTE">Notas contables</MenuItem>
               </Select>
             </FormControl>
             <TextField

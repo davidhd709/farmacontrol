@@ -378,3 +378,25 @@ export interface SetDocumentLockPayload {
   lockedThrough: string | null;
   reason: string;
 }
+
+// ===== NOTAS CONTABLES MANUALES =====
+
+export interface ManualNoteLinePayload {
+  accountId: string;
+  /** Importe decimal como texto, p. ej. "150000.00"; un solo lado positivo por línea */
+  debit: string;
+  credit: string;
+  description?: string;
+}
+
+export interface CreateManualNotePayload {
+  /** Fecha contable elegida (YYYY-MM-DD); respeta períodos cerrados y bloqueo de documentos */
+  entryDate: string;
+  description: string;
+  lines: ManualNoteLinePayload[];
+}
+
+export interface ManualNoteCreatedDto {
+  journalEntryId: string;
+  noteNumber: string;
+}

@@ -17,6 +17,9 @@ import { FiscalPeriodsService } from './application/fiscal-periods.service';
 import { FiscalPeriodsController } from './presentation/fiscal-periods.controller';
 import { DocumentLockService } from './application/document-lock.service';
 import { DocumentLockController } from './presentation/document-lock.controller';
+import { ManualNotesService } from './application/manual-notes.service';
+import { ManualNotesController } from './presentation/manual-notes.controller';
+import { IdempotencyService } from '../sales/infrastructure/idempotency.service';
 
 @Module({
   imports: [IdentityModule],
@@ -28,6 +31,7 @@ import { DocumentLockController } from './presentation/document-lock.controller'
     AccountingReportsController,
     FiscalPeriodsController,
     DocumentLockController,
+    ManualNotesController,
   ],
   providers: [
     AccountingService,
@@ -38,6 +42,8 @@ import { DocumentLockController } from './presentation/document-lock.controller'
     AccountingReportsService,
     FiscalPeriodsService,
     DocumentLockService,
+    ManualNotesService,
+    IdempotencyService,
   ],
   exports: [
     AccountingService,

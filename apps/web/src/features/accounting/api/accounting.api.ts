@@ -297,6 +297,28 @@ export const reopenFiscalPeriod = (id: string, payload: ReopenFiscalPeriodPayloa
     body: JSON.stringify(payload),
   });
 
+// ===== NOTAS CONTABLES MANUALES =====
+
+export interface ManualNoteLinePayload {
+  accountId: string;
+  debit: string;
+  credit: string;
+  description?: string;
+}
+
+export interface CreateManualNotePayload {
+  entryDate: string;
+  description: string;
+  lines: ManualNoteLinePayload[];
+}
+
+export const createManualNote = (payload: CreateManualNotePayload, idempotencyKey: string) =>
+  apiRequest<{ journalEntryId: string; noteNumber: string }>('accounting/manual-notes', {
+    method: 'POST',
+    headers: { 'Idempotency-Key': idempotencyKey },
+    body: JSON.stringify(payload),
+  });
+
 // ===== BLOQUEO DE DOCUMENTOS POR FECHA =====
 
 export interface DocumentLockDto {

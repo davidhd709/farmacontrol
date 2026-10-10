@@ -19,6 +19,7 @@ const rootAccount: api.AccountDto = {
   code: '1',
   name: 'Activos',
   type: 'ASSET',
+  nature: 'DEBIT',
   parentId: null,
   level: 1,
   allowsMovement: false,
