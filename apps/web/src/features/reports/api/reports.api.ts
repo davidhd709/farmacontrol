@@ -1,4 +1,5 @@
 import type {
+  SupplierReturnReportDto,
   CashSummaryReportDto,
   ExpirationsReportDto,
   InventoryValuationReportDto,
@@ -25,6 +26,14 @@ function unwrapReportData<T>(res: ApiResponse<T> | T): T {
 export async function fetchInventoryValuationReport(): Promise<InventoryValuationReportDto> {
   const res = await apiRequest<ApiResponse<InventoryValuationReportDto> | InventoryValuationReportDto>(
     'reports/inventory-valuation',
+    { method: 'GET' }
+  );
+  return unwrapReportData(res);
+}
+
+export async function fetchSupplierReturnsReport(): Promise<SupplierReturnReportDto> {
+  const res = await apiRequest<ApiResponse<SupplierReturnReportDto> | SupplierReturnReportDto>(
+    'reports/supplier-returns',
     { method: 'GET' }
   );
   return unwrapReportData(res);
@@ -68,7 +77,7 @@ export async function fetchCashSummaryReport(filter: ReportDateFilter = {}): Pro
  * Descarga directamente el reporte solicitado en formato CSV con UTF-8 BOM.
  */
 export async function downloadReportCsv(
-  reportPath: 'inventory-valuation' | 'expirations' | 'sales' | 'cash-summary',
+  reportPath: 'inventory-valuation' | 'expirations' | 'sales' | 'cash-summary' | 'supplier-returns',
   filter: ReportDateFilter = {},
 ): Promise<void> {
   const query = new URLSearchParams();

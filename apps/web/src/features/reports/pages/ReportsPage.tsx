@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { HomeBackButton } from '../../../components/HomeBackButton';
 import {
   Alert,
+  Chip,
   Box,
   Button,
   Card,
@@ -26,12 +27,20 @@ import {
   downloadReportCsv,
   fetchCashSummaryReport,
   fetchExpirationsReport,
+  fetchSupplierReturnsReport,
   fetchInventoryValuationReport,
   fetchSalesReport,
 } from '../api/reports.api';
 import { QuickDateRange } from '../../../components/QuickDateRange';
+import type { SupplierReturnStatus } from '@farmacia/contracts';
 
-type ReportTab = 'valuation' | 'expirations' | 'sales' | 'cash';
+type ReportTab = 'valuation' | 'expirations' | 'supplier-returns' | 'sales' | 'cash';
+
+const RETURN_STATUS: Record<SupplierReturnStatus, { label: string; color: 'warning' | 'error' | 'default' }> = {
+  AVISAR_AHORA: { label: 'Avisar al proveedor', color: 'warning' },
+  AVISO_ATRASADO: { label: 'Aviso atrasado', color: 'error' },
+  FUERA_DE_PLAZO: { label: 'Fuera del plazo de devolución', color: 'default' },
+};
 
 export function ReportsPage() {
   const [activeTab, setActiveTab] = useState<ReportTab>('valuation');
@@ -54,6 +63,13 @@ export function ReportsPage() {
     enabled: activeTab === 'expirations',
   });
 
+  // 2b. Devoluciones a proveedor por vencimiento (acuerdo del 4 de octubre)
+  const supplierReturnsQuery = useQuery({
+    queryKey: ['reports', 'supplier-returns'],
+    queryFn: fetchSupplierReturnsReport,
+    enabled: activeTab === 'supplier-returns',
+  });
+
   // 3. Ventas por período
   const salesQuery = useQuery({
     queryKey: ['reports', 'sales', fromDate, toDate],
@@ -72,9 +88,10 @@ export function ReportsPage() {
     setIsExporting(true);
     setExportError(null);
     try {
-      let reportKey: 'inventory-valuation' | 'expirations' | 'sales' | 'cash-summary';
+      let reportKey: 'inventory-valuation' | 'expirations' | 'sales' | 'cash-summary' | 'supplier-returns';
       if (activeTab === 'valuation') reportKey = 'inventory-valuation';
       else if (activeTab === 'expirations') reportKey = 'expirations';
+      else if (activeTab === 'supplier-returns') reportKey = 'supplier-returns';
       else if (activeTab === 'sales') reportKey = 'sales';
       else reportKey = 'cash-summary';
 
@@ -145,6 +162,7 @@ export function ReportsPage() {
           >
             <Tab label="📦 Inventario Valorizado" value="valuation" data-testid="tab-valuation" />
             <Tab label="⏳ Lotes y Vencimientos" value="expirations" data-testid="tab-expirations" />
+            <Tab label="Devoluciones a proveedor" value="supplier-returns" data-testid="tab-supplier-returns" />
             <Tab label="💰 Ventas por Período" value="sales" data-testid="tab-sales" />
             <Tab label="💵 Movimientos de Caja" value="cash" data-testid="tab-cash" />
           </Tabs>
@@ -313,6 +331,86 @@ export function ReportsPage() {
         {/* ========================================================================= */}
         {/* PESTAÑA 2: LOTES Y PRÓXIMOS VENCIMIENTOS                                   */}
         {/* ========================================================================= */}
+        {activeTab === 'supplier-returns' && (
+          <Paper sx={{ p: 2 }}>
+            <Stack spacing={2}>
+              <Typography variant="body2" color="text.secondary">
+                Lotes con existencias que vencen en 120 días o menos. Se avisa al proveedor entre 120 y 110 días antes
+                del vencimiento para que retire la mercancía; la devolución se acepta hasta 90 días antes.
+              </Typography>
+              {supplierReturnsQuery.isLoading ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                  <CircularProgress size={32} />
+                </Box>
+              ) : supplierReturnsQuery.isError ? (
+                <Alert severity="error">No fue posible cargar el reporte de devoluciones a proveedor.</Alert>
+              ) : (
+                <>
+                  <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
+                    <Chip color="warning" label={`Avisar ahora: ${supplierReturnsQuery.data?.notifyNowCount ?? 0}`} />
+                    <Chip color="error" label={`Aviso atrasado: ${supplierReturnsQuery.data?.lateNoticeCount ?? 0}`} />
+                    <Chip label={`Fuera de plazo: ${supplierReturnsQuery.data?.outOfWindowCount ?? 0}`} />
+                  </Stack>
+                  <TableContainer>
+                    <Table size="small" aria-label="Lotes para devolución a proveedor">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell sx={{ fontWeight: 700 }}>Estado</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }}>Proveedor</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }}>Producto</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }}>Lote</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }}>Vence</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }} align="right">Días</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }} align="right">Existencia</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {!supplierReturnsQuery.data?.items.length ? (
+                          <TableRow>
+                            <TableCell colSpan={7} align="center" sx={{ py: 4, color: 'text.secondary' }}>
+                              No hay lotes en la ventana de aviso.
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          supplierReturnsQuery.data.items.map((item) => (
+                            <TableRow key={item.lotId} hover>
+                              <TableCell>
+                                <Chip
+                                  size="small"
+                                  variant="outlined"
+                                  color={RETURN_STATUS[item.status].color}
+                                  label={RETURN_STATUS[item.status].label}
+                                />
+                              </TableCell>
+                              <TableCell>
+                                {item.supplierName ?? 'Sin compra registrada'}
+                                {item.supplierPhone && (
+                                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                                    Tel. {item.supplierPhone} · Factura {item.lastPurchaseInvoice}
+                                  </Typography>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {item.productCode} — {item.productName}
+                              </TableCell>
+                              <TableCell sx={{ fontFamily: 'monospace' }}>{item.lotNumber}</TableCell>
+                              <TableCell>{item.expirationDate}</TableCell>
+                              <TableCell align="right">{item.daysRemaining}</TableCell>
+                              <TableCell align="right">
+                                {item.currentQuantity} {item.baseUnit}
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </>
+              )}
+            </Stack>
+          </Paper>
+        )}
+
         {activeTab === 'expirations' && (
           <Stack spacing={3}>
             {/* Tarjetas de Resumen */}

@@ -67,6 +67,30 @@ export class ReportsController {
   }
 
   /**
+   * GET /api/v1/reports/supplier-returns
+   * Lotes por vencer para avisar al proveedor (120 a 110 días) y devolver antes de 90 días.
+   */
+  @Get('supplier-returns')
+  async getSupplierReturns(
+    @Query('format') format: string | undefined,
+    @Res() res: Response,
+  ) {
+    const data = await this.reportsService.getSupplierReturnsReport();
+
+    if (format === 'csv') {
+      const csv = this.reportsService.exportSupplierReturnsCsv(data);
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="devoluciones_proveedor_${data.referenceDate}.csv"`,
+      );
+      return res.send(csv);
+    }
+
+    return res.json({ success: true, data });
+  }
+
+  /**
    * GET /api/v1/reports/sales
    * Reporte de ventas por período con desglose por medio de pago.
    */

@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { prisma as defaultPrisma, PrismaClient } from '@farmacia/database';
 import {
+  SupplierReturnItemDto,
+  SupplierReturnReportDto,
   CashMovementReportItemDto,
   CashSummaryReportDto,
   ExpirationReportItemDto,
@@ -14,6 +16,13 @@ import {
 } from '@farmacia/contracts';
 import { calculateExpirationSeverity } from '../../alerts/domain/alert.entity';
 import { generateCsv } from '../utils/csv-exporter.util';
+import { businessToday } from '../../../common/utils/business-date';
+import {
+  SUPPLIER_NOTICE_FROM_DAYS,
+  SUPPLIER_NOTICE_UNTIL_DAYS,
+  SUPPLIER_RETURN_LIMIT_DAYS,
+  supplierReturnStatus,
+} from '../domain/supplier-return-window';
 
 @Injectable()
 export class ReportsService {
@@ -169,6 +178,92 @@ export class ReportsService {
       proximosCount,
       items,
     };
+  }
+
+  /**
+   * Lotes con existencias que vencen en 120 días o menos, con el proveedor de su última
+   * compra, para avisarle entre 120 y 110 días antes y devolver antes de los 90 días.
+   */
+  async getSupplierReturnsReport(referenceDay: string = businessToday()): Promise<SupplierReturnReportDto> {
+    const reference = new Date(`${referenceDay}T00:00:00.000Z`);
+    const horizon = new Date(reference.getTime() + SUPPLIER_NOTICE_FROM_DAYS * 86_400_000);
+    const lots = await this.prisma.inventoryLot.findMany({
+      where: {
+        isActive: true,
+        currentQuantity: { gt: 0 },
+        expirationDate: { gt: reference, lte: horizon },
+      },
+      include: { product: true },
+      orderBy: { expirationDate: 'asc' },
+    });
+
+    const purchaseLines = await this.prisma.purchaseLine.findMany({
+      where: { lotId: { in: lots.map((l: { id: string }) => l.id) } },
+      include: { purchase: { include: { supplier: true } } },
+      orderBy: { purchase: { purchaseDate: 'desc' } },
+    });
+    const lastPurchaseByLot = new Map<string, (typeof purchaseLines)[number]>();
+    for (const line of purchaseLines) {
+      if (line.lotId && !lastPurchaseByLot.has(line.lotId)) lastPurchaseByLot.set(line.lotId, line);
+    }
+
+    const items: SupplierReturnItemDto[] = [];
+    for (const lot of lots) {
+      const { daysRemaining } = calculateExpirationSeverity(lot.expirationDate, reference);
+      const status = supplierReturnStatus(daysRemaining);
+      if (!status) continue;
+      const purchase = lastPurchaseByLot.get(lot.id)?.purchase;
+      items.push({
+        lotId: lot.id,
+        lotNumber: lot.lotNumber,
+        productCode: lot.product.code,
+        productName: lot.product.name,
+        expirationDate: lot.expirationDate.toISOString().slice(0, 10),
+        daysRemaining,
+        currentQuantity: lot.currentQuantity,
+        baseUnit: lot.product.baseUnit,
+        supplierId: purchase?.supplier?.id ?? null,
+        supplierName: purchase?.supplier?.name ?? null,
+        supplierPhone: purchase?.supplier?.phone ?? null,
+        lastPurchaseInvoice: purchase?.invoiceNumber ?? null,
+        status,
+      });
+    }
+
+    return {
+      generatedAt: new Date().toISOString(),
+      referenceDate: referenceDay,
+      noticeWindowDays: { from: SUPPLIER_NOTICE_FROM_DAYS, until: SUPPLIER_NOTICE_UNTIL_DAYS },
+      returnLimitDays: SUPPLIER_RETURN_LIMIT_DAYS,
+      notifyNowCount: items.filter((i) => i.status === 'AVISAR_AHORA').length,
+      lateNoticeCount: items.filter((i) => i.status === 'AVISO_ATRASADO').length,
+      outOfWindowCount: items.filter((i) => i.status === 'FUERA_DE_PLAZO').length,
+      items,
+    };
+  }
+
+  exportSupplierReturnsCsv(data: SupplierReturnReportDto): string {
+    const statusLabels: Record<SupplierReturnItemDto['status'], string> = {
+      AVISAR_AHORA: 'Avisar al proveedor',
+      AVISO_ATRASADO: 'Aviso atrasado',
+      FUERA_DE_PLAZO: 'Fuera del plazo de devolución',
+    };
+    return generateCsv(
+      [
+        { header: 'Estado', accessor: (i: SupplierReturnItemDto) => statusLabels[i.status] },
+        { header: 'Proveedor', accessor: (i: SupplierReturnItemDto) => i.supplierName ?? 'Sin compra registrada' },
+        { header: 'Teléfono', accessor: (i: SupplierReturnItemDto) => i.supplierPhone ?? '' },
+        { header: 'Factura de compra', accessor: (i: SupplierReturnItemDto) => i.lastPurchaseInvoice ?? '' },
+        { header: 'Código', accessor: (i: SupplierReturnItemDto) => i.productCode },
+        { header: 'Producto', accessor: (i: SupplierReturnItemDto) => i.productName },
+        { header: 'Lote', accessor: (i: SupplierReturnItemDto) => i.lotNumber },
+        { header: 'Vence', accessor: (i: SupplierReturnItemDto) => i.expirationDate },
+        { header: 'Días restantes', accessor: (i: SupplierReturnItemDto) => i.daysRemaining },
+        { header: 'Existencia', accessor: (i: SupplierReturnItemDto) => i.currentQuantity },
+        { header: 'Unidad', accessor: (i: SupplierReturnItemDto) => i.baseUnit },
+      ],
+      data.items,
+    );
   }
 
   exportExpirationsCsv(data: ExpirationsReportDto): string {

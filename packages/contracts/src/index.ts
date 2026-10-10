@@ -1085,3 +1085,35 @@ export interface VerifyBackupResultDto {
 }
 
 export * from './third-parties.dto';
+
+// ===== DEVOLUCIONES A PROVEEDOR POR VENCIMIENTO =====
+
+export type SupplierReturnStatus = 'AVISAR_AHORA' | 'AVISO_ATRASADO' | 'FUERA_DE_PLAZO';
+
+export interface SupplierReturnItemDto {
+  lotId: string;
+  lotNumber: string;
+  productCode: string;
+  productName: string;
+  expirationDate: string;
+  daysRemaining: number;
+  currentQuantity: number;
+  baseUnit: string;
+  /** Proveedor de la última compra que trajo el lote; null si el lote no vino de una compra */
+  supplierId: string | null;
+  supplierName: string | null;
+  supplierPhone: string | null;
+  lastPurchaseInvoice: string | null;
+  status: SupplierReturnStatus;
+}
+
+export interface SupplierReturnReportDto {
+  generatedAt: string;
+  referenceDate: string;
+  noticeWindowDays: { from: number; until: number };
+  returnLimitDays: number;
+  notifyNowCount: number;
+  lateNoticeCount: number;
+  outOfWindowCount: number;
+  items: SupplierReturnItemDto[];
+}
