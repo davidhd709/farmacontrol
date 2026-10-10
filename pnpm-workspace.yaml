@@ -4,6 +4,8 @@ packages:
 
 allowBuilds:
   '@prisma/engines': true
+  # Telemetría postinstall de swagger-ui-dist: no se ejecuta.
+  '@scarf/scarf': false
   '@swc/core': true
   argon2: true
   esbuild: true
