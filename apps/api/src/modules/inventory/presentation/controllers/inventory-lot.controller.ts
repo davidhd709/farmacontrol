@@ -1,3 +1,5 @@
+import { QueryFieldValidationPipe } from '../../../../common/pagination/request-shape.pipe';
+import { parsePaginationValue } from '../../../../common/pagination/pagination';
 import {
   Controller,
   Get,
@@ -34,12 +36,15 @@ export class InventoryLotController {
   @Get('lots')
   @RequirePermissions(SYSTEM_PERMISSIONS.INVENTORY_READ)
   public async getLots(
-    @Query('productId') productId?: string,
-    @Query('locationId') locationId?: string,
-    @Query('lotNumber') lotNumber?: string,
-    @Query('hasStockOnly') hasStockOnly?: string,
-    @Query('expiringBefore') expiringBefore?: string,
-    @Query('isActive') isActive?: string,
+    @Query('productId', new QueryFieldValidationPipe('productId', 'uuid?')) productId?: string,
+    @Query('locationId', new QueryFieldValidationPipe('locationId', 'uuid?')) locationId?: string,
+    @Query('lotNumber', new QueryFieldValidationPipe('lotNumber', 'text?')) lotNumber?: string,
+    @Query('hasStockOnly', new QueryFieldValidationPipe('hasStockOnly', 'booleanString?'))
+    hasStockOnly?: string,
+    @Query('expiringBefore', new QueryFieldValidationPipe('expiringBefore', 'date?'))
+    expiringBefore?: string,
+    @Query('isActive', new QueryFieldValidationPipe('isActive', 'booleanString?'))
+    isActive?: string,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
   ) {
@@ -50,8 +55,8 @@ export class InventoryLotController {
       hasStockOnly: hasStockOnly === 'true',
       expiringBefore,
       isActive: isActive !== undefined ? isActive === 'true' : undefined,
-      page: page ? parseInt(page, 10) : undefined,
-      pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
+      page: parsePaginationValue(page, 'page'),
+      pageSize: parsePaginationValue(pageSize, 'pageSize'),
     });
     return { success: true, ...result };
   }
@@ -67,12 +72,9 @@ export class InventoryLotController {
   @RequirePermissions(SYSTEM_PERMISSIONS.INVENTORY_READ)
   public async getLotsByProductFefo(
     @Param('productId', ParseUUIDPipe) productId: string,
-    @Query('locationId') locationId?: string,
+    @Query('locationId', new QueryFieldValidationPipe('locationId', 'uuid?')) locationId?: string,
   ) {
-    const data = await this.inventoryLotService.getAvailableLotsFefo(
-      productId,
-      locationId,
-    );
+    const data = await this.inventoryLotService.getAvailableLotsFefo(productId, locationId);
     return { success: true, data };
   }
 
@@ -87,12 +89,7 @@ export class InventoryLotController {
     const ipAddress = req.ip || req.socket.remoteAddress;
     const correlationId = req.headers['x-correlation-id'] as string;
 
-    const data = await this.inventoryLotService.createLot(
-      dto,
-      user.id,
-      ipAddress,
-      correlationId,
-    );
+    const data = await this.inventoryLotService.createLot(dto, user.id, ipAddress, correlationId);
     return { success: true, data };
   }
 

@@ -1,3 +1,4 @@
+import { parsePaginationValue } from '../../../../common/pagination/pagination';
 import { PipeTransform, Injectable } from '@nestjs/common';
 import { ThirdPartyQueryFilters } from '@farmacia/contracts';
 
@@ -27,22 +28,14 @@ export class ThirdPartyQueryValidationPipe implements PipeTransform {
     }
 
     if (query.page !== undefined) {
-      const parsedPage = Number(query.page);
-      if (!isNaN(parsedPage) && parsedPage > 0) {
-        filters.page = parsedPage;
-      }
+      filters.page = parsePaginationValue(query.page, 'page');
     }
 
+    const parsedPageSize = parsePaginationValue(query.pageSize, 'pageSize');
     if (query.limit !== undefined) {
-      const parsedLimit = Number(query.limit);
-      if (!isNaN(parsedLimit) && parsedLimit > 0) {
-        filters.limit = parsedLimit;
-      }
-    } else if (query.pageSize !== undefined) {
-      const parsedSize = Number(query.pageSize);
-      if (!isNaN(parsedSize) && parsedSize > 0) {
-        filters.limit = parsedSize;
-      }
+      filters.limit = parsePaginationValue(query.limit, 'limit');
+    } else {
+      filters.limit = parsedPageSize;
     }
 
     return filters;

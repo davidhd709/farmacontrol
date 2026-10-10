@@ -1,4 +1,8 @@
 import {
+  RequestShapeValidationPipe,
+  QueryFieldValidationPipe,
+} from '../../../common/pagination/request-shape.pipe';
+import {
   BadRequestException,
   Body,
   ConflictException,
@@ -9,6 +13,7 @@ import {
   Post,
   Query,
   UseGuards,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import {
   SYSTEM_PERMISSIONS,
@@ -45,8 +50,8 @@ export class FiscalPeriodsController {
   @Get()
   @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_READ)
   async listPeriods(
-    @Query('year') year?: string,
-    @Query('status') status?: FiscalPeriodStatus,
+    @Query('year', new QueryFieldValidationPipe('year', 'integerString?')) year?: string,
+    @Query('status', new QueryFieldValidationPipe('status', 'text?')) status?: FiscalPeriodStatus,
   ): Promise<FiscalPeriodDto[]> {
     try {
       const yearNum = year ? parseInt(year, 10) : undefined;
@@ -61,7 +66,7 @@ export class FiscalPeriodsController {
 
   @Get(':id')
   @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_READ)
-  async getPeriodById(@Param('id') id: string): Promise<FiscalPeriodDto> {
+  async getPeriodById(@Param('id', ParseUUIDPipe) id: string): Promise<FiscalPeriodDto> {
     try {
       return await this.fiscalPeriodsService.getPeriodById(id);
     } catch (error) {
@@ -72,7 +77,7 @@ export class FiscalPeriodsController {
   @Post('generate')
   @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_MANAGE)
   async generateYearPeriods(
-    @Body() body: GenerateFiscalPeriodsPayload,
+    @Body(new RequestShapeValidationPipe({ year: 'integer' })) body: GenerateFiscalPeriodsPayload,
     @CurrentUser() user: AuthenticatedUserContext,
   ): Promise<FiscalPeriodDto[]> {
     try {
@@ -85,8 +90,9 @@ export class FiscalPeriodsController {
   @Post(':id/close')
   @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_MANAGE)
   async closePeriod(
-    @Param('id') id: string,
-    @Body() body: CloseFiscalPeriodPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new RequestShapeValidationPipe({ notes: 'text?', generateClosingEntry: 'boolean?' }))
+    body: CloseFiscalPeriodPayload,
     @CurrentUser() user: AuthenticatedUserContext,
   ): Promise<FiscalPeriodDto> {
     try {
@@ -99,8 +105,8 @@ export class FiscalPeriodsController {
   @Post(':id/reopen')
   @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_MANAGE)
   async reopenPeriod(
-    @Param('id') id: string,
-    @Body() body: ReopenFiscalPeriodPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new RequestShapeValidationPipe({ reason: 'text' })) body: ReopenFiscalPeriodPayload,
     @CurrentUser() user: AuthenticatedUserContext,
   ): Promise<FiscalPeriodDto> {
     try {

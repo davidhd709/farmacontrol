@@ -1,4 +1,8 @@
 import {
+  RequestShapeValidationPipe,
+  QueryFieldValidationPipe,
+} from '../../../../common/pagination/request-shape.pipe';
+import {
   BadRequestException,
   Body,
   ConflictException,
@@ -14,12 +18,10 @@ import {
   Query,
   Req,
   UseGuards,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import {
-  type ProductPresentationDto,
-  SYSTEM_PERMISSIONS,
-} from '@farmacia/contracts';
+import { type ProductPresentationDto, SYSTEM_PERMISSIONS } from '@farmacia/contracts';
 import { ProductPresentationService } from '../../application/services/product-presentation.service';
 import {
   CreateProductPresentationDto,
@@ -57,21 +59,17 @@ export class ProductPresentationController {
   @HttpCode(HttpStatus.CREATED)
   @RequirePermissions(SYSTEM_PERMISSIONS.PRODUCTS_MANAGE)
   public async create(
-    @Param('productId') productId: string,
+    @Param('productId', ParseUUIDPipe) productId: string,
     @Body(CreateProductPresentationValidationPipe) dto: CreateProductPresentationDto,
     @CurrentUser() user: AuthenticatedUserContext,
     @Req() req: Request,
   ): Promise<ProductPresentationDto> {
     try {
-      const presentation = await this.presentationService.createPresentation(
-        productId,
-        dto,
-        {
-          userId: user.id,
-          ipAddress: req.ip || null,
-          correlationId: req.correlationId || null,
-        },
-      );
+      const presentation = await this.presentationService.createPresentation(productId, dto, {
+        userId: user.id,
+        ipAddress: req.ip || null,
+        correlationId: req.correlationId || null,
+      });
 
       return presentation.toDto();
     } catch (err) {
@@ -99,10 +97,13 @@ export class ProductPresentationController {
   @HttpCode(HttpStatus.OK)
   @RequirePermissions(SYSTEM_PERMISSIONS.PRODUCTS_READ)
   public async list(
-    @Param('productId') productId: string,
-    @Query('isActive') isActive?: string,
-    @Query('purchaseEnabled') purchaseEnabled?: string,
-    @Query('saleEnabled') saleEnabled?: string,
+    @Param('productId', ParseUUIDPipe) productId: string,
+    @Query('isActive', new QueryFieldValidationPipe('isActive', 'booleanString?'))
+    isActive?: string,
+    @Query('purchaseEnabled', new QueryFieldValidationPipe('purchaseEnabled', 'booleanString?'))
+    purchaseEnabled?: string,
+    @Query('saleEnabled', new QueryFieldValidationPipe('saleEnabled', 'booleanString?'))
+    saleEnabled?: string,
   ): Promise<ProductPresentationDto[]> {
     try {
       let parsedIsActive: boolean | undefined;
@@ -138,8 +139,8 @@ export class ProductPresentationController {
   @HttpCode(HttpStatus.OK)
   @RequirePermissions(SYSTEM_PERMISSIONS.PRODUCTS_READ)
   public async getById(
-    @Param('productId') productId: string,
-    @Param('id') id: string,
+    @Param('productId', ParseUUIDPipe) productId: string,
+    @Param('id', ParseUUIDPipe) id: string,
   ): Promise<ProductPresentationDto> {
     try {
       const presentation = await this.presentationService.getPresentationById(productId, id);
@@ -160,23 +161,18 @@ export class ProductPresentationController {
   @HttpCode(HttpStatus.OK)
   @RequirePermissions(SYSTEM_PERMISSIONS.PRODUCTS_MANAGE)
   public async update(
-    @Param('productId') productId: string,
-    @Param('id') id: string,
+    @Param('productId', ParseUUIDPipe) productId: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body(UpdateProductPresentationValidationPipe) dto: UpdateProductPresentationDto,
     @CurrentUser() user: AuthenticatedUserContext,
     @Req() req: Request,
   ): Promise<ProductPresentationDto> {
     try {
-      const presentation = await this.presentationService.updatePresentation(
-        productId,
-        id,
-        dto,
-        {
-          userId: user.id,
-          ipAddress: req.ip || null,
-          correlationId: req.correlationId || null,
-        },
-      );
+      const presentation = await this.presentationService.updatePresentation(productId, id, dto, {
+        userId: user.id,
+        ipAddress: req.ip || null,
+        correlationId: req.correlationId || null,
+      });
 
       return presentation.toDto();
     } catch (err) {
@@ -210,21 +206,17 @@ export class ProductPresentationController {
   @HttpCode(HttpStatus.OK)
   @RequirePermissions(SYSTEM_PERMISSIONS.PRODUCTS_MANAGE)
   public async deactivate(
-    @Param('productId') productId: string,
-    @Param('id') id: string,
+    @Param('productId', ParseUUIDPipe) productId: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: AuthenticatedUserContext,
     @Req() req: Request,
   ): Promise<ProductPresentationDto> {
     try {
-      const presentation = await this.presentationService.deactivatePresentation(
-        productId,
-        id,
-        {
-          userId: user.id,
-          ipAddress: req.ip || null,
-          correlationId: req.correlationId || null,
-        },
-      );
+      const presentation = await this.presentationService.deactivatePresentation(productId, id, {
+        userId: user.id,
+        ipAddress: req.ip || null,
+        correlationId: req.correlationId || null,
+      });
 
       return presentation.toDto();
     } catch (err) {
@@ -249,9 +241,15 @@ export class ProductPresentationController {
   @HttpCode(HttpStatus.OK)
   @RequirePermissions(SYSTEM_PERMISSIONS.PRODUCTS_READ)
   public async convert(
-    @Param('productId') productId: string,
-    @Param('id') id: string,
-    @Body() body: { quantity: number; direction: 'toBase' | 'fromBase' },
+    @Param('productId', ParseUUIDPipe) productId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(
+      new RequestShapeValidationPipe({
+        quantity: 'number',
+        direction: { values: ['toBase', 'fromBase'] },
+      }),
+    )
+    body: { quantity: number; direction: 'toBase' | 'fromBase' },
   ) {
     if (!body || typeof body.quantity !== 'number' || isNaN(body.quantity)) {
       throw new BadRequestException('El campo "quantity" es obligatorio y debe ser un número.');

@@ -1,3 +1,5 @@
+import { QueryFieldValidationPipe } from '../../../../common/pagination/request-shape.pipe';
+import { parsePaginationValue } from '../../../../common/pagination/pagination';
 import {
   Controller,
   Get,
@@ -19,25 +21,24 @@ import { RequirePermissions } from '../../../identity/presentation/decorators/re
 import { SYSTEM_PERMISSIONS, InventoryMovementType } from '@farmacia/contracts';
 import { InventoryMovementService } from '../../application/services/inventory-movement.service';
 
-const UUID_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 @Controller('inventory/movements')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 export class InventoryMovementController {
-  constructor(
-    private readonly movementService: InventoryMovementService,
-  ) {}
+  constructor(private readonly movementService: InventoryMovementService) {}
 
   @Get()
   @RequirePermissions(SYSTEM_PERMISSIONS.INVENTORY_MOVEMENTS_READ)
   public async getMovements(
-    @Query('productId') productId?: string,
-    @Query('lotId') lotId?: string,
-    @Query('movementType') movementType?: string,
-    @Query('fromDate') fromDate?: string,
-    @Query('toDate') toDate?: string,
-    @Query('referenceDocumentId') referenceDocumentId?: string,
+    @Query('productId', new QueryFieldValidationPipe('productId', 'uuid?')) productId?: string,
+    @Query('lotId', new QueryFieldValidationPipe('lotId', 'uuid?')) lotId?: string,
+    @Query('movementType', new QueryFieldValidationPipe('movementType', 'text?'))
+    movementType?: string,
+    @Query('fromDate', new QueryFieldValidationPipe('fromDate', 'date?')) fromDate?: string,
+    @Query('toDate', new QueryFieldValidationPipe('toDate', 'date?')) toDate?: string,
+    @Query('referenceDocumentId', new QueryFieldValidationPipe('referenceDocumentId', 'text?'))
+    referenceDocumentId?: string,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
   ) {
@@ -48,8 +49,8 @@ export class InventoryMovementController {
       fromDate,
       toDate,
       referenceDocumentId,
-      page: page ? parseInt(page, 10) : undefined,
-      pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
+      page: parsePaginationValue(page, 'page'),
+      pageSize: parsePaginationValue(pageSize, 'pageSize'),
     });
     return { success: true, ...result };
   }
@@ -74,11 +75,15 @@ export class InventoryMovementController {
     if (body.adjustmentType !== 'INCREMENTO' && body.adjustmentType !== 'DECREMENTO') {
       throw new BadRequestException('adjustmentType debe ser INCREMENTO o DECREMENTO.');
     }
-    if (typeof body.quantityBaseUnits !== 'number' || body.quantityBaseUnits <= 0) {
+    if (!Number.isSafeInteger(body.quantityBaseUnits) || body.quantityBaseUnits <= 0) {
       throw new BadRequestException('quantityBaseUnits debe ser un entero positivo mayor a 0.');
     }
     if (!body.reason || typeof body.reason !== 'string' || body.reason.trim().length === 0) {
       throw new BadRequestException('reason (motivo justificado) es obligatorio.');
+    }
+
+    if (body.notes !== undefined && body.notes !== null && typeof body.notes !== 'string') {
+      throw new BadRequestException('notes debe ser texto.');
     }
 
     const ipAddress = req.ip || req.socket.remoteAddress;

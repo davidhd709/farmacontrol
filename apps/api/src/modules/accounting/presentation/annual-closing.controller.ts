@@ -1,4 +1,8 @@
 import {
+  RequestShapeValidationPipe,
+  QueryFieldValidationPipe,
+} from '../../../common/pagination/request-shape.pipe';
+import {
   BadRequestException,
   Body,
   ConflictException,
@@ -39,7 +43,9 @@ export class AnnualClosingController {
   /** Muestra el asiento que se generaría, antes de confirmarlo. */
   @Get('preview')
   @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_READ)
-  async preview(@Query('year') year: string): Promise<AnnualClosingPreviewDto> {
+  async preview(
+    @Query('year', new QueryFieldValidationPipe('year', 'integerString')) year: string,
+  ): Promise<AnnualClosingPreviewDto> {
     try {
       return await this.annualClosingService.preview(Number(year));
     } catch (error) {
@@ -50,7 +56,7 @@ export class AnnualClosingController {
   @Post()
   @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_MANAGE)
   async close(
-    @Body() body: { year: number },
+    @Body(new RequestShapeValidationPipe({ year: 'integer' })) body: { year: number },
     @Headers('idempotency-key') idempotencyKey: string | undefined,
     @CurrentUser() user: AuthenticatedUserContext,
   ): Promise<AnnualClosingResultDto> {

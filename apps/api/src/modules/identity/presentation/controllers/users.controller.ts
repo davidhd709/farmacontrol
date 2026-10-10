@@ -1,3 +1,4 @@
+import { RequestShapeValidationPipe } from '../../../../common/pagination/request-shape.pipe';
 import {
   Body,
   Controller,
@@ -8,6 +9,7 @@ import {
   Patch,
   Post,
   UseGuards,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { SYSTEM_PERMISSIONS } from '@farmacia/contracts';
 import type {
@@ -55,7 +57,15 @@ export class UsersController {
   @HttpCode(HttpStatus.CREATED)
   @RequirePermissions(SYSTEM_PERMISSIONS.USERS_CREATE)
   public async createUser(
-    @Body() dto: CreateSystemUserDto
+    @Body(
+      new RequestShapeValidationPipe({
+        username: 'text',
+        password: 'text',
+        roles: 'stringArray',
+        isActive: 'boolean?',
+      }),
+    )
+    dto: CreateSystemUserDto,
   ): Promise<SystemUserListItemDto> {
     return this.userManagementService.createUser(dto);
   }
@@ -67,8 +77,8 @@ export class UsersController {
   @Patch(':id/status')
   @RequirePermissions(SYSTEM_PERMISSIONS.USERS_UPDATE)
   public async updateUserStatus(
-    @Param('id') id: string,
-    @Body() dto: UpdateSystemUserStatusDto
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new RequestShapeValidationPipe({ isActive: 'boolean' })) dto: UpdateSystemUserStatusDto,
   ): Promise<SystemUserListItemDto> {
     return this.userManagementService.updateUserStatus(id, dto.isActive);
   }
@@ -80,8 +90,8 @@ export class UsersController {
   @Patch(':id/roles')
   @RequirePermissions(SYSTEM_PERMISSIONS.ROLES_ASSIGN)
   public async updateUserRoles(
-    @Param('id') id: string,
-    @Body() dto: UpdateSystemUserRolesDto
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new RequestShapeValidationPipe({ roles: 'stringArray' })) dto: UpdateSystemUserRolesDto,
   ): Promise<SystemUserListItemDto> {
     return this.userManagementService.updateUserRoles(id, dto.roles);
   }

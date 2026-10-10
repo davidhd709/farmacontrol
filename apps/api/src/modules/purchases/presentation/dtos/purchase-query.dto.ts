@@ -1,3 +1,4 @@
+import { parsePaginationValue } from '../../../../common/pagination/pagination';
 import { PipeTransform, Injectable } from '@nestjs/common';
 import { PurchaseQueryFilters } from '@farmacia/contracts';
 
@@ -28,17 +29,11 @@ export class PurchaseQueryValidationPipe implements PipeTransform {
     }
 
     if (record.page !== undefined) {
-      const parsed = parseInt(String(record.page), 10);
-      if (!isNaN(parsed) && parsed > 0) {
-        filters.page = parsed;
-      }
+      filters.page = parsePaginationValue(record.page, 'page');
     }
 
     if (record.pageSize !== undefined) {
-      const parsed = parseInt(String(record.pageSize), 10);
-      if (!isNaN(parsed) && parsed > 0) {
-        filters.pageSize = Math.min(100, parsed);
-      }
+      filters.pageSize = parsePaginationValue(record.pageSize, 'pageSize');
     }
 
     return filters;

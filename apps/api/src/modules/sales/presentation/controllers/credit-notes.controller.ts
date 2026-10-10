@@ -1,3 +1,4 @@
+import { QueryFieldValidationPipe } from '../../../../common/pagination/request-shape.pipe';
 import {
   Controller,
   Get,
@@ -11,11 +12,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { CreditNotesService } from '../../application/credit-notes.service';
-import {
-  CreateCreditNotePayload,
-  CreditNoteDto,
-  SYSTEM_PERMISSIONS,
-} from '@farmacia/contracts';
+import { CreateCreditNotePayload, CreditNoteDto, SYSTEM_PERMISSIONS } from '@farmacia/contracts';
 import {
   SessionAuthGuard,
   AuthenticatedUserContext,
@@ -56,19 +53,21 @@ export class CreditNotesController {
 
   @Get('sales/:saleId/credit-notes')
   @RequirePermissions(SYSTEM_PERMISSIONS.SALES_READ)
-  async listForSale(@Param('saleId') saleId: string): Promise<CreditNoteDto[]> {
+  async listForSale(@Param('saleId', ParseUUIDPipe) saleId: string): Promise<CreditNoteDto[]> {
     return this.creditNotesService.listCreditNotes(saleId);
   }
 
   @Get('credit-notes')
   @RequirePermissions(SYSTEM_PERMISSIONS.SALES_READ)
-  async listAll(@Query('saleId') saleId?: string): Promise<CreditNoteDto[]> {
+  async listAll(
+    @Query('saleId', new QueryFieldValidationPipe('saleId', 'uuid?')) saleId?: string,
+  ): Promise<CreditNoteDto[]> {
     return this.creditNotesService.listCreditNotes(saleId);
   }
 
   @Get('credit-notes/:id')
   @RequirePermissions(SYSTEM_PERMISSIONS.SALES_READ)
-  async getById(@Param('id') id: string): Promise<CreditNoteDto> {
+  async getById(@Param('id', ParseUUIDPipe) id: string): Promise<CreditNoteDto> {
     return this.creditNotesService.getCreditNoteById(id);
   }
 }

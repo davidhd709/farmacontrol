@@ -1,4 +1,10 @@
 import {
+  RequestShapeValidationPipe,
+  RequestFieldValidationPipe,
+  QueryShapeValidationPipe,
+} from '../../../common/pagination/request-shape.pipe';
+import { parsePaginationValue } from '../../../common/pagination/pagination';
+import {
   Controller,
   Get,
   Post,
@@ -36,15 +42,26 @@ export class PayablesController {
    */
   @Get()
   @RequirePermissions(SYSTEM_PERMISSIONS.PAYABLES_READ)
-  async findAll(@Query() query: Record<string, string>): Promise<ApiResponse<any>> {
+  async findAll(
+    @Query(
+      new QueryShapeValidationPipe({
+        supplierId: 'uuid?',
+        status: 'text?',
+        fromDate: 'date?',
+        toDate: 'date?',
+        overdueOnly: 'booleanString?',
+      }),
+    )
+    query: Record<string, string>,
+  ): Promise<ApiResponse<any>> {
     const data = await this.svc.findAll({
       supplierId: query['supplierId'],
       status: query['status'] as any,
       fromDate: query['fromDate'],
       toDate: query['toDate'],
       overdueOnly: query['overdueOnly'] === 'true',
-      page: query['page'] ? parseInt(query['page'], 10) : undefined,
-      pageSize: query['pageSize'] ? parseInt(query['pageSize'], 10) : undefined,
+      page: parsePaginationValue(query['page'], 'page'),
+      pageSize: parsePaginationValue(query['pageSize'], 'pageSize'),
     });
     return { success: true, data };
   }
@@ -81,7 +98,15 @@ export class PayablesController {
   @HttpCode(HttpStatus.CREATED)
   async registerPayment(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() payload: RegisterPayablePaymentPayload,
+    @Body(
+      new RequestShapeValidationPipe({
+        amount: 'decimal',
+        paymentMethod: 'text?',
+        bankAccountId: 'uuid?',
+        notes: 'text?',
+      }),
+    )
+    payload: RegisterPayablePaymentPayload,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
     @CurrentUser() user: AuthenticatedUserContext,
   ): Promise<ApiResponse<any>> {
@@ -99,7 +124,7 @@ export class PayablesController {
   async revertPayment(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('paymentId', ParseUUIDPipe) paymentId: string,
-    @Body('reason') reason: string,
+    @Body('reason', new RequestFieldValidationPipe('reason', 'text')) reason: string,
     @CurrentUser() user: AuthenticatedUserContext,
   ): Promise<ApiResponse<any>> {
     const data = await this.svc.revertPayment(id, paymentId, reason, user.id);

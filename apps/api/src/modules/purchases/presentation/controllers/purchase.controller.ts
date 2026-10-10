@@ -1,3 +1,4 @@
+import { QueryShapeValidationPipe } from '../../../../common/pagination/request-shape.pipe';
 import {
   Controller,
   Get,
@@ -13,18 +14,12 @@ import {
   BadRequestException,
   ConflictException,
   HttpException,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import {
-  SYSTEM_PERMISSIONS,
-  PurchaseDto,
-  PaginatedResponse,
-} from '@farmacia/contracts';
+import { SYSTEM_PERMISSIONS, PurchaseDto, PaginatedResponse } from '@farmacia/contracts';
 import { PurchaseService } from '../../application/purchase.service';
-import {
-  ReceivePurchaseDto,
-  ReceivePurchaseValidationPipe,
-} from '../dtos/receive-purchase.dto';
+import { ReceivePurchaseDto, ReceivePurchaseValidationPipe } from '../dtos/receive-purchase.dto';
 import { PurchaseQueryValidationPipe } from '../dtos/purchase-query.dto';
 import {
   SessionAuthGuard,
@@ -52,7 +47,7 @@ export class PurchaseController {
   public async receive(
     @Body(ReceivePurchaseValidationPipe) dto: ReceivePurchaseDto,
     @CurrentUser() user: AuthenticatedUserContext,
-    @Req() req: Request
+    @Req() req: Request,
   ): Promise<PurchaseDto> {
     try {
       const purchase = await this.purchaseService.receivePurchase(dto, {
@@ -65,10 +60,7 @@ export class PurchaseController {
       if (error instanceof HttpException) {
         throw error;
       }
-      if (
-        error instanceof SupplierNotActiveException ||
-        error instanceof ExpiredLotDateException
-      ) {
+      if (error instanceof SupplierNotActiveException || error instanceof ExpiredLotDateException) {
         throw new BadRequestException(error.message);
       }
       if (
@@ -87,14 +79,24 @@ export class PurchaseController {
   @Get()
   @RequirePermissions(SYSTEM_PERMISSIONS.PURCHASES_READ)
   public async findAll(
-    @Query(PurchaseQueryValidationPipe) query: any
+    @Query(
+      new QueryShapeValidationPipe({
+        supplierId: 'uuid?',
+        invoiceNumber: 'text?',
+        fromDate: 'date?',
+        toDate: 'date?',
+        status: 'text?',
+      }),
+      PurchaseQueryValidationPipe,
+    )
+    query: any,
   ): Promise<PaginatedResponse<PurchaseDto>> {
     return this.purchaseService.getPurchases(query);
   }
 
   @Get(':id')
   @RequirePermissions(SYSTEM_PERMISSIONS.PURCHASES_READ)
-  public async findOne(@Param('id') id: string): Promise<PurchaseDto> {
+  public async findOne(@Param('id', ParseUUIDPipe) id: string): Promise<PurchaseDto> {
     try {
       const purchase = await this.purchaseService.getPurchaseById(id);
       return purchase.toDto();

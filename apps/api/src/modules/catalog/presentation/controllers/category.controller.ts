@@ -1,3 +1,5 @@
+import { QueryFieldValidationPipe } from '../../../../common/pagination/request-shape.pipe';
+import { parsePaginationValue } from '../../../../common/pagination/pagination';
 import {
   Controller,
   Get,
@@ -14,23 +16,17 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import {
-  SYSTEM_PERMISSIONS,
-  CategoryDto,
-  PaginatedResponse,
-} from '@farmacia/contracts';
+import { SYSTEM_PERMISSIONS, CategoryDto, PaginatedResponse } from '@farmacia/contracts';
 import { CategoryService } from '../../application/services/category.service';
+import { CreateCategoryDto, CreateCategoryValidationPipe } from '../dtos/create-category.dto';
+import { UpdateCategoryDto, UpdateCategoryValidationPipe } from '../dtos/update-category.dto';
 import {
-  CreateCategoryDto,
-  CreateCategoryValidationPipe,
-} from '../dtos/create-category.dto';
-import {
-  UpdateCategoryDto,
-  UpdateCategoryValidationPipe,
-} from '../dtos/update-category.dto';
-import { SessionAuthGuard, AuthenticatedUserContext } from '../../../identity/presentation/guards/session-auth.guard';
+  SessionAuthGuard,
+  AuthenticatedUserContext,
+} from '../../../identity/presentation/guards/session-auth.guard';
 import { PermissionsGuard } from '../../../identity/presentation/guards/permissions.guard';
 import { RequirePermissions } from '../../../identity/presentation/decorators/require-permissions.decorator';
 import { CurrentUser } from '../../../identity/presentation/decorators/current-user.decorator';
@@ -55,7 +51,7 @@ export class CategoryController {
   public async create(
     @Body(CreateCategoryValidationPipe) dto: CreateCategoryDto,
     @CurrentUser() user: AuthenticatedUserContext,
-    @Req() req: Request
+    @Req() req: Request,
   ): Promise<CategoryDto> {
     try {
       const category = await this.categoryService.createCategory(dto, {
@@ -84,24 +80,25 @@ export class CategoryController {
   @HttpCode(HttpStatus.OK)
   @RequirePermissions(SYSTEM_PERMISSIONS.CATEGORIES_READ)
   public async list(
-    @Query('search') search?: string,
-    @Query('isActive') isActive?: string,
+    @Query('search', new QueryFieldValidationPipe('search', 'text?')) search?: string,
+    @Query('isActive', new QueryFieldValidationPipe('isActive', 'booleanString?'))
+    isActive?: string,
     @Query('page') page?: string,
-    @Query('pageSize') pageSize?: string
+    @Query('pageSize') pageSize?: string,
   ): Promise<PaginatedResponse<CategoryDto>> {
     let parsedIsActive: boolean | undefined = undefined;
     if (isActive !== undefined && isActive !== '') {
       parsedIsActive = isActive === 'true' || isActive === '1';
     }
 
-    const parsedPage = page ? parseInt(page, 10) : 1;
-    const parsedPageSize = pageSize ? parseInt(pageSize, 10) : 20;
+    const parsedPage = parsePaginationValue(page, 'page', 1);
+    const parsedPageSize = parsePaginationValue(pageSize, 'pageSize', 20);
 
     return this.categoryService.listCategories({
       search,
       isActive: parsedIsActive,
-      page: isNaN(parsedPage) ? 1 : parsedPage,
-      pageSize: isNaN(parsedPageSize) ? 20 : parsedPageSize,
+      page: parsedPage,
+      pageSize: parsedPageSize,
     });
   }
 
@@ -112,7 +109,7 @@ export class CategoryController {
   @Get(':id')
   @HttpCode(HttpStatus.OK)
   @RequirePermissions(SYSTEM_PERMISSIONS.CATEGORIES_READ)
-  public async getById(@Param('id') id: string): Promise<CategoryDto> {
+  public async getById(@Param('id', ParseUUIDPipe) id: string): Promise<CategoryDto> {
     try {
       const category = await this.categoryService.getCategoryById(id);
       return category.toDto();
@@ -132,10 +129,10 @@ export class CategoryController {
   @HttpCode(HttpStatus.OK)
   @RequirePermissions(SYSTEM_PERMISSIONS.CATEGORIES_MANAGE)
   public async update(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body(UpdateCategoryValidationPipe) dto: UpdateCategoryDto,
     @CurrentUser() user: AuthenticatedUserContext,
-    @Req() req: Request
+    @Req() req: Request,
   ): Promise<CategoryDto> {
     try {
       const category = await this.categoryService.updateCategory(id, dto, {
@@ -167,9 +164,9 @@ export class CategoryController {
   @HttpCode(HttpStatus.OK)
   @RequirePermissions(SYSTEM_PERMISSIONS.CATEGORIES_MANAGE)
   public async delete(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: AuthenticatedUserContext,
-    @Req() req: Request
+    @Req() req: Request,
   ): Promise<{ message: string; category: CategoryDto }> {
     try {
       const category = await this.categoryService.deactivateCategory(id, {
