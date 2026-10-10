@@ -28,6 +28,7 @@ export interface HealthStatus {
   timestamp: string;
   uptime: number;
   service: string;
+  database: 'up' | 'down';
 }
 
 export const SYSTEM_ROLES = {
