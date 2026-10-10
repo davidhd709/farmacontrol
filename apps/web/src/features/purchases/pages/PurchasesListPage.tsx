@@ -254,7 +254,7 @@ export const PurchasesListPage: React.FC = () => {
                       Ver Detalle
                     </Button>
                     {purchase.status === 'RECEIVED' && (
-                      <PermissionGate permission={SYSTEM_PERMISSIONS.PURCHASES_RECEIVE}>
+                      <PermissionGate permission={SYSTEM_PERMISSIONS.PURCHASES_DEBIT_NOTE}>
                         <Button
                           size="small"
                           variant="outlined"

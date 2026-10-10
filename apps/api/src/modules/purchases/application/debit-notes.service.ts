@@ -12,6 +12,7 @@ import {
   CreateDebitNotePayload,
 } from '@farmacia/contracts';
 import { AccountingEngineService } from '../../accounting/application/accounting-engine.service';
+import { IdempotencyService } from '../../sales/infrastructure/idempotency.service';
 import { parseMoneyToCents, centsToMoneyString } from '../../treasury/domain/treasury-rules';
 
 type Tx = Parameters<Parameters<PrismaClient['$transaction']>[0]>[0];
@@ -73,6 +74,7 @@ export class DebitNotesService {
   constructor(
     @Optional() customClient?: PrismaClient,
     @Optional() private readonly accountingEngine?: AccountingEngineService,
+    @Optional() private readonly idempotencyService: IdempotencyService = new IdempotencyService(),
   ) {
     this.client = customClient ?? prisma;
   }
@@ -81,14 +83,38 @@ export class DebitNotesService {
     purchaseId: string,
     payload: CreateDebitNotePayload,
     userId: string,
+    idempotencyKey?: string,
   ): Promise<DebitNoteDto> {
+    const key = idempotencyKey?.trim();
+    if (!key) {
+      throw new BadRequestException('Idempotency-Key es obligatorio para emitir una nota débito.');
+    }
+    if (key.length > 100) {
+      throw new BadRequestException('Idempotency-Key debe tener entre 1 y 100 caracteres.');
+    }
+    const endpoint = `/api/v1/purchases/${purchaseId}/debit-notes`;
+    const requestHash = this.idempotencyService.computeHash(endpoint, userId, payload);
+
     if (!payload.items || payload.items.length === 0) {
       throw new BadRequestException('La nota débito debe incluir al menos una línea a devolver.');
+    }
+    const lineIds = payload.items.map((item) => item.purchaseLineId);
+    if (new Set(lineIds).size !== lineIds.length) {
+      throw new BadRequestException('Cada línea de compra debe aparecer una sola vez en la nota débito.');
     }
 
     return executeWithRetry(async () => {
       return this.client.$transaction(
         async (tx) => {
+          // Serializa con otras notas débito de la misma compra
+          await tx.$queryRaw`SELECT id FROM purchases WHERE id = ${purchaseId}::uuid FOR UPDATE`;
+
+          // Un reintento con la misma clave devuelve la nota ya emitida sin repetir efectos
+          const cached = await this.idempotencyService.getRecord(key, requestHash, tx);
+          if (cached) {
+            return cached.responseBody as DebitNoteDto;
+          }
+
           // 1. Obtener compra con sus líneas y notas débito existentes
           const purchase = await tx.purchase.findUnique({
             where: { id: purchaseId },
@@ -130,6 +156,10 @@ export class DebitNotesService {
             total: Prisma.Decimal;
           }> = [];
 
+          // Consecutivo antes de las líneas: el kardex referencia el número de la nota
+          const count = await tx.debitNote.count();
+          const debitNoteNumber = `ND-${String(count + 1).padStart(6, '0')}`;
+
           let totalSubtotalCents = 0n;
           let totalTaxCents = 0n;
           let totalDebitCents = 0n;
@@ -148,33 +178,49 @@ export class DebitNotesService {
               );
             }
 
-            let alreadyDebited = 0;
-            for (const dn of purchase.debitNotes) {
-              for (const dnl of dn.lines) {
-                if (dnl.purchaseLineId === line.id) {
-                  alreadyDebited += Number(dnl.quantityCommercial);
-                }
-              }
-            }
-
-            const maxAvailable = Number(line.quantityCommercial) - alreadyDebited;
-            if (item.quantityCommercial > maxAvailable + 0.0001) {
+            const factor = line.presentationFactorHistorical || 1;
+            const exactBaseUnits = item.quantityCommercial * factor;
+            const quantityBaseUnits = Math.round(exactBaseUnits);
+            // El inventario se lleva en unidades base enteras: no se redondea en silencio
+            if (Math.abs(exactBaseUnits - quantityBaseUnits) > 1e-6) {
               throw new BadRequestException(
-                `Cantidad a devolver (${item.quantityCommercial}) excede el saldo de compra disponible (${maxAvailable}) para ${line.product.name}.`,
+                `La cantidad ${item.quantityCommercial} con factor ${factor} no equivale a unidades base enteras.`,
               );
             }
 
-            const factor = line.presentationFactorHistorical || 1;
-            const quantityBaseUnits = Math.round(item.quantityCommercial * factor);
+            // El saldo devolvible se controla en unidades base, sin sumas de coma flotante
+            let alreadyDebitedBaseUnits = 0;
+            for (const dn of purchase.debitNotes) {
+              for (const dnl of dn.lines) {
+                if (dnl.purchaseLineId === line.id) {
+                  alreadyDebitedBaseUnits += dnl.quantityBaseUnits;
+                }
+              }
+            }
+            const maxAvailableBaseUnits = line.quantityBaseUnits - alreadyDebitedBaseUnits;
+            if (quantityBaseUnits > maxAvailableBaseUnits) {
+              throw new BadRequestException(
+                `Cantidad a devolver (${quantityBaseUnits} unidades base) excede el saldo de compra disponible (${maxAvailableBaseUnits} unidades base) para ${line.product.name}.`,
+              );
+            }
 
-            // Bloquear lote para salida y verificar que no quede en saldo negativo
-            const lot = await tx.inventoryLot.findUnique({
-              where: { id: line.lotId },
-            });
-
-            if (!lot) {
+            // Bloquear el lote: una venta o ajuste concurrente no puede dejarlo en negativo
+            const lockedLots = await tx.$queryRaw<
+              Array<{ id: string; lot_number: string; current_quantity: number }>
+            >`
+              SELECT id, lot_number, current_quantity
+              FROM inventory_lots
+              WHERE id = ${line.lotId}::uuid
+              FOR UPDATE
+            `;
+            if (!lockedLots.length) {
               throw new BadRequestException(`Lote de inventario para ${line.product.name} no encontrado.`);
             }
+            const lot = {
+              id: lockedLots[0].id,
+              lotNumber: lockedLots[0].lot_number,
+              currentQuantity: lockedLots[0].current_quantity,
+            };
 
             if (lot.currentQuantity < quantityBaseUnits) {
               throw new BadRequestException(
@@ -201,7 +247,7 @@ export class DebitNotesService {
                 presentationFactorHistorical: line.presentationFactorHistorical,
                 balanceAfterBaseUnits: updatedLot.currentQuantity,
                 referenceDocumentType: 'DEBIT_NOTE',
-                referenceDocumentId: purchase.invoiceNumber,
+                referenceDocumentId: debitNoteNumber,
                 notes: `Devolución a proveedor ${purchase.supplier.name} s/factura ${purchase.invoiceNumber} (${payload.reason})`,
                 createdByUserId: userId,
               },
@@ -234,10 +280,6 @@ export class DebitNotesService {
               total: new Prisma.Decimal(centsToMoneyString(lineTotCents)),
             });
           }
-
-          // 3. Consecutivo de Nota Débito
-          const count = await tx.debitNote.count();
-          const debitNoteNumber = `ND-${String(count + 1).padStart(6, '0')}`;
 
           // 4. Ajuste en Cuentas por Pagar: lo adeudado baja y lo pagado no cambia
           const payables = await tx.$queryRaw<
@@ -343,7 +385,19 @@ export class DebitNotesService {
             );
           }
 
-          return this.mapToDto(debitNote);
+          const dto = this.mapToDto(debitNote);
+          await this.idempotencyService.saveRecord(
+            {
+              key,
+              userId,
+              endpoint,
+              requestHash,
+              responseStatus: 201,
+              responseBody: dto,
+            },
+            tx,
+          );
+          return dto;
         },
         {
           isolationLevel: Prisma.TransactionIsolationLevel.Serializable,

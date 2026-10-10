@@ -926,6 +926,7 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
           ],
         },
         adminUserId,
+        randomUUID(),
       );
 
       expect(nd).toBeDefined();
@@ -948,6 +949,7 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
       expect(mov!.movementType).toBe('SALIDA_DEVOLUCION_COMPRA');
       expect(mov!.quantityBaseUnits).toBe(3);
       expect(mov!.balanceAfterBaseUnits).toBe(7);
+      expect(mov!.referenceDocumentId).toBe(nd.debitNoteNumber);
 
       // 3. Verificar cuenta por pagar reducida
       const reloadedPayable = await prisma.payable.findUniqueOrThrow({ where: { id: payable.id } });
@@ -1046,6 +1048,7 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
               items: [{ purchaseLineId: purchaseLine.id, quantityCommercial }],
             },
             adminUserId,
+            randomUUID(),
           );
         return { payableId: payable.id, lotId: lot.id, returnUnits };
       }
@@ -1142,8 +1145,222 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
             items: [{ purchaseLineId: purchaseLine.id, quantityCommercial: 5 }],
           },
           adminUserId,
+          randomUUID(),
         ),
       ).rejects.toThrow('Existencias insuficientes en el lote');
+    });
+
+    describe('autorización, validación e idempotencia de notas débito', () => {
+      async function receivedPurchase(options: { lineQuantity?: number; factor?: number } = {}) {
+        const lineQuantity = options.lineQuantity ?? 10;
+        const factor = options.factor ?? 1;
+        await setupStandardPucAndMappings();
+        const location = await prisma.location.findFirstOrThrow();
+        const supplier = await prisma.supplier.create({
+          data: { taxId: '900777888-1', name: 'Proveedor ND' },
+        });
+        const category = await prisma.category.create({ data: { name: 'Categoría ND' } });
+        const product = await prisma.product.create({
+          data: { code: 'ND-001', name: 'Producto ND', basePrice: 2000, baseCost: 1000, categoryId: category.id },
+        });
+        const lot = await prisma.inventoryLot.create({
+          data: {
+            productId: product.id,
+            locationId: location.id,
+            lotNumber: 'LOT-ND',
+            expirationDate: new Date('2029-06-30'),
+            currentQuantity: lineQuantity * factor,
+          },
+        });
+        const totalAmount = lineQuantity * 1000;
+        const purchase = await prisma.purchase.create({
+          data: {
+            supplierId: supplier.id,
+            invoiceNumber: 'FAC-ND',
+            status: 'RECEIVED',
+            purchaseDate: new Date('2026-10-01'),
+            totalAmount,
+            receivedByUserId: adminUserId,
+          },
+        });
+        const purchaseLine = await prisma.purchaseLine.create({
+          data: {
+            purchaseId: purchase.id,
+            productId: product.id,
+            lotId: lot.id,
+            quantityCommercial: lineQuantity,
+            quantityBaseUnits: lineQuantity * factor,
+            presentationFactorHistorical: factor,
+            unitCost: 1000,
+            subtotal: totalAmount,
+            lotNumber: 'LOT-ND',
+            expirationDate: new Date('2029-06-30'),
+          },
+        });
+        await prisma.payable.create({
+          data: {
+            purchaseId: purchase.id,
+            supplierId: supplier.id,
+            totalAmount,
+            balance: totalAmount,
+            status: 'PENDIENTE',
+            dueDate: new Date('2026-11-01'),
+          },
+        });
+        return { purchaseId: purchase.id, purchaseLineId: purchaseLine.id, lotId: lot.id };
+      }
+
+      function postDebitNote(purchaseId: string, body: object, key: string | null, sessionCookie = cookie) {
+        const req = request(app.getHttpServer())
+          .post(`/api/v1/purchases/${purchaseId}/debit-notes`)
+          .set('Cookie', sessionCookie);
+        if (key) req.set('Idempotency-Key', key);
+        return req.send(body);
+      }
+
+      it('exige el permiso de notas débito: el rol inventario con purchases:receive recibe 403', async () => {
+        const { purchaseId, purchaseLineId, lotId } = await receivedPurchase();
+        const admin = await prisma.user.findUniqueOrThrow({ where: { id: adminUserId } });
+        const stocker = await prisma.user.create({
+          data: { username: 'inventario_nd', passwordHash: admin.passwordHash, isActive: true },
+        });
+        const role = await prisma.role.findUniqueOrThrow({ where: { name: 'inventario' } });
+        await prisma.userRole.create({ data: { userId: stocker.id, roleId: role.id } });
+        const login = await auth.login('inventario_nd', 'AdminPassword#2026');
+
+        await postDebitNote(
+          purchaseId,
+          { purchaseId, reason: 'Devolución', items: [{ purchaseLineId, quantityCommercial: 1 }] },
+          randomUUID(),
+          `${SESSION_COOKIE_NAME}=${login.rawToken}`,
+        ).expect(403);
+        expect(await prisma.debitNote.count()).toBe(0);
+        const lot = await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lotId } });
+        expect(lot.currentQuantity).toBe(10);
+      });
+
+      it('exige Idempotency-Key', async () => {
+        const { purchaseId, purchaseLineId } = await receivedPurchase();
+        await postDebitNote(
+          purchaseId,
+          { purchaseId, reason: 'Devolución', items: [{ purchaseLineId, quantityCommercial: 1 }] },
+          null,
+        ).expect(400);
+        expect(await prisma.debitNote.count()).toBe(0);
+      });
+
+      it('valida el cuerpo antes de tocar inventario o cartera', async () => {
+        const { purchaseId, purchaseLineId } = await receivedPurchase();
+        for (const body of [
+          { reason: 'Devolución', items: [{ purchaseLineId, quantityCommercial: 'uno' }] },
+          { reason: '   ', items: [{ purchaseLineId, quantityCommercial: 1 }] },
+          { reason: 'Devolución', items: [{ purchaseLineId: 'no-es-uuid', quantityCommercial: 1 }] },
+          { reason: 'Devolución', items: [] },
+          {
+            reason: 'Devolución',
+            items: [
+              { purchaseLineId, quantityCommercial: 1 },
+              { purchaseLineId, quantityCommercial: 1 },
+            ],
+          },
+        ]) {
+          const res = await postDebitNote(purchaseId, body, randomUUID());
+          expect(res.status, JSON.stringify(body)).toBe(400);
+        }
+        await postDebitNote(
+          'no-es-uuid',
+          { reason: 'Devolución', items: [{ purchaseLineId, quantityCommercial: 1 }] },
+          randomUUID(),
+        ).expect(400);
+        expect(await prisma.debitNote.count()).toBe(0);
+      });
+
+      it('rechaza cantidades que no equivalen a unidades base enteras', async () => {
+        const { purchaseId, purchaseLineId, lotId } = await receivedPurchase({ factor: 1 });
+        const res = await postDebitNote(
+          purchaseId,
+          { purchaseId, reason: 'Devolución', items: [{ purchaseLineId, quantityCommercial: 1.5 }] },
+          randomUUID(),
+        );
+        expect(res.status).toBe(400);
+        expect(res.body.message).toMatch(/unidades base enteras/);
+        const lot = await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lotId } });
+        expect(lot.currentQuantity).toBe(10);
+      });
+
+      it('convierte con el factor histórico de la compra', async () => {
+        const { purchaseId, purchaseLineId, lotId } = await receivedPurchase({ lineQuantity: 2, factor: 10 });
+        const res = await postDebitNote(
+          purchaseId,
+          { purchaseId, reason: 'Cajas averiadas', items: [{ purchaseLineId, quantityCommercial: 0.7 }] },
+          randomUUID(),
+        );
+        // 0.7 × 10 = 7.000000000000001 en coma flotante: sigue siendo 7 unidades base exactas
+        expect(res.status, JSON.stringify(res.body)).toBe(201);
+        expect(res.body.lines[0].quantityBaseUnits).toBe(7);
+        const lot = await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lotId } });
+        expect(lot.currentQuantity).toBe(13);
+      });
+
+      it('un reintento con la misma clave devuelve la misma nota sin duplicar salida ni ajuste de cartera', async () => {
+        const { purchaseId, purchaseLineId, lotId } = await receivedPurchase();
+        const key = randomUUID();
+        const body = { purchaseId, reason: 'Devolución', items: [{ purchaseLineId, quantityCommercial: 2 }] };
+
+        const [first, second] = await Promise.all([
+          postDebitNote(purchaseId, body, key),
+          postDebitNote(purchaseId, body, key),
+        ]);
+        const third = await postDebitNote(purchaseId, body, key);
+        expect(first.status, JSON.stringify(first.body)).toBe(201);
+        expect(second.status, JSON.stringify(second.body)).toBe(201);
+        expect(third.status).toBe(201);
+        expect(second.body.id).toBe(first.body.id);
+        expect(third.body.id).toBe(first.body.id);
+
+        expect(await prisma.debitNote.count()).toBe(1);
+        expect(
+          await prisma.inventoryMovement.count({ where: { referenceDocumentType: 'DEBIT_NOTE' } }),
+        ).toBe(1);
+        const lot = await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lotId } });
+        expect(lot.currentQuantity).toBe(8);
+        const payable = await prisma.payable.findFirstOrThrow({ where: { purchaseId } });
+        expect(payable.balance.toString()).toBe('8000');
+      });
+
+      it('la misma clave con otro contenido es un conflicto', async () => {
+        const { purchaseId, purchaseLineId } = await receivedPurchase();
+        const key = randomUUID();
+        await postDebitNote(
+          purchaseId,
+          { purchaseId, reason: 'Devolución', items: [{ purchaseLineId, quantityCommercial: 1 }] },
+          key,
+        ).expect(201);
+        await postDebitNote(
+          purchaseId,
+          { purchaseId, reason: 'Devolución', items: [{ purchaseLineId, quantityCommercial: 2 }] },
+          key,
+        ).expect(409);
+        expect(await prisma.debitNote.count()).toBe(1);
+      });
+
+      it('notas concurrentes de la misma compra no devuelven más de lo comprado', async () => {
+        const { purchaseId, purchaseLineId, lotId } = await receivedPurchase({ lineQuantity: 10 });
+        const body = { purchaseId, reason: 'Devolución', items: [{ purchaseLineId, quantityCommercial: 6 }] };
+
+        const results = await Promise.all([
+          postDebitNote(purchaseId, body, randomUUID()),
+          postDebitNote(purchaseId, body, randomUUID()),
+        ]);
+        const statuses = results.map((r) => r.status).sort();
+        expect(statuses, JSON.stringify(results.map((r) => r.body))).toEqual([201, 400]);
+
+        expect(await prisma.debitNote.count()).toBe(1);
+        const lot = await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lotId } });
+        expect(lot.currentQuantity).toBe(4);
+        const payable = await prisma.payable.findFirstOrThrow({ where: { purchaseId } });
+        expect(payable.balance.toString()).toBe('4000');
+      });
     });
   });
 

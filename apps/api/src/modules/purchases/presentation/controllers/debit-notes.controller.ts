@@ -6,6 +6,9 @@ import {
   Param,
   UseGuards,
   Query,
+  Headers,
+  ParseUUIDPipe,
+  ConflictException,
 } from '@nestjs/common';
 import { DebitNotesService } from '../../application/debit-notes.service';
 import {
@@ -20,6 +23,8 @@ import {
 import { PermissionsGuard } from '../../../identity/presentation/guards/permissions.guard';
 import { RequirePermissions } from '../../../identity/presentation/decorators/require-permissions.decorator';
 import { CurrentUser } from '../../../identity/presentation/decorators/current-user.decorator';
+import { CreateDebitNoteValidationPipe } from '../dtos/create-debit-note.dto';
+import { IdempotencyConflictException } from '../../../sales/domain/sale.exceptions';
 
 @Controller()
 @UseGuards(SessionAuthGuard, PermissionsGuard)
@@ -27,14 +32,26 @@ export class DebitNotesController {
   constructor(private readonly debitNotesService: DebitNotesService) {}
 
   @Post('purchases/:purchaseId/debit-notes')
-  @RequirePermissions(SYSTEM_PERMISSIONS.PURCHASES_RECEIVE)
+  @RequirePermissions(SYSTEM_PERMISSIONS.PURCHASES_DEBIT_NOTE)
   async createForPurchase(
-    @Param('purchaseId') purchaseId: string,
-    @Body() payload: CreateDebitNotePayload,
+    @Param('purchaseId', ParseUUIDPipe) purchaseId: string,
+    @Body(CreateDebitNoteValidationPipe) payload: CreateDebitNotePayload,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
     @CurrentUser() user: AuthenticatedUserContext,
   ): Promise<DebitNoteDto> {
-    const userId = user.id || '00000000-0000-0000-0000-000000000000';
-    return this.debitNotesService.createDebitNote(purchaseId, payload, userId);
+    try {
+      return await this.debitNotesService.createDebitNote(
+        purchaseId,
+        payload,
+        user.id,
+        idempotencyKey,
+      );
+    } catch (error) {
+      if (error instanceof IdempotencyConflictException) {
+        throw new ConflictException(error.message);
+      }
+      throw error;
+    }
   }
 
   @Get('purchases/:purchaseId/debit-notes')

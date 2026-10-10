@@ -52,6 +52,7 @@ export const BASE_PERMISSIONS: PermissionDefinition[] = [
   { name: SYSTEM_PERMISSIONS.PURCHASES_READ, description: 'Consultar historial de compras' },
   { name: SYSTEM_PERMISSIONS.PURCHASES_CREATE, description: 'Crear órdenes y compras a proveedores' },
   { name: SYSTEM_PERMISSIONS.PURCHASES_RECEIVE, description: 'Recepcionar compras y registrar lotes' },
+  { name: SYSTEM_PERMISSIONS.PURCHASES_DEBIT_NOTE, description: 'Emitir notas débito por devoluciones a proveedores' },
 
   // Clientes y proveedores
   { name: SYSTEM_PERMISSIONS.CUSTOMERS_READ, description: 'Consultar directorio de clientes' },
@@ -125,6 +126,7 @@ export const BASE_ROLES: RoleDefinition[] = [
       SYSTEM_PERMISSIONS.PURCHASES_READ,
       SYSTEM_PERMISSIONS.PURCHASES_CREATE,
       SYSTEM_PERMISSIONS.PURCHASES_RECEIVE,
+      SYSTEM_PERMISSIONS.PURCHASES_DEBIT_NOTE,
       SYSTEM_PERMISSIONS.CUSTOMERS_READ,
       SYSTEM_PERMISSIONS.CUSTOMERS_MANAGE,
       SYSTEM_PERMISSIONS.SUPPLIERS_READ,

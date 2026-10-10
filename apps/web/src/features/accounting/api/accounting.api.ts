@@ -490,9 +490,14 @@ export interface DebitNoteDto {
 export const fetchPurchaseDebitNotes = (purchaseId: string) =>
   apiRequest<DebitNoteDto[]>(`purchases/${encodeURIComponent(purchaseId)}/debit-notes`);
 
-export const createPurchaseDebitNote = (purchaseId: string, payload: CreateDebitNotePayload) =>
+export const createPurchaseDebitNote = (
+  purchaseId: string,
+  payload: CreateDebitNotePayload,
+  idempotencyKey: string,
+) =>
   apiRequest<DebitNoteDto>(`purchases/${encodeURIComponent(purchaseId)}/debit-notes`, {
     method: 'POST',
+    headers: { 'Idempotency-Key': idempotencyKey },
     body: JSON.stringify(payload),
   });
 

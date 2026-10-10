@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Button,
@@ -33,9 +33,12 @@ export const DebitNoteDialog: React.FC<Props> = ({ open, purchase, onClose, onCr
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Un reintento del mismo contenido reutiliza la clave para no emitir la nota dos veces
+  const retryRef = useRef<{ fingerprint: string; key: string } | null>(null);
 
   useEffect(() => {
     if (open) {
+      retryRef.current = null;
       setQuantities({});
       setReason('');
       setError(null);
@@ -67,11 +70,16 @@ export const DebitNoteDialog: React.FC<Props> = ({ open, purchase, onClose, onCr
     setSubmitting(true);
     setError(null);
     try {
-      const nd = await createPurchaseDebitNote(purchase.id, {
+      const payload = {
         purchaseId: purchase.id,
         reason: reason.trim(),
         items,
-      });
+      };
+      const fingerprint = JSON.stringify(payload);
+      if (retryRef.current?.fingerprint !== fingerprint) {
+        retryRef.current = { fingerprint, key: crypto.randomUUID() };
+      }
+      const nd = await createPurchaseDebitNote(purchase.id, payload, retryRef.current.key);
       onCreated(nd.debitNoteNumber);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo registrar la nota débito.');
