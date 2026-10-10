@@ -11,6 +11,8 @@ import { User } from '../../src/modules/identity/domain/entities/user.entity';
 import { Username } from '../../src/modules/identity/domain/value-objects/username.vo';
 import { RateLimiterService } from '../../src/common/services/rate-limiter.service';
 import { getCorsConfig } from '../../src/common/config/cors.config';
+import { configureHttpApp, parseTrustProxy } from '../../src/common/config/http-app.config';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 
 describe('Security Hardening — Cabeceras OWASP, CORS y Fuerza Bruta (Integration)', () => {
   let app: INestApplication;
@@ -34,7 +36,11 @@ describe('Security Hardening — Cabeceras OWASP, CORS y Fuerza Bruta (Integrati
       imports: [AppModule],
     }).compile();
 
-    app = moduleFixture.createNestApplication();
+    app = moduleFixture.createNestApplication<NestExpressApplication>();
+    // Igual que en producción detrás de Caddy: un proxy de confianza
+    process.env.TRUST_PROXY = '1';
+    configureHttpApp(app as NestExpressApplication);
+    delete process.env.TRUST_PROXY;
     app.setGlobalPrefix('api/v1');
     app.enableCors(getCorsConfig());
 
@@ -197,6 +203,53 @@ describe('Security Hardening — Cabeceras OWASP, CORS y Fuerza Bruta (Integrati
         .send({ username: testUser, password: 'WrongPassword123!' });
 
       expect(afterRes.status).toBe(401);
+    });
+
+    const login = (ip: string, username: string, password: string) =>
+      request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .set('X-Forwarded-For', ip)
+        .send({ username, password });
+
+    it('AUD-012: los fallos desde una IP no bloquean la cuenta para quien entra desde otra', async () => {
+      await seedTestUser();
+
+      for (let i = 1; i <= 4; i++) {
+        expect((await login('203.0.113.10', testUser, 'WrongPassword123!')).status).toBe(401);
+      }
+      expect((await login('203.0.113.10', testUser, 'WrongPassword123!')).status).toBe(429);
+      // El atacante sigue bloqueado aunque acierte la contraseña
+      expect((await login('203.0.113.10', testUser, testPass)).status).toBe(429);
+
+      // El usuario legítimo en la farmacia entra sin problema
+      expect((await login('198.51.100.20', testUser, testPass)).status).toBe(200);
+    });
+
+    it('AUD-012: una IP que prueba muchas cuentas queda bloqueada por el límite de IP', async () => {
+      await seedTestUser();
+
+      let lastStatus = 0;
+      for (let i = 1; i <= 20; i++) {
+        lastStatus = (await login('203.0.113.11', `inexistente_${i}`, 'WrongPassword123!')).status;
+      }
+      expect(lastStatus).toBe(429);
+      // También para una cuenta válida con la contraseña correcta, mientras dure el bloqueo
+      expect((await login('203.0.113.11', testUser, testPass)).status).toBe(429);
+      // Otra IP no se ve afectada
+      expect((await login('198.51.100.21', testUser, testPass)).status).toBe(200);
+    });
+  });
+
+  describe('4. Confianza en el proxy (TRUST_PROXY)', () => {
+    it('sin configurar no confía en ningún proxy: X-Forwarded-For del cliente se ignora', () => {
+      expect(parseTrustProxy(undefined)).toBe(false);
+      expect(parseTrustProxy('')).toBe(false);
+      expect(parseTrustProxy('false')).toBe(false);
+    });
+
+    it('acepta número de saltos o lista de subredes', () => {
+      expect(parseTrustProxy('1')).toBe(1);
+      expect(parseTrustProxy(' loopback, 172.16.0.0/12 ')).toBe('loopback, 172.16.0.0/12');
     });
   });
 });

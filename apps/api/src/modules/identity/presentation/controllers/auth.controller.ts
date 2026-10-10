@@ -54,10 +54,15 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response
   ): Promise<LoginResponseDto> {
+    // req.ip respeta TRUST_PROXY: detrás de Caddy es la IP real del cliente
     const clientIp = req.ip || req.socket?.remoteAddress || 'unknown-ip';
+    const normalizedUsername = loginDto.username.toLowerCase().trim();
+    // El bloqueo por cuenta es por IP+usuario: fallar desde un equipo no bloquea la cuenta
+    // (p. ej. admin) en los demás. El límite por IP, más alto, frena probar muchas cuentas.
     const ipKey = `auth:ip:${clientIp}`;
-    const userKey = `auth:user:${loginDto.username.toLowerCase().trim()}`;
+    const userKey = `auth:ip-user:${clientIp}:${normalizedUsername}`;
     const maxAttempts = Number(process.env.AUTH_RATE_LIMIT_MAX_ATTEMPTS) || 5;
+    const maxIpAttempts = Number(process.env.AUTH_RATE_LIMIT_IP_MAX_ATTEMPTS) || 20;
     const windowMs = Number(process.env.AUTH_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000;
 
     // 1. Verificación previa de bloqueo por intentos fallidos excesivos
@@ -87,9 +92,9 @@ export class AuthController {
         loginDto.password
       );
 
-      // Restablecer contadores de intentos fallidos tras login exitoso
+      // Un login correcto limpia solo su par IP+usuario: no debe borrar los fallos
+      // acumulados por la IP contra otras cuentas
       if (this.rateLimiterService) {
-        this.rateLimiterService.reset(ipKey);
         this.rateLimiterService.reset(userKey);
       }
 
@@ -128,7 +133,7 @@ export class AuthController {
         let retryAfter = 0;
 
         if (this.rateLimiterService) {
-          const ipResult = this.rateLimiterService.recordAttempt(ipKey, maxAttempts, windowMs);
+          const ipResult = this.rateLimiterService.recordAttempt(ipKey, maxIpAttempts, windowMs);
           const userResult = this.rateLimiterService.recordAttempt(userKey, maxAttempts, windowMs);
 
           if (ipResult.blocked || userResult.blocked) {
