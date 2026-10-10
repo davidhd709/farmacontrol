@@ -12,7 +12,7 @@ export class SecurityHeadersMiddleware implements NestMiddleware {
     // 1. Content Security Policy (CSP) estricta
     res.setHeader(
       'Content-Security-Policy',
-      "default-src 'self'; base-uri 'self'; font-src 'self' https: data:; form-action 'self'; frame-ancestors 'none'; img-src 'self' data: https:; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline';"
+      "default-src 'self'; base-uri 'self'; font-src 'self' https: data:; form-action 'self'; frame-ancestors 'none'; img-src 'self' data: https:; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline';",
     );
 
     // 2. Prevenir detección incorrecta de tipos MIME (MIME-Sniffing)
@@ -25,10 +25,7 @@ export class SecurityHeadersMiddleware implements NestMiddleware {
     res.setHeader('X-XSS-Protection', '0');
 
     // 5. HTTP Strict Transport Security (HSTS) - Forzar HTTPS durante 1 año
-    res.setHeader(
-      'Strict-Transport-Security',
-      'max-age=31536000; includeSubDomains; preload'
-    );
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
 
     // 6. Política de Referrer para no filtrar datos sensibles en URLs externas
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
@@ -40,7 +37,7 @@ export class SecurityHeadersMiddleware implements NestMiddleware {
     // 8. Permissions-Policy: Restringir APIs de hardware y navegador no necesarias en la API
     res.setHeader(
       'Permissions-Policy',
-      'accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()'
+      'accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()',
     );
 
     // 9. Ocultar información del framework (remover X-Powered-By)

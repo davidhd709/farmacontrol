@@ -69,7 +69,7 @@ export class RateLimiterService implements OnModuleDestroy {
     key: string,
     maxAttempts: number,
     windowMs: number,
-    blockDurationMs = windowMs
+    blockDurationMs = windowMs,
   ): RateLimitStatus {
     const now = Date.now();
     const entry = this.entries.get(key);

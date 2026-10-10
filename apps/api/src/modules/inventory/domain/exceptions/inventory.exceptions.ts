@@ -1,6 +1,8 @@
-export class InventoryDomainException extends Error {
-  constructor(message: string) {
-    super(message);
+import { DomainError, type DomainErrorKind } from '../../../../common/domain-error';
+
+export class InventoryDomainException extends DomainError {
+  constructor(message: string, kind: DomainErrorKind = 'validation') {
+    super(message, kind);
     this.name = 'InventoryDomainException';
   }
 }
@@ -21,14 +23,16 @@ export class NegativeQuantityException extends InventoryDomainException {
 
 export class LotExpiredException extends InventoryDomainException {
   constructor(message: string = 'El lote se encuentra vencido.') {
-    super(message);
+    super(message, 'conflict');
     this.name = 'LotExpiredException';
   }
 }
 
 export class InsufficientInventoryException extends InventoryDomainException {
-  constructor(message: string = 'No hay suficiente inventario disponible para satisfacer la cantidad solicitada.') {
-    super(message);
+  constructor(
+    message: string = 'No hay suficiente inventario disponible para satisfacer la cantidad solicitada.',
+  ) {
+    super(message, 'conflict');
     this.name = 'InsufficientInventoryException';
   }
 }
