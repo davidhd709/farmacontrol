@@ -2,7 +2,6 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-  ConflictException,
   Optional,
 } from '@nestjs/common';
 import { prisma, PrismaClient, Prisma } from '@farmacia/database';
@@ -16,6 +15,7 @@ import { AuditService } from '../../audit/application/services/audit.service';
 import { IdempotencyService } from '../../../common/idempotency/idempotency.service';
 import { parseMoneyToCents, centsToMoneyString } from '../../treasury/domain/treasury-rules';
 import { CashService } from '../../cash/application/cash.service';
+import { ReceivablesLedger } from '../../receivables/application/receivables-ledger';
 import { recordSourceBankMovement } from '../../treasury/application/record-source-bank-movement';
 import {
   prorateCents,
@@ -86,6 +86,7 @@ export class CreditNotesService {
 
   constructor(
     private readonly cashService: CashService,
+    private readonly receivablesLedger: ReceivablesLedger,
     @Optional() customClient?: PrismaClient,
     @Optional() private readonly accountingEngine?: AccountingEngineService,
     @Optional() private readonly auditService?: AuditService,
@@ -330,48 +331,11 @@ export class CreditNotesService {
 
           // 5. Ajuste financiero según método de reembolso
           if (refundMethod === 'CREDITO_CARTERA') {
-            const receivables = await tx.$queryRaw<
-              Array<{
-                id: string;
-                total_amount: Prisma.Decimal;
-                balance: Prisma.Decimal;
-                status: string;
-                notes: string | null;
-              }>
-            >`
-              SELECT id, total_amount, balance, status, notes
-              FROM receivables
-              WHERE sale_id = ${sale.id}::uuid
-              FOR UPDATE
-            `;
-            if (!receivables.length) {
-              throw new BadRequestException(
-                `La venta ${sale.invoiceNumber} no tiene cuenta por cobrar asociada.`,
-              );
-            }
-            const receivable = receivables[0];
-            if (receivable.status === 'CANCELADA') {
-              throw new ConflictException(
-                `La cuenta por cobrar de la venta ${sale.invoiceNumber} está CANCELADA.`,
-              );
-            }
-            const balanceCents = toCents(receivable.balance, 'Saldo de cartera');
-            if (totalReturnCents > balanceCents) {
-              throw new ConflictException(
-                `La devolución (${centsToMoneyString(totalReturnCents)}) supera el saldo pendiente en cartera (${centsToMoneyString(balanceCents)}).`,
-              );
-            }
-            // Se reduce lo adeudado: total y saldo bajan juntos y lo abonado no cambia
-            const newTotalCents = toCents(receivable.total_amount, 'Total de cartera') - totalReturnCents;
-            const newBalanceCents = balanceCents - totalReturnCents;
-            await tx.receivable.update({
-              where: { id: receivable.id },
-              data: {
-                totalAmount: new Prisma.Decimal(centsToMoneyString(newTotalCents)),
-                balance: new Prisma.Decimal(centsToMoneyString(newBalanceCents)),
-                status: newBalanceCents === 0n ? 'PAGADA' : receivable.status,
-                notes: `${receivable.notes || ''} [Nota Crédito ${creditNoteNumber}: -${centsToMoneyString(totalReturnCents)}]`.trim(),
-              },
+            await this.receivablesLedger.applyCreditNote(tx, {
+              saleId: sale.id,
+              invoiceNumber: sale.invoiceNumber,
+              creditNoteNumber,
+              amountCents: totalReturnCents,
             });
           } else if (refundMethod === 'TRANSFERENCIA') {
             await recordSourceBankMovement(tx, {

@@ -1,6 +1,7 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { prisma, PrismaClient, Prisma } from '@farmacia/database';
 import { IPurchaseRepository } from '../domain/purchase.repository';
+import { PayablesLedger } from '../../payables/application/payables-ledger';
 import { Purchase, PurchaseLine } from '../domain/purchase.entity';
 import {
   DuplicatePurchaseInvoiceException,
@@ -14,7 +15,10 @@ import { PurchaseQueryFilters } from '@farmacia/contracts';
 export class PrismaPurchaseRepository implements IPurchaseRepository {
   private readonly client: PrismaClient;
 
-  constructor(@Optional() customClient?: PrismaClient) {
+  constructor(
+    @Optional() customClient?: PrismaClient,
+    @Optional() private readonly payablesLedger: PayablesLedger = new PayablesLedger(),
+  ) {
     this.client = customClient ?? prisma;
   }
 
@@ -62,17 +66,12 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
       // Conforme a MODULO_CONTABILIDAD_FARMACIA.md: registrar la compra y pagarla son eventos distintos.
       // Toda compra causa una obligación en estado PENDIENTE. Si es CONTADO, vence en la misma fecha de compra.
       const payableDueDate = purchase.dueDate || purchase.purchaseDate;
-      await tx.payable.create({
-        data: {
-          purchaseId: purchase.id,
-          supplierId: purchase.supplierId,
-          totalAmount: new Prisma.Decimal(purchase.totalAmount),
-          amountPaid: new Prisma.Decimal(0),
-          balance: new Prisma.Decimal(purchase.totalAmount),
-          status: 'PENDIENTE',
-          dueDate: payableDueDate,
-          notes: purchase.notes,
-        },
+      await this.payablesLedger.openForPurchase(tx, {
+        purchaseId: purchase.id,
+        supplierId: purchase.supplierId,
+        totalAmount: purchase.totalAmount,
+        dueDate: payableDueDate,
+        notes: purchase.notes,
       });
 
       // 2. Procesar cada línea de compra y afectar inventario

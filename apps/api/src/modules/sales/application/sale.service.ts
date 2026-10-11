@@ -26,6 +26,7 @@ import {
 import { IdempotencyService } from '../../../common/idempotency/idempotency.service';
 import { AuditService } from '../../audit/application/services/audit.service';
 import { CashService } from '../../cash/application/cash.service';
+import { ReceivablesLedger } from '../../receivables/application/receivables-ledger';
 import { recordSourceBankMovement } from '../../treasury/application/record-source-bank-movement';
 import { requirePaymentBankAccountId } from '../../treasury/application/payment-validation';
 import { parseMoneyToCents } from '../../treasury/domain/treasury-rules';
@@ -110,6 +111,7 @@ export class SaleService {
     private readonly saleRepository: ISaleRepository,
     private readonly idempotencyService: IdempotencyService,
     private readonly cashService: CashService,
+    private readonly receivablesLedger: ReceivablesLedger,
     @Optional() customClient?: PrismaClient,
     @Optional() private readonly auditService?: AuditService,
     @Optional() private readonly accountingEngine?: AccountingEngineService,
@@ -407,17 +409,12 @@ export class SaleService {
       // 2.7. Cuenta por Cobrar si es Crédito
       if (payload.paymentMethod === 'CREDITO') {
         const dueDate = calendarDate(addCalendarDays(businessToday(), 30));
-        await tx.receivable.create({
-          data: {
-            saleId: sale.id,
-            customerId: customerId!,
-            totalAmount: new Prisma.Decimal(sale.total).toFixed(2),
-            amountPaid: '0.00',
-            balance: new Prisma.Decimal(sale.total).toFixed(2),
-            status: 'PENDIENTE',
-            dueDate,
-            notes: payload.notes || `Venta a crédito comprobante ${sale.invoiceNumber}`,
-          },
+        await this.receivablesLedger.openForSale(tx, {
+          saleId: sale.id,
+          customerId: customerId!,
+          total: new Prisma.Decimal(sale.total).toFixed(2),
+          dueDate,
+          notes: payload.notes || `Venta a crédito comprobante ${sale.invoiceNumber}`,
         });
       }
 
@@ -629,10 +626,7 @@ export class SaleService {
         });
       }
       if (sale.paymentMethod === 'CREDITO') {
-        await tx.receivable.updateMany({
-          where: { saleId: sale.id },
-          data: { status: 'CANCELADA', notes: `Venta anulada: ${trimmedReason}` },
-        });
+        await this.receivablesLedger.cancelForSale(tx, sale.id, trimmedReason);
       }
 
       // Reversión contable automática
