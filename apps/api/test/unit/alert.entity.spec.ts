@@ -5,7 +5,8 @@ import {
 } from '../../src/modules/alerts/domain/alert.entity';
 
 describe('InventoryAlert Entity & Expiration Severity (RN-001, RN-002, RF-008)', () => {
-  const refDate = new Date('2026-06-01T00:00:00Z');
+  // Mediodía del 1 de junio en Bogotá: la referencia es un instante que se lee en la zona del negocio.
+  const refDate = new Date('2026-06-01T12:00:00-05:00');
 
   describe('calculateExpirationSeverity', () => {
     it('debe clasificar como VENCIDO si la fecha de vencimiento ya pasó (días restantes < 0)', () => {
@@ -15,11 +16,11 @@ describe('InventoryAlert Entity & Expiration Severity (RN-001, RN-002, RF-008)',
       expect(result.severity).toBe('VENCIDO');
     });
 
-    it('debe clasificar como VENCIDO si la fecha de vencimiento es exactamente hoy (días restantes = 0)', () => {
+    it('debe clasificar como CRITICO el día del vencimiento (días restantes = 0): el POS aún lo vende', () => {
       const expDate = new Date('2026-06-01T00:00:00Z');
       const result = calculateExpirationSeverity(expDate, refDate);
       expect(result.daysRemaining).toBe(0);
-      expect(result.severity).toBe('VENCIDO');
+      expect(result.severity).toBe('CRITICO');
     });
 
     it('debe clasificar como CRITICO si vence entre 1 y 30 días', () => {

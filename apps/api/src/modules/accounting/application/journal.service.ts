@@ -1,3 +1,4 @@
+import { businessDateOf } from '../../../common/utils/business-date';
 import { Injectable } from '@nestjs/common';
 import { AccountingPurpose as DbPurpose, prisma, Prisma } from '@farmacia/database';
 import {
@@ -351,11 +352,11 @@ export class JournalService {
     throw new AccountingConflictError('No se pudo reversar el asiento.');
   }
 
-  async canPostForPurposes(purposes: DbPurpose[], date = new Date(), tx?: Tx): Promise<boolean> {
+  async canPostForPurposes(purposes: DbPurpose[], date = new Date(), tx?: Tx, dateIsCalendar = false): Promise<boolean> {
     const client = tx ?? prisma;
     // El período cerrado se valida antes que los mapeos: una operación sin asiento
     // por falta de configuración tampoco puede registrarse en un período cerrado.
-    const day = parseJournalDate(date.toISOString().slice(0, 10));
+    const day = parseJournalDate(dateIsCalendar ? date.toISOString().slice(0, 10) : businessDateOf(date));
     await this.assertDateWritable(day, 'registrar operaciones', client);
 
     for (const purpose of new Set(purposes)) {
@@ -364,8 +365,8 @@ export class JournalService {
           purpose,
           status: 'ACTIVE',
           accountId: { not: null },
-          effectiveFrom: { lte: date },
-          OR: [{ effectiveTo: null }, { effectiveTo: { gte: date } }],
+          effectiveFrom: { lte: day },
+          OR: [{ effectiveTo: null }, { effectiveTo: { gte: day } }],
           account: {
             isActive: true,
             allowsMovement: true,

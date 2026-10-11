@@ -1,3 +1,4 @@
+import { businessToday, businessYearMonth } from '../../../common/utils/business-date';
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { prisma, Prisma } from '@farmacia/database';
 import {
@@ -803,8 +804,8 @@ export class AccountingReportsService {
    * Agrupa los movimientos contables por Tercero (NIT / Cédula, Razón Social).
    */
   async getThirdPartyReport(filters: ThirdPartyReportFilters): Promise<ThirdPartyReportDto> {
-    const fromDate = filters.fromDate || new Date(new Date().getFullYear(), 0, 1).toISOString().slice(0, 10);
-    const toDate = filters.toDate || new Date().toISOString().slice(0, 10);
+    const fromDate = filters.fromDate || `${businessYearMonth().year}-01-01`;
+    const toDate = filters.toDate || businessToday();
 
     const from = parseJournalDate(fromDate);
     const to = parseJournalDate(toDate);

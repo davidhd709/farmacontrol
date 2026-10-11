@@ -1,3 +1,4 @@
+import { businessDayStart, businessDayEnd, businessToday, calendarDate } from '../../../common/utils/business-date';
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { prisma, Prisma } from '@farmacia/database';
 import { CashService } from '../../cash/application/cash.service';
@@ -10,13 +11,8 @@ import {
 } from '@farmacia/contracts';
 import { centsToMoneyString, parseMoneyToCents } from '../../treasury/domain/treasury-rules';
 import { recordSourceBankMovement } from '../../treasury/application/record-source-bank-movement';
-import {
-  findPaymentRetry,
-  parsePaymentAmount,
-  paymentRequestHash,
-  requirePaymentBankAccountId,
-  savePaymentRetry,
-} from '../../treasury/application/payment-idempotency';
+import { parsePaymentAmount, requirePaymentBankAccountId } from '../../treasury/application/payment-validation';
+import { IdempotencyService } from '../../../common/idempotency/idempotency.service';
 import { Optional } from '@nestjs/common';
 import { AccountingEngineService } from '../../accounting/application/accounting-engine.service';
 
@@ -25,6 +21,7 @@ export class PayablesService {
   constructor(
     private readonly cashService: CashService,
     @Optional() private readonly accountingEngine?: AccountingEngineService,
+    private readonly idempotencyService: IdempotencyService = new IdempotencyService(),
   ) {}
 
   // ------------------------------------------------------------------ //
@@ -97,16 +94,14 @@ export class PayablesService {
     if (filters.supplierId) where.supplierId = filters.supplierId;
     if (filters.status) where.status = filters.status;
     if (filters.overdueOnly) {
-      where.dueDate = { lt: new Date() };
+      where.dueDate = { lt: calendarDate(businessToday()) };
       where.status = 'PENDIENTE';
     }
     if (filters.fromDate || filters.toDate) {
       where.createdAt = {};
-      if (filters.fromDate) where.createdAt.gte = new Date(filters.fromDate);
+      if (filters.fromDate) where.createdAt.gte = businessDayStart(filters.fromDate);
       if (filters.toDate) {
-        const to = new Date(filters.toDate);
-        to.setHours(23, 59, 59, 999);
-        where.createdAt.lte = to;
+        where.createdAt.lte = businessDayEnd(filters.toDate);
       }
     }
 
@@ -175,19 +170,22 @@ export class PayablesService {
         'El pago con tarjeta requiere una política de liquidación aprobada; use EFECTIVO o TRANSFERENCIA.',
       );
     }
+    // Todo pago mueve dinero: un reintento sin clave lo duplicaría (AGENTS.md §6).
+    if (!idempotencyKey?.trim())
+      throw new BadRequestException('Idempotency-Key es obligatorio para registrar un pago.');
     if (method === 'TRANSFERENCIA') {
       requirePaymentBankAccountId(payload.bankAccountId);
-      if (!idempotencyKey)
-        throw new BadRequestException('Idempotency-Key es obligatorio para transferencias.');
     } else if (payload.bankAccountId) {
       throw new BadRequestException('Una cuenta bancaria solo corresponde a TRANSFERENCIA.');
     }
     const endpoint = `/api/v1/payables/${payableId}/payments`;
-    const requestHash = paymentRequestHash(endpoint, userId, payload);
+    const requestHash = this.idempotencyService.computeHash(endpoint, userId, payload);
 
-    return prisma.$transaction(async (tx: any) => {
-      const cached = await findPaymentRetry<PayableDto>(tx, idempotencyKey, requestHash);
-      if (cached) return cached;
+    return this.idempotencyService.retryOnSerialization(() => prisma.$transaction(async (tx: any) => {
+      const cached = idempotencyKey
+        ? await this.idempotencyService.getRecord(idempotencyKey, requestHash, tx, 'http')
+        : null;
+      if (cached) return cached.responseBody as PayableDto;
       // 1. Bloqueo pesimista
       const rows = await tx.$queryRaw<any[]>`
         SELECT
@@ -297,17 +295,16 @@ export class PayablesService {
       });
 
       const result = this.toDto(updated, payments);
-      await savePaymentRetry(tx, {
-        key: idempotencyKey,
-        endpoint,
-        hash: requestHash,
-        userId,
-        responseBody: result,
-      });
+      if (idempotencyKey) {
+        await this.idempotencyService.saveRecord({
+          key: idempotencyKey, endpoint, requestHash, userId,
+          responseStatus: 201, responseBody: result,
+        }, tx);
+      }
       return result;
     }, {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-    });
+    }));
   }
 
   /**
@@ -326,8 +323,7 @@ export class PayablesService {
       },
     });
 
-    const now = new Date();
-    now.setHours(0, 0, 0, 0);
+    const now = calendarDate(businessToday());
 
     let currentCents = 0n;
     let currentCount = 0;
@@ -342,8 +338,7 @@ export class PayablesService {
 
     for (const p of payables) {
       const balanceCents = parseMoneyToCents(p.balance.toString(), 'Saldo de cuenta por pagar');
-      const due = new Date(p.dueDate);
-      due.setHours(0, 0, 0, 0);
+      const due = p.dueDate;
 
       const diffTime = now.getTime() - due.getTime();
       const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));

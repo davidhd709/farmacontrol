@@ -1,3 +1,4 @@
+import { QueryShapeValidationPipe } from '../../../../common/pagination/request-shape.pipe';
 import {
   Controller,
   Get,
@@ -9,6 +10,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import {
@@ -22,10 +24,7 @@ import {
   CreateCashMovementDto,
   CreateCashMovementValidationPipe,
 } from '../dtos/create-cash-movement.dto';
-import {
-  CashMovementQueryDto,
-  CashMovementQueryValidationPipe,
-} from '../dtos/cash-query.dto';
+import { CashMovementQueryDto, CashMovementQueryValidationPipe } from '../dtos/cash-query.dto';
 import {
   SessionAuthGuard,
   AuthenticatedUserContext,
@@ -45,7 +44,7 @@ export class CashController {
   public async create(
     @Body(CreateCashMovementValidationPipe) dto: CreateCashMovementDto,
     @CurrentUser() user: AuthenticatedUserContext,
-    @Req() req: Request
+    @Req() req: Request,
   ): Promise<CashMovementDto> {
     return this.cashService.registerMovement(dto, {
       userId: user.id,
@@ -63,14 +62,23 @@ export class CashController {
   @Get()
   @RequirePermissions(SYSTEM_PERMISSIONS.CASH_READ)
   public async list(
-    @Query(CashMovementQueryValidationPipe) query: CashMovementQueryDto
+    @Query(
+      new QueryShapeValidationPipe({
+        movementType: 'text?',
+        paymentMethod: 'text?',
+        startDate: 'date?',
+        endDate: 'date?',
+      }),
+      CashMovementQueryValidationPipe,
+    )
+    query: CashMovementQueryDto,
   ): Promise<PaginatedResponse<CashMovementDto>> {
     return this.cashService.listMovements(query);
   }
 
   @Get(':id')
   @RequirePermissions(SYSTEM_PERMISSIONS.CASH_READ)
-  public async getById(@Param('id') id: string): Promise<CashMovementDto> {
+  public async getById(@Param('id', ParseUUIDPipe) id: string): Promise<CashMovementDto> {
     return this.cashService.getMovementById(id);
   }
 }

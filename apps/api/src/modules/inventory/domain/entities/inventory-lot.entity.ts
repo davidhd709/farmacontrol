@@ -1,3 +1,4 @@
+import { businessDateOf, calendarDate } from '../../../../common/utils/business-date';
 import type { InventoryLotDto } from '@farmacia/contracts';
 import {
   InvalidLotDataException,
@@ -160,19 +161,12 @@ export class InventoryLot {
   }
 
   public isExpired(referenceDate: Date = new Date()): boolean {
-    const ref = new Date(referenceDate);
-    ref.setHours(0, 0, 0, 0);
-    const exp = new Date(this._expirationDate);
-    exp.setHours(0, 0, 0, 0);
-    return exp.getTime() < ref.getTime();
+    return this._expirationDate.toISOString().slice(0, 10) < businessDateOf(referenceDate);
   }
 
   public daysUntilExpiration(referenceDate: Date = new Date()): number {
-    const ref = new Date(referenceDate);
-    ref.setHours(0, 0, 0, 0);
-    const exp = new Date(this._expirationDate);
-    exp.setHours(0, 0, 0, 0);
-    const diffTime = exp.getTime() - ref.getTime();
+    const ref = calendarDate(businessDateOf(referenceDate));
+    const diffTime = this._expirationDate.getTime() - ref.getTime();
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   }
 

@@ -1,4 +1,9 @@
 import {
+  RequestShapeValidationPipe,
+  RequestFieldValidationPipe,
+  ParamFieldValidationPipe,
+} from '../../../common/pagination/request-shape.pipe';
+import {
   BadRequestException,
   Body,
   ConflictException,
@@ -15,12 +20,13 @@ import {
   UploadedFile,
   UseGuards,
   UseInterceptors,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
-import { Prisma } from '@farmacia/database';
 import {
   SYSTEM_PERMISSIONS,
+  ACCOUNTING_PURPOSES,
   AccountInput,
   AccountDto,
   AccountingPurposeDto,
@@ -41,12 +47,8 @@ import type { AuthenticatedUserContext } from '../../identity/presentation/guard
 
 function httpError(error: unknown): never {
   if (error instanceof AccountingNotFoundError) throw new NotFoundException(error.message);
-  if (
-    error instanceof AccountingConflictError ||
-    (error instanceof Prisma.PrismaClientKnownRequestError &&
-      (error.code === 'P2002' || error.code === 'P2034'))
-  )
-    throw new ConflictException(error instanceof Error ? error.message : 'Conflicto de datos.');
+  // Los errores de Prisma siguen al filtro global, que responde 409 sin exponer su mensaje.
+  if (error instanceof AccountingConflictError) throw new ConflictException(error.message);
   if (error instanceof AccountingValidationError) throw new BadRequestException(error.message);
   throw error;
 }
@@ -76,7 +78,18 @@ export class AccountsController {
   @Post()
   @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_MANAGE)
   async create(
-    @Body() body: AccountInput,
+    @Body(
+      new RequestShapeValidationPipe({
+        code: 'text',
+        name: 'text',
+        type: 'text',
+        nature: 'text?',
+        parentId: 'uuid?',
+        allowsMovement: 'boolean',
+        isActive: 'boolean?',
+      }),
+    )
+    body: AccountInput,
     @CurrentUser() user: AuthenticatedUserContext,
   ): Promise<AccountDto> {
     try {
@@ -89,8 +102,19 @@ export class AccountsController {
   @Patch(':id')
   @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_MANAGE)
   async update(
-    @Param('id') id: string,
-    @Body() body: Partial<AccountInput>,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(
+      new RequestShapeValidationPipe({
+        code: 'text?',
+        name: 'text?',
+        type: 'text?',
+        nature: 'text?',
+        parentId: 'uuid?',
+        allowsMovement: 'boolean?',
+        isActive: 'boolean?',
+      }),
+    )
+    body: Partial<AccountInput>,
     @CurrentUser() user: AuthenticatedUserContext,
   ): Promise<AccountDto> {
     try {
@@ -131,7 +155,7 @@ export class AccountsController {
   @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_MANAGE)
   async confirm(
     @UploadedFile() file: { buffer: Buffer; originalname: string; size: number } | undefined,
-    @Body('previewHash') hash: string,
+    @Body('previewHash', new RequestFieldValidationPipe('previewHash', 'text')) hash: string,
     @CurrentUser() user: AuthenticatedUserContext,
   ): Promise<{ importedCount: number }> {
     try {
@@ -156,8 +180,10 @@ export class AccountingConfigurationController {
   @Put('purposes/:purpose')
   @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_MANAGE)
   async map(
-    @Param('purpose') purpose: string,
-    @Body() body: { accountId: string | null },
+    @Param('purpose', new ParamFieldValidationPipe('purpose', { values: ACCOUNTING_PURPOSES }))
+    purpose: string,
+    @Body(new RequestShapeValidationPipe({ accountId: 'uuid?' }))
+    body: { accountId: string | null },
     @CurrentUser() user: AuthenticatedUserContext,
   ): Promise<AccountingPurposeDto> {
     if (!body || !Object.prototype.hasOwnProperty.call(body, 'accountId'))

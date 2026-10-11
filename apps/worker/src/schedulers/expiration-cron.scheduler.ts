@@ -6,6 +6,7 @@ import {
 import { Cron, CronExpression, Interval } from '@nestjs/schedule';
 import { ExpirationEvaluatorService } from '../services/expiration-evaluator.service';
 import { JobQueueService } from '../services/job-queue.service';
+import { IdempotencyCleanupService } from '../services/idempotency-cleanup.service';
 
 @Injectable()
 export class ExpirationCronScheduler implements OnApplicationBootstrap {
@@ -14,6 +15,7 @@ export class ExpirationCronScheduler implements OnApplicationBootstrap {
   constructor(
     private readonly expirationEvaluator: ExpirationEvaluatorService,
     private readonly jobQueue: JobQueueService,
+    private readonly idempotencyCleanup: IdempotencyCleanupService,
   ) {}
 
   /**
@@ -38,6 +40,16 @@ export class ExpirationCronScheduler implements OnApplicationBootstrap {
       await this.expirationEvaluator.evaluate();
     } catch (err: any) {
       this.logger.error(`[Worker Scheduler] Error en escaneo horario: ${err.message}`);
+    }
+  }
+
+  @Cron(CronExpression.EVERY_HOUR)
+  async handleIdempotencyCleanup(): Promise<void> {
+    try {
+      const deleted = await this.idempotencyCleanup.deleteExpired();
+      if (deleted > 0) this.logger.log(`[Worker Scheduler] Eliminadas ${deleted} claves de idempotencia expiradas.`);
+    } catch (err: unknown) {
+      this.logger.error(`[Worker Scheduler] Error limpiando claves de idempotencia: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 

@@ -7,6 +7,8 @@ import {
   Logger,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import { Prisma } from '@farmacia/database';
+import { DomainError } from '../domain-error';
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
@@ -18,9 +20,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const req = ctx.getRequest<Request>();
 
     const correlationId =
-      req?.correlationId ||
-      (req?.headers?.['x-correlation-id'] as string) ||
-      crypto.randomUUID();
+      req?.correlationId || (req?.headers?.['x-correlation-id'] as string) || crypto.randomUUID();
 
     if (res && typeof res.setHeader === 'function') {
       res.setHeader('X-Correlation-Id', correlationId);
@@ -44,6 +44,29 @@ export class HttpExceptionFilter implements ExceptionFilter {
         errorName = (body.error as string) || exception.name;
         details = body.details;
       }
+    } else if (exception instanceof DomainError) {
+      const statusByKind = {
+        validation: HttpStatus.BAD_REQUEST,
+        unauthorized: HttpStatus.UNAUTHORIZED,
+        forbidden: HttpStatus.FORBIDDEN,
+        not_found: HttpStatus.NOT_FOUND,
+        conflict: HttpStatus.CONFLICT,
+      } as const;
+      status = statusByKind[exception.kind];
+      message = exception.message;
+      errorName = exception.name;
+    } else if (exception instanceof Prisma.PrismaClientKnownRequestError) {
+      if (['P2002', 'P2003', 'P2004', 'P2034', 'P2028'].includes(exception.code)) {
+        status = HttpStatus.CONFLICT;
+        message = 'Conflicto de datos. La operación no pudo completarse.';
+        errorName = 'Conflict';
+      } else if (exception.code === 'P2025') {
+        status = HttpStatus.NOT_FOUND;
+        message = 'El recurso solicitado no fue encontrado.';
+        errorName = 'Not Found';
+      } else if (process.env.NODE_ENV === 'production') {
+        errorName = 'InternalServerError';
+      }
     } else if (exception instanceof Error) {
       if (process.env.NODE_ENV === 'production') {
         message = 'Error interno del servidor.';
@@ -56,7 +79,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
     this.logger.error(
       `[${req?.method || 'HTTP'} ${req?.originalUrl || req?.url || ''}] ${status} - ${message} [corr=${correlationId}]`,
-      exception instanceof Error ? exception.stack : undefined
+      exception instanceof Error ? exception.stack : undefined,
     );
 
     res.status(status).json({

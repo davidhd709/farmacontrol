@@ -2,6 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { prisma, PrismaClient } from '@farmacia/database';
 import { ExpirationEvaluatorService } from './expiration-evaluator.service';
 
+/** Un día calendario (YYYY-MM-DD) se evalúa como ese día en Bogotá (UTC-05:00), no como medianoche UTC. */
+function businessReferenceDate(value: string): Date {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T05:00:00.000Z`) : new Date(value);
+}
+
 @Injectable()
 export class JobQueueService {
   private readonly logger = new Logger(JobQueueService.name);
@@ -24,16 +29,21 @@ export class JobQueueService {
     try {
       // Reclamar hasta 5 trabajos pendientes cuya fecha programada sea <= now
       const now = new Date();
-      const pendingJobs = await this.db.backgroundJob.findMany({
-        where: {
-          status: 'PENDING',
-          scheduledAt: { lte: now },
-        },
-        orderBy: [
-          { priority: 'desc' },
-          { scheduledAt: 'asc' },
-        ],
-        take: 5,
+      const pendingJobs = await this.db.$transaction(async (tx) => {
+        const claimed = await tx.$queryRaw<Array<{ id: string }>>`
+          SELECT id FROM background_jobs
+          WHERE status = 'PENDING' AND scheduled_at <= ${now}
+          ORDER BY priority DESC, scheduled_at ASC, id ASC
+          LIMIT 5 FOR UPDATE SKIP LOCKED
+        `;
+        if (claimed.length === 0) return [];
+
+        const ids = claimed.map((job) => job.id);
+        await tx.backgroundJob.updateMany({
+          where: { id: { in: ids } },
+          data: { status: 'PROCESSING', startedAt: now, attempts: { increment: 1 } },
+        });
+        return tx.backgroundJob.findMany({ where: { id: { in: ids } } });
       });
 
       for (const job of pendingJobs) {
@@ -52,21 +62,12 @@ export class JobQueueService {
   private async executeJob(job: any): Promise<void> {
     this.logger.log(`[Worker JobQueue] Procesando trabajo ${job.id} (${job.jobType})`);
 
-    // Marcar como PROCESSING e incrementar intentos
-    await this.db.backgroundJob.update({
-      where: { id: job.id },
-      data: {
-        status: 'PROCESSING',
-        startedAt: new Date(),
-        attempts: { increment: 1 },
-      },
-    });
-
     try {
       if (job.jobType === 'EVALUATE_EXPIRATIONS') {
-        const payloadDate = job.payload && typeof job.payload === 'object' && 'referenceDate' in job.payload
-          ? new Date((job.payload as any).referenceDate)
-          : new Date();
+        const payloadDate =
+          job.payload && typeof job.payload === 'object' && 'referenceDate' in job.payload
+            ? businessReferenceDate(String((job.payload as any).referenceDate))
+            : new Date();
         await this.expirationEvaluator.evaluate(payloadDate);
       } else {
         this.logger.warn(`[Worker JobQueue] Tipo de trabajo desconocido: ${job.jobType}`);
@@ -84,8 +85,10 @@ export class JobQueueService {
 
       this.logger.log(`[Worker JobQueue] Trabajo ${job.id} finalizado exitosamente.`);
     } catch (error: any) {
-      this.logger.error(`[Worker JobQueue] Falló ejecución del trabajo ${job.id}: ${error.message}`);
-      const newAttempts = job.attempts + 1;
+      this.logger.error(
+        `[Worker JobQueue] Falló ejecución del trabajo ${job.id}: ${error.message}`,
+      );
+      const newAttempts = job.attempts;
       const isFailed = newAttempts >= job.maxAttempts;
 
       await this.db.backgroundJob.update({

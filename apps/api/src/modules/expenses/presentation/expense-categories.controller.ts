@@ -1,4 +1,18 @@
-import { Controller, Get, Post, Patch, Param, Body, Query, UseGuards } from '@nestjs/common';
+import {
+  RequestShapeValidationPipe,
+  QueryFieldValidationPipe,
+} from '../../../common/pagination/request-shape.pipe';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Param,
+  Body,
+  Query,
+  UseGuards,
+  ParseUUIDPipe,
+} from '@nestjs/common';
 import { ExpenseCategoriesService } from '../application/expense-categories.service';
 import {
   ExpenseCategoryDto,
@@ -17,27 +31,41 @@ export class ExpenseCategoriesController {
 
   @Get()
   @RequirePermissions(SYSTEM_PERMISSIONS.EXPENSES_READ)
-  async findAll(@Query('includeInactive') includeInactive?: string): Promise<ExpenseCategoryDto[]> {
+  async findAll(
+    @Query('includeInactive', new QueryFieldValidationPipe('includeInactive', 'booleanString?'))
+    includeInactive?: string,
+  ): Promise<ExpenseCategoryDto[]> {
     return this.service.findAll(includeInactive === 'true');
   }
 
   @Get(':id')
   @RequirePermissions(SYSTEM_PERMISSIONS.EXPENSES_READ)
-  async findById(@Param('id') id: string): Promise<ExpenseCategoryDto> {
+  async findById(@Param('id', ParseUUIDPipe) id: string): Promise<ExpenseCategoryDto> {
     return this.service.findById(id);
   }
 
   @Post()
   @RequirePermissions(SYSTEM_PERMISSIONS.EXPENSES_MANAGE)
-  async create(@Body() payload: CreateExpenseCategoryPayload): Promise<ExpenseCategoryDto> {
+  async create(
+    @Body(new RequestShapeValidationPipe({ name: 'text', description: 'text?', accountId: 'uuid' }))
+    payload: CreateExpenseCategoryPayload,
+  ): Promise<ExpenseCategoryDto> {
     return this.service.create(payload);
   }
 
   @Patch(':id')
   @RequirePermissions(SYSTEM_PERMISSIONS.EXPENSES_MANAGE)
   async update(
-    @Param('id') id: string,
-    @Body() payload: UpdateExpenseCategoryPayload,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(
+      new RequestShapeValidationPipe({
+        name: 'text?',
+        description: 'text?',
+        accountId: 'uuid?',
+        isActive: 'boolean?',
+      }),
+    )
+    payload: UpdateExpenseCategoryPayload,
   ): Promise<ExpenseCategoryDto> {
     return this.service.update(id, payload);
   }

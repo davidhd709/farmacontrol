@@ -1,11 +1,5 @@
-import {
-  BadRequestException,
-  Body,
-  Controller,
-  Get,
-  Post,
-  UseGuards,
-} from '@nestjs/common';
+import { RequestShapeValidationPipe } from '../../../common/pagination/request-shape.pipe';
+import { BadRequestException, Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import {
   SYSTEM_PERMISSIONS,
   type DocumentLockDto,
@@ -34,7 +28,8 @@ export class DocumentLockController {
   @Post()
   @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_MANAGE)
   async setLock(
-    @Body() body: SetDocumentLockPayload,
+    @Body(new RequestShapeValidationPipe({ lockedThrough: 'date?', reason: 'text' }))
+    body: SetDocumentLockPayload,
     @CurrentUser() user: AuthenticatedUserContext,
   ): Promise<DocumentLockDto> {
     try {

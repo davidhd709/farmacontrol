@@ -9,7 +9,7 @@ import { JournalService } from './journal.service';
 import { AccountingConflictError, AccountingValidationError } from '../domain/accounting-rules';
 import { normalizeJournalAmount } from '../domain/journal-rules';
 import type { JournalLineInput } from '../domain/journal-rules';
-import { IdempotencyService } from '../../sales/infrastructure/idempotency.service';
+import { IdempotencyService } from '../../../common/idempotency/idempotency.service';
 import { businessToday } from '../../../common/utils/business-date';
 
 export const ANNUAL_CLOSING_SOURCE = 'ANNUAL_CLOSING';

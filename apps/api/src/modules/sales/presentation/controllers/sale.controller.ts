@@ -1,3 +1,4 @@
+import { QueryShapeValidationPipe } from '../../../../common/pagination/request-shape.pipe';
 import {
   Controller,
   Get,
@@ -14,8 +15,10 @@ import {
   ConflictException,
   BadRequestException,
   HttpException,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import type { Request } from 'express';
+import { Prisma } from '@farmacia/database';
 import {
   SYSTEM_PERMISSIONS,
   SaleDto,
@@ -23,14 +26,8 @@ import {
   PaginatedResponse,
 } from '@farmacia/contracts';
 import { SaleService } from '../../application/sale.service';
-import {
-  ConfirmSaleDto,
-  ConfirmSaleValidationPipe,
-} from '../dtos/confirm-sale.dto';
-import {
-  CancelSaleDto,
-  CancelSaleValidationPipe,
-} from '../dtos/cancel-sale.dto';
+import { ConfirmSaleDto, ConfirmSaleValidationPipe } from '../dtos/confirm-sale.dto';
+import { CancelSaleDto, CancelSaleValidationPipe } from '../dtos/cancel-sale.dto';
 import { SaleQueryValidationPipe } from '../dtos/sale-query.dto';
 import {
   SessionAuthGuard,
@@ -60,7 +57,7 @@ export class SaleController {
     @Body(ConfirmSaleValidationPipe) dto: ConfirmSaleDto,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
     @CurrentUser() user: AuthenticatedUserContext,
-    @Req() req: Request
+    @Req() req: Request,
   ): Promise<SaleDto> {
     try {
       return await this.saleService.confirmSale(
@@ -71,7 +68,7 @@ export class SaleController {
           correlationId: req.headers['x-correlation-id'] as string | undefined,
           permissions: user.permissions,
         },
-        idempotencyKey
+        idempotencyKey,
       );
     } catch (error) {
       if (error instanceof HttpException) {
@@ -83,7 +80,8 @@ export class SaleController {
       if (error instanceof IdempotencyConflictException) {
         throw new ConflictException(error.message);
       }
-      if (error instanceof Error) {
+      // Los errores de Prisma siguen al filtro global (409/404 sin mensaje interno).
+      if (error instanceof Error && !(error instanceof Prisma.PrismaClientKnownRequestError)) {
         throw new BadRequestException(error.message);
       }
       throw error;
@@ -93,14 +91,24 @@ export class SaleController {
   @Get()
   @RequirePermissions(SYSTEM_PERMISSIONS.SALES_READ)
   public async findAll(
-    @Query(SaleQueryValidationPipe) query: SaleQueryFilters
+    @Query(
+      new QueryShapeValidationPipe({
+        invoiceNumber: 'text?',
+        customerId: 'uuid?',
+        fromDate: 'date?',
+        toDate: 'date?',
+        status: 'text?',
+      }),
+      SaleQueryValidationPipe,
+    )
+    query: SaleQueryFilters,
   ): Promise<PaginatedResponse<SaleDto>> {
     return this.saleService.getSales(query);
   }
 
   @Get(':id')
   @RequirePermissions(SYSTEM_PERMISSIONS.SALES_READ)
-  public async findOne(@Param('id') id: string): Promise<SaleDto> {
+  public async findOne(@Param('id', ParseUUIDPipe) id: string): Promise<SaleDto> {
     try {
       return await this.saleService.getSaleById(id);
     } catch (error) {
@@ -115,10 +123,10 @@ export class SaleController {
   @HttpCode(HttpStatus.OK)
   @RequirePermissions(SYSTEM_PERMISSIONS.SALES_CANCEL)
   public async cancel(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body(CancelSaleValidationPipe) dto: CancelSaleDto,
     @CurrentUser() user: AuthenticatedUserContext,
-    @Req() req: Request
+    @Req() req: Request,
   ): Promise<SaleDto> {
     try {
       return await this.saleService.cancelSale(id, dto.reason, {

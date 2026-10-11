@@ -1,3 +1,4 @@
+import { businessDayStart, businessDayEnd } from '../../../../common/utils/business-date';
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { prisma, Prisma } from '@farmacia/database';
 import { IInventoryMovementRepository } from '../../application/ports/inventory-movement.repository.port';
@@ -127,8 +128,8 @@ export class PrismaInventoryMovementRepository
 
     if (filters.fromDate || filters.toDate) {
       where.createdAt = {};
-      if (filters.fromDate) where.createdAt.gte = new Date(filters.fromDate);
-      if (filters.toDate) where.createdAt.lte = new Date(filters.toDate);
+      if (filters.fromDate) where.createdAt.gte = businessDayStart(filters.fromDate);
+      if (filters.toDate) where.createdAt.lte = businessDayEnd(filters.toDate);
     }
 
     const [total, items] = await Promise.all([

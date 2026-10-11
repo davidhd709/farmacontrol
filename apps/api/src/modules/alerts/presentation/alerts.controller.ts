@@ -1,4 +1,9 @@
 import {
+  RequestFieldValidationPipe,
+  QueryFieldValidationPipe,
+} from '../../../common/pagination/request-shape.pipe';
+import { parsePaginationValue } from '../../../common/pagination/pagination';
+import {
   Controller,
   Get,
   Post,
@@ -9,14 +14,11 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { AlertsService } from '../application/alerts.service';
-import {
-  ApiResponse,
-  SYSTEM_PERMISSIONS,
-  ExpirationSeverity,
-} from '@farmacia/contracts';
+import { ApiResponse, SYSTEM_PERMISSIONS, ExpirationSeverity } from '@farmacia/contracts';
 import { SessionAuthGuard } from '../../identity/presentation/guards/session-auth.guard';
 import { PermissionsGuard } from '../../identity/presentation/guards/permissions.guard';
 import { RequirePermissions } from '../../identity/presentation/decorators/require-permissions.decorator';
+import { businessDayStart } from '../../../common/utils/business-date';
 
 @Controller('alerts')
 @UseGuards(SessionAuthGuard)
@@ -29,15 +31,14 @@ export class AlertsController {
    */
   @Get('expirations')
   @UseGuards(PermissionsGuard)
-  @RequirePermissions(
-    SYSTEM_PERMISSIONS.INVENTORY_READ,
-    SYSTEM_PERMISSIONS.ALERTS_READ,
-  )
+  @RequirePermissions(SYSTEM_PERMISSIONS.INVENTORY_READ, SYSTEM_PERMISSIONS.ALERTS_READ)
   async getExpirations(
-    @Query('severity') severity?: ExpirationSeverity,
-    @Query('search') search?: string,
-    @Query('locationId') locationId?: string,
-    @Query('isResolved') isResolved?: string,
+    @Query('severity', new QueryFieldValidationPipe('severity', 'text?'))
+    severity?: ExpirationSeverity,
+    @Query('search', new QueryFieldValidationPipe('search', 'text?')) search?: string,
+    @Query('locationId', new QueryFieldValidationPipe('locationId', 'uuid?')) locationId?: string,
+    @Query('isResolved', new QueryFieldValidationPipe('isResolved', 'booleanString?'))
+    isResolved?: string,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
   ): Promise<ApiResponse<any>> {
@@ -46,8 +47,8 @@ export class AlertsController {
       search,
       locationId,
       isResolved: isResolved !== undefined ? isResolved === 'true' : false,
-      page: page ? parseInt(page, 10) : undefined,
-      pageSize: pageSize ? parseInt(pageSize, 10) : undefined,
+      page: parsePaginationValue(page, 'page'),
+      pageSize: parsePaginationValue(pageSize, 'pageSize'),
     });
     return { success: true, data };
   }
@@ -72,9 +73,11 @@ export class AlertsController {
   @UseGuards(PermissionsGuard)
   @RequirePermissions(SYSTEM_PERMISSIONS.ALERTS_MANAGE)
   async triggerEvaluation(
-    @Body('referenceDate') referenceDateStr?: string,
+    @Body('referenceDate', new RequestFieldValidationPipe('referenceDate', 'date?'))
+    referenceDateStr?: string,
   ): Promise<ApiResponse<any>> {
-    const refDate = referenceDateStr ? new Date(referenceDateStr) : new Date();
+    // Un día calendario se evalúa como ese día en Bogotá, no como medianoche UTC.
+    const refDate = referenceDateStr ? businessDayStart(referenceDateStr) : new Date();
     const data = await this.alertsService.evaluateLotsExpirations(refDate);
     return { success: true, data };
   }
@@ -87,7 +90,7 @@ export class AlertsController {
   @UseGuards(PermissionsGuard)
   @RequirePermissions(SYSTEM_PERMISSIONS.ALERTS_MANAGE)
   async enqueueJob(
-    @Body('priority') priority?: number,
+    @Body('priority', new RequestFieldValidationPipe('priority', 'integer?')) priority?: number,
   ): Promise<ApiResponse<any>> {
     const data = await this.alertsService.enqueueEvaluationJob(priority || 0);
     return { success: true, data };
@@ -102,7 +105,7 @@ export class AlertsController {
   @RequirePermissions(SYSTEM_PERMISSIONS.ALERTS_MANAGE)
   async getJobs(@Query('limit') limit?: string): Promise<ApiResponse<any>> {
     const data = await this.alertsService.getBackgroundJobs(
-      limit ? parseInt(limit, 10) : 20,
+      parsePaginationValue(limit, 'limit', 20),
     );
     return { success: true, data };
   }

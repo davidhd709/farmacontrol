@@ -1,4 +1,10 @@
 import {
+  RequestShapeValidationPipe,
+  RequestFieldValidationPipe,
+  QueryFieldValidationPipe,
+} from '../../../common/pagination/request-shape.pipe';
+import { parsePaginationValue } from '../../../common/pagination/pagination';
+import {
   BadRequestException,
   Body,
   ConflictException,
@@ -12,6 +18,7 @@ import {
   Put,
   Query,
   UseGuards,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import { SYSTEM_PERMISSIONS } from '@farmacia/contracts';
 import type {
@@ -64,7 +71,8 @@ export class TreasuryController {
   @Get('bank-accounts')
   @RequirePermissions(SYSTEM_PERMISSIONS.TREASURY_READ)
   async listAccounts(
-    @Query('includeInactive') includeInactive?: string,
+    @Query('includeInactive', new QueryFieldValidationPipe('includeInactive', 'booleanString?'))
+    includeInactive?: string,
   ): Promise<BankAccountDto[]> {
     try {
       const showInactive = includeInactive === 'true';
@@ -86,7 +94,7 @@ export class TreasuryController {
 
   @Get('bank-accounts/:id')
   @RequirePermissions(SYSTEM_PERMISSIONS.TREASURY_READ)
-  async getAccount(@Param('id') id: string): Promise<BankAccountDto> {
+  async getAccount(@Param('id', ParseUUIDPipe) id: string): Promise<BankAccountDto> {
     try {
       return await this.treasuryService.getAccount(id);
     } catch (error) {
@@ -98,7 +106,18 @@ export class TreasuryController {
   @RequirePermissions(SYSTEM_PERMISSIONS.TREASURY_MANAGE)
   @HttpCode(HttpStatus.CREATED)
   async createAccount(
-    @Body() dto: CreateBankAccountDto,
+    @Body(
+      new RequestShapeValidationPipe({
+        bankName: 'text',
+        accountType: 'text',
+        accountNumber: 'text',
+        name: 'text',
+        initialBalance: 'decimal?',
+        notes: 'text?',
+        ledgerAccountId: 'uuid',
+      }),
+    )
+    dto: CreateBankAccountDto,
     @CurrentUser() user: AuthenticatedUserContext,
   ): Promise<BankAccountDto> {
     try {
@@ -111,8 +130,16 @@ export class TreasuryController {
   @Put('bank-accounts/:id')
   @RequirePermissions(SYSTEM_PERMISSIONS.TREASURY_MANAGE)
   async updateAccount(
-    @Param('id') id: string,
-    @Body() dto: UpdateBankAccountDto,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(
+      new RequestShapeValidationPipe({
+        name: 'text?',
+        notes: 'text?',
+        isActive: 'boolean?',
+        ledgerAccountId: 'uuid?',
+      }),
+    )
+    dto: UpdateBankAccountDto,
     @CurrentUser() user: AuthenticatedUserContext,
   ): Promise<BankAccountDto> {
     try {
@@ -125,11 +152,12 @@ export class TreasuryController {
   @Get('bank-accounts/:id/movements')
   @RequirePermissions(SYSTEM_PERMISSIONS.TREASURY_READ)
   async listMovements(
-    @Param('id') id: string,
-    @Query('fromDate') fromDate?: string,
-    @Query('toDate') toDate?: string,
-    @Query('movementType') movementType?: string,
-    @Query('search') search?: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('fromDate', new QueryFieldValidationPipe('fromDate', 'date?')) fromDate?: string,
+    @Query('toDate', new QueryFieldValidationPipe('toDate', 'date?')) toDate?: string,
+    @Query('movementType', new QueryFieldValidationPipe('movementType', 'text?'))
+    movementType?: string,
+    @Query('search', new QueryFieldValidationPipe('search', 'text?')) search?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ): Promise<{ items: BankMovementDto[]; total: number }> {
@@ -139,8 +167,8 @@ export class TreasuryController {
         toDate,
         movementType,
         search,
-        page: page ? parseInt(page, 10) : undefined,
-        limit: limit ? parseInt(limit, 10) : undefined,
+        page: parsePaginationValue(page, 'page'),
+        limit: parsePaginationValue(limit, 'limit'),
       });
     } catch (error) {
       toHttpException(error);
@@ -151,8 +179,19 @@ export class TreasuryController {
   @RequirePermissions(SYSTEM_PERMISSIONS.TREASURY_MANAGE)
   @HttpCode(HttpStatus.CREATED)
   async createMovement(
-    @Param('id') id: string,
-    @Body() dto: CreateBankMovementDto,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(
+      new RequestShapeValidationPipe({
+        movementType: 'text',
+        amount: 'decimal',
+        concept: 'text',
+        externalReference: 'text?',
+        referenceDocumentType: 'text?',
+        referenceDocumentId: 'text?',
+        movementDate: 'date?',
+      }),
+    )
+    dto: CreateBankMovementDto,
     @CurrentUser() user: AuthenticatedUserContext,
   ): Promise<BankMovementDto> {
     try {
@@ -166,9 +205,9 @@ export class TreasuryController {
   @RequirePermissions(SYSTEM_PERMISSIONS.TREASURY_MANAGE)
   @HttpCode(HttpStatus.OK)
   async revertMovement(
-    @Param('id') id: string,
-    @Param('movementId') movementId: string,
-    @Body('reason') reason: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('movementId', ParseUUIDPipe) movementId: string,
+    @Body('reason', new RequestFieldValidationPipe('reason', 'text')) reason: string,
     @CurrentUser() user: AuthenticatedUserContext,
   ): Promise<BankMovementDto> {
     try {

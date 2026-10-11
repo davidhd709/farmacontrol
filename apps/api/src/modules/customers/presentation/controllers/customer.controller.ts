@@ -1,3 +1,4 @@
+import { QueryShapeValidationPipe } from '../../../../common/pagination/request-shape.pipe';
 import {
   Controller,
   Get,
@@ -15,6 +16,7 @@ import {
   ConflictException,
   BadRequestException,
   ForbiddenException,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import {
@@ -75,7 +77,11 @@ export class CustomerController {
   @Get()
   @RequirePermissions(SYSTEM_PERMISSIONS.CUSTOMERS_READ)
   public async findAll(
-    @Query(CustomerQueryValidationPipe) query: CustomerQueryFilters,
+    @Query(
+      new QueryShapeValidationPipe({ search: 'text?', isActive: 'booleanString?' }),
+      CustomerQueryValidationPipe,
+    )
+    query: CustomerQueryFilters,
   ): Promise<PaginatedResponse<CustomerDto>> {
     return this.customerService.getCustomers(query);
   }
@@ -96,7 +102,7 @@ export class CustomerController {
 
   @Get(':id')
   @RequirePermissions(SYSTEM_PERMISSIONS.CUSTOMERS_READ)
-  public async findOne(@Param('id') id: string): Promise<CustomerDto> {
+  public async findOne(@Param('id', ParseUUIDPipe) id: string): Promise<CustomerDto> {
     try {
       const customer = await this.customerService.getCustomerById(id);
       return customer.toDto();
@@ -111,7 +117,7 @@ export class CustomerController {
   @Put(':id')
   @RequirePermissions(SYSTEM_PERMISSIONS.CUSTOMERS_MANAGE)
   public async update(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body(UpdateCustomerValidationPipe) dto: UpdateCustomerDto,
     @CurrentUser() user: AuthenticatedUserContext,
     @Req() req: Request,
@@ -147,7 +153,7 @@ export class CustomerController {
   @Delete(':id')
   @RequirePermissions(SYSTEM_PERMISSIONS.CUSTOMERS_MANAGE)
   public async remove(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: AuthenticatedUserContext,
     @Req() req: Request,
   ): Promise<CustomerDto> {

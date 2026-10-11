@@ -12,13 +12,13 @@ Este documento resume qué se corrigió desde la auditoría técnica, qué falta
 | 1 | Integridad de datos y dinero (P0, P1 de backend y P2 de integridad) | **IMPLEMENTADO** (cerrada el 10 de octubre); lo que depende del cliente quedó con la opción conservadora (sección 4) |
 | 2 | Producción y seguridad | **IMPLEMENTADO** (10 de octubre); falta que el cliente provea el destino externo de respaldos (sección 3) |
 | 3 | Acuerdos de la reunión del 4 de octubre | **IMPLEMENTADO** (10 de octubre), salvo el botón de recordatorio de pago (bloqueado por la decisión 15) |
-| 4 | Contrato de API y estabilidad | PENDIENTE |
+| 4 | Contrato de API y estabilidad | **IMPLEMENTADO** (10 de octubre), salvo los contratos transaccionales entre módulos, que pasan a un slice propio |
 | 5 | Frontend y UX | PENDIENTE |
 | 6 | Pruebas de cierre (E2E, concurrencia, permisos) | PENDIENTE |
 | 7 | Decisiones del cliente | EN PROGRESO: preguntas identificadas, sin respuesta |
 | 8 | Aceptación (UAT) y release v1.0.0 | PENDIENTE |
 
-**Calidad al corte:** typecheck sin errores, lint sin errores (advertencias `any` preexistentes), **826 pruebas en 127 archivos, todas en verde**.
+**Calidad al corte:** typecheck sin errores, lint sin errores (advertencias `any` preexistentes), **923 pruebas en 136 archivos**: 921 en la corrida completa y las 2 restantes (`product.controller`, timeout del `beforeEach` con el disco ocupado) en verde al repetirlas solas; después, las correcciones de la auditoría pasaron 105/105 en los archivos afectados.
 
 ## 2. Qué se hizo
 
@@ -85,6 +85,19 @@ Verificación de infraestructura: `caddy validate`; Caddy real delante de servic
 | Aviso a proveedor 110–120 días | Reporte de lotes por vencer con proveedor y estado (avisar, atrasado, fuera de plazo) | `7bc296a` |
 | Botón manual de recordatorio de pago | **BLOQUEADO:** falta definir el canal (decisión 15) | — |
 
+### Fase 4 — Contrato de API y estabilidad
+
+| Tema | Qué pasaba | Qué hace ahora | Commit |
+|---|---|---|---|
+| OpenAPI | No existía | UI en `/api/v1/docs` y JSON en `/api/v1/docs-json`, con la cookie de sesión y rutas agrupadas por módulo; en producción sólo con `API_DOCS_ENABLED=true` | `874c8af` |
+| Errores 500 | Excepciones de dominio y de Prisma sin traducir terminaban en 500 | `DomainError` con tipo (400/401/403/404/409); Prisma P2002/P2003/P2004/P2028/P2034 → 409 y P2025 → 404, sin exponer el mensaje interno | `a88186f`, `8883cd7` |
+| Validación | ~15 endpoints sin validar; paginación sin tope o con NaN | Validación de forma en 33 controladores, ids UUID, paginación entera con tope 100 (lo máximo que pide el frontend) | ver `git log` |
+| Worker | VENCIDO el día D, fechas UTC, P2002 con ejecuciones solapadas, cola sin `SKIP LOCKED` | Fecha de Bogotá, VENCIDO desde D+1 (como vende el POS), advisory lock, `FOR UPDATE SKIP LOCKED` | `7d2ed1a` |
+| Idempotencia | Dos implementaciones, sin expiración, carreras con la misma clave; abonos en efectivo sin clave obligatoria | Un servicio compartido con lock por clave, clave vencida se reprocesa, limpieza horaria en el worker; clave obligatoria en todo pago | `1e8b058`, `e92d7ff`, `aec8f4c` |
+| Fechas de negocio | `CURRENT_DATE` y `toISOString()` en UTC: desde las 7 p. m. FEFO, asientos, períodos y filtros usaban el día siguiente | Día de Bogotá en FEFO, contabilidad, CxC/CxP, reportes, filtros, alertas y web; el evaluador manual comparte el lock del worker (409 si hay otra evaluación) | `1e3a1ec`, ver `git log` |
+
+Auditoría de seguridad de la fase (Antigravity, sólo lectura): dos P1 y un P2 confirmados y corregidos (mensajes de Prisma reenviados por controladores; clave de idempotencia opcional en pagos en efectivo). Un P1 descartado: la CSP no bloquea Swagger UI porque `@nestjs/swagger` carga su inicialización como archivo externo.
+
 ## 3. Pasos obligatorios al desplegar estos cambios
 
 1. **Respaldo** de la base antes de migrar.
@@ -141,13 +154,7 @@ Ninguna se implementó por supuesto; las que se tocaron quedaron con la opción 
 - Botón manual de recordatorio de pago: bloqueado hasta definir el canal (decisión 15).
 
 ### Fase 4 — API y estabilidad
-- OpenAPI en `/api/v1/docs`.
-- Validación en los ~15 endpoints que no validan; paginación con tope.
-- Fechas de negocio en America/Bogota (contabilidad, FEFO, worker).
-- Worker: VENCIDO el día D, `SKIP LOCKED`, ejecuciones solapadas.
-- Errores de dominio con 400/403/409 en vez de 500.
-- Contratos transaccionales para que ningún módulo escriba tablas ajenas.
-- Expiración y limpieza de claves de idempotencia.
+- **Slice propio:** contratos transaccionales para que ningún módulo escriba tablas ajenas (ventas y compras escriben hoy lotes, kardex, caja, cartera y CxP; terceros escribe clientes y proveedores). Reescribe el flujo de venta con FEFO, por eso se separó de la fase.
 
 ### Fase 5 — Frontend
 - POS: debounce y cancelación de búsquedas (AUD-014); elegir cliente existente; presentación por defecto; vista previa FEFO.
@@ -166,7 +173,11 @@ Ninguna se implementó por supuesto; las que se tocaron quedaron con la opción 
 ## 6. Deuda técnica conocida
 
 - **Signo del kardex en la base:** las salidas por venta y devolución se guardan con cantidad positiva y los ajustes negativos con cantidad negativa. El historial es inmutable, así que el sentido se deduce del tipo (así lo hace la pantalla). Unificar el signo exige una decisión y una migración de lectura, no de datos.
-- **`IdempotencyService`** vive en `sales/infrastructure` y lo usan también las notas débito; moverlo a un módulo compartido cuando se aborden los contratos entre módulos (Fase 4).
+- **Idempotencia:** sólo los pagos de cartera y CxP reintentan ante conflictos de serialización; las demás operaciones ya tienen pruebas de duplicado concurrente en verde. `getRecord` todavía acepta un modo que lanza `ConflictException` de Nest (acoplamiento a HTTP en infraestructura).
+- **Worker:** un trabajo que no obtiene el lock de evaluación termina COMPLETED sin evaluar; un trabajo interrumpido queda en PROCESSING sin recuperación (ya pasaba antes).
+- **Errores sin tipar:** quedan `throw new Error` en domain/application y las clases de `accounting-rules.ts` y `treasury-rules.ts` fuera de `DomainError`; la confirmación de venta sigue devolviendo 400 para cualquier `Error` que no sea de Prisma.
+- **Validación:** la regla `decimal` del pipe acepta números, pero las notas contables exigen texto decimal; los errores de inicialización de Prisma no se sanean fuera de producción.
+- **RN-006:** el lote es vendible el día de su vencimiento y se marca VENCIDO desde el día siguiente; es la conducta existente, no una regla confirmada.
 - **Consecutivos** (`count() + 1`): se mantienen porque, con reintento en transacción serializable, producen numeración sin saltos. Una secuencia de PostgreSQL deja huecos al revertir, lo que no conviene para documentos con numeración legal. A revisar cuando se defina el comprobante.
 - **Tipos de movimiento de caja:** sin restricción; las pruebas usan valores fuera del contrato (`APERTURA`, `EGRESO`). Revisar datos reales antes de restringirlos.
 - **Auditoría fuera de la transacción** en varios servicios (lotes, compras).
@@ -177,9 +188,8 @@ Ninguna se implementó por supuesto; las que se tocaron quedaron con la opción 
 - **Límite por IP en la farmacia:** si todos los equipos salen por la misma IP pública, 20 fallos en 15 minutos bloquean el login en la sede; ajustable con `AUTH_RATE_LIMIT_IP_MAX_ATTEMPTS`.
 - **Terceros:** `ThirdPartyService.createThirdParty` crea el cliente o proveedor y el tercero sin una transacción común; editar un cliente o proveedor no actualiza su tercero. Las líneas de notas contables no llevan tercero.
 - **Notas crédito y descuentos:** la devolución se registra neta del descuento en `SALES_RETURNS`; no se revierte la parte proporcional en `SALES_DISCOUNTS`.
-- **Fechas en el frontend:** quedan usos de `toISOString()` como fecha de negocio fuera de las pantallas tocadas (nombres de archivos exportados, otras pantallas); revisar con la fase 4 de fechas en America/Bogota.
 - 128 advertencias de lint por `any` y componentes de más de 600 líneas, a reducir solo cuando se toquen.
 
 ## 7. Siguiente paso recomendado
 
-Validar con la contadora, en el ambiente de pruebas, la naturaleza de las cuentas, el cierre anual y los recibos/comprobantes; enviarle las decisiones de la sección 4 (incluido el canal del recordatorio de pago) junto con el pedido del destino externo de respaldos. En paralelo, seguir con la **Fase 4** (contrato de API y estabilidad), que no depende de ninguna decisión.
+Validar con la contadora, en el ambiente de pruebas, la naturaleza de las cuentas, el cierre anual y los recibos/comprobantes; enviarle las decisiones de la sección 4 (incluido el canal del recordatorio de pago) junto con el pedido del destino externo de respaldos. En paralelo, el slice de **contratos transaccionales entre módulos** (pendiente de la Fase 4) o la **Fase 5** (frontend); ninguno depende de decisiones del cliente.

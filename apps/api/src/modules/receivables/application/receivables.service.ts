@@ -1,3 +1,4 @@
+import { businessDayStart, businessDayEnd, businessToday, calendarDate } from '../../../common/utils/business-date';
 import {
   Injectable,
   NotFoundException,
@@ -15,13 +16,8 @@ import {
 } from '@farmacia/contracts';
 import { centsToMoneyString, parseMoneyToCents } from '../../treasury/domain/treasury-rules';
 import { recordSourceBankMovement } from '../../treasury/application/record-source-bank-movement';
-import {
-  findPaymentRetry,
-  parsePaymentAmount,
-  paymentRequestHash,
-  requirePaymentBankAccountId,
-  savePaymentRetry,
-} from '../../treasury/application/payment-idempotency';
+import { parsePaymentAmount, requirePaymentBankAccountId } from '../../treasury/application/payment-validation';
+import { IdempotencyService } from '../../../common/idempotency/idempotency.service';
 import { Optional } from '@nestjs/common';
 import { AccountingEngineService } from '../../accounting/application/accounting-engine.service';
 
@@ -30,6 +26,7 @@ export class ReceivablesService {
   constructor(
     private readonly cashService: CashService,
     @Optional() private readonly accountingEngine?: AccountingEngineService,
+    private readonly idempotencyService: IdempotencyService = new IdempotencyService(),
   ) {}
 
   // ------------------------------------------------------------------ //
@@ -83,16 +80,14 @@ export class ReceivablesService {
     if (filters.customerId) where.customerId = filters.customerId;
     if (filters.status) where.status = filters.status;
     if (filters.overdueOnly) {
-      where.dueDate = { lt: new Date() };
+      where.dueDate = { lt: calendarDate(businessToday()) };
       where.status = 'PENDIENTE';
     }
     if (filters.fromDate || filters.toDate) {
       where.createdAt = {};
-      if (filters.fromDate) where.createdAt.gte = new Date(filters.fromDate);
+      if (filters.fromDate) where.createdAt.gte = businessDayStart(filters.fromDate);
       if (filters.toDate) {
-        const to = new Date(filters.toDate);
-        to.setHours(23, 59, 59, 999);
-        where.createdAt.lte = to;
+        where.createdAt.lte = businessDayEnd(filters.toDate);
       }
     }
 
@@ -161,19 +156,22 @@ export class ReceivablesService {
         'El pago con tarjeta requiere una política de liquidación aprobada; use EFECTIVO o TRANSFERENCIA.',
       );
     }
+    // Todo pago mueve dinero: un reintento sin clave lo duplicaría (AGENTS.md §6).
+    if (!idempotencyKey?.trim())
+      throw new BadRequestException('Idempotency-Key es obligatorio para registrar un pago.');
     if (method === 'TRANSFERENCIA') {
       requirePaymentBankAccountId(payload.bankAccountId);
-      if (!idempotencyKey)
-        throw new BadRequestException('Idempotency-Key es obligatorio para transferencias.');
     } else if (payload.bankAccountId) {
       throw new BadRequestException('Una cuenta bancaria solo corresponde a TRANSFERENCIA.');
     }
     const endpoint = `/api/v1/receivables/${receivableId}/payments`;
-    const requestHash = paymentRequestHash(endpoint, userId, payload);
+    const requestHash = this.idempotencyService.computeHash(endpoint, userId, payload);
 
-    return prisma.$transaction(async (tx: any) => {
-      const cached = await findPaymentRetry<ReceivableDto>(tx, idempotencyKey, requestHash);
-      if (cached) return cached;
+    return this.idempotencyService.retryOnSerialization(() => prisma.$transaction(async (tx: any) => {
+      const cached = idempotencyKey
+        ? await this.idempotencyService.getRecord(idempotencyKey, requestHash, tx, 'http')
+        : null;
+      if (cached) return cached.responseBody as ReceivableDto;
       // 1. Bloqueo pesimista para evitar doble abono concurrente
       const rows = await tx.$queryRaw<any[]>`
         SELECT
@@ -283,17 +281,16 @@ export class ReceivablesService {
       });
 
       const result = this.toDto(updated, payments);
-      await savePaymentRetry(tx, {
-        key: idempotencyKey,
-        endpoint,
-        hash: requestHash,
-        userId,
-        responseBody: result,
-      });
+      if (idempotencyKey) {
+        await this.idempotencyService.saveRecord({
+          key: idempotencyKey, endpoint, requestHash, userId,
+          responseStatus: 201, responseBody: result,
+        }, tx);
+      }
       return result;
     }, {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-    });
+    }));
   }
 
   /**
@@ -312,8 +309,7 @@ export class ReceivablesService {
       },
     });
 
-    const now = new Date();
-    now.setHours(0, 0, 0, 0);
+    const now = calendarDate(businessToday());
 
     let currentCents = 0n;
     let currentCount = 0;
@@ -328,8 +324,7 @@ export class ReceivablesService {
 
     for (const r of receivables) {
       const balanceCents = parseMoneyToCents(r.balance.toString(), 'Saldo de cuenta por cobrar');
-      const due = new Date(r.dueDate);
-      due.setHours(0, 0, 0, 0);
+      const due = r.dueDate;
 
       const diffTime = now.getTime() - due.getTime();
       const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));

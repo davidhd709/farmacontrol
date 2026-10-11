@@ -1,12 +1,5 @@
-import {
-  Controller,
-  Get,
-  HttpCode,
-  HttpStatus,
-  Param,
-  Post,
-  UseGuards,
-} from '@nestjs/common';
+import { ParamFieldValidationPipe } from '../../../common/pagination/request-shape.pipe';
+import { Controller, Get, HttpCode, HttpStatus, Param, Post, UseGuards } from '@nestjs/common';
 import { SYSTEM_PERMISSIONS } from '@farmacia/contracts';
 import type {
   BackupSummaryDto,
@@ -40,7 +33,7 @@ export class BackupsController {
   @HttpCode(HttpStatus.OK)
   @RequirePermissions(SYSTEM_PERMISSIONS.BACKUPS_MANAGE)
   async verifyBackup(
-    @Param('filename') filename: string,
+    @Param('filename', new ParamFieldValidationPipe('filename', 'filename')) filename: string,
   ): Promise<VerifyBackupResultDto> {
     return this.backupsService.verifyBackup(filename);
   }

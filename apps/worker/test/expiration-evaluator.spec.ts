@@ -2,13 +2,36 @@ import { describe, it, expect } from 'vitest';
 import { calculateExpirationSeverity } from '../src/services/expiration-evaluator.service';
 
 describe('Worker Expiration Evaluator Unit Test', () => {
-  const referenceDate = new Date('2026-06-01T00:00:00Z');
+  const referenceDate = new Date('2026-06-01T15:00:00Z');
 
-  it('debe detectar lotes vencidos con daysRemaining <= 0', () => {
+  it('debe detectar lotes vencidos desde D+1', () => {
     const expired = new Date('2026-05-30T00:00:00Z');
     const res = calculateExpirationSeverity(expired, referenceDate);
     expect(res.severity).toBe('VENCIDO');
-    expect(res.daysRemaining).toBeLessThanOrEqual(0);
+    expect(res.daysRemaining).toBe(-2);
+  });
+
+  it('clasifica D-1, D y D+1 de acuerdo con el POS', () => {
+    expect(calculateExpirationSeverity(new Date('2026-06-02T00:00:00Z'), referenceDate)).toEqual({
+      daysRemaining: 1,
+      severity: 'CRITICO',
+    });
+    expect(calculateExpirationSeverity(new Date('2026-06-01T00:00:00Z'), referenceDate)).toEqual({
+      daysRemaining: 0,
+      severity: 'CRITICO',
+    });
+    expect(calculateExpirationSeverity(new Date('2026-05-31T00:00:00Z'), referenceDate)).toEqual({
+      daysRemaining: -1,
+      severity: 'VENCIDO',
+    });
+  });
+
+  it('usa el día de Bogotá durante la noche cuando UTC ya cambió de día', () => {
+    const bogotaEvening = new Date('2026-06-02T04:30:00Z'); // 1 de junio, 23:30 Bogotá
+    expect(calculateExpirationSeverity(new Date('2026-06-01T00:00:00Z'), bogotaEvening)).toEqual({
+      daysRemaining: 0,
+      severity: 'CRITICO',
+    });
   });
 
   it('debe detectar lotes en estado CRITICO cuando vencen en <= 30 días', () => {

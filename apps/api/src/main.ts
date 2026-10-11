@@ -3,6 +3,7 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { getCorsConfig } from './common/config/cors.config';
 import { configureHttpApp } from './common/config/http-app.config';
+import { configureOpenApi } from './common/config/openapi.config';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -11,6 +12,7 @@ async function bootstrap() {
 
   // Prefijo global de API según arquitectura
   app.setGlobalPrefix('api/v1');
+  configureOpenApi(app);
 
   // Habilitar política de CORS endurecida con lista blanca
   app.enableCors(getCorsConfig());

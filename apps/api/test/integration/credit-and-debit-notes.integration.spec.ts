@@ -669,6 +669,7 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
       await request(app.getHttpServer())
         .post(`/api/v1/receivables/${receivable.id}/payments`)
         .set('Cookie', cookie)
+        .set('Idempotency-Key', randomUUID())
         .send({ amount: 5000, paymentMethod: 'EFECTIVO' })
         .expect(201);
 
@@ -823,6 +824,7 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
       await request(app.getHttpServer())
         .post(`/api/v1/receivables/${receivable.id}/payments`)
         .set('Cookie', cookie)
+        .set('Idempotency-Key', randomUUID())
         .send({ amount: 15000, paymentMethod: 'EFECTIVO' })
         .expect(201);
       const lateBefore = await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lateLotId } });

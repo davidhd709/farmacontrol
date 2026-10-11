@@ -1,3 +1,4 @@
+import { QueryFieldValidationPipe } from '../../../../common/pagination/request-shape.pipe';
 import {
   Controller,
   Get,
@@ -11,11 +12,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { DebitNotesService } from '../../application/debit-notes.service';
-import {
-  CreateDebitNotePayload,
-  DebitNoteDto,
-  SYSTEM_PERMISSIONS,
-} from '@farmacia/contracts';
+import { CreateDebitNotePayload, DebitNoteDto, SYSTEM_PERMISSIONS } from '@farmacia/contracts';
 import {
   SessionAuthGuard,
   AuthenticatedUserContext,
@@ -56,19 +53,23 @@ export class DebitNotesController {
 
   @Get('purchases/:purchaseId/debit-notes')
   @RequirePermissions(SYSTEM_PERMISSIONS.PURCHASES_READ)
-  async listForPurchase(@Param('purchaseId') purchaseId: string): Promise<DebitNoteDto[]> {
+  async listForPurchase(
+    @Param('purchaseId', ParseUUIDPipe) purchaseId: string,
+  ): Promise<DebitNoteDto[]> {
     return this.debitNotesService.listDebitNotes(purchaseId);
   }
 
   @Get('debit-notes')
   @RequirePermissions(SYSTEM_PERMISSIONS.PURCHASES_READ)
-  async listAll(@Query('purchaseId') purchaseId?: string): Promise<DebitNoteDto[]> {
+  async listAll(
+    @Query('purchaseId', new QueryFieldValidationPipe('purchaseId', 'uuid?')) purchaseId?: string,
+  ): Promise<DebitNoteDto[]> {
     return this.debitNotesService.listDebitNotes(purchaseId);
   }
 
   @Get('debit-notes/:id')
   @RequirePermissions(SYSTEM_PERMISSIONS.PURCHASES_READ)
-  async getById(@Param('id') id: string): Promise<DebitNoteDto> {
+  async getById(@Param('id', ParseUUIDPipe) id: string): Promise<DebitNoteDto> {
     return this.debitNotesService.getDebitNoteById(id);
   }
 }

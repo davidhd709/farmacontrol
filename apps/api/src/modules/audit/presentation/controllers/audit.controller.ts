@@ -1,3 +1,4 @@
+import { QueryShapeValidationPipe } from '../../../../common/pagination/request-shape.pipe';
 import {
   Controller,
   Get,
@@ -5,6 +6,7 @@ import {
   Query,
   UseGuards,
   NotFoundException,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import {
   SYSTEM_PERMISSIONS,
@@ -31,7 +33,20 @@ export class AuditController {
   @Get('events')
   @RequirePermissions(SYSTEM_PERMISSIONS.AUDIT_READ)
   public async getEvents(
-    @Query(AuditQueryValidationPipe) query: AuditQueryFilters,
+    @Query(
+      new QueryShapeValidationPipe({
+        userId: 'uuid?',
+        action: 'text?',
+        entity: 'text?',
+        entityId: 'text?',
+        correlationId: 'text?',
+        fromDate: 'date?',
+        toDate: 'date?',
+        search: 'text?',
+      }),
+      AuditQueryValidationPipe,
+    )
+    query: AuditQueryFilters,
   ): Promise<PaginatedResponse<AuditEventDto>> {
     return this.auditService.findPaginated(query);
   }
@@ -52,7 +67,7 @@ export class AuditController {
    */
   @Get('events/:id')
   @RequirePermissions(SYSTEM_PERMISSIONS.AUDIT_READ)
-  public async getEventById(@Param('id') id: string): Promise<AuditEventDto> {
+  public async getEventById(@Param('id', ParseUUIDPipe) id: string): Promise<AuditEventDto> {
     const event = await this.auditService.findByIdWithUser(id);
     if (!event) {
       throw new NotFoundException(`Evento de auditoría con ID '${id}' no encontrado.`);

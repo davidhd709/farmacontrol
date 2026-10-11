@@ -12,7 +12,7 @@ import {
   CreateDebitNotePayload,
 } from '@farmacia/contracts';
 import { AccountingEngineService } from '../../accounting/application/accounting-engine.service';
-import { IdempotencyService } from '../../sales/infrastructure/idempotency.service';
+import { IdempotencyService } from '../../../common/idempotency/idempotency.service';
 import { parseMoneyToCents, centsToMoneyString } from '../../treasury/domain/treasury-rules';
 
 type Tx = Parameters<Parameters<PrismaClient['$transaction']>[0]>[0];

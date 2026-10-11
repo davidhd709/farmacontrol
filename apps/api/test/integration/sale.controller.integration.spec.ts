@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest';
 import request from 'supertest';
 import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
@@ -176,6 +176,53 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
     await app.close();
   });
 
+  it('vende el lote que vence hoy Bogotá a las 23:30 y registra asiento en octubre', async () => {
+    await prisma.inventoryLot.update({ where: { id: lot1Id }, data: { expirationDate: new Date('2026-10-10T00:00:00Z') } });
+    await prisma.inventoryLot.update({ where: { id: lot2Id }, data: { expirationDate: new Date('2026-10-11T00:00:00Z') } });
+    const mappings = [
+      { purpose: 'CASH', code: '110505', type: 'ASSET' },
+      { purpose: 'SALES_EXCLUDED', code: '413502', type: 'INCOME' },
+      { purpose: 'COST_OF_SALES', code: '613501', type: 'COST' },
+      { purpose: 'INVENTORY', code: '143501', type: 'ASSET' },
+    ] as const;
+    for (const mapping of mappings) {
+      const account = await prisma.account.create({ data: {
+        code: mapping.code, name: mapping.purpose, type: mapping.type,
+        level: 1, allowsMovement: true,
+      } });
+      await prisma.companyAccountingMapping.create({ data: {
+        purpose: mapping.purpose, accountId: account.id, status: 'ACTIVE',
+        effectiveFrom: new Date('2026-01-01T00:00:00Z'),
+      } });
+    }
+    await prisma.fiscalPeriod.create({ data: {
+      year: 2026, month: 10, name: 'Octubre 2026',
+      startDate: new Date('2026-10-01T00:00:00Z'),
+      endDate: new Date('2026-10-31T00:00:00Z'), status: 'OPEN',
+    } });
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-10T23:30:00-05:00'));
+    try {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/sales/confirm')
+        .set('Idempotency-Key', randomUUID())
+        .set('Cookie', cajeroCookie)
+        .send({ paymentMethod: 'EFECTIVO', items: [{ productId, presentationId, quantityCommercial: 1 }] });
+      expect(res.status, JSON.stringify(res.body)).toBe(201);
+      expect(res.body.lines[0].lotAllocations[0].lotNumber).toBe('LOTE-FEFO-01');
+      const entry = await prisma.journalEntry.findUniqueOrThrow({
+        where: { sourceType_sourceId: { sourceType: 'SALE', sourceId: res.body.id } },
+      });
+      expect(entry.entryDate.toISOString().slice(0, 10)).toBe('2026-10-10');
+      const period = await prisma.fiscalPeriod.findFirstOrThrow({ where: {
+        startDate: { lte: entry.entryDate }, endDate: { gte: entry.entryDate },
+      } });
+      expect([period.year, period.month]).toEqual([2026, 10]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('POST /api/v1/sales/confirm ejecuta la venta con asignación FEFO automática, Kardex y caja', async () => {
     // Se piden 2 cajas = 20 tabletas
     // Lote 1 tiene 10 tabletas (vence antes) -> Se agota (0)
@@ -309,6 +356,54 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
     // El inventario NO debe haberse descontado dos veces
     const lot1AfterSecond = await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lot1Id } });
     expect(lot1AfterSecond.currentQuantity).toBe(0);
+  });
+
+  it('serializa dos confirmaciones simultáneas con la misma clave y devuelve la misma venta', async () => {
+    const key = 'sale-concurrent-same-key';
+    const payload = {
+      paymentMethod: 'EFECTIVO',
+      items: [{ productId, presentationId, quantityCommercial: 1 }],
+    };
+    const send = () => request(app.getHttpServer())
+      .post('/api/v1/sales/confirm')
+      .set('Cookie', cajeroCookie)
+      .set('Idempotency-Key', key)
+      .send(payload);
+
+    const [first, second] = await Promise.all([send(), send()]);
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(201);
+    expect(second.body).toEqual(first.body);
+    expect(await prisma.sale.count()).toBe(1);
+    expect(await prisma.inventoryMovement.count({ where: { referenceDocumentType: 'SALE' } })).toBe(1);
+  });
+
+  it('procesa de nuevo una clave expirada y reemplaza su registro', async () => {
+    const key = 'sale-expired-key';
+    const payload = {
+      paymentMethod: 'EFECTIVO',
+      items: [{ productId, presentationId, quantityCommercial: 1 }],
+    };
+    const send = () => request(app.getHttpServer())
+      .post('/api/v1/sales/confirm')
+      .set('Cookie', cajeroCookie)
+      .set('Idempotency-Key', key)
+      .send(payload);
+
+    const first = await send();
+    expect(first.status).toBe(201);
+    await prisma.idempotencyKey.update({
+      where: { key },
+      data: {
+        createdAt: new Date(Date.now() - 48 * 60 * 60 * 1000),
+        expiresAt: new Date(Date.now() - 60 * 60 * 1000),
+      },
+    });
+    const second = await send();
+    expect(second.status).toBe(201);
+    expect(second.body.id).not.toBe(first.body.id);
+    expect(await prisma.sale.count()).toBe(2);
+    expect(await prisma.idempotencyKey.count({ where: { key } })).toBe(1);
   });
 
   it('AUD-003: exige Idempotency-Key también en ventas en efectivo', async () => {
@@ -712,6 +807,7 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
       await request(app.getHttpServer())
         .post(`/api/v1/receivables/${receivable.id}/payments`)
         .set('Cookie', supervisorCookie)
+        .set('Idempotency-Key', randomUUID())
         .send({ amount: 2000, paymentMethod: 'EFECTIVO' })
         .expect(201);
       const payment = await prisma.receivablePayment.findFirstOrThrow({
@@ -785,6 +881,7 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
           request(app.getHttpServer())
             .post(`/api/v1/receivables/${receivable.id}/payments`)
             .set('Cookie', supervisorCookie)
+        .set('Idempotency-Key', randomUUID())
             .send({ amount: 100, paymentMethod: 'EFECTIVO' }),
         ]);
 

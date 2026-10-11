@@ -1,3 +1,4 @@
+import { businessToday, addCalendarDays, calendarDate } from '../../../common/utils/business-date';
 import {
   BadRequestException,
   ForbiddenException,
@@ -22,10 +23,10 @@ import {
   SaleHasCreditNotesException,
   SaleHasReceivablePaymentsException,
 } from '../domain/sale.exceptions';
-import { IdempotencyService } from '../infrastructure/idempotency.service';
+import { IdempotencyService } from '../../../common/idempotency/idempotency.service';
 import { AuditService } from '../../audit/application/services/audit.service';
 import { recordSourceBankMovement } from '../../treasury/application/record-source-bank-movement';
-import { requirePaymentBankAccountId } from '../../treasury/application/payment-idempotency';
+import { requirePaymentBankAccountId } from '../../treasury/application/payment-validation';
 import { parseMoneyToCents } from '../../treasury/domain/treasury-rules';
 import {
   calculateNewCashBalanceCents,
@@ -270,7 +271,7 @@ export class SaleService {
             WHERE product_id = ${product.id}::uuid
               AND is_active = true
               AND current_quantity > 0
-              AND expiration_date >= CURRENT_DATE
+              AND expiration_date >= ${businessToday()}::date
             ORDER BY expiration_date ASC, created_at ASC
             FOR UPDATE
           `;
@@ -430,8 +431,7 @@ export class SaleService {
 
       // 2.7. Cuenta por Cobrar si es Crédito
       if (payload.paymentMethod === 'CREDITO') {
-        const dueDate = new Date();
-        dueDate.setDate(dueDate.getDate() + 30);
+        const dueDate = calendarDate(addCalendarDays(businessToday(), 30));
         await tx.receivable.create({
           data: {
             saleId: sale.id,
