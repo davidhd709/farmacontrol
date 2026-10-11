@@ -25,13 +25,11 @@ import {
 } from '../domain/sale.exceptions';
 import { IdempotencyService } from '../../../common/idempotency/idempotency.service';
 import { AuditService } from '../../audit/application/services/audit.service';
+import { CashService } from '../../cash/application/cash.service';
 import { recordSourceBankMovement } from '../../treasury/application/record-source-bank-movement';
 import { requirePaymentBankAccountId } from '../../treasury/application/payment-validation';
 import { parseMoneyToCents } from '../../treasury/domain/treasury-rules';
-import {
-  calculateNewCashBalanceCents,
-  centsToMoneyString,
-} from '../../cash/domain/cash-rules';
+import { centsToMoneyString } from '../../cash/domain/cash-rules';
 import { AccountingEngineService } from '../../accounting/application/accounting-engine.service';
 
 const SALE_CONFIRM_ENDPOINT = '/api/v1/sales/confirm';
@@ -111,6 +109,7 @@ export class SaleService {
     @Inject(SALE_REPOSITORY)
     private readonly saleRepository: ISaleRepository,
     private readonly idempotencyService: IdempotencyService,
+    private readonly cashService: CashService,
     @Optional() customClient?: PrismaClient,
     @Optional() private readonly auditService?: AuditService,
     @Optional() private readonly accountingEngine?: AccountingEngineService,
@@ -390,42 +389,18 @@ export class SaleService {
 
       // 2.6. Movimiento de Caja si es Efectivo
       if (payload.paymentMethod === 'EFECTIVO') {
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(742189321)`;
-
-        const lastRows = await tx.$queryRaw<Array<{ balance_after: Prisma.Decimal }>>`
-          SELECT balance_after
-          FROM cash_movements
-          ORDER BY created_at DESC
-          LIMIT 1
-        `;
-
-        const currentBalanceCents =
-          lastRows.length > 0
-            ? parseMoneyToCents(lastRows[0].balance_after.toString(), 'Saldo de caja')
-            : 0n;
-
         const saleAmountCents = parseMoneyToCents(
           new Prisma.Decimal(sale.total).toFixed(2),
           'Total de venta',
         );
-
-        const { balanceAfter } = calculateNewCashBalanceCents(
-          currentBalanceCents,
-          'INGRESO_VENTA',
-          saleAmountCents,
-        );
-
-        await tx.cashMovement.create({
-          data: {
-            movementType: 'INGRESO_VENTA',
-            amount: new Prisma.Decimal(centsToMoneyString(saleAmountCents)),
-            paymentMethod: 'EFECTIVO',
-            reason: `Venta mostrador comprobante ${sale.invoiceNumber}`,
-            referenceDocumentType: 'SALE',
-            referenceDocumentId: sale.invoiceNumber,
-            balanceAfter: new Prisma.Decimal(centsToMoneyString(balanceAfter)),
-            createdByUserId: auditCtx.userId || '00000000-0000-0000-0000-000000000000',
-          },
+        await this.cashService.recordMovementInTransaction(tx, {
+          movementType: 'INGRESO_VENTA',
+          amount: centsToMoneyString(saleAmountCents),
+          paymentMethod: 'EFECTIVO',
+          reason: `Venta mostrador comprobante ${sale.invoiceNumber}`,
+          referenceDocumentType: 'SALE',
+          referenceDocumentId: sale.invoiceNumber,
+          createdByUserId: auditCtx.userId || '00000000-0000-0000-0000-000000000000',
         });
       }
 
@@ -626,42 +601,18 @@ export class SaleService {
 
       // Revertir en caja si fue en efectivo
       if (sale.paymentMethod === 'EFECTIVO') {
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(742189321)`;
-
-        const lastRows = await tx.$queryRaw<Array<{ balance_after: Prisma.Decimal }>>`
-          SELECT balance_after
-          FROM cash_movements
-          ORDER BY created_at DESC
-          LIMIT 1
-        `;
-
-        const currentBalanceCents =
-          lastRows.length > 0
-            ? parseMoneyToCents(lastRows[0].balance_after.toString(), 'Saldo de caja')
-            : 0n;
-
         const saleAmountCents = parseMoneyToCents(
           new Prisma.Decimal(sale.total).toFixed(2),
           'Total de venta',
         );
-
-        const { balanceAfter } = calculateNewCashBalanceCents(
-          currentBalanceCents,
-          'EGRESO_MANUAL',
-          saleAmountCents,
-        );
-
-        await tx.cashMovement.create({
-          data: {
-            movementType: 'EGRESO_MANUAL',
-            amount: new Prisma.Decimal(centsToMoneyString(saleAmountCents)),
-            paymentMethod: 'EFECTIVO',
-            reason: `Reversión por anulación de venta ${sale.invoiceNumber}: ${trimmedReason}`,
-            referenceDocumentType: 'SALE_CANCEL',
-            referenceDocumentId: sale.invoiceNumber,
-            balanceAfter: new Prisma.Decimal(centsToMoneyString(balanceAfter)),
-            createdByUserId: auditCtx.userId || '00000000-0000-0000-0000-000000000000',
-          },
+        await this.cashService.recordMovementInTransaction(tx, {
+          movementType: 'EGRESO_MANUAL',
+          amount: centsToMoneyString(saleAmountCents),
+          paymentMethod: 'EFECTIVO',
+          reason: `Reversión por anulación de venta ${sale.invoiceNumber}: ${trimmedReason}`,
+          referenceDocumentType: 'SALE_CANCEL',
+          referenceDocumentId: sale.invoiceNumber,
+          createdByUserId: auditCtx.userId || '00000000-0000-0000-0000-000000000000',
         });
       }
       if (sale.paymentMethod === 'TRANSFERENCIA') {

@@ -15,7 +15,7 @@ import { AccountingEngineService } from '../../accounting/application/accounting
 import { AuditService } from '../../audit/application/services/audit.service';
 import { IdempotencyService } from '../../../common/idempotency/idempotency.service';
 import { parseMoneyToCents, centsToMoneyString } from '../../treasury/domain/treasury-rules';
-import { calculateNewCashBalanceCents } from '../../cash/domain/cash-rules';
+import { CashService } from '../../cash/application/cash.service';
 import { recordSourceBankMovement } from '../../treasury/application/record-source-bank-movement';
 import {
   prorateCents,
@@ -85,6 +85,7 @@ export class CreditNotesService {
   private readonly client: PrismaClient;
 
   constructor(
+    private readonly cashService: CashService,
     @Optional() customClient?: PrismaClient,
     @Optional() private readonly accountingEngine?: AccountingEngineService,
     @Optional() private readonly auditService?: AuditService,
@@ -383,37 +384,14 @@ export class CreditNotesService {
               createdById: userId,
             });
           } else {
-            await tx.$executeRaw`SELECT pg_advisory_xact_lock(742189321)`;
-
-            const lastRows = await tx.$queryRaw<Array<{ balance_after: Prisma.Decimal }>>`
-              SELECT balance_after
-              FROM cash_movements
-              ORDER BY created_at DESC
-              LIMIT 1
-            `;
-
-            const currentBalanceCents =
-              lastRows.length > 0
-                ? parseMoneyToCents(lastRows[0].balance_after.toString(), 'Saldo de caja')
-                : 0n;
-
-            const { balanceAfter } = calculateNewCashBalanceCents(
-              currentBalanceCents,
-              'EGRESO_MANUAL',
-              totalReturnCents,
-            );
-
-            await tx.cashMovement.create({
-              data: {
-                movementType: 'EGRESO_MANUAL',
-                amount: new Prisma.Decimal(centsToMoneyString(totalReturnCents)),
-                paymentMethod: 'EFECTIVO',
-                reason: `Reembolso por Nota Crédito ${creditNoteNumber} de venta ${sale.invoiceNumber}`,
-                referenceDocumentType: 'CREDIT_NOTE',
-                referenceDocumentId: creditNoteNumber,
-                balanceAfter: new Prisma.Decimal(centsToMoneyString(balanceAfter)),
-                createdByUserId: userId,
-              },
+            await this.cashService.recordMovementInTransaction(tx, {
+              movementType: 'EGRESO_MANUAL',
+              amount: centsToMoneyString(totalReturnCents),
+              paymentMethod: 'EFECTIVO',
+              reason: `Reembolso por Nota Crédito ${creditNoteNumber} de venta ${sale.invoiceNumber}`,
+              referenceDocumentType: 'CREDIT_NOTE',
+              referenceDocumentId: creditNoteNumber,
+              createdByUserId: userId,
             });
           }
 

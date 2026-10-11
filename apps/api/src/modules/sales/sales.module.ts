@@ -8,12 +8,20 @@ import { AuditModule } from '../audit/audit.module';
 import { IdentityModule } from '../identity/identity.module';
 import { CustomersModule } from '../customers/customers.module';
 import { AccountingModule } from '../accounting/accounting.module';
+import { CashModule } from '../cash/cash.module';
 
 import { CreditNotesController } from './presentation/controllers/credit-notes.controller';
 import { CreditNotesService } from './application/credit-notes.service';
 
 @Module({
-  imports: [IdempotencyModule, IdentityModule, AuditModule, CustomersModule, AccountingModule],
+  imports: [
+    IdempotencyModule,
+    IdentityModule,
+    AuditModule,
+    CustomersModule,
+    AccountingModule,
+    CashModule,
+  ],
   controllers: [SaleController, CreditNotesController],
   providers: [
     SaleService,
