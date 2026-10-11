@@ -31,6 +31,7 @@ import { HomeBackButton } from '../../../components/HomeBackButton';
 import { PermissionGate } from '../../auth/components/PermissionGate';
 import { SweetModal } from '../../../components/SweetModal';
 import { CreditNoteDialog } from '../components/CreditNoteDialog';
+import { businessDayEnd, businessDayStart } from '../../../utils/business-date';
 
 export const SalesHistoryPage: React.FC = () => {
   const navigate = useNavigate();
@@ -67,8 +68,8 @@ export const SalesHistoryPage: React.FC = () => {
       const response = await fetchSales({
         invoiceNumber: invoiceNumberFilter.trim() || undefined,
         status: statusFilter === 'ALL' ? undefined : statusFilter,
-        fromDate: fromDateFilter ? new Date(fromDateFilter).toISOString() : undefined,
-        toDate: toDateFilter ? new Date(toDateFilter + 'T23:59:59.999Z').toISOString() : undefined,
+        fromDate: fromDateFilter ? businessDayStart(fromDateFilter) : undefined,
+        toDate: toDateFilter ? businessDayEnd(toDateFilter) : undefined,
         limit: 100,
       });
       setSales(response.items || []);

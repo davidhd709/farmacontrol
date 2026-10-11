@@ -39,6 +39,7 @@ import type {
 import { fetchSuppliers } from '../../suppliers/api/suppliers.api';
 import { fetchProducts } from '../../catalog/api/products.api';
 import { receivePurchase } from '../api/purchases.api';
+import { addDaysToDate, businessToday } from '../../../utils/business-date';
 
 interface PurchaseFormLine {
   productId: string;
@@ -60,21 +61,15 @@ export const ReceivePurchasePage: React.FC = () => {
   // Cabecera del formulario
   const [supplierId, setSupplierId] = useState('');
   const [invoiceNumber, setInvoiceNumber] = useState('');
-  const [purchaseDate, setPurchaseDate] = useState(
-    new Date().toISOString().split('T')[0]
-  );
+  const [purchaseDate, setPurchaseDate] = useState(() => businessToday());
   const [paymentCondition, setPaymentCondition] = useState<'CONTADO' | 'CREDITO'>('CREDITO');
   const [creditDays, setCreditDays] = useState('30');
 
-  const calculateDefaultDueDate = (baseDateStr: string, days: number) => {
-    const d = new Date(baseDateStr + 'T12:00:00');
-    d.setDate(d.getDate() + days);
-    return d.toISOString().split('T')[0];
-  };
+  const calculateDefaultDueDate = (baseDateStr: string, days: number) =>
+    addDaysToDate(baseDateStr, days);
 
   const [dueDate, setDueDate] = useState(() => {
-    const today = new Date().toISOString().split('T')[0];
-    return calculateDefaultDueDate(today, 30);
+    return calculateDefaultDueDate(businessToday(), 30);
   });
 
   const [notes, setNotes] = useState('');

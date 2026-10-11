@@ -7,6 +7,7 @@ import type {
   SalesReportDto,
 } from '@farmacia/contracts';
 import { apiRequest } from '../../../api/http-client';
+import { businessToday } from '../../../utils/business-date';
 
 const DEFAULT_API_URL = '/api/v1';
 const apiUrl = (import.meta.env.VITE_API_URL || DEFAULT_API_URL).replace(/\/$/, '');
@@ -99,7 +100,7 @@ export async function downloadReportCsv(
   const blobUrl = window.URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = blobUrl;
-  a.download = `reporte_${reportPath}_${new Date().toISOString().split('T')[0]}.csv`;
+  a.download = `reporte_${reportPath}_${businessToday()}.csv`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
