@@ -16,7 +16,6 @@ import {
   UseGuards,
   ParseUUIDPipe,
 } from '@nestjs/common';
-import { Prisma } from '@farmacia/database';
 import {
   SYSTEM_PERMISSIONS,
   type ProductTaxProfileDto,
@@ -38,12 +37,8 @@ import type { AuthenticatedUserContext } from '../../identity/presentation/guard
 function httpError(error: unknown): never {
   if (error instanceof AccountingNotFoundError) throw new NotFoundException(error.message);
   if (error instanceof AccountingValidationError) throw new BadRequestException(error.message);
-  if (
-    error instanceof AccountingConflictError ||
-    (error instanceof Prisma.PrismaClientKnownRequestError &&
-      ['P2002', 'P2004', 'P2034'].includes(error.code))
-  )
-    throw new ConflictException(error instanceof Error ? error.message : 'Conflicto de datos.');
+  // Los errores de Prisma siguen al filtro global, que responde 409 sin exponer su mensaje.
+  if (error instanceof AccountingConflictError) throw new ConflictException(error.message);
   throw error;
 }
 

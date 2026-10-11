@@ -18,6 +18,7 @@ import {
   ParseUUIDPipe,
 } from '@nestjs/common';
 import type { Request } from 'express';
+import { Prisma } from '@farmacia/database';
 import {
   SYSTEM_PERMISSIONS,
   SaleDto,
@@ -79,7 +80,8 @@ export class SaleController {
       if (error instanceof IdempotencyConflictException) {
         throw new ConflictException(error.message);
       }
-      if (error instanceof Error) {
+      // Los errores de Prisma siguen al filtro global (409/404 sin mensaje interno).
+      if (error instanceof Error && !(error instanceof Prisma.PrismaClientKnownRequestError)) {
         throw new BadRequestException(error.message);
       }
       throw error;

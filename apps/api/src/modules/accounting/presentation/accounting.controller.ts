@@ -24,7 +24,6 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
-import { Prisma } from '@farmacia/database';
 import {
   SYSTEM_PERMISSIONS,
   ACCOUNTING_PURPOSES,
@@ -48,12 +47,8 @@ import type { AuthenticatedUserContext } from '../../identity/presentation/guard
 
 function httpError(error: unknown): never {
   if (error instanceof AccountingNotFoundError) throw new NotFoundException(error.message);
-  if (
-    error instanceof AccountingConflictError ||
-    (error instanceof Prisma.PrismaClientKnownRequestError &&
-      (error.code === 'P2002' || error.code === 'P2034'))
-  )
-    throw new ConflictException(error instanceof Error ? error.message : 'Conflicto de datos.');
+  // Los errores de Prisma siguen al filtro global, que responde 409 sin exponer su mensaje.
+  if (error instanceof AccountingConflictError) throw new ConflictException(error.message);
   if (error instanceof AccountingValidationError) throw new BadRequestException(error.message);
   throw error;
 }
