@@ -13,6 +13,7 @@ import {
 import { AccountingEngineService } from '../../accounting/application/accounting-engine.service';
 import { IdempotencyService } from '../../../common/idempotency/idempotency.service';
 import { PayablesLedger } from '../../payables/application/payables-ledger';
+import { InventoryLedger } from '../../inventory/application/inventory-ledger';
 import { parseMoneyToCents, centsToMoneyString } from '../../treasury/domain/treasury-rules';
 
 type Tx = Parameters<Parameters<PrismaClient['$transaction']>[0]>[0];
@@ -76,6 +77,7 @@ export class DebitNotesService {
     @Optional() private readonly accountingEngine?: AccountingEngineService,
     @Optional() private readonly idempotencyService: IdempotencyService = new IdempotencyService(),
     @Optional() private readonly payablesLedger: PayablesLedger = new PayablesLedger(),
+    @Optional() private readonly inventoryLedger: InventoryLedger = new InventoryLedger(),
   ) {
     this.client = customClient ?? prisma;
   }
@@ -206,21 +208,14 @@ export class DebitNotesService {
             }
 
             // Bloquear el lote: una venta o ajuste concurrente no puede dejarlo en negativo
-            const lockedLots = await tx.$queryRaw<
-              Array<{ id: string; lot_number: string; current_quantity: number }>
-            >`
-              SELECT id, lot_number, current_quantity
-              FROM inventory_lots
-              WHERE id = ${line.lotId}::uuid
-              FOR UPDATE
-            `;
-            if (!lockedLots.length) {
+            const lockedLot = await this.inventoryLedger.lockLot(tx, line.lotId);
+            if (!lockedLot) {
               throw new BadRequestException(`Lote de inventario para ${line.product.name} no encontrado.`);
             }
             const lot = {
-              id: lockedLots[0].id,
-              lotNumber: lockedLots[0].lot_number,
-              currentQuantity: lockedLots[0].current_quantity,
+              id: lockedLot.id,
+              lotNumber: lockedLot.lot_number,
+              currentQuantity: lockedLot.current_quantity,
             };
 
             if (lot.currentQuantity < quantityBaseUnits) {
@@ -229,29 +224,17 @@ export class DebitNotesService {
               );
             }
 
-            // Descontar del lote
-            const updatedLot = await tx.inventoryLot.update({
-              where: { id: lot.id },
-              data: {
-                currentQuantity: { decrement: quantityBaseUnits },
-              },
-            });
-
-            // Registrar movimiento de kardex
-            await tx.inventoryMovement.create({
-              data: {
-                movementType: 'SALIDA_DEVOLUCION_COMPRA',
-                productId: line.productId,
-                lotId: lot.id,
-                presentationId: line.presentationId || null,
-                quantityBaseUnits,
-                presentationFactorHistorical: line.presentationFactorHistorical,
-                balanceAfterBaseUnits: updatedLot.currentQuantity,
-                referenceDocumentType: 'DEBIT_NOTE',
-                referenceDocumentId: debitNoteNumber,
-                notes: `Devolución a proveedor ${purchase.supplier.name} s/factura ${purchase.invoiceNumber} (${payload.reason})`,
-                createdByUserId: userId,
-              },
+            // Descontar del lote y registrar movimiento de kardex
+            await this.inventoryLedger.changeLotQuantity(tx, lot.id, -quantityBaseUnits, {
+              movementType: 'SALIDA_DEVOLUCION_COMPRA',
+              productId: line.productId,
+              presentationId: line.presentationId || null,
+              quantityBaseUnits,
+              presentationFactorHistorical: line.presentationFactorHistorical,
+              referenceDocumentType: 'DEBIT_NOTE',
+              referenceDocumentId: debitNoteNumber,
+              notes: `Devolución a proveedor ${purchase.supplier.name} s/factura ${purchase.invoiceNumber} (${payload.reason})`,
+              createdByUserId: userId,
             });
 
             const unitCost = new Prisma.Decimal(line.unitCost);

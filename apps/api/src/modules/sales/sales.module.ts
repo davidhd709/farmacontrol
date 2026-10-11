@@ -10,6 +10,7 @@ import { CustomersModule } from '../customers/customers.module';
 import { AccountingModule } from '../accounting/accounting.module';
 import { CashModule } from '../cash/cash.module';
 import { ReceivablesModule } from '../receivables/receivables.module';
+import { InventoryModule } from '../inventory/inventory.module';
 
 import { CreditNotesController } from './presentation/controllers/credit-notes.controller';
 import { CreditNotesService } from './application/credit-notes.service';
@@ -23,6 +24,7 @@ import { CreditNotesService } from './application/credit-notes.service';
     AccountingModule,
     CashModule,
     ReceivablesModule,
+    InventoryModule,
   ],
   controllers: [SaleController, CreditNotesController],
   providers: [

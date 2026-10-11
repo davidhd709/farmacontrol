@@ -16,6 +16,7 @@ import { IdempotencyService } from '../../../common/idempotency/idempotency.serv
 import { parseMoneyToCents, centsToMoneyString } from '../../treasury/domain/treasury-rules';
 import { CashService } from '../../cash/application/cash.service';
 import { ReceivablesLedger } from '../../receivables/application/receivables-ledger';
+import { InventoryLedger } from '../../inventory/application/inventory-ledger';
 import { recordSourceBankMovement } from '../../treasury/application/record-source-bank-movement';
 import {
   prorateCents,
@@ -87,6 +88,7 @@ export class CreditNotesService {
   constructor(
     private readonly cashService: CashService,
     private readonly receivablesLedger: ReceivablesLedger,
+    private readonly inventoryLedger: InventoryLedger,
     @Optional() customClient?: PrismaClient,
     @Optional() private readonly accountingEngine?: AccountingEngineService,
     @Optional() private readonly auditService?: AuditService,
@@ -300,29 +302,22 @@ export class CreditNotesService {
             if (shouldRestock) {
               for (const portion of portions) {
                 if (!portion.lotId) continue;
-                await tx.$queryRaw`SELECT id FROM inventory_lots WHERE id = ${portion.lotId}::uuid FOR UPDATE`;
-                const updatedLot = await tx.inventoryLot.update({
-                  where: { id: portion.lotId },
-                  data: {
-                    currentQuantity: { increment: portion.quantityBaseUnits },
-                  },
-                });
-
-                await tx.inventoryMovement.create({
-                  data: {
+                await this.inventoryLedger.changeLotQuantity(
+                  tx,
+                  portion.lotId,
+                  portion.quantityBaseUnits,
+                  {
                     movementType: 'ENTRADA_DEVOLUCION_VENTA',
                     productId: line.productId,
-                    lotId: portion.lotId,
                     presentationId: line.presentationId || null,
                     quantityBaseUnits: portion.quantityBaseUnits,
                     presentationFactorHistorical: line.presentationFactorHistorical,
-                    balanceAfterBaseUnits: updatedLot.currentQuantity,
                     referenceDocumentType: 'CREDIT_NOTE',
                     referenceDocumentId: creditNoteNumber,
                     notes: `Reintegro por devolución en venta ${sale.invoiceNumber} (${payload.reason})`,
                     createdByUserId: userId,
                   },
-                });
+                );
               }
             }
           }

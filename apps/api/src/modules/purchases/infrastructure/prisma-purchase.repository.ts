@@ -2,6 +2,7 @@ import { Injectable, Optional } from '@nestjs/common';
 import { prisma, PrismaClient, Prisma } from '@farmacia/database';
 import { IPurchaseRepository } from '../domain/purchase.repository';
 import { PayablesLedger } from '../../payables/application/payables-ledger';
+import { InventoryLedger } from '../../inventory/application/inventory-ledger';
 import { Purchase, PurchaseLine } from '../domain/purchase.entity';
 import {
   DuplicatePurchaseInvoiceException,
@@ -18,6 +19,7 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
   constructor(
     @Optional() customClient?: PrismaClient,
     @Optional() private readonly payablesLedger: PayablesLedger = new PayablesLedger(),
+    @Optional() private readonly inventoryLedger: InventoryLedger = new InventoryLedger(),
   ) {
     this.client = customClient ?? prisma;
   }
@@ -77,21 +79,14 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
       // 2. Procesar cada línea de compra y afectar inventario
       for (const line of purchase.lines) {
         // Buscar y bloquear el lote en la ubicación
-        const existingLots = await tx.$queryRaw<
-          Array<{ id: string; expiration_date: Date; is_active: boolean }>
-        >`
-          SELECT id, expiration_date, is_active
-          FROM inventory_lots
-          WHERE product_id = ${line.productId}::uuid
-            AND location_id = ${defaultLocationId}::uuid
-            AND lot_number = ${line.lotNumber}
-          FOR UPDATE
-        `;
+        const existing = await this.inventoryLedger.lockLotByNumber(tx, {
+          productId: line.productId,
+          locationId: defaultLocationId,
+          lotNumber: line.lotNumber,
+        });
 
-        let lot: { id: string };
-        let newBalance = line.quantityBaseUnits;
-        if (existingLots.length > 0) {
-          const existing = existingLots[0];
+        let lotId: string;
+        if (existing) {
           // Un lote es un único vencimiento: la recepción no lo reescribe ni lo reactiva
           if (toDateOnly(existing.expiration_date) !== toDateOnly(line.expirationDate)) {
             throw new LotConflictException(
@@ -103,29 +98,18 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
               `El lote "${line.lotNumber}" está inactivo; no se puede recibir mercancía en él.`,
             );
           }
-          const updatedLot = await tx.inventoryLot.update({
-            where: { id: existing.id },
-            data: {
-              currentQuantity: { increment: line.quantityBaseUnits },
-            },
-          });
-          newBalance = updatedLot.currentQuantity;
-          lot = updatedLot;
-          line.setLotId(existing.id);
+          lotId = existing.id;
         } else {
-          lot = await tx.inventoryLot.create({
-            data: {
-              id: line.lotId,
-              productId: line.productId,
-              locationId: defaultLocationId,
-              lotNumber: line.lotNumber,
-              expirationDate: line.expirationDate,
-              currentQuantity: line.quantityBaseUnits,
-              isActive: true,
-            },
+          lotId = await this.inventoryLedger.createLot(tx, {
+            id: line.lotId,
+            productId: line.productId,
+            locationId: defaultLocationId,
+            lotNumber: line.lotNumber,
+            expirationDate: line.expirationDate,
+            currentQuantity: line.quantityBaseUnits,
           });
-          line.setLotId(lot.id);
         }
+        line.setLotId(lotId);
 
         const factorHistorical = line.conversionFactor;
 
@@ -136,7 +120,7 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
             purchaseId: purchase.id,
             productId: line.productId,
             presentationId: line.presentationId,
-            lotId: lot.id,
+            lotId,
             quantityCommercial: new Prisma.Decimal(line.quantityCommercial),
             presentationFactorHistorical: factorHistorical,
             quantityBaseUnits: line.quantityBaseUnits,
@@ -148,24 +132,24 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
           },
         });
 
-        // Insertar movimiento inmutable de Kardex
-
-        await tx.inventoryMovement.create({
-          data: {
-            movementType: 'ENTRADA_COMPRA',
-            productId: line.productId,
-            lotId: lot.id,
-            presentationId: line.presentationId,
-            quantityBaseUnits: line.quantityBaseUnits,
-            presentationFactorHistorical: factorHistorical,
-            quantityCommercial: new Prisma.Decimal(line.quantityCommercial),
-            balanceAfterBaseUnits: newBalance,
-            referenceDocumentType: 'COMPRA',
-            referenceDocumentId: purchase.id,
-            notes: `Recepción factura ${purchase.invoiceNumber} - Lote ${line.lotNumber}`,
-            createdByUserId: actorUserId,
-          },
-        });
+        // Entrada al lote (si ya existía) y movimiento inmutable de Kardex
+        const entry = {
+          movementType: 'ENTRADA_COMPRA',
+          productId: line.productId,
+          presentationId: line.presentationId,
+          quantityBaseUnits: line.quantityBaseUnits,
+          presentationFactorHistorical: factorHistorical,
+          quantityCommercial: new Prisma.Decimal(line.quantityCommercial),
+          referenceDocumentType: 'COMPRA',
+          referenceDocumentId: purchase.id,
+          notes: `Recepción factura ${purchase.invoiceNumber} - Lote ${line.lotNumber}`,
+          createdByUserId: actorUserId,
+        };
+        if (existing) {
+          await this.inventoryLedger.changeLotQuantity(tx, lotId, line.quantityBaseUnits, entry);
+        } else {
+          await this.inventoryLedger.recordMovement(tx, lotId, line.quantityBaseUnits, entry);
+        }
       }
 
       const result = await this.findByIdWithTx(purchase.id, tx);

@@ -27,6 +27,7 @@ import { IdempotencyService } from '../../../common/idempotency/idempotency.serv
 import { AuditService } from '../../audit/application/services/audit.service';
 import { CashService } from '../../cash/application/cash.service';
 import { ReceivablesLedger } from '../../receivables/application/receivables-ledger';
+import { InventoryLedger } from '../../inventory/application/inventory-ledger';
 import { recordSourceBankMovement } from '../../treasury/application/record-source-bank-movement';
 import { requirePaymentBankAccountId } from '../../treasury/application/payment-validation';
 import { parseMoneyToCents } from '../../treasury/domain/treasury-rules';
@@ -112,6 +113,7 @@ export class SaleService {
     private readonly idempotencyService: IdempotencyService,
     private readonly cashService: CashService,
     private readonly receivablesLedger: ReceivablesLedger,
+    private readonly inventoryLedger: InventoryLedger,
     @Optional() customClient?: PrismaClient,
     @Optional() private readonly auditService?: AuditService,
     @Optional() private readonly accountingEngine?: AccountingEngineService,
@@ -259,23 +261,11 @@ export class SaleService {
         // Asignación FEFO con bloqueo concurrente
         if (product.requiresLotControl) {
           // Bloquear lotes disponibles ordenados por vencimiento ascendente
-          const availableLots = await tx.$queryRaw<
-            Array<{
-              id: string;
-              lot_number: string;
-              expiration_date: Date;
-              current_quantity: number;
-            }>
-          >`
-            SELECT id, lot_number, expiration_date, current_quantity
-            FROM inventory_lots
-            WHERE product_id = ${product.id}::uuid
-              AND is_active = true
-              AND current_quantity > 0
-              AND expiration_date >= ${businessToday()}::date
-            ORDER BY expiration_date ASC, created_at ASC
-            FOR UPDATE
-          `;
+          const availableLots = await this.inventoryLedger.lockFefoCandidates(
+            tx,
+            product.id,
+            businessToday(),
+          );
 
           const totalAvailable = availableLots.reduce((acc, l) => acc + l.current_quantity, 0);
           if (totalAvailable < requiredBaseUnits) {
@@ -288,32 +278,17 @@ export class SaleService {
             if (remainingUnits <= 0) break;
 
             const take = Math.min(lot.current_quantity, remainingUnits);
-            const balanceAfter = lot.current_quantity - take;
-
-            // Descontar existencias del lote
-            await tx.inventoryLot.update({
-              where: { id: lot.id },
-              data: {
-                currentQuantity: balanceAfter,
-                updatedAt: new Date(),
-              },
-            });
-
-            // Registrar Kardex inmutable
-            await tx.inventoryMovement.create({
-              data: {
-                movementType: 'SALIDA_VENTA',
-                productId: product.id,
-                lotId: lot.id,
-                presentationId: item.presentationId || null,
-                quantityBaseUnits: take,
-                presentationFactorHistorical: factor,
-                balanceAfterBaseUnits: balanceAfter,
-                referenceDocumentType: 'SALE',
-                referenceDocumentId: invoiceNumber,
-                notes: `Venta POS ${invoiceNumber} - Despacho FEFO`,
-                createdByUserId: auditCtx.userId || null,
-              },
+            // Descontar existencias del lote y registrar Kardex inmutable
+            await this.inventoryLedger.changeLotQuantity(tx, lot.id, -take, {
+              movementType: 'SALIDA_VENTA',
+              productId: product.id,
+              presentationId: item.presentationId || null,
+              quantityBaseUnits: take,
+              presentationFactorHistorical: factor,
+              referenceDocumentType: 'SALE',
+              referenceDocumentId: invoiceNumber,
+              notes: `Venta POS ${invoiceNumber} - Despacho FEFO`,
+              createdByUserId: auditCtx.userId || null,
             });
 
             const alloc = SaleLotAllocation.create({
@@ -558,40 +533,16 @@ export class SaleService {
       // Reintegrar unidades a los lotes originales exactos
       for (const line of sale.lines) {
         for (const alloc of line.lotAllocations) {
-          // Bloquear lote
-          const lotRows = await tx.$queryRaw<Array<{ current_quantity: number }>>`
-            SELECT current_quantity
-            FROM inventory_lots
-            WHERE id = ${alloc.lotId}::uuid
-            FOR UPDATE
-          `;
-
-          const currentQty = lotRows.length > 0 ? lotRows[0].current_quantity : 0;
-          const restoredQty = currentQty + alloc.quantityBaseUnits;
-
-          await tx.inventoryLot.update({
-            where: { id: alloc.lotId },
-            data: {
-              currentQuantity: restoredQty,
-              updatedAt: new Date(),
-            },
-          });
-
-          // Registrar movimiento inmutable de reversión en Kardex
-          await tx.inventoryMovement.create({
-            data: {
-              movementType: 'DEVOLUCION_CLIENTE',
-              productId: line.productId,
-              lotId: alloc.lotId,
-              presentationId: line.presentationId || null,
-              quantityBaseUnits: alloc.quantityBaseUnits,
-              presentationFactorHistorical: line.presentationFactorHistorical,
-              balanceAfterBaseUnits: restoredQty,
-              referenceDocumentType: 'SALE_CANCEL',
-              referenceDocumentId: sale.invoiceNumber,
-              notes: `Anulación venta ${sale.invoiceNumber}. Motivo: ${trimmedReason}`,
-              createdByUserId: auditCtx.userId || null,
-            },
+          await this.inventoryLedger.changeLotQuantity(tx, alloc.lotId, alloc.quantityBaseUnits, {
+            movementType: 'DEVOLUCION_CLIENTE',
+            productId: line.productId,
+            presentationId: line.presentationId || null,
+            quantityBaseUnits: alloc.quantityBaseUnits,
+            presentationFactorHistorical: line.presentationFactorHistorical,
+            referenceDocumentType: 'SALE_CANCEL',
+            referenceDocumentId: sale.invoiceNumber,
+            notes: `Anulación venta ${sale.invoiceNumber}. Motivo: ${trimmedReason}`,
+            createdByUserId: auditCtx.userId || null,
           });
         }
       }
