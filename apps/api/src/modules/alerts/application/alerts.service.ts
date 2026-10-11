@@ -1,3 +1,4 @@
+import { DomainError } from '../../../common/domain-error';
 import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { prisma as defaultPrisma, PrismaClient } from '@farmacia/database';
@@ -10,6 +11,12 @@ import {
   InventoryAlertDto,
 } from '@farmacia/contracts';
 import { calculateExpirationSeverity } from '../domain/alert.entity';
+
+export class EvaluationInProgressError extends DomainError {
+  constructor() {
+    super('Otra evaluación está en curso', 'conflict');
+  }
+}
 
 @Injectable()
 export class AlertsService {
@@ -155,7 +162,13 @@ export class AlertsService {
   async evaluateLotsExpirations(referenceDate: Date = new Date()): Promise<EvaluationResultDto> {
     this.logger.log(`Iniciando evaluación de vencimientos de lotes con fecha de referencia ${referenceDate.toISOString()}`);
 
-    const lots = await this.prisma.inventoryLot.findMany({
+    return this.prisma.$transaction(async (tx) => {
+      const [lock] = await tx.$queryRaw<Array<{ acquired: boolean }>>`
+        SELECT pg_try_advisory_xact_lock(41704, 1) AS acquired
+      `;
+      if (!lock?.acquired) throw new EvaluationInProgressError();
+
+    const lots = await tx.inventoryLot.findMany({
       where: { isActive: true },
       select: {
         id: true,
@@ -180,7 +193,7 @@ export class AlertsService {
 
       // Si el lote tiene existencias y está en riesgo (<= 90 días o vencido)
       if (lot.currentQuantity > 0 && severity !== 'NORMAL') {
-        const existing = await this.prisma.inventoryAlert.findUnique({
+        const existing = await tx.inventoryAlert.findUnique({
           where: {
             lotId_alertType: {
               lotId: lot.id,
@@ -190,7 +203,7 @@ export class AlertsService {
         });
 
         if (!existing) {
-          await this.prisma.inventoryAlert.create({
+          await tx.inventoryAlert.create({
             data: {
               id: randomUUID(),
               lotId: lot.id,
@@ -205,7 +218,7 @@ export class AlertsService {
           });
           createdAlerts++;
         } else {
-          await this.prisma.inventoryAlert.update({
+          await tx.inventoryAlert.update({
             where: { id: existing.id },
             data: {
               severity,
@@ -220,7 +233,7 @@ export class AlertsService {
         }
       } else {
         // Si el lote se agotó o su vencimiento ya es mayor a 90 días, resolvemos cualquier alerta previa
-        const existing = await this.prisma.inventoryAlert.findUnique({
+        const existing = await tx.inventoryAlert.findUnique({
           where: {
             lotId_alertType: {
               lotId: lot.id,
@@ -230,7 +243,7 @@ export class AlertsService {
         });
 
         if (existing && !existing.isResolved) {
-          await this.prisma.inventoryAlert.update({
+          await tx.inventoryAlert.update({
             where: { id: existing.id },
             data: {
               severity,
@@ -257,6 +270,7 @@ export class AlertsService {
       resolvedAlerts,
       timestamp: referenceDate.toISOString(),
     };
+    }, { timeout: 60000 });
   }
 
   /**

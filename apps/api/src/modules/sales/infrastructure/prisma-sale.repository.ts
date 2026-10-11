@@ -1,3 +1,4 @@
+import { businessDayStart, businessDayEnd } from '../../../common/utils/business-date';
 import { Injectable, Optional } from '@nestjs/common';
 import { prisma, PrismaClient, Prisma } from '@farmacia/database';
 import { ISaleRepository } from '../domain/sale.repository';
@@ -157,12 +158,10 @@ export class PrismaSaleRepository implements ISaleRepository {
     if (filters.fromDate || filters.toDate) {
       where.createdAt = {};
       if (filters.fromDate) {
-        where.createdAt.gte = new Date(filters.fromDate);
+        where.createdAt.gte = businessDayStart(filters.fromDate);
       }
       if (filters.toDate) {
-        const to = new Date(filters.toDate);
-        to.setHours(23, 59, 59, 999);
-        where.createdAt.lte = to;
+        where.createdAt.lte = businessDayEnd(filters.toDate);
       }
     }
 

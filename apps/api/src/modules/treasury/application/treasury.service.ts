@@ -1,3 +1,4 @@
+import { businessDayStart, businessDayEnd } from '../../../common/utils/business-date';
 import { Injectable } from '@nestjs/common';
 import { Prisma, prisma, type BankAccount, type BankMovement } from '@farmacia/database';
 import type {
@@ -440,16 +441,16 @@ export class TreasuryService {
       if (filter.fromDate) {
         const from = new Date(filter.fromDate);
         if (!Number.isNaN(from.getTime())) {
-          where.movementDate.gte = from;
+          where.movementDate.gte = typeof filter.fromDate === 'string' && filter.fromDate.length === 10 ? businessDayStart(filter.fromDate) : from;
         }
       }
       if (filter.toDate) {
         const to = new Date(filter.toDate);
         if (!Number.isNaN(to.getTime())) {
           if (typeof filter.toDate === 'string' && filter.toDate.length === 10) {
-            to.setHours(23, 59, 59, 999);
+            where.movementDate.lte = businessDayEnd(filter.toDate);
           }
-          where.movementDate.lte = to;
+          if (!(typeof filter.toDate === 'string' && filter.toDate.length === 10)) where.movementDate.lte = to;
         }
       }
     }

@@ -54,7 +54,7 @@ describe('InventoryLot & Location Domain Entities (Unit)', () => {
   });
 
   it('debe evaluar correctamente si un lote está vencido y días restantes de vida útil', () => {
-    const today = new Date('2026-10-01');
+    const today = new Date('2026-10-01T12:00:00-05:00');
 
     const expiredLot = InventoryLot.create({
       productId: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',

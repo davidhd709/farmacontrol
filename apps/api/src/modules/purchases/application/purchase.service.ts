@@ -1,3 +1,4 @@
+import { businessToday } from '../../../common/utils/business-date';
 import { Inject, Injectable, Optional, BadRequestException, NotFoundException } from '@nestjs/common';
 import { prisma, PrismaClient } from '@farmacia/database';
 import {
@@ -112,10 +113,8 @@ export class PurchaseService {
         );
       }
 
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const expZero = new Date(expirationDate);
-      expZero.setHours(0, 0, 0, 0);
+      const today = businessToday();
+      const expZero = expirationDate.toISOString().slice(0, 10);
 
       if (expZero <= today) {
         throw new ExpiredLotDateException(

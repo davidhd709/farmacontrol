@@ -1,10 +1,11 @@
+import { businessDateOf } from '../../../common/utils/business-date';
 import { ExpirationSeverity } from '@farmacia/contracts';
 
 /**
  * Calcula la severidad de vencimiento de un lote a partir de su fecha de vencimiento y una fecha de referencia.
  * Reglas de negocio (RN-001, RN-002, RF-008):
- * - VENCIDO: daysRemaining <= 0
- * - CRITICO: 1 <= daysRemaining <= 30
+ * - VENCIDO: daysRemaining < 0
+ * - CRITICO: 0 <= daysRemaining <= 30
  * - ALERTA: 31 <= daysRemaining <= 60
  * - PROXIMO: 61 <= daysRemaining <= 90
  * - NORMAL: daysRemaining > 90
@@ -13,23 +14,19 @@ export function calculateExpirationSeverity(
   expirationDate: Date,
   referenceDate: Date = new Date(),
 ): { daysRemaining: number; severity: ExpirationSeverity } {
-  // Normalizar ambas fechas a medianoche UTC para comparar días enteros sin sesgos horarios
+  // expirationDate es DATE; referenceDate es un instante y se interpreta en Bogotá.
   const expUtc = Date.UTC(
     expirationDate.getUTCFullYear(),
     expirationDate.getUTCMonth(),
     expirationDate.getUTCDate(),
   );
-  const refUtc = Date.UTC(
-    referenceDate.getUTCFullYear(),
-    referenceDate.getUTCMonth(),
-    referenceDate.getUTCDate(),
-  );
+  const refUtc = Date.parse(`${businessDateOf(referenceDate)}T00:00:00Z`);
 
   const MS_PER_DAY = 1000 * 60 * 60 * 24;
   const daysRemaining = Math.round((expUtc - refUtc) / MS_PER_DAY);
 
   let severity: ExpirationSeverity;
-  if (daysRemaining <= 0) {
+  if (daysRemaining < 0) {
     severity = 'VENCIDO';
   } else if (daysRemaining <= 30) {
     severity = 'CRITICO';

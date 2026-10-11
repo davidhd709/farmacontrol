@@ -1,3 +1,4 @@
+import { businessToday } from '../../../common/utils/business-date';
 import { Injectable, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
 import { prisma, Prisma } from '@farmacia/database';
 import { CashService } from '../../cash/application/cash.service';
@@ -161,7 +162,7 @@ export class ExpensesService {
       }
     }
 
-    const expenseDate = new Date(payload.expenseDate || new Date().toISOString().slice(0, 10));
+    const expenseDate = new Date(payload.expenseDate || businessToday());
     const dueDate = payload.dueDate ? new Date(payload.dueDate) : null;
 
     const isCredit = method === 'CREDITO';
@@ -259,7 +260,7 @@ export class ExpensesService {
       validateUuid(payload.bankAccountId, 'ID de cuenta bancaria');
     }
 
-    const paymentDate = new Date(payload.paymentDate || new Date().toISOString().slice(0, 10));
+    const paymentDate = new Date(payload.paymentDate || businessToday());
 
     await prisma.$transaction(async (tx) => {
       const rows = await tx.$queryRaw<Array<{ id: string; balance: Prisma.Decimal; amount_paid: Prisma.Decimal; status: string; description: string; beneficiary: string; document_number: string | null }>>`

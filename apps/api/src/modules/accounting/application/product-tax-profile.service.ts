@@ -1,3 +1,4 @@
+import { businessToday } from '../../../common/utils/business-date';
 import { Injectable } from '@nestjs/common';
 import { Prisma, prisma, type ProductTaxProfile as DbProfile } from '@farmacia/database';
 import {
@@ -202,8 +203,8 @@ export class ProductTaxProfileService {
             throw new AccountingValidationError('La activación exige referencia documental.');
           if (profile.ratePct === null)
             throw new AccountingValidationError('La activación exige tarifa verificada.');
-          const today = (await tx.$queryRaw<{ day: string }[]>`SELECT CURRENT_DATE::text AS day`)[0]?.day;
-          if (!today || dateText(profile.effectiveFrom) < today)
+          const today = businessToday();
+          if (dateText(profile.effectiveFrom) < today)
             throw new AccountingValidationError('La activación retroactiva no está permitida.');
           const overlap = await tx.productTaxProfile.findFirst({
             where: {

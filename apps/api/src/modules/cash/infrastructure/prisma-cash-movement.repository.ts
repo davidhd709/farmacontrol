@@ -1,3 +1,4 @@
+import { businessDayStart, businessDayEnd, businessToday } from '../../../common/utils/business-date';
 import { Injectable, Optional } from '@nestjs/common';
 import { prisma, PrismaClient, Prisma } from '@farmacia/database';
 import {
@@ -113,8 +114,7 @@ export class PrismaCashMovementRepository implements ICashMovementRepository {
       : 0n;
 
     // 2. Calcular límites para hoy (00:00:00 hasta 23:59:59)
-    const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+    const startOfToday = businessDayStart(businessToday());
 
     const todayWhere: Prisma.CashMovementWhereInput = {
       createdAt: { gte: startOfToday },
@@ -169,14 +169,14 @@ export class PrismaCashMovementRepository implements ICashMovementRepository {
       where.createdAt = {};
       if (startDate) {
         const start = new Date(startDate);
-        where.createdAt.gte = start;
+        where.createdAt.gte = typeof startDate === 'string' && startDate.length === 10 ? businessDayStart(startDate) : start;
       }
       if (endDate) {
         const end = new Date(endDate);
         if (typeof endDate === 'string' && endDate.length === 10) {
-          end.setHours(23, 59, 59, 999);
+          where.createdAt.lte = businessDayEnd(endDate);
         }
-        where.createdAt.lte = end;
+        if (!(typeof endDate === 'string' && endDate.length === 10)) where.createdAt.lte = end;
       }
     }
 

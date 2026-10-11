@@ -1,3 +1,4 @@
+import { businessDateOf, businessToday } from '../../../common/utils/business-date';
 import { Injectable, Logger } from '@nestjs/common';
 import { prisma, Prisma, AccountingPurpose as DbPurpose } from '@farmacia/database';
 import { JournalService } from './journal.service';
@@ -326,7 +327,7 @@ export class AccountingEngineService {
 
     return this.journalService.post(
       {
-        entryDate: entryDate.toISOString().slice(0, 10),
+        entryDate: businessDateOf(entryDate),
         description: `Venta mostrador comprobante ${sale.invoiceNumber}`,
         sourceType: 'SALE',
         sourceId: sale.id,
@@ -355,7 +356,7 @@ export class AccountingEngineService {
     return this.journalService.reverse(
       {
         entryId: existing.id,
-        entryDate: new Date().toISOString().slice(0, 10),
+        entryDate: businessToday(),
         reason,
         createdById: userId,
       },
@@ -381,6 +382,7 @@ export class AccountingEngineService {
       ['INVENTORY', 'SUPPLIERS'],
       purchaseDate,
       client,
+      true,
     );
     if (!canPost) {
       this.logger.warn(
@@ -466,7 +468,7 @@ export class AccountingEngineService {
 
     return this.journalService.post(
       {
-        entryDate: now.toISOString().slice(0, 10),
+        entryDate: businessDateOf(now),
         description: `Abono cartera${payment.invoiceNumber ? ' factura ' + payment.invoiceNumber : ''}${payment.customerName ? ' - ' + payment.customerName : ''}`,
         sourceType: 'RECEIVABLE_PAYMENT',
         sourceId: payment.id,
@@ -495,7 +497,7 @@ export class AccountingEngineService {
     return this.journalService.reverse(
       {
         entryId: existing.id,
-        entryDate: new Date().toISOString().slice(0, 10),
+        entryDate: businessToday(),
         reason,
         createdById: userId,
       },
@@ -551,7 +553,7 @@ export class AccountingEngineService {
 
     return this.journalService.post(
       {
-        entryDate: now.toISOString().slice(0, 10),
+        entryDate: businessDateOf(now),
         description: `Pago a proveedor${payment.invoiceNumber ? ' factura ' + payment.invoiceNumber : ''}${payment.supplierName ? ' - ' + payment.supplierName : ''}`,
         sourceType: 'PAYABLE_PAYMENT',
         sourceId: payment.id,
@@ -580,7 +582,7 @@ export class AccountingEngineService {
     return this.journalService.reverse(
       {
         entryId: existing.id,
-        entryDate: new Date().toISOString().slice(0, 10),
+        entryDate: businessToday(),
         reason,
         createdById: userId,
       },
@@ -615,6 +617,7 @@ export class AccountingEngineService {
       this.withoutBank([contraPurpose], bankLedger),
       date,
       tx,
+      true,
     );
     if (!canPost) {
       this.logger.warn(
@@ -671,7 +674,7 @@ export class AccountingEngineService {
     return this.journalService.reverse(
       {
         entryId: existing.id,
-        entryDate: new Date().toISOString().slice(0, 10),
+        entryDate: businessToday(),
         reason,
         createdById: userId,
       },
@@ -698,6 +701,7 @@ export class AccountingEngineService {
       this.withoutBank([DbPurpose.SUPPLIERS, paymentPurpose], bankLedger),
       date,
       tx,
+      true,
     );
     if (!canPost) {
       this.logger.warn(
@@ -752,7 +756,7 @@ export class AccountingEngineService {
     return this.journalService.reverse(
       {
         entryId: existing.id,
-        entryDate: new Date().toISOString().slice(0, 10),
+        entryDate: businessToday(),
         reason,
         createdById: userId,
       },
@@ -863,7 +867,7 @@ export class AccountingEngineService {
 
     return this.journalService.post(
       {
-        entryDate: entryDate.toISOString().slice(0, 10),
+        entryDate: businessDateOf(entryDate),
         description: `Nota Crédito ${note.creditNoteNumber} (${note.reason})${note.saleInvoiceNumber ? ' s/factura ' + note.saleInvoiceNumber : ''}`,
         sourceType: 'CREDIT_NOTE',
         sourceId: note.id,
@@ -943,7 +947,7 @@ export class AccountingEngineService {
 
     return this.journalService.post(
       {
-        entryDate: entryDate.toISOString().slice(0, 10),
+        entryDate: businessDateOf(entryDate),
         description: `Nota Débito ${note.debitNoteNumber} (${note.reason})${note.purchaseInvoiceNumber ? ' s/factura ' + note.purchaseInvoiceNumber : ''}`,
         sourceType: 'DEBIT_NOTE',
         sourceId: note.id,
