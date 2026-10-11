@@ -5,6 +5,7 @@ import { CatalogModule } from '../catalog/catalog.module';
 import { InventoryModule } from '../inventory/inventory.module';
 import { SuppliersModule } from '../suppliers/suppliers.module';
 import { AccountingModule } from '../accounting/accounting.module';
+import { IdempotencyModule } from '../../common/idempotency/idempotency.module';
 import { PURCHASE_REPOSITORY } from './domain/purchase.repository';
 import { PrismaPurchaseRepository } from './infrastructure/prisma-purchase.repository';
 import { PurchaseService } from './application/purchase.service';
@@ -14,7 +15,7 @@ import { DebitNotesController } from './presentation/controllers/debit-notes.con
 import { DebitNotesService } from './application/debit-notes.service';
 
 @Module({
-  imports: [IdentityModule, AuditModule, CatalogModule, InventoryModule, SuppliersModule, AccountingModule],
+  imports: [IdempotencyModule, IdentityModule, AuditModule, CatalogModule, InventoryModule, SuppliersModule, AccountingModule],
   controllers: [PurchaseController, DebitNotesController],
   providers: [
     {

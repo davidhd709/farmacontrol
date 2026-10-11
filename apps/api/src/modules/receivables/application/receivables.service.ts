@@ -15,13 +15,8 @@ import {
 } from '@farmacia/contracts';
 import { centsToMoneyString, parseMoneyToCents } from '../../treasury/domain/treasury-rules';
 import { recordSourceBankMovement } from '../../treasury/application/record-source-bank-movement';
-import {
-  findPaymentRetry,
-  parsePaymentAmount,
-  paymentRequestHash,
-  requirePaymentBankAccountId,
-  savePaymentRetry,
-} from '../../treasury/application/payment-idempotency';
+import { parsePaymentAmount, requirePaymentBankAccountId } from '../../treasury/application/payment-validation';
+import { IdempotencyService } from '../../../common/idempotency/idempotency.service';
 import { Optional } from '@nestjs/common';
 import { AccountingEngineService } from '../../accounting/application/accounting-engine.service';
 
@@ -30,6 +25,7 @@ export class ReceivablesService {
   constructor(
     private readonly cashService: CashService,
     @Optional() private readonly accountingEngine?: AccountingEngineService,
+    private readonly idempotencyService: IdempotencyService = new IdempotencyService(),
   ) {}
 
   // ------------------------------------------------------------------ //
@@ -169,11 +165,13 @@ export class ReceivablesService {
       throw new BadRequestException('Una cuenta bancaria solo corresponde a TRANSFERENCIA.');
     }
     const endpoint = `/api/v1/receivables/${receivableId}/payments`;
-    const requestHash = paymentRequestHash(endpoint, userId, payload);
+    const requestHash = this.idempotencyService.computeHash(endpoint, userId, payload);
 
-    return prisma.$transaction(async (tx: any) => {
-      const cached = await findPaymentRetry<ReceivableDto>(tx, idempotencyKey, requestHash);
-      if (cached) return cached;
+    return this.idempotencyService.retryOnSerialization(() => prisma.$transaction(async (tx: any) => {
+      const cached = idempotencyKey
+        ? await this.idempotencyService.getRecord(idempotencyKey, requestHash, tx, 'http')
+        : null;
+      if (cached) return cached.responseBody as ReceivableDto;
       // 1. Bloqueo pesimista para evitar doble abono concurrente
       const rows = await tx.$queryRaw<any[]>`
         SELECT
@@ -283,17 +281,16 @@ export class ReceivablesService {
       });
 
       const result = this.toDto(updated, payments);
-      await savePaymentRetry(tx, {
-        key: idempotencyKey,
-        endpoint,
-        hash: requestHash,
-        userId,
-        responseBody: result,
-      });
+      if (idempotencyKey) {
+        await this.idempotencyService.saveRecord({
+          key: idempotencyKey, endpoint, requestHash, userId,
+          responseStatus: 201, responseBody: result,
+        }, tx);
+      }
       return result;
     }, {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-    });
+    }));
   }
 
   /**

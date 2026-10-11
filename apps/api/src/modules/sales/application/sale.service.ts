@@ -22,10 +22,10 @@ import {
   SaleHasCreditNotesException,
   SaleHasReceivablePaymentsException,
 } from '../domain/sale.exceptions';
-import { IdempotencyService } from '../infrastructure/idempotency.service';
+import { IdempotencyService } from '../../../common/idempotency/idempotency.service';
 import { AuditService } from '../../audit/application/services/audit.service';
 import { recordSourceBankMovement } from '../../treasury/application/record-source-bank-movement';
-import { requirePaymentBankAccountId } from '../../treasury/application/payment-idempotency';
+import { requirePaymentBankAccountId } from '../../treasury/application/payment-validation';
 import { parseMoneyToCents } from '../../treasury/domain/treasury-rules';
 import {
   calculateNewCashBalanceCents,

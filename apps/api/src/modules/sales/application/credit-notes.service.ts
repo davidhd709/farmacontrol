@@ -13,7 +13,7 @@ import {
 } from '@farmacia/contracts';
 import { AccountingEngineService } from '../../accounting/application/accounting-engine.service';
 import { AuditService } from '../../audit/application/services/audit.service';
-import { IdempotencyService } from '../infrastructure/idempotency.service';
+import { IdempotencyService } from '../../../common/idempotency/idempotency.service';
 import { parseMoneyToCents, centsToMoneyString } from '../../treasury/domain/treasury-rules';
 import { calculateNewCashBalanceCents } from '../../cash/domain/cash-rules';
 import { recordSourceBankMovement } from '../../treasury/application/record-source-bank-movement';

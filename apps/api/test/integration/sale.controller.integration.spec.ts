@@ -311,6 +311,54 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
     expect(lot1AfterSecond.currentQuantity).toBe(0);
   });
 
+  it('serializa dos confirmaciones simultáneas con la misma clave y devuelve la misma venta', async () => {
+    const key = 'sale-concurrent-same-key';
+    const payload = {
+      paymentMethod: 'EFECTIVO',
+      items: [{ productId, presentationId, quantityCommercial: 1 }],
+    };
+    const send = () => request(app.getHttpServer())
+      .post('/api/v1/sales/confirm')
+      .set('Cookie', cajeroCookie)
+      .set('Idempotency-Key', key)
+      .send(payload);
+
+    const [first, second] = await Promise.all([send(), send()]);
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(201);
+    expect(second.body).toEqual(first.body);
+    expect(await prisma.sale.count()).toBe(1);
+    expect(await prisma.inventoryMovement.count({ where: { referenceDocumentType: 'SALE' } })).toBe(1);
+  });
+
+  it('procesa de nuevo una clave expirada y reemplaza su registro', async () => {
+    const key = 'sale-expired-key';
+    const payload = {
+      paymentMethod: 'EFECTIVO',
+      items: [{ productId, presentationId, quantityCommercial: 1 }],
+    };
+    const send = () => request(app.getHttpServer())
+      .post('/api/v1/sales/confirm')
+      .set('Cookie', cajeroCookie)
+      .set('Idempotency-Key', key)
+      .send(payload);
+
+    const first = await send();
+    expect(first.status).toBe(201);
+    await prisma.idempotencyKey.update({
+      where: { key },
+      data: {
+        createdAt: new Date(Date.now() - 48 * 60 * 60 * 1000),
+        expiresAt: new Date(Date.now() - 60 * 60 * 1000),
+      },
+    });
+    const second = await send();
+    expect(second.status).toBe(201);
+    expect(second.body.id).not.toBe(first.body.id);
+    expect(await prisma.sale.count()).toBe(2);
+    expect(await prisma.idempotencyKey.count({ where: { key } })).toBe(1);
+  });
+
   it('AUD-003: exige Idempotency-Key también en ventas en efectivo', async () => {
     const res = await request(app.getHttpServer())
       .post('/api/v1/sales/confirm')
