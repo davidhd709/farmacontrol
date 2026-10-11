@@ -807,6 +807,7 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
       await request(app.getHttpServer())
         .post(`/api/v1/receivables/${receivable.id}/payments`)
         .set('Cookie', supervisorCookie)
+        .set('Idempotency-Key', randomUUID())
         .send({ amount: 2000, paymentMethod: 'EFECTIVO' })
         .expect(201);
       const payment = await prisma.receivablePayment.findFirstOrThrow({
@@ -880,6 +881,7 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
           request(app.getHttpServer())
             .post(`/api/v1/receivables/${receivable.id}/payments`)
             .set('Cookie', supervisorCookie)
+        .set('Idempotency-Key', randomUUID())
             .send({ amount: 100, paymentMethod: 'EFECTIVO' }),
         ]);
 

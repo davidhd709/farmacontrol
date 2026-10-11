@@ -235,4 +235,16 @@ describe('Idempotencia concurrente de pagos (Integration)', () => {
     expect(foreign.status).toBe(409);
     expect(await prisma.payablePayment.count({ where: { payableId: payable.id } })).toBe(1);
   });
+
+  it('rechaza con 400 un abono en efectivo sin Idempotency-Key, sin registrar el pago', async () => {
+    const receivable = await createReceivable('INV-NO-KEY');
+    const res = await request(app.getHttpServer())
+      .post(`/api/v1/receivables/${receivable.id}/payments`)
+      .set('Cookie', adminCookie)
+      .send({ amount: '10000.00', paymentMethod: 'EFECTIVO' });
+    expect(res.status).toBe(400);
+    expect(await prisma.receivablePayment.count({ where: { receivableId: receivable.id } })).toBe(
+      0,
+    );
+  });
 });
