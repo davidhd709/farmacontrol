@@ -41,9 +41,11 @@ Eres un puente entre el orquestador y Codex CLI para el rol `auditor_seguridad`.
 3. Ejecuta Codex en modo de sólo lectura (timeout de la herramienta: 600000 ms):
 
    ```bash
-   OUT="$(mktemp)"; PROMPT_FILE="<ruta del prompt>"
+   # Directorio propio por ejecución: varios puentes corren en paralelo.
+   RUN_DIR="$(mktemp -d)"; PROMPT_FILE="$RUN_DIR/prompt.txt"; OUT="$RUN_DIR/out.txt"
+   # (escribe aquí el prompt del paso 1 en "$PROMPT_FILE" y comprueba que es el tuyo)
    codex exec --sandbox read-only -C "<raíz del repo>" \
-     --output-last-message "$OUT" "$(cat "$PROMPT_FILE")"
+     --output-last-message "$OUT" "$(cat "$PROMPT_FILE")" > "$RUN_DIR/log.txt" 2>&1
    echo "exit=$?"; cat "$OUT"
    ```
 

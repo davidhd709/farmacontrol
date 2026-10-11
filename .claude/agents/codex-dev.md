@@ -36,13 +36,17 @@ Si falta el rol o el contrato está incompleto, devuelve `BLOQUEADO` sin llamar 
 2. Ejecuta Codex sin interacción (timeout de la herramienta: 600000 ms):
 
    ```bash
-   OUT="$(mktemp)"; PROMPT_FILE="<ruta del prompt>"
+   # Directorio propio por ejecución: varios puentes corren en paralelo.
+   RUN_DIR="$(mktemp -d)"; PROMPT_FILE="$RUN_DIR/prompt.txt"; OUT="$RUN_DIR/out.txt"
+   # (escribe aquí el prompt del paso 1 en "$PROMPT_FILE" y comprueba que es el tuyo)
    codex exec --sandbox workspace-write -C "<directorio>" \
-     --output-last-message "$OUT" "$(cat "$PROMPT_FILE")"
+     --output-last-message "$OUT" "$(cat "$PROMPT_FILE")" > "$RUN_DIR/log.txt" 2>&1
    echo "exit=$?"; cat "$OUT"
    ```
 
    - Para `qa_concurrencia` cuando sólo debe analizar, usa `--sandbox read-only`.
+   - Si el contrato exige pruebas contra PostgreSQL (localhost:5434) o instalar paquetes, añade `-c sandbox_workspace_write.network_access=true`; sin eso el sandbox devuelve `EPERM` al conectar.
+   - Si `codex exec` responde que el modelo requiere una versión más nueva o no está soportado, devuelve `BLOQUEADO` con el mensaje exacto (la solución suele ser actualizar la CLI con `npm i -g @openai/codex@latest`).
    - Si la tarea puede tardar más de 10 minutos, ejecútala en segundo plano y consulta `$OUT` hasta que exista.
    - Nunca uses `danger-full-access` ni `--dangerously-bypass-approvals-and-sandbox`.
 
