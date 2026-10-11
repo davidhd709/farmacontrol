@@ -156,10 +156,11 @@ export class ReceivablesService {
         'El pago con tarjeta requiere una política de liquidación aprobada; use EFECTIVO o TRANSFERENCIA.',
       );
     }
+    // Todo pago mueve dinero: un reintento sin clave lo duplicaría (AGENTS.md §6).
+    if (!idempotencyKey?.trim())
+      throw new BadRequestException('Idempotency-Key es obligatorio para registrar un pago.');
     if (method === 'TRANSFERENCIA') {
       requirePaymentBankAccountId(payload.bankAccountId);
-      if (!idempotencyKey)
-        throw new BadRequestException('Idempotency-Key es obligatorio para transferencias.');
     } else if (payload.bankAccountId) {
       throw new BadRequestException('Una cuenta bancaria solo corresponde a TRANSFERENCIA.');
     }

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 /**
  * ÉPICA 07 — HU-020 / HU-021: Cuentas por Cobrar y Cuentas por Pagar
  *
@@ -303,6 +304,7 @@ describe('ReceivablesController & PayablesController (Integration)', () => {
       const res = await request(app.getHttpServer())
         .post(`/api/v1/receivables/${receivable.id}/payments`)
         .set('Cookie', carteraCookie)
+        .set('Idempotency-Key', randomUUID())
         .send({ amount: 40000, paymentMethod: 'EFECTIVO' });
 
       expect(res.status).toBe(201);
@@ -415,6 +417,7 @@ describe('ReceivablesController & PayablesController (Integration)', () => {
       const res = await request(app.getHttpServer())
         .post(`/api/v1/receivables/${receivable.id}/payments`)
         .set('Cookie', carteraCookie)
+        .set('Idempotency-Key', randomUUID())
         .send({ amount: 99999 });
 
       expect(res.status).toBe(400);
@@ -574,6 +577,7 @@ describe('ReceivablesController & PayablesController (Integration)', () => {
       const res = await request(app.getHttpServer())
         .post(`/api/v1/payables/${payable.id}/payments`)
         .set('Cookie', adminCookie)
+        .set('Idempotency-Key', randomUUID())
         .send({ amount: 50000 });
 
       expect(res.status).toBe(201);
@@ -616,6 +620,7 @@ describe('ReceivablesController & PayablesController (Integration)', () => {
       const res = await request(app.getHttpServer())
         .post(`/api/v1/payables/${payable.id}/payments`)
         .set('Cookie', adminCookie)
+        .set('Idempotency-Key', randomUUID())
         .send({ amount: 99999 });
 
       expect(res.status).toBe(400);
