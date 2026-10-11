@@ -1,3 +1,4 @@
+import { businessToday } from '../../../common/utils/business-date';
 import { PurchaseDto, PurchaseLineDto } from '@farmacia/contracts';
 
 export interface CreatePurchaseLineProps {
@@ -81,10 +82,8 @@ export class PurchaseLine {
       throw new Error('La fecha de vencimiento es obligatoria y debe ser una fecha válida');
     }
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const expDate = new Date(props.expirationDate);
-    expDate.setHours(0, 0, 0, 0);
+    const today = businessToday();
+    const expDate = props.expirationDate.toISOString().slice(0, 10);
 
     if (expDate <= today) {
       throw new Error(

@@ -1,3 +1,4 @@
+import { businessDayStart, businessDayEnd, businessToday } from '../../../common/utils/business-date';
 import { Injectable, Logger } from '@nestjs/common';
 import { prisma as defaultPrisma, PrismaClient } from '@farmacia/database';
 import {
@@ -16,7 +17,6 @@ import {
 } from '@farmacia/contracts';
 import { calculateExpirationSeverity } from '../../alerts/domain/alert.entity';
 import { generateCsv } from '../utils/csv-exporter.util';
-import { businessToday } from '../../../common/utils/business-date';
 import {
   SUPPLIER_NOTICE_FROM_DAYS,
   SUPPLIER_NOTICE_UNTIL_DAYS,
@@ -209,7 +209,10 @@ export class ReportsService {
 
     const items: SupplierReturnItemDto[] = [];
     for (const lot of lots) {
-      const { daysRemaining } = calculateExpirationSeverity(lot.expirationDate, reference);
+      const { daysRemaining } = calculateExpirationSeverity(
+        lot.expirationDate,
+        businessDayStart(referenceDay),
+      );
       const status = supplierReturnStatus(daysRemaining);
       if (!status) continue;
       const purchase = lastPurchaseByLot.get(lot.id)?.purchase;
@@ -296,12 +299,10 @@ export class ReportsService {
     if (filter.fromDate || filter.toDate) {
       where.createdAt = {};
       if (filter.fromDate) {
-        where.createdAt.gte = new Date(filter.fromDate);
+        where.createdAt.gte = businessDayStart(filter.fromDate);
       }
       if (filter.toDate) {
-        const toDateEnd = new Date(filter.toDate);
-        toDateEnd.setUTCHours(23, 59, 59, 999);
-        where.createdAt.lte = toDateEnd;
+        where.createdAt.lte = businessDayEnd(filter.toDate);
       }
     }
 
@@ -378,12 +379,10 @@ export class ReportsService {
     if (filter.fromDate || filter.toDate) {
       where.createdAt = {};
       if (filter.fromDate) {
-        where.createdAt.gte = new Date(filter.fromDate);
+        where.createdAt.gte = businessDayStart(filter.fromDate);
       }
       if (filter.toDate) {
-        const toDateEnd = new Date(filter.toDate);
-        toDateEnd.setUTCHours(23, 59, 59, 999);
-        where.createdAt.lte = toDateEnd;
+        where.createdAt.lte = businessDayEnd(filter.toDate);
       }
     }
 

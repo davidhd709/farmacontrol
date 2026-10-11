@@ -1,3 +1,4 @@
+import { businessDateOf } from '../../../../common/utils/business-date';
 import {
   InsufficientInventoryException,
   NegativeQuantityException,
@@ -33,15 +34,13 @@ export class FefoAllocationEngine {
       );
     }
 
-    const ref = new Date(referenceDate);
-    ref.setHours(0, 0, 0, 0);
+    const ref = businessDateOf(referenceDate);
 
     // Filtrar lotes vencidos y ordenar por vencimiento ascendente
     const sortedLots = candidates
       .filter((lot) => {
-        const exp = new Date(lot.expirationDate);
-        exp.setHours(0, 0, 0, 0);
-        return exp.getTime() >= ref.getTime() && lot.availableQuantity > 0;
+        const exp = lot.expirationDate.toISOString().slice(0, 10);
+        return exp >= ref && lot.availableQuantity > 0;
       })
       .sort((a, b) => a.expirationDate.getTime() - b.expirationDate.getTime());
 

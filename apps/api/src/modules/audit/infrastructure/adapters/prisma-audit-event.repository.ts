@@ -1,3 +1,4 @@
+import { businessDayStart, businessDayEnd } from '../../../../common/utils/business-date';
 import { Injectable, Optional } from '@nestjs/common';
 import { prisma, PrismaClient, Prisma } from '@farmacia/database';
 import {
@@ -152,10 +153,10 @@ export class PrismaAuditEventRepository implements AuditEventRepositoryPort {
     if (filters.fromDate || filters.toDate) {
       where.createdAt = {};
       if (filters.fromDate) {
-        where.createdAt.gte = new Date(`${filters.fromDate}T00:00:00.000Z`);
+        where.createdAt.gte = businessDayStart(filters.fromDate);
       }
       if (filters.toDate) {
-        where.createdAt.lte = new Date(`${filters.toDate}T23:59:59.999Z`);
+        where.createdAt.lte = businessDayEnd(filters.toDate);
       }
     }
     if (filters.search && filters.search.trim()) {

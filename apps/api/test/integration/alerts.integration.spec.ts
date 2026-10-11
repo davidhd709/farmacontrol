@@ -131,7 +131,32 @@ describe('AlertsController (Integration with PostgreSQL real & Background Worker
   });
 
   describe('Evaluación de Vencimientos y Generación de Alertas (RN-001, RN-002, RF-008)', () => {
-    it('debe evaluar los lotes existentes y clasificar en VENCIDO, CRITICO, ALERTA y PROXIMO', async () => {
+    it('responde 409 si el worker conserva el advisory lock de evaluación', async () => {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    let acquired!: () => void;
+    const ready = new Promise<void>((resolve) => { acquired = resolve; });
+    const holder = prisma.$transaction(async (tx) => {
+      const [lock] = await tx.$queryRaw<Array<{ acquired: boolean }>>`SELECT pg_try_advisory_xact_lock(41704, 1) AS acquired`;
+      expect(lock?.acquired).toBe(true);
+      acquired();
+      await held;
+    }, { timeout: 10000 });
+    await ready;
+    try {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/alerts/evaluate')
+        .set('Cookie', adminCookie)
+        .send({});
+      expect(res.status).toBe(409);
+      expect(res.body.message).toBe('Otra evaluación está en curso');
+    } finally {
+      release();
+      await holder;
+    }
+  });
+
+  it('debe evaluar los lotes existentes y clasificar en VENCIDO, CRITICO, ALERTA y PROXIMO', async () => {
       const refDate = new Date('2026-06-01T00:00:00Z');
 
       // Crear 4 lotes con distintas fechas relativas a refDate (2026-06-01):

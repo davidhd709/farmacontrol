@@ -18,6 +18,7 @@ import { ApiResponse, SYSTEM_PERMISSIONS, ExpirationSeverity } from '@farmacia/c
 import { SessionAuthGuard } from '../../identity/presentation/guards/session-auth.guard';
 import { PermissionsGuard } from '../../identity/presentation/guards/permissions.guard';
 import { RequirePermissions } from '../../identity/presentation/decorators/require-permissions.decorator';
+import { businessDayStart } from '../../../common/utils/business-date';
 
 @Controller('alerts')
 @UseGuards(SessionAuthGuard)
@@ -75,7 +76,8 @@ export class AlertsController {
     @Body('referenceDate', new RequestFieldValidationPipe('referenceDate', 'date?'))
     referenceDateStr?: string,
   ): Promise<ApiResponse<any>> {
-    const refDate = referenceDateStr ? new Date(referenceDateStr) : new Date();
+    // Un día calendario se evalúa como ese día en Bogotá, no como medianoche UTC.
+    const refDate = referenceDateStr ? businessDayStart(referenceDateStr) : new Date();
     const data = await this.alertsService.evaluateLotsExpirations(refDate);
     return { success: true, data };
   }

@@ -1,3 +1,4 @@
+import { businessDayStart, businessDayEnd, businessToday, calendarDate } from '../../../common/utils/business-date';
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { prisma, Prisma } from '@farmacia/database';
 import { CashService } from '../../cash/application/cash.service';
@@ -93,16 +94,14 @@ export class PayablesService {
     if (filters.supplierId) where.supplierId = filters.supplierId;
     if (filters.status) where.status = filters.status;
     if (filters.overdueOnly) {
-      where.dueDate = { lt: new Date() };
+      where.dueDate = { lt: calendarDate(businessToday()) };
       where.status = 'PENDIENTE';
     }
     if (filters.fromDate || filters.toDate) {
       where.createdAt = {};
-      if (filters.fromDate) where.createdAt.gte = new Date(filters.fromDate);
+      if (filters.fromDate) where.createdAt.gte = businessDayStart(filters.fromDate);
       if (filters.toDate) {
-        const to = new Date(filters.toDate);
-        to.setHours(23, 59, 59, 999);
-        where.createdAt.lte = to;
+        where.createdAt.lte = businessDayEnd(filters.toDate);
       }
     }
 
@@ -323,8 +322,7 @@ export class PayablesService {
       },
     });
 
-    const now = new Date();
-    now.setHours(0, 0, 0, 0);
+    const now = calendarDate(businessToday());
 
     let currentCents = 0n;
     let currentCount = 0;
@@ -339,8 +337,7 @@ export class PayablesService {
 
     for (const p of payables) {
       const balanceCents = parseMoneyToCents(p.balance.toString(), 'Saldo de cuenta por pagar');
-      const due = new Date(p.dueDate);
-      due.setHours(0, 0, 0, 0);
+      const due = p.dueDate;
 
       const diffTime = now.getTime() - due.getTime();
       const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));

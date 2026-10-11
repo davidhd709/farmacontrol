@@ -1,3 +1,4 @@
+import { businessToday } from '../../../common/utils/business-date';
 import { QueryFieldValidationPipe } from '../../../common/pagination/request-shape.pipe';
 import { Controller, Get, Query, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
@@ -29,7 +30,7 @@ export class ReportsController {
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader(
         'Content-Disposition',
-        `attachment; filename="reporte_inventario_valorizado_${new Date().toISOString().split('T')[0]}.csv"`,
+        `attachment; filename="reporte_inventario_valorizado_${businessToday()}.csv"`,
       );
       return res.send(csv);
     }
@@ -53,7 +54,7 @@ export class ReportsController {
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader(
         'Content-Disposition',
-        `attachment; filename="reporte_vencimientos_${new Date().toISOString().split('T')[0]}.csv"`,
+        `attachment; filename="reporte_vencimientos_${businessToday()}.csv"`,
       );
       return res.send(csv);
     }
@@ -104,7 +105,7 @@ export class ReportsController {
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader(
         'Content-Disposition',
-        `attachment; filename="reporte_ventas_${new Date().toISOString().split('T')[0]}.csv"`,
+        `attachment; filename="reporte_ventas_${businessToday()}.csv"`,
       );
       return res.send(csv);
     }
@@ -131,7 +132,7 @@ export class ReportsController {
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader(
         'Content-Disposition',
-        `attachment; filename="reporte_caja_${new Date().toISOString().split('T')[0]}.csv"`,
+        `attachment; filename="reporte_caja_${businessToday()}.csv"`,
       );
       return res.send(csv);
     }

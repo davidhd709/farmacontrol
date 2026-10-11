@@ -1,3 +1,4 @@
+import { businessToday } from '../../../../common/utils/business-date';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import type {
   CreateProductPayload,
@@ -102,7 +103,7 @@ export class ProductService {
       WHERE product_id = ${id}::uuid
         AND is_active = true
         AND current_quantity > 0
-        AND expiration_date >= CURRENT_DATE
+        AND expiration_date >= ${businessToday()}::date
     `;
     return product.toDto(stockAgg[0]?.total_stock ?? 0);
   }
@@ -207,7 +208,7 @@ export class ProductService {
         WHERE product_id IN (${Prisma.join(productIds.map((id) => Prisma.sql`${id}::uuid`))})
           AND is_active = true
           AND current_quantity > 0
-          AND expiration_date >= CURRENT_DATE
+          AND expiration_date >= ${businessToday()}::date
         GROUP BY product_id
       `;
 

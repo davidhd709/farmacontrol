@@ -2,6 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { prisma, PrismaClient } from '@farmacia/database';
 import { ExpirationEvaluatorService } from './expiration-evaluator.service';
 
+/** Un día calendario (YYYY-MM-DD) se evalúa como ese día en Bogotá (UTC-05:00), no como medianoche UTC. */
+function businessReferenceDate(value: string): Date {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T05:00:00.000Z`) : new Date(value);
+}
+
 @Injectable()
 export class JobQueueService {
   private readonly logger = new Logger(JobQueueService.name);
@@ -61,7 +66,7 @@ export class JobQueueService {
       if (job.jobType === 'EVALUATE_EXPIRATIONS') {
         const payloadDate =
           job.payload && typeof job.payload === 'object' && 'referenceDate' in job.payload
-            ? new Date((job.payload as any).referenceDate)
+            ? businessReferenceDate(String((job.payload as any).referenceDate))
             : new Date();
         await this.expirationEvaluator.evaluate(payloadDate);
       } else {

@@ -1,3 +1,4 @@
+import { businessDateOf, businessToday, calendarDate } from '../../../common/utils/business-date';
 import { Injectable } from '@nestjs/common';
 import {
   prisma,
@@ -23,12 +24,6 @@ import {
 
 type Tx = Prisma.TransactionClient;
 type AccountRecord = NonNullable<Awaited<ReturnType<typeof prisma.account.findFirst>>>;
-
-function dateOnly(value: Date): Date {
-  if (Number.isNaN(value.getTime()))
-    throw new AccountingValidationError('Fecha de vigencia inválida.');
-  return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()));
-}
 
 function dto(account: AccountRecord): AccountDto {
   return {
@@ -148,7 +143,7 @@ export class AccountingRepository {
         where: {
           accountId: id,
           status: 'ACTIVE',
-          OR: [{ effectiveTo: null }, { effectiveTo: { gte: new Date() } }],
+          OR: [{ effectiveTo: null }, { effectiveTo: { gte: calendarDate(businessToday()) } }],
         },
       });
       if (activeMapping)
@@ -177,7 +172,7 @@ export class AccountingRepository {
   }
 
   async listMappings(date = new Date()): Promise<AccountingPurposeDto[]> {
-    const effectiveDate = dateOnly(date);
+    const effectiveDate = calendarDate(businessDateOf(date));
     const rows = await prisma.companyAccountingMapping.findMany({
       where: {
         effectiveFrom: { lte: effectiveDate },
@@ -211,7 +206,7 @@ export class AccountingRepository {
         'El propósito requiere una cuenta activa que permita movimiento.',
       );
     if (account) validatePurposeAccountType(purpose, account.type);
-    const today = dateOnly(effectiveDate);
+    const today = calendarDate(businessDateOf(effectiveDate));
     const current = await tx.companyAccountingMapping.findFirst({
       where: {
         purpose,
