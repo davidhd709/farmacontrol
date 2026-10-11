@@ -12,13 +12,13 @@ Este documento resume qué se corrigió desde la auditoría técnica, qué falta
 | 1 | Integridad de datos y dinero (P0, P1 de backend y P2 de integridad) | **IMPLEMENTADO** (cerrada el 10 de octubre); lo que depende del cliente quedó con la opción conservadora (sección 4) |
 | 2 | Producción y seguridad | **IMPLEMENTADO** (10 de octubre); falta que el cliente provea el destino externo de respaldos (sección 3) |
 | 3 | Acuerdos de la reunión del 4 de octubre | **IMPLEMENTADO** (10 de octubre), salvo el botón de recordatorio de pago (bloqueado por la decisión 15) |
-| 4 | Contrato de API y estabilidad | **IMPLEMENTADO** (10 de octubre), salvo los contratos transaccionales entre módulos, que pasan a un slice propio |
+| 4 | Contrato de API y estabilidad | **IMPLEMENTADO** (10 de octubre), incluidos los contratos transaccionales entre módulos |
 | 5 | Frontend y UX | PENDIENTE |
 | 6 | Pruebas de cierre (E2E, concurrencia, permisos) | PENDIENTE |
 | 7 | Decisiones del cliente | EN PROGRESO: preguntas identificadas, sin respuesta |
 | 8 | Aceptación (UAT) y release v1.0.0 | PENDIENTE |
 
-**Calidad al corte:** typecheck sin errores, lint sin errores (advertencias `any` preexistentes), **923 pruebas en 136 archivos**: 921 en la corrida completa y las 2 restantes (`product.controller`, timeout del `beforeEach` con el disco ocupado) en verde al repetirlas solas; después, las correcciones de la auditoría pasaron 105/105 en los archivos afectados.
+**Calidad al corte:** typecheck sin errores, lint sin errores (advertencias `any` preexistentes), **926 pruebas en 137 archivos, todas en verde** en una sola corrida contra PostgreSQL real.
 
 ## 2. Qué se hizo
 
@@ -94,6 +94,7 @@ Verificación de infraestructura: `caddy validate`; Caddy real delante de servic
 | Validación | ~15 endpoints sin validar; paginación sin tope o con NaN | Validación de forma en 33 controladores, ids UUID, paginación entera con tope 100 (lo máximo que pide el frontend) | ver `git log` |
 | Worker | VENCIDO el día D, fechas UTC, P2002 con ejecuciones solapadas, cola sin `SKIP LOCKED` | Fecha de Bogotá, VENCIDO desde D+1 (como vende el POS), advisory lock, `FOR UPDATE SKIP LOCKED` | `7d2ed1a` |
 | Idempotencia | Dos implementaciones, sin expiración, carreras con la misma clave; abonos en efectivo sin clave obligatoria | Un servicio compartido con lock por clave, clave vencida se reprocesa, limpieza horaria en el worker; clave obligatoria en todo pago | `1e8b058`, `e92d7ff`, `aec8f4c` |
+| Contratos entre módulos | Ventas y compras escribían lotes, kardex, caja, cartera y CxP; terceros escribía clientes y proveedores sin transacción común | `InventoryLedger`, `CashService.recordMovementInTransaction`, `ReceivablesLedger`, `PayablesLedger`, `CustomersLedger` y `SuppliersLedger`, siempre dentro de la transacción del llamador; terceros sincroniza en una sola transacción. Una prueba de arquitectura falla si un módulo vuelve a escribir esas tablas de otro | `7e0071d`, `8428496`, `5ee4393`, `1762d74`, `6646c9a` |
 | Fechas de negocio | `CURRENT_DATE` y `toISOString()` en UTC: desde las 7 p. m. FEFO, asientos, períodos y filtros usaban el día siguiente | Día de Bogotá en FEFO, contabilidad, CxC/CxP, reportes, filtros, alertas y web; el evaluador manual comparte el lock del worker (409 si hay otra evaluación) | `1e3a1ec`, ver `git log` |
 
 Auditoría de seguridad de la fase (Antigravity, sólo lectura): dos P1 y un P2 confirmados y corregidos (mensajes de Prisma reenviados por controladores; clave de idempotencia opcional en pagos en efectivo). Un P1 descartado: la CSP no bloquea Swagger UI porque `@nestjs/swagger` carga su inicialización como archivo externo.
@@ -154,7 +155,7 @@ Ninguna se implementó por supuesto; las que se tocaron quedaron con la opción 
 - Botón manual de recordatorio de pago: bloqueado hasta definir el canal (decisión 15).
 
 ### Fase 4 — API y estabilidad
-- **Slice propio:** contratos transaccionales para que ningún módulo escriba tablas ajenas (ventas y compras escriben hoy lotes, kardex, caja, cartera y CxP; terceros escribe clientes y proveedores). Reescribe el flujo de venta con FEFO, por eso se separó de la fase.
+- Sin pendientes. La deuda menor está en la sección 6.
 
 ### Fase 5 — Frontend
 - POS: debounce y cancelación de búsquedas (AUD-014); elegir cliente existente; presentación por defecto; vista previa FEFO.
@@ -186,10 +187,12 @@ Ninguna se implementó por supuesto; las que se tocaron quedaron con la opción 
 - **Rate limit en memoria:** válido con una sola instancia de la API. Un ataque distribuido contra una cuenta solo lo frena el límite por IP y el costo de Argon2.
 - **RPO de 24 horas:** no hay archivado continuo de WAL (PITR).
 - **Límite por IP en la farmacia:** si todos los equipos salen por la misma IP pública, 20 fallos en 15 minutos bloquean el login en la sede; ajustable con `AUTH_RATE_LIMIT_IP_MAX_ATTEMPTS`.
-- **Terceros:** `ThirdPartyService.createThirdParty` crea el cliente o proveedor y el tercero sin una transacción común; editar un cliente o proveedor no actualiza su tercero. Las líneas de notas contables no llevan tercero.
+- **Terceros:** editar un cliente o proveedor desde su propio módulo no actualiza su tercero (al revés sí, en una sola transacción). Las líneas de notas contables no llevan tercero.
+- **Límites entre módulos:** la prueba de arquitectura vigila lotes, kardex, ubicaciones, caja, cartera, CxP, clientes, proveedores y tesorería; varios módulos siguen escribiendo `audit_events` directamente y las tablas de ventas, compras, contabilidad y catálogo no están vigiladas. Terceros instancia `CustomersLedger`/`SuppliersLedger` directamente porque clientes y proveedores ya importan su módulo (un import de vuelta sería circular).
+- **CI:** las pruebas de respaldos (`backups.integration`) fallan en GitHub Actions desde antes de la Fase 4 (500 al generar el respaldo real en el runner); en local pasan.
 - **Notas crédito y descuentos:** la devolución se registra neta del descuento en `SALES_RETURNS`; no se revierte la parte proporcional en `SALES_DISCOUNTS`.
 - 128 advertencias de lint por `any` y componentes de más de 600 líneas, a reducir solo cuando se toquen.
 
 ## 7. Siguiente paso recomendado
 
-Validar con la contadora, en el ambiente de pruebas, la naturaleza de las cuentas, el cierre anual y los recibos/comprobantes; enviarle las decisiones de la sección 4 (incluido el canal del recordatorio de pago) junto con el pedido del destino externo de respaldos. En paralelo, el slice de **contratos transaccionales entre módulos** (pendiente de la Fase 4) o la **Fase 5** (frontend); ninguno depende de decisiones del cliente.
+Validar con la contadora, en el ambiente de pruebas, la naturaleza de las cuentas, el cierre anual y los recibos/comprobantes; enviarle las decisiones de la sección 4 (incluido el canal del recordatorio de pago) junto con el pedido del destino externo de respaldos. En paralelo, la **Fase 5** (frontend), que no depende de decisiones del cliente, y corregir el fallo de respaldos en CI.
