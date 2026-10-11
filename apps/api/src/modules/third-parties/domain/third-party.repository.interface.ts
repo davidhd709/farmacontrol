@@ -4,7 +4,8 @@ import { ThirdPartyQueryFilters, PaginatedResponse } from '@farmacia/contracts';
 export interface IThirdPartyRepository {
   findById(id: string): Promise<ThirdParty | null>;
   findByDocumentNumber(documentNumber: string): Promise<ThirdParty | null>;
-  save(thirdParty: ThirdParty): Promise<void>;
-  update(thirdParty: ThirdParty): Promise<void>;
+  /** `tx` es la transacción del caso de uso, opaca para el dominio. */
+  save(thirdParty: ThirdParty, tx?: unknown): Promise<void>;
+  update(thirdParty: ThirdParty, tx?: unknown): Promise<void>;
   findPaginated(filters: ThirdPartyQueryFilters): Promise<PaginatedResponse<ThirdParty>>;
 }
