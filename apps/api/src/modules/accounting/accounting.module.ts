@@ -21,10 +21,10 @@ import { ManualNotesService } from './application/manual-notes.service';
 import { ManualNotesController } from './presentation/manual-notes.controller';
 import { AnnualClosingService } from './application/annual-closing.service';
 import { AnnualClosingController } from './presentation/annual-closing.controller';
-import { IdempotencyService } from '../sales/infrastructure/idempotency.service';
+import { IdempotencyModule } from '../../common/idempotency/idempotency.module';
 
 @Module({
-  imports: [IdentityModule],
+  imports: [IdempotencyModule, IdentityModule],
   controllers: [
     AccountsController,
     AccountingConfigurationController,
@@ -47,7 +47,6 @@ import { IdempotencyService } from '../sales/infrastructure/idempotency.service'
     DocumentLockService,
     ManualNotesService,
     AnnualClosingService,
-    IdempotencyService,
   ],
   exports: [
     AccountingService,

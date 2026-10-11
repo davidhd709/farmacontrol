@@ -234,6 +234,35 @@ describe('ReceivablesController & PayablesController (Integration)', () => {
   });
 
   describe('POST /api/v1/receivables/:id/payments', () => {
+    it('dos pagos simultáneos con la misma clave registran un único abono', async () => {
+      const adminUser = await prisma.user.findFirstOrThrow({ where: { username: 'admin_test' } });
+      const sale = await prisma.sale.create({
+        data: {
+          invoiceNumber: 'INV-CONCURRENT-PAYMENT', customerId,
+          paymentMethod: 'CREDITO', subtotal: '50000', total: '50000',
+          createdById: adminUser.id,
+        },
+      });
+      const receivable = await prisma.receivable.create({
+        data: {
+          saleId: sale.id, customerId, totalAmount: '50000', balance: '50000',
+          status: 'PENDIENTE', dueDate: new Date('2027-06-30'),
+        },
+      });
+      const send = () => request(app.getHttpServer())
+        .post(`/api/v1/receivables/${receivable.id}/payments`)
+        .set('Cookie', carteraCookie)
+        .set('Idempotency-Key', 'concurrent-receivable-payment')
+        .send({ amount: '10000.00', paymentMethod: 'EFECTIVO' });
+
+      const [first, second] = await Promise.all([send(), send()]);
+      expect(first.status).toBe(201);
+      expect(second.status).toBe(201);
+      expect(second.body).toEqual(first.body);
+      expect(await prisma.receivablePayment.count({ where: { receivableId: receivable.id } })).toBe(1);
+      expect((await prisma.receivable.findUniqueOrThrow({ where: { id: receivable.id } })).balance.toString()).toBe('40000');
+    });
+
     it('aplica un abono parcial correctamente', async () => {
       const adminUser = await prisma.user.findFirst({ where: { username: 'admin_test' } });
 

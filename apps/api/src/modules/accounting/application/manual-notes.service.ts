@@ -3,7 +3,7 @@ import { prisma, Prisma } from '@farmacia/database';
 import type { CreateManualNotePayload, ManualNoteCreatedDto } from '@farmacia/contracts';
 import { JournalService } from './journal.service';
 import { AccountingConflictError, AccountingValidationError } from '../domain/accounting-rules';
-import { IdempotencyService } from '../../sales/infrastructure/idempotency.service';
+import { IdempotencyService } from '../../../common/idempotency/idempotency.service';
 
 export const MANUAL_NOTE_SOURCE = 'MANUAL_NOTE';
 const ENDPOINT = '/api/v1/accounting/manual-notes';
