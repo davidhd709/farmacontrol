@@ -10,6 +10,7 @@ import { INVENTORY_MOVEMENT_REPOSITORY_PORT } from './application/ports/inventor
 import { PrismaInventoryMovementRepository } from './infrastructure/adapters/prisma-inventory-movement.repository';
 import { InventoryMovementService } from './application/services/inventory-movement.service';
 import { InventoryMovementController } from './presentation/controllers/inventory-movement.controller';
+import { InventoryLedger } from './application/inventory-ledger';
 
 @Module({
   imports: [IdentityModule, AuditModule, CatalogModule],
@@ -25,12 +26,14 @@ import { InventoryMovementController } from './presentation/controllers/inventor
     },
     InventoryLotService,
     InventoryMovementService,
+    InventoryLedger,
   ],
   exports: [
     INVENTORY_LOT_REPOSITORY_PORT,
     INVENTORY_MOVEMENT_REPOSITORY_PORT,
     InventoryLotService,
     InventoryMovementService,
+    InventoryLedger,
   ],
 })
 export class InventoryModule {}

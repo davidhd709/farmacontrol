@@ -15,6 +15,14 @@ import {
   ThirdPartyDocumentChangeForbiddenException,
 } from '../domain/third-party.exceptions';
 import { AuditService } from '../../audit/application/services/audit.service';
+import {
+  CustomersLedger,
+  CustomerFromThirdParty,
+} from '../../customers/application/customers-ledger';
+import {
+  SuppliersLedger,
+  SupplierFromThirdParty,
+} from '../../suppliers/application/suppliers-ledger';
 
 export const THIRD_PARTY_REPOSITORY = 'THIRD_PARTY_REPOSITORY';
 
@@ -36,8 +44,38 @@ export class ThirdPartyService {
     private readonly auditService?: AuditService,
     @Optional()
     customPrisma?: PrismaClient,
+    // Contratos sin dependencias: se instancian aquí porque clientes y proveedores
+    // ya importan el módulo de terceros y un import de vuelta sería circular.
+    @Optional()
+    private readonly customersLedger: CustomersLedger = new CustomersLedger(),
+    @Optional()
+    private readonly suppliersLedger: SuppliersLedger = new SuppliersLedger(),
   ) {
     this.db = customPrisma ?? prisma;
+  }
+
+  private customerData(thirdParty: ThirdParty): CustomerFromThirdParty {
+    return {
+      documentType: thirdParty.documentType,
+      documentNumber: thirdParty.documentNumber,
+      name: thirdParty.name,
+      phone: thirdParty.phone || null,
+      email: thirdParty.email || null,
+      address: thirdParty.address || null,
+      isActive: thirdParty.isActive,
+    };
+  }
+
+  private supplierData(thirdParty: ThirdParty): SupplierFromThirdParty {
+    return {
+      taxId: thirdParty.documentNumber,
+      name: thirdParty.name,
+      contactName: thirdParty.contactName || thirdParty.tradeName || null,
+      phone: thirdParty.phone || null,
+      email: thirdParty.email || null,
+      address: thirdParty.address || null,
+      isActive: thirdParty.isActive,
+    };
   }
 
   async createThirdParty(
@@ -71,49 +109,24 @@ export class ThirdPartyService {
       notes: input.notes,
     });
 
-    // Sincronizar o vincular con Customer si tiene rol de cliente
-    if (thirdParty.isCustomer) {
-      let cust = await this.db.customer.findUnique({
-        where: { documentNumber: docNumber },
-      });
-      if (!cust) {
-        cust = await this.db.customer.create({
-          data: {
-            documentType: thirdParty.documentType,
-            documentNumber: docNumber,
-            name: thirdParty.name,
-            phone: thirdParty.phone || null,
-            email: thirdParty.email || null,
-            address: thirdParty.address || null,
-            isActive: true,
-          },
+    // El tercero y su cliente o proveedor se crean juntos o no se crea ninguno
+    await this.db.$transaction(async (tx) => {
+      if (thirdParty.isCustomer) {
+        const customerId = await this.customersLedger.findOrCreate(tx, {
+          ...this.customerData(thirdParty),
+          isActive: true,
         });
+        thirdParty.linkCustomer(customerId);
       }
-      thirdParty.linkCustomer(cust.id);
-    }
-
-    // Sincronizar o vincular con Supplier si tiene rol de proveedor
-    if (thirdParty.isSupplier) {
-      let supp = await this.db.supplier.findUnique({
-        where: { taxId: docNumber },
-      });
-      if (!supp) {
-        supp = await this.db.supplier.create({
-          data: {
-            taxId: docNumber,
-            name: thirdParty.name,
-            contactName: thirdParty.contactName || thirdParty.tradeName || null,
-            phone: thirdParty.phone || null,
-            email: thirdParty.email || null,
-            address: thirdParty.address || null,
-            isActive: true,
-          },
+      if (thirdParty.isSupplier) {
+        const supplierId = await this.suppliersLedger.findOrCreate(tx, {
+          ...this.supplierData(thirdParty),
+          isActive: true,
         });
+        thirdParty.linkSupplier(supplierId);
       }
-      thirdParty.linkSupplier(supp.id);
-    }
-
-    await this.thirdPartyRepository.save(thirdParty);
+      await this.thirdPartyRepository.save(thirdParty, tx);
+    });
 
     if (this.auditService) {
       await this.auditService.recordEvent({
@@ -199,83 +212,38 @@ export class ThirdPartyService {
 
     thirdParty.update(input);
 
-    // Sincronizar Customer si corresponde
-    if (thirdParty.isCustomer) {
-      if (thirdParty.customerId) {
-        await this.db.customer.update({
-          where: { id: thirdParty.customerId },
-          data: {
-            name: thirdParty.name,
-            phone: thirdParty.phone || null,
-            email: thirdParty.email || null,
-            address: thirdParty.address || null,
-            isActive: thirdParty.isActive,
-          },
-        });
-      } else {
-        const cust = await this.db.customer.upsert({
-          where: { documentNumber: thirdParty.documentNumber },
-          create: {
-            documentType: thirdParty.documentType,
-            documentNumber: thirdParty.documentNumber,
-            name: thirdParty.name,
-            phone: thirdParty.phone || null,
-            email: thirdParty.email || null,
-            address: thirdParty.address || null,
-            isActive: thirdParty.isActive,
-          },
-          update: {
-            name: thirdParty.name,
-            phone: thirdParty.phone || null,
-            email: thirdParty.email || null,
-            address: thirdParty.address || null,
-            isActive: thirdParty.isActive,
-          },
-        });
-        thirdParty.linkCustomer(cust.id);
+    await this.db.$transaction(async (tx) => {
+      if (thirdParty.isCustomer) {
+        const data = this.customerData(thirdParty);
+        if (thirdParty.customerId) {
+          await this.customersLedger.update(tx, thirdParty.customerId, {
+            name: data.name,
+            phone: data.phone,
+            email: data.email,
+            address: data.address,
+            isActive: data.isActive,
+          });
+        } else {
+          thirdParty.linkCustomer(await this.customersLedger.upsert(tx, data));
+        }
       }
-    }
-
-    // Sincronizar Supplier si corresponde
-    if (thirdParty.isSupplier) {
-      if (thirdParty.supplierId) {
-        await this.db.supplier.update({
-          where: { id: thirdParty.supplierId },
-          data: {
-            name: thirdParty.name,
-            contactName: thirdParty.contactName || thirdParty.tradeName || null,
-            phone: thirdParty.phone || null,
-            email: thirdParty.email || null,
-            address: thirdParty.address || null,
-            isActive: thirdParty.isActive,
-          },
-        });
-      } else {
-        const supp = await this.db.supplier.upsert({
-          where: { taxId: thirdParty.documentNumber },
-          create: {
-            taxId: thirdParty.documentNumber,
-            name: thirdParty.name,
-            contactName: thirdParty.contactName || thirdParty.tradeName || null,
-            phone: thirdParty.phone || null,
-            email: thirdParty.email || null,
-            address: thirdParty.address || null,
-            isActive: thirdParty.isActive,
-          },
-          update: {
-            name: thirdParty.name,
-            contactName: thirdParty.contactName || thirdParty.tradeName || null,
-            phone: thirdParty.phone || null,
-            email: thirdParty.email || null,
-            address: thirdParty.address || null,
-            isActive: thirdParty.isActive,
-          },
-        });
-        thirdParty.linkSupplier(supp.id);
+      if (thirdParty.isSupplier) {
+        const data = this.supplierData(thirdParty);
+        if (thirdParty.supplierId) {
+          await this.suppliersLedger.update(tx, thirdParty.supplierId, {
+            name: data.name,
+            contactName: data.contactName,
+            phone: data.phone,
+            email: data.email,
+            address: data.address,
+            isActive: data.isActive,
+          });
+        } else {
+          thirdParty.linkSupplier(await this.suppliersLedger.upsert(tx, data));
+        }
       }
-    }
-
-    await this.thirdPartyRepository.update(thirdParty);
+      await this.thirdPartyRepository.update(thirdParty, tx);
+    });
 
     if (this.auditService) {
       await this.auditService.recordEvent({
@@ -304,21 +272,15 @@ export class ThirdPartyService {
 
     thirdParty.deactivate();
 
-    if (thirdParty.customerId) {
-      await this.db.customer.update({
-        where: { id: thirdParty.customerId },
-        data: { isActive: false },
-      });
-    }
-
-    if (thirdParty.supplierId) {
-      await this.db.supplier.update({
-        where: { id: thirdParty.supplierId },
-        data: { isActive: false },
-      });
-    }
-
-    await this.thirdPartyRepository.update(thirdParty);
+    await this.db.$transaction(async (tx) => {
+      if (thirdParty.customerId) {
+        await this.customersLedger.setActive(tx, thirdParty.customerId, false);
+      }
+      if (thirdParty.supplierId) {
+        await this.suppliersLedger.setActive(tx, thirdParty.supplierId, false);
+      }
+      await this.thirdPartyRepository.update(thirdParty, tx);
+    });
 
     if (this.auditService) {
       await this.auditService.recordEvent({
@@ -341,21 +303,15 @@ export class ThirdPartyService {
 
     thirdParty.activate();
 
-    if (thirdParty.customerId) {
-      await this.db.customer.update({
-        where: { id: thirdParty.customerId },
-        data: { isActive: true },
-      });
-    }
-
-    if (thirdParty.supplierId) {
-      await this.db.supplier.update({
-        where: { id: thirdParty.supplierId },
-        data: { isActive: true },
-      });
-    }
-
-    await this.thirdPartyRepository.update(thirdParty);
+    await this.db.$transaction(async (tx) => {
+      if (thirdParty.customerId) {
+        await this.customersLedger.setActive(tx, thirdParty.customerId, true);
+      }
+      if (thirdParty.supplierId) {
+        await this.suppliersLedger.setActive(tx, thirdParty.supplierId, true);
+      }
+      await this.thirdPartyRepository.update(thirdParty, tx);
+    });
 
     if (this.auditService) {
       await this.auditService.recordEvent({

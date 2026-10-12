@@ -13,9 +13,19 @@ import { PurchaseController } from './presentation/controllers/purchase.controll
 
 import { DebitNotesController } from './presentation/controllers/debit-notes.controller';
 import { DebitNotesService } from './application/debit-notes.service';
+import { PayablesModule } from '../payables/payables.module';
 
 @Module({
-  imports: [IdempotencyModule, IdentityModule, AuditModule, CatalogModule, InventoryModule, SuppliersModule, AccountingModule],
+  imports: [
+    IdempotencyModule,
+    IdentityModule,
+    AuditModule,
+    CatalogModule,
+    InventoryModule,
+    SuppliersModule,
+    AccountingModule,
+    PayablesModule,
+  ],
   controllers: [PurchaseController, DebitNotesController],
   providers: [
     {

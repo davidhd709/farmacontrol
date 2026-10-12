@@ -12,8 +12,9 @@ export class PrismaThirdPartyRepository implements IThirdPartyRepository {
     this.client = customClient ?? prisma;
   }
 
-  async save(tp: ThirdParty): Promise<void> {
-    await this.client.thirdParty.upsert({
+  async save(tp: ThirdParty, tx?: unknown): Promise<void> {
+    const db = (tx as Prisma.TransactionClient | undefined) ?? this.client;
+    await db.thirdParty.upsert({
       where: { id: tp.id },
       create: {
         id: tp.id,
@@ -68,8 +69,8 @@ export class PrismaThirdPartyRepository implements IThirdPartyRepository {
     });
   }
 
-  async update(tp: ThirdParty): Promise<void> {
-    await this.save(tp);
+  async update(tp: ThirdParty, tx?: unknown): Promise<void> {
+    await this.save(tp, tx);
   }
 
   async findById(id: string): Promise<ThirdParty | null> {

@@ -2,7 +2,6 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-  ConflictException,
   Optional,
 } from '@nestjs/common';
 import { prisma, PrismaClient, Prisma } from '@farmacia/database';
@@ -13,6 +12,8 @@ import {
 } from '@farmacia/contracts';
 import { AccountingEngineService } from '../../accounting/application/accounting-engine.service';
 import { IdempotencyService } from '../../../common/idempotency/idempotency.service';
+import { PayablesLedger } from '../../payables/application/payables-ledger';
+import { InventoryLedger } from '../../inventory/application/inventory-ledger';
 import { parseMoneyToCents, centsToMoneyString } from '../../treasury/domain/treasury-rules';
 
 type Tx = Parameters<Parameters<PrismaClient['$transaction']>[0]>[0];
@@ -75,6 +76,8 @@ export class DebitNotesService {
     @Optional() customClient?: PrismaClient,
     @Optional() private readonly accountingEngine?: AccountingEngineService,
     @Optional() private readonly idempotencyService: IdempotencyService = new IdempotencyService(),
+    @Optional() private readonly payablesLedger: PayablesLedger = new PayablesLedger(),
+    @Optional() private readonly inventoryLedger: InventoryLedger = new InventoryLedger(),
   ) {
     this.client = customClient ?? prisma;
   }
@@ -205,21 +208,14 @@ export class DebitNotesService {
             }
 
             // Bloquear el lote: una venta o ajuste concurrente no puede dejarlo en negativo
-            const lockedLots = await tx.$queryRaw<
-              Array<{ id: string; lot_number: string; current_quantity: number }>
-            >`
-              SELECT id, lot_number, current_quantity
-              FROM inventory_lots
-              WHERE id = ${line.lotId}::uuid
-              FOR UPDATE
-            `;
-            if (!lockedLots.length) {
+            const lockedLot = await this.inventoryLedger.lockLot(tx, line.lotId);
+            if (!lockedLot) {
               throw new BadRequestException(`Lote de inventario para ${line.product.name} no encontrado.`);
             }
             const lot = {
-              id: lockedLots[0].id,
-              lotNumber: lockedLots[0].lot_number,
-              currentQuantity: lockedLots[0].current_quantity,
+              id: lockedLot.id,
+              lotNumber: lockedLot.lot_number,
+              currentQuantity: lockedLot.current_quantity,
             };
 
             if (lot.currentQuantity < quantityBaseUnits) {
@@ -228,29 +224,17 @@ export class DebitNotesService {
               );
             }
 
-            // Descontar del lote
-            const updatedLot = await tx.inventoryLot.update({
-              where: { id: lot.id },
-              data: {
-                currentQuantity: { decrement: quantityBaseUnits },
-              },
-            });
-
-            // Registrar movimiento de kardex
-            await tx.inventoryMovement.create({
-              data: {
-                movementType: 'SALIDA_DEVOLUCION_COMPRA',
-                productId: line.productId,
-                lotId: lot.id,
-                presentationId: line.presentationId || null,
-                quantityBaseUnits,
-                presentationFactorHistorical: line.presentationFactorHistorical,
-                balanceAfterBaseUnits: updatedLot.currentQuantity,
-                referenceDocumentType: 'DEBIT_NOTE',
-                referenceDocumentId: debitNoteNumber,
-                notes: `Devolución a proveedor ${purchase.supplier.name} s/factura ${purchase.invoiceNumber} (${payload.reason})`,
-                createdByUserId: userId,
-              },
+            // Descontar del lote y registrar movimiento de kardex
+            await this.inventoryLedger.changeLotQuantity(tx, lot.id, -quantityBaseUnits, {
+              movementType: 'SALIDA_DEVOLUCION_COMPRA',
+              productId: line.productId,
+              presentationId: line.presentationId || null,
+              quantityBaseUnits,
+              presentationFactorHistorical: line.presentationFactorHistorical,
+              referenceDocumentType: 'DEBIT_NOTE',
+              referenceDocumentId: debitNoteNumber,
+              notes: `Devolución a proveedor ${purchase.supplier.name} s/factura ${purchase.invoiceNumber} (${payload.reason})`,
+              createdByUserId: userId,
             });
 
             const unitCost = new Prisma.Decimal(line.unitCost);
@@ -282,45 +266,11 @@ export class DebitNotesService {
           }
 
           // 4. Ajuste en Cuentas por Pagar: lo adeudado baja y lo pagado no cambia
-          const payables = await tx.$queryRaw<
-            Array<{
-              id: string;
-              total_amount: Prisma.Decimal;
-              balance: Prisma.Decimal;
-              status: string;
-              notes: string | null;
-            }>
-          >`
-            SELECT id, total_amount, balance, status, notes
-            FROM payables
-            WHERE purchase_id = ${purchase.id}::uuid
-            FOR UPDATE
-          `;
-          if (!payables.length) {
-            throw new BadRequestException(
-              `La compra ${purchase.invoiceNumber} no tiene cuenta por pagar asociada.`,
-            );
-          }
-          const payable = payables[0];
-          const balanceCents = parseMoneyToCents(payable.balance.toString(), 'Saldo por pagar');
-          if (totalDebitCents > balanceCents) {
-            // El asiento debita Proveedores por el total: recortar el saldo descuadraría la cartera
-            throw new ConflictException(
-              `La devolución (${centsToMoneyString(totalDebitCents)}) supera el saldo pendiente de la cuenta por pagar (${centsToMoneyString(balanceCents)}).`,
-            );
-          }
-          const newTotalCents =
-            parseMoneyToCents(payable.total_amount.toString(), 'Total por pagar') - totalDebitCents;
-          const newBalanceCents = balanceCents - totalDebitCents;
-
-          await tx.payable.update({
-            where: { id: payable.id },
-            data: {
-              totalAmount: new Prisma.Decimal(centsToMoneyString(newTotalCents)),
-              balance: new Prisma.Decimal(centsToMoneyString(newBalanceCents)),
-              status: newBalanceCents === 0n ? 'PAGADA' : payable.status,
-              notes: `${payable.notes || ''} [Nota Débito ${debitNoteNumber}: -${centsToMoneyString(totalDebitCents)}]`.trim(),
-            },
+          await this.payablesLedger.applyDebitNote(tx, {
+            purchaseId: purchase.id,
+            invoiceNumber: purchase.invoiceNumber,
+            debitNoteNumber,
+            amountCents: totalDebitCents,
           });
 
           // 5. Guardar la Nota Débito y sus líneas

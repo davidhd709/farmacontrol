@@ -2,7 +2,6 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-  ConflictException,
   Optional,
 } from '@nestjs/common';
 import { prisma, PrismaClient, Prisma } from '@farmacia/database';
@@ -15,7 +14,9 @@ import { AccountingEngineService } from '../../accounting/application/accounting
 import { AuditService } from '../../audit/application/services/audit.service';
 import { IdempotencyService } from '../../../common/idempotency/idempotency.service';
 import { parseMoneyToCents, centsToMoneyString } from '../../treasury/domain/treasury-rules';
-import { calculateNewCashBalanceCents } from '../../cash/domain/cash-rules';
+import { CashService } from '../../cash/application/cash.service';
+import { ReceivablesLedger } from '../../receivables/application/receivables-ledger';
+import { InventoryLedger } from '../../inventory/application/inventory-ledger';
 import { recordSourceBankMovement } from '../../treasury/application/record-source-bank-movement';
 import {
   prorateCents,
@@ -85,6 +86,9 @@ export class CreditNotesService {
   private readonly client: PrismaClient;
 
   constructor(
+    private readonly cashService: CashService,
+    private readonly receivablesLedger: ReceivablesLedger,
+    private readonly inventoryLedger: InventoryLedger,
     @Optional() customClient?: PrismaClient,
     @Optional() private readonly accountingEngine?: AccountingEngineService,
     @Optional() private readonly auditService?: AuditService,
@@ -298,29 +302,22 @@ export class CreditNotesService {
             if (shouldRestock) {
               for (const portion of portions) {
                 if (!portion.lotId) continue;
-                await tx.$queryRaw`SELECT id FROM inventory_lots WHERE id = ${portion.lotId}::uuid FOR UPDATE`;
-                const updatedLot = await tx.inventoryLot.update({
-                  where: { id: portion.lotId },
-                  data: {
-                    currentQuantity: { increment: portion.quantityBaseUnits },
-                  },
-                });
-
-                await tx.inventoryMovement.create({
-                  data: {
+                await this.inventoryLedger.changeLotQuantity(
+                  tx,
+                  portion.lotId,
+                  portion.quantityBaseUnits,
+                  {
                     movementType: 'ENTRADA_DEVOLUCION_VENTA',
                     productId: line.productId,
-                    lotId: portion.lotId,
                     presentationId: line.presentationId || null,
                     quantityBaseUnits: portion.quantityBaseUnits,
                     presentationFactorHistorical: line.presentationFactorHistorical,
-                    balanceAfterBaseUnits: updatedLot.currentQuantity,
                     referenceDocumentType: 'CREDIT_NOTE',
                     referenceDocumentId: creditNoteNumber,
                     notes: `Reintegro por devolución en venta ${sale.invoiceNumber} (${payload.reason})`,
                     createdByUserId: userId,
                   },
-                });
+                );
               }
             }
           }
@@ -329,48 +326,11 @@ export class CreditNotesService {
 
           // 5. Ajuste financiero según método de reembolso
           if (refundMethod === 'CREDITO_CARTERA') {
-            const receivables = await tx.$queryRaw<
-              Array<{
-                id: string;
-                total_amount: Prisma.Decimal;
-                balance: Prisma.Decimal;
-                status: string;
-                notes: string | null;
-              }>
-            >`
-              SELECT id, total_amount, balance, status, notes
-              FROM receivables
-              WHERE sale_id = ${sale.id}::uuid
-              FOR UPDATE
-            `;
-            if (!receivables.length) {
-              throw new BadRequestException(
-                `La venta ${sale.invoiceNumber} no tiene cuenta por cobrar asociada.`,
-              );
-            }
-            const receivable = receivables[0];
-            if (receivable.status === 'CANCELADA') {
-              throw new ConflictException(
-                `La cuenta por cobrar de la venta ${sale.invoiceNumber} está CANCELADA.`,
-              );
-            }
-            const balanceCents = toCents(receivable.balance, 'Saldo de cartera');
-            if (totalReturnCents > balanceCents) {
-              throw new ConflictException(
-                `La devolución (${centsToMoneyString(totalReturnCents)}) supera el saldo pendiente en cartera (${centsToMoneyString(balanceCents)}).`,
-              );
-            }
-            // Se reduce lo adeudado: total y saldo bajan juntos y lo abonado no cambia
-            const newTotalCents = toCents(receivable.total_amount, 'Total de cartera') - totalReturnCents;
-            const newBalanceCents = balanceCents - totalReturnCents;
-            await tx.receivable.update({
-              where: { id: receivable.id },
-              data: {
-                totalAmount: new Prisma.Decimal(centsToMoneyString(newTotalCents)),
-                balance: new Prisma.Decimal(centsToMoneyString(newBalanceCents)),
-                status: newBalanceCents === 0n ? 'PAGADA' : receivable.status,
-                notes: `${receivable.notes || ''} [Nota Crédito ${creditNoteNumber}: -${centsToMoneyString(totalReturnCents)}]`.trim(),
-              },
+            await this.receivablesLedger.applyCreditNote(tx, {
+              saleId: sale.id,
+              invoiceNumber: sale.invoiceNumber,
+              creditNoteNumber,
+              amountCents: totalReturnCents,
             });
           } else if (refundMethod === 'TRANSFERENCIA') {
             await recordSourceBankMovement(tx, {
@@ -383,37 +343,14 @@ export class CreditNotesService {
               createdById: userId,
             });
           } else {
-            await tx.$executeRaw`SELECT pg_advisory_xact_lock(742189321)`;
-
-            const lastRows = await tx.$queryRaw<Array<{ balance_after: Prisma.Decimal }>>`
-              SELECT balance_after
-              FROM cash_movements
-              ORDER BY created_at DESC
-              LIMIT 1
-            `;
-
-            const currentBalanceCents =
-              lastRows.length > 0
-                ? parseMoneyToCents(lastRows[0].balance_after.toString(), 'Saldo de caja')
-                : 0n;
-
-            const { balanceAfter } = calculateNewCashBalanceCents(
-              currentBalanceCents,
-              'EGRESO_MANUAL',
-              totalReturnCents,
-            );
-
-            await tx.cashMovement.create({
-              data: {
-                movementType: 'EGRESO_MANUAL',
-                amount: new Prisma.Decimal(centsToMoneyString(totalReturnCents)),
-                paymentMethod: 'EFECTIVO',
-                reason: `Reembolso por Nota Crédito ${creditNoteNumber} de venta ${sale.invoiceNumber}`,
-                referenceDocumentType: 'CREDIT_NOTE',
-                referenceDocumentId: creditNoteNumber,
-                balanceAfter: new Prisma.Decimal(centsToMoneyString(balanceAfter)),
-                createdByUserId: userId,
-              },
+            await this.cashService.recordMovementInTransaction(tx, {
+              movementType: 'EGRESO_MANUAL',
+              amount: centsToMoneyString(totalReturnCents),
+              paymentMethod: 'EFECTIVO',
+              reason: `Reembolso por Nota Crédito ${creditNoteNumber} de venta ${sale.invoiceNumber}`,
+              referenceDocumentType: 'CREDIT_NOTE',
+              referenceDocumentId: creditNoteNumber,
+              createdByUserId: userId,
             });
           }
 

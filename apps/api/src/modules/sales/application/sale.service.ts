@@ -25,13 +25,13 @@ import {
 } from '../domain/sale.exceptions';
 import { IdempotencyService } from '../../../common/idempotency/idempotency.service';
 import { AuditService } from '../../audit/application/services/audit.service';
+import { CashService } from '../../cash/application/cash.service';
+import { ReceivablesLedger } from '../../receivables/application/receivables-ledger';
+import { InventoryLedger } from '../../inventory/application/inventory-ledger';
 import { recordSourceBankMovement } from '../../treasury/application/record-source-bank-movement';
 import { requirePaymentBankAccountId } from '../../treasury/application/payment-validation';
 import { parseMoneyToCents } from '../../treasury/domain/treasury-rules';
-import {
-  calculateNewCashBalanceCents,
-  centsToMoneyString,
-} from '../../cash/domain/cash-rules';
+import { centsToMoneyString } from '../../cash/domain/cash-rules';
 import { AccountingEngineService } from '../../accounting/application/accounting-engine.service';
 
 const SALE_CONFIRM_ENDPOINT = '/api/v1/sales/confirm';
@@ -111,6 +111,9 @@ export class SaleService {
     @Inject(SALE_REPOSITORY)
     private readonly saleRepository: ISaleRepository,
     private readonly idempotencyService: IdempotencyService,
+    private readonly cashService: CashService,
+    private readonly receivablesLedger: ReceivablesLedger,
+    private readonly inventoryLedger: InventoryLedger,
     @Optional() customClient?: PrismaClient,
     @Optional() private readonly auditService?: AuditService,
     @Optional() private readonly accountingEngine?: AccountingEngineService,
@@ -258,23 +261,11 @@ export class SaleService {
         // Asignación FEFO con bloqueo concurrente
         if (product.requiresLotControl) {
           // Bloquear lotes disponibles ordenados por vencimiento ascendente
-          const availableLots = await tx.$queryRaw<
-            Array<{
-              id: string;
-              lot_number: string;
-              expiration_date: Date;
-              current_quantity: number;
-            }>
-          >`
-            SELECT id, lot_number, expiration_date, current_quantity
-            FROM inventory_lots
-            WHERE product_id = ${product.id}::uuid
-              AND is_active = true
-              AND current_quantity > 0
-              AND expiration_date >= ${businessToday()}::date
-            ORDER BY expiration_date ASC, created_at ASC
-            FOR UPDATE
-          `;
+          const availableLots = await this.inventoryLedger.lockFefoCandidates(
+            tx,
+            product.id,
+            businessToday(),
+          );
 
           const totalAvailable = availableLots.reduce((acc, l) => acc + l.current_quantity, 0);
           if (totalAvailable < requiredBaseUnits) {
@@ -287,32 +278,17 @@ export class SaleService {
             if (remainingUnits <= 0) break;
 
             const take = Math.min(lot.current_quantity, remainingUnits);
-            const balanceAfter = lot.current_quantity - take;
-
-            // Descontar existencias del lote
-            await tx.inventoryLot.update({
-              where: { id: lot.id },
-              data: {
-                currentQuantity: balanceAfter,
-                updatedAt: new Date(),
-              },
-            });
-
-            // Registrar Kardex inmutable
-            await tx.inventoryMovement.create({
-              data: {
-                movementType: 'SALIDA_VENTA',
-                productId: product.id,
-                lotId: lot.id,
-                presentationId: item.presentationId || null,
-                quantityBaseUnits: take,
-                presentationFactorHistorical: factor,
-                balanceAfterBaseUnits: balanceAfter,
-                referenceDocumentType: 'SALE',
-                referenceDocumentId: invoiceNumber,
-                notes: `Venta POS ${invoiceNumber} - Despacho FEFO`,
-                createdByUserId: auditCtx.userId || null,
-              },
+            // Descontar existencias del lote y registrar Kardex inmutable
+            await this.inventoryLedger.changeLotQuantity(tx, lot.id, -take, {
+              movementType: 'SALIDA_VENTA',
+              productId: product.id,
+              presentationId: item.presentationId || null,
+              quantityBaseUnits: take,
+              presentationFactorHistorical: factor,
+              referenceDocumentType: 'SALE',
+              referenceDocumentId: invoiceNumber,
+              notes: `Venta POS ${invoiceNumber} - Despacho FEFO`,
+              createdByUserId: auditCtx.userId || null,
             });
 
             const alloc = SaleLotAllocation.create({
@@ -390,59 +366,30 @@ export class SaleService {
 
       // 2.6. Movimiento de Caja si es Efectivo
       if (payload.paymentMethod === 'EFECTIVO') {
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(742189321)`;
-
-        const lastRows = await tx.$queryRaw<Array<{ balance_after: Prisma.Decimal }>>`
-          SELECT balance_after
-          FROM cash_movements
-          ORDER BY created_at DESC
-          LIMIT 1
-        `;
-
-        const currentBalanceCents =
-          lastRows.length > 0
-            ? parseMoneyToCents(lastRows[0].balance_after.toString(), 'Saldo de caja')
-            : 0n;
-
         const saleAmountCents = parseMoneyToCents(
           new Prisma.Decimal(sale.total).toFixed(2),
           'Total de venta',
         );
-
-        const { balanceAfter } = calculateNewCashBalanceCents(
-          currentBalanceCents,
-          'INGRESO_VENTA',
-          saleAmountCents,
-        );
-
-        await tx.cashMovement.create({
-          data: {
-            movementType: 'INGRESO_VENTA',
-            amount: new Prisma.Decimal(centsToMoneyString(saleAmountCents)),
-            paymentMethod: 'EFECTIVO',
-            reason: `Venta mostrador comprobante ${sale.invoiceNumber}`,
-            referenceDocumentType: 'SALE',
-            referenceDocumentId: sale.invoiceNumber,
-            balanceAfter: new Prisma.Decimal(centsToMoneyString(balanceAfter)),
-            createdByUserId: auditCtx.userId || '00000000-0000-0000-0000-000000000000',
-          },
+        await this.cashService.recordMovementInTransaction(tx, {
+          movementType: 'INGRESO_VENTA',
+          amount: centsToMoneyString(saleAmountCents),
+          paymentMethod: 'EFECTIVO',
+          reason: `Venta mostrador comprobante ${sale.invoiceNumber}`,
+          referenceDocumentType: 'SALE',
+          referenceDocumentId: sale.invoiceNumber,
+          createdByUserId: auditCtx.userId || '00000000-0000-0000-0000-000000000000',
         });
       }
 
       // 2.7. Cuenta por Cobrar si es Crédito
       if (payload.paymentMethod === 'CREDITO') {
         const dueDate = calendarDate(addCalendarDays(businessToday(), 30));
-        await tx.receivable.create({
-          data: {
-            saleId: sale.id,
-            customerId: customerId!,
-            totalAmount: new Prisma.Decimal(sale.total).toFixed(2),
-            amountPaid: '0.00',
-            balance: new Prisma.Decimal(sale.total).toFixed(2),
-            status: 'PENDIENTE',
-            dueDate,
-            notes: payload.notes || `Venta a crédito comprobante ${sale.invoiceNumber}`,
-          },
+        await this.receivablesLedger.openForSale(tx, {
+          saleId: sale.id,
+          customerId: customerId!,
+          total: new Prisma.Decimal(sale.total).toFixed(2),
+          dueDate,
+          notes: payload.notes || `Venta a crédito comprobante ${sale.invoiceNumber}`,
         });
       }
 
@@ -586,82 +533,34 @@ export class SaleService {
       // Reintegrar unidades a los lotes originales exactos
       for (const line of sale.lines) {
         for (const alloc of line.lotAllocations) {
-          // Bloquear lote
-          const lotRows = await tx.$queryRaw<Array<{ current_quantity: number }>>`
-            SELECT current_quantity
-            FROM inventory_lots
-            WHERE id = ${alloc.lotId}::uuid
-            FOR UPDATE
-          `;
-
-          const currentQty = lotRows.length > 0 ? lotRows[0].current_quantity : 0;
-          const restoredQty = currentQty + alloc.quantityBaseUnits;
-
-          await tx.inventoryLot.update({
-            where: { id: alloc.lotId },
-            data: {
-              currentQuantity: restoredQty,
-              updatedAt: new Date(),
-            },
-          });
-
-          // Registrar movimiento inmutable de reversión en Kardex
-          await tx.inventoryMovement.create({
-            data: {
-              movementType: 'DEVOLUCION_CLIENTE',
-              productId: line.productId,
-              lotId: alloc.lotId,
-              presentationId: line.presentationId || null,
-              quantityBaseUnits: alloc.quantityBaseUnits,
-              presentationFactorHistorical: line.presentationFactorHistorical,
-              balanceAfterBaseUnits: restoredQty,
-              referenceDocumentType: 'SALE_CANCEL',
-              referenceDocumentId: sale.invoiceNumber,
-              notes: `Anulación venta ${sale.invoiceNumber}. Motivo: ${trimmedReason}`,
-              createdByUserId: auditCtx.userId || null,
-            },
+          await this.inventoryLedger.changeLotQuantity(tx, alloc.lotId, alloc.quantityBaseUnits, {
+            movementType: 'DEVOLUCION_CLIENTE',
+            productId: line.productId,
+            presentationId: line.presentationId || null,
+            quantityBaseUnits: alloc.quantityBaseUnits,
+            presentationFactorHistorical: line.presentationFactorHistorical,
+            referenceDocumentType: 'SALE_CANCEL',
+            referenceDocumentId: sale.invoiceNumber,
+            notes: `Anulación venta ${sale.invoiceNumber}. Motivo: ${trimmedReason}`,
+            createdByUserId: auditCtx.userId || null,
           });
         }
       }
 
       // Revertir en caja si fue en efectivo
       if (sale.paymentMethod === 'EFECTIVO') {
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(742189321)`;
-
-        const lastRows = await tx.$queryRaw<Array<{ balance_after: Prisma.Decimal }>>`
-          SELECT balance_after
-          FROM cash_movements
-          ORDER BY created_at DESC
-          LIMIT 1
-        `;
-
-        const currentBalanceCents =
-          lastRows.length > 0
-            ? parseMoneyToCents(lastRows[0].balance_after.toString(), 'Saldo de caja')
-            : 0n;
-
         const saleAmountCents = parseMoneyToCents(
           new Prisma.Decimal(sale.total).toFixed(2),
           'Total de venta',
         );
-
-        const { balanceAfter } = calculateNewCashBalanceCents(
-          currentBalanceCents,
-          'EGRESO_MANUAL',
-          saleAmountCents,
-        );
-
-        await tx.cashMovement.create({
-          data: {
-            movementType: 'EGRESO_MANUAL',
-            amount: new Prisma.Decimal(centsToMoneyString(saleAmountCents)),
-            paymentMethod: 'EFECTIVO',
-            reason: `Reversión por anulación de venta ${sale.invoiceNumber}: ${trimmedReason}`,
-            referenceDocumentType: 'SALE_CANCEL',
-            referenceDocumentId: sale.invoiceNumber,
-            balanceAfter: new Prisma.Decimal(centsToMoneyString(balanceAfter)),
-            createdByUserId: auditCtx.userId || '00000000-0000-0000-0000-000000000000',
-          },
+        await this.cashService.recordMovementInTransaction(tx, {
+          movementType: 'EGRESO_MANUAL',
+          amount: centsToMoneyString(saleAmountCents),
+          paymentMethod: 'EFECTIVO',
+          reason: `Reversión por anulación de venta ${sale.invoiceNumber}: ${trimmedReason}`,
+          referenceDocumentType: 'SALE_CANCEL',
+          referenceDocumentId: sale.invoiceNumber,
+          createdByUserId: auditCtx.userId || '00000000-0000-0000-0000-000000000000',
         });
       }
       if (sale.paymentMethod === 'TRANSFERENCIA') {
@@ -678,10 +577,7 @@ export class SaleService {
         });
       }
       if (sale.paymentMethod === 'CREDITO') {
-        await tx.receivable.updateMany({
-          where: { saleId: sale.id },
-          data: { status: 'CANCELADA', notes: `Venta anulada: ${trimmedReason}` },
-        });
+        await this.receivablesLedger.cancelForSale(tx, sale.id, trimmedReason);
       }
 
       // Reversión contable automática
