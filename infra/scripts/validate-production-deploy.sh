@@ -86,7 +86,7 @@ fi
 
 # 4. Validar sintaxis de scripts de respaldo y recuperación
 echo " [4/5] Verificando scripts bash de infraestructura..."
-for script in backup.sh backup-scheduler.sh restore-drill.sh verify-backup.sh restore.sh create-test-db.sh; do
+for script in backup.sh backup-scheduler.sh restore-drill.sh verify-backup.sh restore.sh test-with-ephemeral-db.sh; do
   SCRIPT_PATH="${ROOT_DIR}/infra/scripts/${script}"
   if [ -f "${SCRIPT_PATH}" ]; then
     if bash -n "${SCRIPT_PATH}"; then

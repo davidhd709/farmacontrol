@@ -42,3 +42,6 @@ infra/backups/latest_backup.json
 
 # Destino y credenciales del respaldo externo
 infra/compose/backup.env
+
+# Registros de ejecuciones de pruebas (pnpm test)
+.test-runs/
