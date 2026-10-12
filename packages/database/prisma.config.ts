@@ -1,6 +1,8 @@
 import { defineConfig } from '@prisma/config';
 
-if (typeof process.loadEnvFile === 'function') {
+// En una ejecución de pruebas autorizada (FARMACIA_TEST_RUN_ID) el entorno lo define el
+// script de pruebas: un .env local no puede redirigir las migraciones
+if (typeof process.loadEnvFile === 'function' && !process.env.FARMACIA_TEST_RUN_ID) {
   try {
     process.loadEnvFile();
   } catch {

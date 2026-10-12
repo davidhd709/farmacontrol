@@ -7,6 +7,8 @@ export default defineConfig({
     environment: 'node',
     include: ['**/*.spec.ts', '**/*.e2e-spec.ts'],
     fileParallelism: false,
+    // FARM-AUD-014: solo contra la base temporal creada por `pnpm test`
+    globalSetup: ['../../packages/database/src/testing/isolation.global-setup.ts'],
     // Los proyectos de Vitest no heredan los timeouts de la configuración raíz.
     // cleanTestDatabase + seedRbac contra PostgreSQL real supera el default de 10 s.
     testTimeout: 30000,

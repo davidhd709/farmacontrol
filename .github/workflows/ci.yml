@@ -20,25 +20,12 @@ jobs:
     name: Monorepo Quality Gate
     runs-on: ubuntu-latest
 
-    services:
-      postgres:
-        image: postgres:18-alpine
-        env:
-          POSTGRES_USER: farmacia_ci_user
-          POSTGRES_PASSWORD: farmacia_ci_password_testing_only
-          POSTGRES_DB: farmacia_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U farmacia_ci_user -d farmacia_test"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 5
-
+    # Las pruebas crean su propio PostgreSQL temporal con Docker (pnpm test, FARM-AUD-014):
+    # mismo mecanismo de aislamiento que en local, sin servicio compartido.
     env:
       NODE_ENV: test
-      DATABASE_URL: postgresql://farmacia_ci_user:farmacia_ci_password_testing_only@localhost:5432/farmacia_test?schema=public
-      DATABASE_TEST_URL: postgresql://farmacia_ci_user:farmacia_ci_password_testing_only@localhost:5432/farmacia_test?schema=public
+      # Solo para prisma generate/validate; ninguna etapa se conecta a esta URL
+      DATABASE_URL: postgresql://prisma:prisma@127.0.0.1:1/prisma_validate?schema=public
 
     steps:
       - name: Checkout repository
@@ -55,6 +42,25 @@ jobs:
           node-version: 22
           cache: 'pnpm'
 
+      # La prueba de respaldos ejecuta pg_dump real contra el PostgreSQL 18 temporal: el cliente
+      # de la imagen del runner es anterior y pg_dump se niega a volcar un servidor más nuevo.
+      - name: Install PostgreSQL 18 client (PGDG)
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          . /etc/os-release
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-client-18
+          echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
+
+      - name: Verify PostgreSQL client version
+        run: |
+          pg_dump --version
+          pg_dump --version | grep -Eq '\(PostgreSQL\) (1[89]|[2-9][0-9])\.'
+
       - name: Install dependencies (frozen lockfile)
         run: pnpm install --frozen-lockfile
 
@@ -63,9 +69,6 @@ jobs:
 
       - name: Prisma Validate
         run: pnpm db:validate
-
-      - name: Apply Migrations to Test Database
-        run: pnpm db:test:migrate
 
       - name: Build Monorepo
         run: pnpm build
@@ -77,5 +80,5 @@ jobs:
       - name: Typecheck TypeScript
         run: pnpm typecheck
 
-      - name: Run Automated Tests
+      - name: Run Automated Tests (PostgreSQL temporal)
         run: pnpm test

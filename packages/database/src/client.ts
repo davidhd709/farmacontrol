@@ -1,7 +1,13 @@
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
+import { TEST_RUN_ID_ENV, testRunMarker } from './test-isolation';
 
 function ensureEnvLoaded(): void {
+  // En una ejecución de pruebas autorizada todo el entorno lo define el script: un .env local
+  // no puede completar ni redirigir la conexión
+  if (process.env[TEST_RUN_ID_ENV]) {
+    return;
+  }
   if (typeof process.loadEnvFile === 'function') {
     try {
       process.loadEnvFile();
@@ -136,17 +142,25 @@ export async function checkDatabaseConnection(client: PrismaClient = prisma): Pr
  * Limpia de forma controlada las tablas de la base de datos de pruebas entre ejecuciones de tests.
  * PROTECCIÓN DE SEGURIDAD ESTRICTA:
  * - Valida que la conexión activa apunte a una base con sufijo `_test` o `farmacia_test`.
- * - Rechaza terminantemente su ejecución si la base conectada es de desarrollo o producción.
+ * - Exige que esa base sea la temporal de la ejecución en curso (marca FARMACIA_TEST_RUN_ID):
+ *   una base de desarrollo llamada `*_test` también se rechaza (FARM-AUD-014).
  */
 export async function cleanTestDatabase(client: PrismaClient = prisma): Promise<void> {
-  const rows = await client.$queryRaw<Array<{ current_db: string }>>`
-    SELECT current_database() as current_db
+  const rows = await client.$queryRaw<Array<{ current_db: string; marker: string | null }>>`
+    SELECT current_database() as current_db, shobj_description(oid, 'pg_database') as marker
+    FROM pg_database WHERE datname = current_database()
   `;
   const currentDb = rows[0]?.current_db || '';
 
   if (!currentDb || (!currentDb.endsWith('_test') && currentDb !== 'farmacia_test')) {
     throw new Error(
       `[Seguridad] Limpieza abortada: la base de datos actual "${currentDb}" no está autorizada para operaciones destructivas de test.`
+    );
+  }
+  const runId = process.env[TEST_RUN_ID_ENV];
+  if (!runId || rows[0]?.marker !== testRunMarker(runId)) {
+    throw new Error(
+      `[Seguridad] Limpieza abortada: la base "${currentDb}" no es la base temporal de esta ejecución de pruebas.`
     );
   }
 

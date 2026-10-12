@@ -71,17 +71,12 @@ pnpm db:generate
 # Comprobar la conexión real contra PostgreSQL 18 en desarrollo (farmacia_db)
 pnpm db:check
 
-# Crear la base de datos de pruebas si no existe
-pnpm db:test:create
-
-# Comprobar la conexión real contra la base de datos de pruebas (farmacia_test)
-pnpm db:test:check
 ```
 
 ### Aislamiento estricto de bases de datos:
-- **`DATABASE_URL` (Desarrollo):** Conecta a `farmacia_db`. Es la base utilizada por la API, worker y comandos estándar.
-- **`DATABASE_TEST_URL` (Pruebas Automatizadas):** Conecta exclusivamente a `farmacia_test`. Las suites de testing (`pnpm test`) rechazan el uso de `DATABASE_URL` y exigen `DATABASE_TEST_URL`.
-- **Protección defensiva:** El cliente de base de datos valida que la URL de pruebas apunte únicamente a bases cuyo nombre sea `farmacia_test` o termine en `_test`. Si se configura accidentalmente `farmacia_db` como base de pruebas, la ejecución se aborta de inmediato antes de realizar cualquier operación.
+- **`DATABASE_URL` (Desarrollo):** conecta a `farmacia_db` en el contenedor de desarrollo. La usan la API, el worker y los comandos estándar.
+- **Pruebas automatizadas:** `pnpm test` crea su propio PostgreSQL temporal (contenedor `farmacontrol-test-<id>`, credenciales aleatorias, `tmpfs`) y lo elimina al terminar. No usa `farmacia_test` del contenedor de desarrollo ni los `.env` locales. Requiere Docker y el cliente PostgreSQL 18 o superior (`pg_dump`, `pg_restore`, `pg_isready`, `psql`).
+- **Protección defensiva:** antes de migrar, limpiar o ejecutar pruebas de integración se exige que la base alcanzada lleve la marca de la ejecución en curso (`COMMENT ON DATABASE`, variable `FARMACIA_TEST_RUN_ID`). Una base de desarrollo o producción se rechaza aunque su nombre termine en `_test`. Detalle en la sección 5.1 del README.
 
 ---
 
@@ -90,10 +85,10 @@ pnpm db:test:check
 El monorepositorio utiliza **Vitest** como test runner unificado con ejecución transversal de pruebas reales aisladas:
 
 ```bash
-# Ejecutar todas las pruebas del monorepositorio (contra farmacia_test)
+# Ejecutar todas las pruebas del monorepositorio (PostgreSQL temporal; requiere Docker)
 pnpm test
 
-# Ejecutar pruebas en modo observador (watch)
+# Ejecutar pruebas en modo observador (watch) con base temporal
 pnpm test:watch
 
 # Ejecutar validaciones estáticas y compilación
@@ -117,7 +112,6 @@ pnpm install
 pnpm db:validate
 pnpm db:generate
 pnpm db:check
-pnpm db:test:check
 pnpm build
 pnpm lint
 pnpm typecheck

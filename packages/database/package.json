@@ -15,7 +15,8 @@
     "db:generate": "prisma generate",
     "db:check": "tsx src/check.ts",
     "db:test:check": "NODE_ENV=test tsx src/check-test.ts",
-    "db:test:migrate": "NODE_ENV=test prisma migrate deploy",
+    "db:test:assert": "tsx src/testing/assert-test-isolation.cli.ts",
+    "db:test:migrate": "tsx src/testing/assert-test-isolation.cli.ts && NODE_ENV=test prisma migrate deploy",
     "db:seed:rbac": "tsx src/seed/run-rbac-seed.ts",
     "db:seed:puc": "tsx src/seed/seed-puc.ts"
   },
