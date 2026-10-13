@@ -13,6 +13,7 @@ import {
   RegisterReceivablePaymentPayload,
   PaginatedResponse,
   AgingSummaryDto,
+  ReceivableStatus,
 } from '@farmacia/contracts';
 import { centsToMoneyString, parseMoneyToCents } from '../../treasury/domain/treasury-rules';
 import { recordSourceBankMovement } from '../../treasury/application/record-source-bank-movement';
@@ -213,7 +214,7 @@ export class ReceivablesService {
         data: {
           amountPaid: new Prisma.Decimal(centsToMoneyString(amountPaidCents + amountCents)),
           balance: new Prisma.Decimal(centsToMoneyString(newBalanceCents)),
-          status: newBalanceCents === 0n ? 'PAGADA' : 'PENDIENTE',
+          status: (newBalanceCents === 0n ? 'PAGADA' : 'PENDIENTE') satisfies ReceivableStatus,
         },
         include: {
           customer: { select: { name: true } },
@@ -402,9 +403,9 @@ export class ReceivablesService {
       const raw = rows[0];
 
       // Una cuenta de una venta anulada no debe volver a quedar pendiente de cobro
-      if (raw.status === 'CANCELADA') {
+      if (raw.status === ('ANULADA' satisfies ReceivableStatus)) {
         throw new ConflictException(
-          'No se puede revertir un abono de una cuenta por cobrar CANCELADA.',
+          'No se puede revertir un abono de una cuenta por cobrar ANULADA.',
         );
       }
 
@@ -449,7 +450,7 @@ export class ReceivablesService {
         data: {
           balance: new Prisma.Decimal(centsToMoneyString(newBalanceCents)),
           amountPaid: new Prisma.Decimal(centsToMoneyString(newAmountPaidCents)),
-          status: 'PENDIENTE',
+          status: 'PENDIENTE' satisfies ReceivableStatus,
         },
         include: {
           customer: { select: { name: true } },

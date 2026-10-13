@@ -22,6 +22,8 @@ import {
   RegisterReceivablePaymentPayload,
   ApiResponse,
   SYSTEM_PERMISSIONS,
+  RECEIVABLE_STATUSES,
+  ReceivableStatus,
 } from '@farmacia/contracts';
 import {
   SessionAuthGuard,
@@ -46,7 +48,8 @@ export class ReceivablesController {
     @Query(
       new QueryShapeValidationPipe({
         customerId: 'uuid?',
-        status: 'text?',
+        // FARM-AUD-003: solo estados del contrato; un valor ajeno responde 400 en vez de lista vacía
+        status: { values: RECEIVABLE_STATUSES, optional: true },
         fromDate: 'date?',
         toDate: 'date?',
         overdueOnly: 'booleanString?',
@@ -56,7 +59,7 @@ export class ReceivablesController {
   ): Promise<ApiResponse<any>> {
     const data = await this.svc.findAll({
       customerId: query['customerId'],
-      status: query['status'] as any,
+      status: query['status'] as ReceivableStatus | undefined,
       fromDate: query['fromDate'],
       toDate: query['toDate'],
       overdueOnly: query['overdueOnly'] === 'true',

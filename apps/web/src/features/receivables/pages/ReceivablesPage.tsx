@@ -30,7 +30,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import type { ReceivableDto, ReceivableStatus, ReceivablePaymentDto } from '@farmacia/contracts';
+import {
+  isReceivableStatus,
+  type ReceivableDto,
+  type ReceivableStatus,
+  type ReceivablePaymentDto,
+} from '@farmacia/contracts';
 import {
   fetchReceivables,
   fetchReceivableById,
@@ -73,6 +78,15 @@ const statusConfig: Record<
   PAGADA: { label: 'Pagada', color: 'success' },
   ANULADA: { label: 'Anulada', color: 'error' },
 };
+
+/**
+ * FARM-AUD-003: un estado fuera del contrato no rompe la pantalla ni se presenta como pagado o
+ * anulado; se muestra tal cual para que la inconsistencia sea visible.
+ */
+const getStatusDisplay = (status: string) =>
+  isReceivableStatus(status)
+    ? { ...statusConfig[status], recognized: true }
+    : { label: `Estado no reconocido: ${status}`, color: 'default' as const, recognized: false };
 
 const isOverdue = (dueDate: string, status: ReceivableStatus) =>
   status === 'PENDIENTE' && new Date(dueDate) < new Date();
@@ -156,6 +170,7 @@ function PaymentModal({ receivable, onClose, onSuccess }: PaymentModalProps) {
 
   const balance = Number(detail?.balance ?? receivable.balance);
   const canPay = detail?.status === 'PENDIENTE' && balance > 0;
+  const statusDisplay = getStatusDisplay(detail?.status ?? receivable.status);
 
   return (
     <Dialog
@@ -244,8 +259,8 @@ function PaymentModal({ receivable, onClose, onSuccess }: PaymentModalProps) {
           </Typography>
           <Chip
             size="small"
-            label={statusConfig[detail?.status ?? receivable.status].label}
-            color={statusConfig[detail?.status ?? receivable.status].color}
+            label={statusDisplay.label}
+            color={statusDisplay.color}
           />
         </Stack>
 
@@ -450,11 +465,20 @@ function PaymentModal({ receivable, onClose, onSuccess }: PaymentModalProps) {
           </Box>
         )}
 
-        {!canPay && (
+        {!canPay && !statusDisplay.recognized && (
+          <Alert severity="warning">
+            El estado "{detail?.status ?? receivable.status}" no es reconocido por el sistema. La
+            cuenta no admite abonos; informe al administrador para revisar su consistencia.
+          </Alert>
+        )}
+
+        {!canPay && statusDisplay.recognized && (
           <Alert severity={detail?.status === 'PAGADA' ? 'success' : 'info'}>
             {detail?.status === 'PAGADA'
               ? 'Esta cuenta por cobrar se encuentra totalmente pagada (saldo $0,00).'
-              : 'Esta cuenta no puede recibir abonos en su estado actual.'}
+              : detail?.status === 'ANULADA'
+                ? 'La venta de origen fue anulada: el saldo no constituye deuda pendiente y la cuenta no admite abonos.'
+                : 'Esta cuenta no puede recibir abonos en su estado actual.'}
           </Alert>
         )}
       </DialogContent>
@@ -849,7 +873,7 @@ export function ReceivablesPage() {
               )}
               {filteredItems.map((r) => {
                 const overdue = isOverdue(r.dueDate, r.status);
-                const cfg = statusConfig[r.status];
+                const cfg = getStatusDisplay(r.status);
                 return (
                   <TableRow
                     key={r.id}

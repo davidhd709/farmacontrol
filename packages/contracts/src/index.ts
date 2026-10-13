@@ -748,7 +748,18 @@ export * from './sales.dto';
 
 // ===== RECEIVABLES (Cuentas por Cobrar) =====
 
-export type ReceivableStatus = 'PENDIENTE' | 'PAGADA' | 'ANULADA';
+/**
+ * Estados almacenados de una cuenta por cobrar. ANULADA corresponde a una venta de origen anulada
+ * (FARM-AUD-003). "Parcial" y "Vencida" se calculan a partir de saldo y vencimiento. La tabla
+ * `receivables` restringe la columna a estos valores (chk_receivables_status_allowed).
+ */
+export const RECEIVABLE_STATUSES = ['PENDIENTE', 'PAGADA', 'ANULADA'] as const;
+
+export type ReceivableStatus = (typeof RECEIVABLE_STATUSES)[number];
+
+export function isReceivableStatus(value: unknown): value is ReceivableStatus {
+  return typeof value === 'string' && (RECEIVABLE_STATUSES as readonly string[]).includes(value);
+}
 
 export interface ReceivablePaymentDto {
   id: string;

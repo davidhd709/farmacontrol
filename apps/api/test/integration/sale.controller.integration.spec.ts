@@ -853,7 +853,8 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
       expect(res.status).toBe(200);
 
       const receivable = await prisma.receivable.findUniqueOrThrow({ where: { id: receivableId } });
-      expect(receivable.status).toBe('CANCELADA');
+      // FARM-AUD-003: estado canónico del contrato (antes se guardaba 'CANCELADA')
+      expect(receivable.status).toBe('ANULADA');
       const lot1 = await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lot1Id } });
       expect(lot1.currentQuantity).toBe(10);
     });
@@ -893,12 +894,13 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
       }
     });
 
-    it('no reabre una cuenta por cobrar CANCELADA al revertir un abono', async () => {
+    it('no reabre una cuenta por cobrar ANULADA al revertir un abono', async () => {
       const { receivableId, paymentId } = await confirmCreditSaleWithPayment();
-      // Estado heredado: cuenta cancelada con un abono vigente, anterior a esta corrección
+      // Estado heredado: cuenta anulada con un abono vigente, anterior a AUD-006.
+      // FARM-AUD-003: la base ya no admite 'CANCELADA'; la migración lo regularizó a 'ANULADA'.
       await prisma.receivable.update({
         where: { id: receivableId },
-        data: { status: 'CANCELADA' },
+        data: { status: 'ANULADA' },
       });
 
       const res = await request(app.getHttpServer())
@@ -908,7 +910,7 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
       expect(res.status).toBe(409);
 
       const receivable = await prisma.receivable.findUniqueOrThrow({ where: { id: receivableId } });
-      expect(receivable.status).toBe('CANCELADA');
+      expect(receivable.status).toBe('ANULADA');
       const payment = await prisma.receivablePayment.findUniqueOrThrow({ where: { id: paymentId } });
       expect(payment.isReversed).toBe(false);
     });
