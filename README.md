@@ -75,7 +75,6 @@ pnpm install
 
 ```bash
 pnpm db:up
-pnpm db:test:create   # crea farmacia_test para las pruebas automatizadas
 ```
 
 ### 4.3 Configuración de Variables de Entorno
@@ -91,9 +90,6 @@ cp .env.example .env
 ```bash
 # Aplicar migraciones de base de datos
 pnpm --filter @farmacia/database exec prisma migrate deploy
-
-# Aplicar migraciones a la base de pruebas
-pnpm db:test:migrate
 
 # Poblar roles y permisos RBAC
 pnpm db:seed:rbac
@@ -172,16 +168,18 @@ El proyecto cuenta con una batería de pruebas automatizadas que validan lógica
 
 ```bash
 # Ejecutar todas las pruebas del monorepositorio (api, web, worker y database)
+# contra un PostgreSQL temporal creado y eliminado por el propio comando (requiere Docker)
 pnpm test
 
-# Ejecutar pruebas exclusivas del backend (con PostgreSQL real)
-pnpm --filter @farmacia/api test
+# Solo algunos archivos o proyectos (argumentos para Vitest), con la misma base temporal
+pnpm test apps/api/test/integration/sale.controller.integration.spec.ts
+pnpm test --project @farmacia/api
 
 # Ejecutar pruebas del frontend (React Testing Library y Vitest)
 pnpm --filter @farmacia/web test
 
-# Ejecutar pruebas del worker
-pnpm --filter @farmacia/worker test
+# Modo observación con base temporal (se elimina al salir con Ctrl+C)
+pnpm test:watch
 
 # Comprobar tipos y empaquetar aplicaciones para producción
 pnpm build
@@ -189,6 +187,23 @@ pnpm build
 # Ejecutar linter estricto de código
 pnpm lint
 ```
+
+### 5.1 Aislamiento de la base de pruebas
+
+`pnpm test` (`infra/scripts/test-with-ephemeral-db.sh`) nunca usa la base de desarrollo ni la de producción. Requiere Docker y el cliente PostgreSQL 18 o superior (`pg_dump`, `pg_restore`, `pg_isready`, `psql`), porque la prueba de respaldos ejecuta `pg_dump` real; con un cliente anterior se detiene antes de empezar.
+
+1. Crea un contenedor `farmacontrol-test-<id>` (`postgres:18-alpine`) con credenciales aleatorias (pasadas por archivo, no por la línea de comandos), puerto asignado por Docker solo en `127.0.0.1`, datos en `tmpfs` y la etiqueta `com.farmacontrol.test-run=<id>`.
+2. Marca su base con `COMMENT ON DATABASE farmacia_test IS 'farmacontrol-test-run:<id>'` desde dentro del contenedor.
+3. Descarta toda variable `PG*` heredada (`PGHOSTADDR`, `PGSERVICE`, `PGPASSFILE`, `PGOPTIONS`...), exporta un entorno de conexión completo (`DATABASE_URL`, `DATABASE_TEST_URL`, `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE`) y deja de leer los `.env` locales. Comprueba con `psql`, que usa la misma libpq que `pg_dump`, que ese entorno llega a la base marcada.
+4. Crea un directorio temporal propio (`FARMACIA_TEST_RUN_DIR`, permisos 0700, con sello `.farmacontrol-test-run`). `BACKUP_DIR` es su subdirectorio `backups`: la retención de `backup.sh` nunca recorre respaldos reales y no hay destino externo.
+5. Verifica el aislamiento, aplica las migraciones, ejecuta Vitest en su propio grupo de procesos y guarda la salida en `.test-runs/<id>.log`.
+6. Al terminar, aunque fallen las pruebas, se interrumpa con Ctrl+C o reciba SIGTERM, detiene solo sus procesos y elimina solo el contenedor cuyo nombre y etiqueta coinciden (también si `docker run` falló a medias) y su directorio temporal. `FARMACIA_TEST_KEEP=1 pnpm test` conserva el contenedor para investigar un fallo.
+
+Los proyectos que usan PostgreSQL (api, database, worker), `pnpm db:test:migrate` y `cleanTestDatabase` se detienen antes de tocar datos si la base alcanzada no tiene la marca de la ejecución en curso, si hay variables `PG*` no admitidas o si `BACKUP_DIR` no es el directorio de respaldos de la ejecución (rutas canónicas, sin enlaces simbólicos). Un nombre terminado en `_test` no basta. Por eso `vitest` o `pnpm --filter @farmacia/api test` ejecutados directamente fallan con un mensaje que remite a `pnpm test`. `backup.sh` repite la comprobación del directorio antes de escribir cuando corre dentro de una ejecución de pruebas. Las pruebas del frontend (`pnpm --filter @farmacia/web test`) no usan base de datos y pueden ejecutarse sin Docker.
+
+`bash tests/infra/check-test-runner.sh` verifica el propio script: cliente PostgreSQL anterior, `docker run` fallido a medias, fallo de Vitest, SIGINT, SIGTERM y ejecución correcta, sin dejar contenedores, directorios ni procesos, y sin tocar contenedores de otras ejecuciones.
+
+Si el script se lanza en segundo plano desde un shell sin control de trabajos (por ejemplo `pnpm test &` dentro de otro script), bash le entrega SIGINT ignorado y no puede capturarlo; SIGTERM sigue limpiando correctamente.
 
 ---
 

@@ -22,6 +22,26 @@ BACKUP_AGE_RECIPIENT="${BACKUP_AGE_RECIPIENT:-}"
 BACKUP_REQUIRE_OFFSITE="${BACKUP_REQUIRE_OFFSITE:-false}"
 REMOTE_RETENTION_DAYS="${REMOTE_RETENTION_DAYS:-90}"
 
+# Ejecución de pruebas (FARM-AUD-014): antes de escribir o aplicar la retención, BACKUP_DIR
+# debe ser exactamente el directorio de respaldos de esa ejecución y no hay copia externa.
+# En producción FARMACIA_TEST_RUN_ID no existe y este bloque no se ejecuta.
+if [ -n "${FARMACIA_TEST_RUN_ID:-}" ]; then
+  test_run_dir="$(realpath -e -- "${FARMACIA_TEST_RUN_DIR:-/nonexistent}" 2>/dev/null || true)"
+  test_backup_dir="$(realpath -e -- "${BACKUP_DIR}" 2>/dev/null || true)"
+  if [ -z "${test_run_dir}" ] || [ -L "${FARMACIA_TEST_RUN_DIR}" ] || [ -L "${BACKUP_DIR}" ] \
+    || [ "${test_run_dir}" != "${FARMACIA_TEST_RUN_DIR}" ] \
+    || [ "${test_backup_dir}" != "${test_run_dir}/backups" ] || [ "${BACKUP_DIR}" != "${test_backup_dir}" ] \
+    || [ ! -f "${test_run_dir}/.farmacontrol-test-run" ] || [ -L "${test_run_dir}/.farmacontrol-test-run" ] \
+    || [ "$(cat "${test_run_dir}/.farmacontrol-test-run")" != "${FARMACIA_TEST_RUN_ID}" ]; then
+    echo " [ERROR] Ejecución de pruebas: BACKUP_DIR no es el directorio de respaldos de la ejecución ${FARMACIA_TEST_RUN_ID}. No se modifica ningún archivo." >&2
+    exit 1
+  fi
+  if [ -n "${BACKUP_REMOTE}" ] || [ -n "${BACKUP_AGE_RECIPIENT}" ] || [ "${BACKUP_REQUIRE_OFFSITE}" = "true" ]; then
+    echo " [ERROR] Ejecución de pruebas: no se permite un destino externo de respaldos." >&2
+    exit 1
+  fi
+fi
+
 export PGPASSWORD
 
 TIMESTAMP="$(date -u +"%Y%m%d_%H%M%S")"
