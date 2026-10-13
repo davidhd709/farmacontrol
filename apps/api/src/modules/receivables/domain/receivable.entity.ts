@@ -1,4 +1,6 @@
-export type ReceivableStatus = 'PENDIENTE' | 'PAGADA' | 'ANULADA';
+import type { ReceivableStatus } from '@farmacia/contracts';
+
+export type { ReceivableStatus };
 
 export class Receivable {
   constructor(

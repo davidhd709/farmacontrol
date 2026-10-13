@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import { Prisma } from '@farmacia/database';
+import type { ReceivableStatus } from '@farmacia/contracts';
 import { centsToMoneyString, parseMoneyToCents } from '../../treasury/domain/treasury-rules';
 
 type Tx = Prisma.TransactionClient;
@@ -26,18 +27,21 @@ export class ReceivablesLedger {
         totalAmount: params.total,
         amountPaid: '0.00',
         balance: params.total,
-        status: 'PENDIENTE',
+        status: 'PENDIENTE' satisfies ReceivableStatus,
         dueDate: params.dueDate,
         notes: params.notes,
       },
     });
   }
 
-  /** Marca como CANCELADA la cuenta por cobrar de una venta anulada. */
+  /**
+   * Marca como ANULADA la cuenta por cobrar de una venta anulada (FARM-AUD-003: antes guardaba
+   * 'CANCELADA', un estado ajeno al contrato). Importes y abonos se conservan como historial.
+   */
   async cancelForSale(tx: Tx, saleId: string, reason: string): Promise<void> {
     await tx.receivable.updateMany({
       where: { saleId },
-      data: { status: 'CANCELADA', notes: `Venta anulada: ${reason}` },
+      data: { status: 'ANULADA' satisfies ReceivableStatus, notes: `Venta anulada: ${reason}` },
     });
   }
 
@@ -74,9 +78,9 @@ export class ReceivablesLedger {
       );
     }
     const receivable = receivables[0];
-    if (receivable.status === 'CANCELADA') {
+    if (receivable.status === ('ANULADA' satisfies ReceivableStatus)) {
       throw new ConflictException(
-        `La cuenta por cobrar de la venta ${params.invoiceNumber} está CANCELADA.`,
+        `La cuenta por cobrar de la venta ${params.invoiceNumber} está ANULADA.`,
       );
     }
     const balanceCents = toCents(receivable.balance, 'Saldo de cartera');
@@ -92,7 +96,7 @@ export class ReceivablesLedger {
       data: {
         totalAmount: new Prisma.Decimal(centsToMoneyString(newTotalCents)),
         balance: new Prisma.Decimal(centsToMoneyString(newBalanceCents)),
-        status: newBalanceCents === 0n ? 'PAGADA' : receivable.status,
+        status: newBalanceCents === 0n ? ('PAGADA' satisfies ReceivableStatus) : receivable.status,
         notes:
           `${receivable.notes || ''} [Nota Crédito ${params.creditNoteNumber}: -${centsToMoneyString(params.amountCents)}]`.trim(),
       },
