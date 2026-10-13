@@ -329,8 +329,12 @@ export function ProductsPage() {
                         </TableCell>
                         <TableCell>
                           <Chip
-                            label={product.requiresLotControl ? 'Lote / FEFO' : 'Sin lote'}
-                            color={product.requiresLotControl ? 'primary' : 'default'}
+                            label={
+                              product.requiresLotControl
+                                ? 'Lote / FEFO'
+                                : 'Sin lote · no vendible, regularizar'
+                            }
+                            color={product.requiresLotControl ? 'primary' : 'warning'}
                             size="small"
                             variant={product.requiresLotControl ? 'filled' : 'outlined'}
                           />

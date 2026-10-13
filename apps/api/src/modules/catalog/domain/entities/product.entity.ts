@@ -1,4 +1,5 @@
 import type { ProductDto, ProductPresentationDto } from '@farmacia/contracts';
+import { ProductLotControlRequiredException } from '../exceptions/product.exceptions';
 
 export interface CreateProductProps {
   id?: string;
@@ -92,6 +93,9 @@ export class Product {
   }
 
   public static create(props: CreateProductProps): Product {
+    if (props.requiresLotControl === false) {
+      throw new ProductLotControlRequiredException();
+    }
     const code = Product.validateCode(props.code);
     const name = Product.validateName(props.name);
     const barcode = Product.validateBarcode(props.barcode);
@@ -226,6 +230,11 @@ export class Product {
     baseCost?: number | string;
     isActive?: boolean;
   }): void {
+    // Antes de aplicar cualquier cambio: la edición se rechaza completa, sin cambios parciales.
+    // Un producto antiguo sin control puede editarse y regularizarse, pero nadie lo desactiva.
+    if (props.requiresLotControl === false) {
+      throw new ProductLotControlRequiredException();
+    }
     if (props.categoryId !== undefined) {
       if (!props.categoryId.trim()) {
         throw new Error('La categoría del producto es requerida.');

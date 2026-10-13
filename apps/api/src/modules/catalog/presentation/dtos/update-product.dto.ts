@@ -147,7 +147,11 @@ export class UpdateProductValidationPipe implements PipeTransform {
     }
 
     if (record.requiresLotControl !== undefined) {
-      result.requiresLotControl = Boolean(record.requiresLotControl);
+      // Solo booleanos JSON: Boolean("false") activaría el control en silencio (FARM-AUD-002)
+      if (typeof record.requiresLotControl !== 'boolean') {
+        throw new BadRequestException('El campo "requiresLotControl" debe ser booleano (true o false).');
+      }
+      result.requiresLotControl = record.requiresLotControl;
     }
 
     if (record.prescriptionRequired !== undefined) {

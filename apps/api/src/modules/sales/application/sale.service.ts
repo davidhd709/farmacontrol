@@ -22,6 +22,7 @@ import {
   SaleAlreadyCancelledException,
   SaleHasCreditNotesException,
   SaleHasReceivablePaymentsException,
+  ProductWithoutLotControlException,
 } from '../domain/sale.exceptions';
 import { IdempotencyService } from '../../../common/idempotency/idempotency.service';
 import { AuditService } from '../../audit/application/services/audit.service';
@@ -258,52 +259,57 @@ export class SaleService {
         const lineId = crypto.randomUUID();
         const lineAllocations: SaleLotAllocation[] = [];
 
+        // FARM-AUD-002: toda línea descuenta existencias por FEFO. Un producto antiguo sin
+        // control de lote se rechaza aquí, antes de tocar inventario (la transacción revierte
+        // también lo ya descontado por líneas anteriores).
+        if (!product.requiresLotControl) {
+          throw new ProductWithoutLotControlException(product.name);
+        }
+
         // Asignación FEFO con bloqueo concurrente
-        if (product.requiresLotControl) {
-          // Bloquear lotes disponibles ordenados por vencimiento ascendente
-          const availableLots = await this.inventoryLedger.lockFefoCandidates(
-            tx,
-            product.id,
-            businessToday(),
-          );
+        // Bloquear lotes disponibles ordenados por vencimiento ascendente
+        const availableLots = await this.inventoryLedger.lockFefoCandidates(
+          tx,
+          product.id,
+          businessToday(),
+        );
 
-          const totalAvailable = availableLots.reduce((acc, l) => acc + l.current_quantity, 0);
-          if (totalAvailable < requiredBaseUnits) {
-            throw new InsufficientStockException(product.name, requiredBaseUnits, totalAvailable);
-          }
+        const totalAvailable = availableLots.reduce((acc, l) => acc + l.current_quantity, 0);
+        if (totalAvailable < requiredBaseUnits) {
+          throw new InsufficientStockException(product.name, requiredBaseUnits, totalAvailable);
+        }
 
-          let remainingUnits = requiredBaseUnits;
+        let remainingUnits = requiredBaseUnits;
 
-          for (const lot of availableLots) {
-            if (remainingUnits <= 0) break;
+        for (const lot of availableLots) {
+          if (remainingUnits <= 0) break;
 
-            const take = Math.min(lot.current_quantity, remainingUnits);
-            // Descontar existencias del lote y registrar Kardex inmutable
-            await this.inventoryLedger.changeLotQuantity(tx, lot.id, -take, {
-              movementType: 'SALIDA_VENTA',
-              productId: product.id,
-              presentationId: item.presentationId || null,
-              quantityBaseUnits: take,
-              presentationFactorHistorical: factor,
-              referenceDocumentType: 'SALE',
-              referenceDocumentId: invoiceNumber,
-              notes: `Venta POS ${invoiceNumber} - Despacho FEFO`,
-              createdByUserId: auditCtx.userId || null,
-            });
+          const take = Math.min(lot.current_quantity, remainingUnits);
+          // Descontar existencias del lote y registrar Kardex inmutable
+          await this.inventoryLedger.changeLotQuantity(tx, lot.id, -take, {
+            movementType: 'SALIDA_VENTA',
+            productId: product.id,
+            presentationId: item.presentationId || null,
+            quantityBaseUnits: take,
+            presentationFactorHistorical: factor,
+            referenceDocumentType: 'SALE',
+            referenceDocumentId: invoiceNumber,
+            notes: `Venta POS ${invoiceNumber} - Despacho FEFO`,
+            createdByUserId: auditCtx.userId || null,
+          });
 
-            const alloc = SaleLotAllocation.create({
-              saleId,
-              saleLineId: lineId,
-              lotId: lot.id,
-              lotNumber: lot.lot_number,
-              expirationDate: new Date(lot.expiration_date).toISOString().split('T')[0],
-              quantityBaseUnits: take,
-            });
+          const alloc = SaleLotAllocation.create({
+            saleId,
+            saleLineId: lineId,
+            lotId: lot.id,
+            lotNumber: lot.lot_number,
+            expirationDate: new Date(lot.expiration_date).toISOString().split('T')[0],
+            quantityBaseUnits: take,
+          });
 
-            lineAllocations.push(alloc);
-            allLotAllocations.push(alloc);
-            remainingUnits -= take;
-          }
+          lineAllocations.push(alloc);
+          allLotAllocations.push(alloc);
+          remainingUnits -= take;
         }
 
         const saleLine = SaleLine.create({
