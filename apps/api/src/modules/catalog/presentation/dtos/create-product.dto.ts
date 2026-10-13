@@ -119,8 +119,12 @@ export class CreateProductValidationPipe implements PipeTransform {
         ? record.baseUnit.trim().toUpperCase()
         : 'UNIDAD';
 
+    // Solo booleanos JSON: Boolean("false") daría true en silencio (FARM-AUD-002)
+    if (record.requiresLotControl !== undefined && typeof record.requiresLotControl !== 'boolean') {
+      throw new BadRequestException('El campo "requiresLotControl" debe ser booleano (true o false).');
+    }
     const requiresLotControl =
-      record.requiresLotControl !== undefined ? Boolean(record.requiresLotControl) : true;
+      record.requiresLotControl !== undefined ? record.requiresLotControl : true;
     const prescriptionRequired =
       record.prescriptionRequired !== undefined ? Boolean(record.prescriptionRequired) : false;
 

@@ -27,3 +27,17 @@ export class ProductCategoryNotFoundException extends DomainError {
     this.name = 'ProductCategoryNotFoundException';
   }
 }
+
+/**
+ * FARM-AUD-002: mientras no exista un modelo de inventario sin lote (T-09), todo producto se
+ * controla por lote para que sus ventas descuenten existencias y dejen kardex.
+ */
+export class ProductLotControlRequiredException extends DomainError {
+  constructor() {
+    super(
+      'El control por lote y vencimiento es obligatorio: un producto sin control de lote podría venderse sin descontar inventario. El inventario sin lote aún no está disponible.',
+      'validation',
+    );
+    this.name = 'ProductLotControlRequiredException';
+  }
+}

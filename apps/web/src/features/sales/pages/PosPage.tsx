@@ -145,6 +145,15 @@ export const PosPage: React.FC = () => {
   const handleAddToCart = (product: ProductDto, presentation?: ProductPresentationDto | null) => {
     setErrorMsg(null);
 
+    // FARM-AUD-002: un producto sin control por lote no descuenta inventario; el backend lo
+    // rechaza y aquí se explica antes de llegar al cobro
+    if (!product.requiresLotControl) {
+      const msg = `El producto "${product.name}" tiene desactivado el control por lote y no puede venderse. Debe regularizarse en el catálogo.`;
+      setErrorMsg(msg);
+      setSnackbar({ open: true, message: msg, severity: 'warning' });
+      return;
+    }
+
     // Validación P0: Prevenir agregar productos sin existencias vigentes
     if (product.availableStock !== undefined && product.availableStock <= 0) {
       const msg = `El producto "${product.name}" no tiene existencias disponibles o lotes vigentes para la venta.`;
@@ -413,7 +422,9 @@ export const PosPage: React.FC = () => {
               data-testid="pos-product-autocomplete"
               options={productOptions}
               getOptionLabel={(opt) => `${opt.code} - ${opt.name} (${opt.baseUnit})`}
-              getOptionDisabled={(opt) => opt.availableStock !== undefined && opt.availableStock <= 0}
+              getOptionDisabled={(opt) =>
+                !opt.requiresLotControl || (opt.availableStock !== undefined && opt.availableStock <= 0)
+              }
               loading={productLoading}
               onInputChange={(_, value) => handleSearchProducts(value)}
               onChange={(_, value) => {
@@ -440,15 +451,24 @@ export const PosPage: React.FC = () => {
               )}
               renderOption={(props, opt) => {
                 const isOutOfStock = opt.availableStock !== undefined && opt.availableStock <= 0;
+                const needsRegularization = !opt.requiresLotControl;
                 return (
                   <li {...props} key={opt.id}>
-                    <Box sx={{ width: '100%', py: 0.5, opacity: isOutOfStock ? 0.6 : 1 }}>
+                    <Box sx={{ width: '100%', py: 0.5, opacity: isOutOfStock || needsRegularization ? 0.6 : 1 }}>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
                         <Typography variant="body2" sx={{ fontWeight: 600 }}>
                           {opt.name}
                         </Typography>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          {opt.availableStock !== undefined && (
+                          {needsRegularization ? (
+                            <Chip
+                              size="small"
+                              label="No vendible: regularizar en catálogo"
+                              color="warning"
+                              variant="outlined"
+                              sx={{ height: 20, fontSize: '0.68rem', fontWeight: 700 }}
+                            />
+                          ) : opt.availableStock !== undefined && (
                             <Chip
                               size="small"
                               label={

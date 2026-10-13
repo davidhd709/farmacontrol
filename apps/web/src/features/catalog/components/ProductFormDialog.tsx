@@ -46,6 +46,9 @@ export function ProductFormDialog({
   onSuccess,
 }: ProductFormDialogProps) {
   const isEditing = Boolean(product);
+  // Producto creado antes de FARM-AUD-002 con el control por lote desactivado: no puede venderse
+  // hasta regularizarlo. El control solo se activa si el usuario lo decide explícitamente.
+  const isLegacyWithoutLotControl = Boolean(product && !product.requiresLotControl);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const { data: categoriesData, isLoading: isLoadingCategories } = useCategories({
@@ -143,7 +146,9 @@ export function ProductFormDialog({
         sanitaryRegistry: values.sanitaryRegistry ? values.sanitaryRegistry : null,
         manufacturer: values.manufacturer ? values.manufacturer : null,
         description: values.description ? values.description : null,
-        requiresLotControl: values.requiresLotControl,
+        // Nunca se envía false: el backend lo rechaza. Un producto antiguo sin control conserva
+        // su configuración (campo omitido) mientras el usuario no active el control.
+        ...(values.requiresLotControl ? { requiresLotControl: true } : {}),
         prescriptionRequired: values.prescriptionRequired,
         baseUnit: values.baseUnit,
         basePrice: values.basePrice,
@@ -203,6 +208,15 @@ export function ProductFormDialog({
             {submitError ? (
               <Alert severity="error" onClose={() => setSubmitError(null)}>
                 {submitError}
+              </Alert>
+            ) : null}
+
+            {isLegacyWithoutLotControl ? (
+              <Alert severity="warning" data-testid="legacy-lot-control-warning">
+                Este producto tiene desactivado el control por lote y vencimiento, por lo que{' '}
+                <strong>no puede venderse</strong>: la venta no descontaría inventario. Active el
+                control por lote para regularizarlo; podrá venderse con FEFO sobre sus lotes
+                registrados.
               </Alert>
             ) : null}
 
@@ -538,10 +552,27 @@ export function ProductFormDialog({
                         <Switch
                           checked={field.value}
                           onChange={(e) => field.onChange(e.target.checked)}
-                          disabled={isSubmitting}
+                          disabled={isSubmitting || !isLegacyWithoutLotControl}
+                          slotProps={{ input: { 'aria-describedby': 'lot-control-help' } }}
                         />
                       }
-                      label="Control por lote y vencimiento (FEFO)"
+                      label={
+                        <Box>
+                          <Typography variant="body2">
+                            Control por lote y vencimiento (FEFO)
+                            {isLegacyWithoutLotControl ? '' : ' · obligatorio'}
+                          </Typography>
+                          <Typography
+                            id="lot-control-help"
+                            variant="caption"
+                            color="text.secondary"
+                          >
+                            {isLegacyWithoutLotControl
+                              ? 'Actívelo para regularizar el producto y habilitar su venta.'
+                              : 'Toda venta descuenta existencias por lote. El inventario sin lote aún no está disponible.'}
+                          </Typography>
+                        </Box>
+                      }
                     />
                   )}
                 />
