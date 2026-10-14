@@ -18,7 +18,12 @@ import { PermissionsGuard } from '../../../identity/presentation/guards/permissi
 import { CurrentUser } from '../../../identity/presentation/decorators/current-user.decorator';
 import type { AuthenticatedUserContext } from '../../../identity/presentation/guards/session-auth.guard';
 import { RequirePermissions } from '../../../identity/presentation/decorators/require-permissions.decorator';
-import { SYSTEM_PERMISSIONS, InventoryMovementType } from '@farmacia/contracts';
+import {
+  SYSTEM_PERMISSIONS,
+  InventoryMovementType,
+  INVENTORY_ADJUSTMENT_REASON_MAX_LENGTH,
+  INVENTORY_MOVEMENT_NOTES_MAX_LENGTH,
+} from '@farmacia/contracts';
 import { InventoryMovementService } from '../../application/services/inventory-movement.service';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -81,13 +86,26 @@ export class InventoryMovementController {
     if (!body.reason || typeof body.reason !== 'string' || body.reason.trim().length === 0) {
       throw new BadRequestException('reason (motivo justificado) es obligatorio.');
     }
+    // FARM-AUD-012: límites de las columnas reason y notes; superarlos era un error 500
+    if (body.reason.trim().length > INVENTORY_ADJUSTMENT_REASON_MAX_LENGTH) {
+      throw new BadRequestException(
+        `El motivo del ajuste no puede superar ${INVENTORY_ADJUSTMENT_REASON_MAX_LENGTH} caracteres.`,
+      );
+    }
 
     if (body.notes !== undefined && body.notes !== null && typeof body.notes !== 'string') {
       throw new BadRequestException('notes debe ser texto.');
     }
+    const notes = typeof body.notes === 'string' ? body.notes.trim() : '';
+    if (notes.length > INVENTORY_MOVEMENT_NOTES_MAX_LENGTH) {
+      throw new BadRequestException(
+        `Las observaciones no pueden superar ${INVENTORY_MOVEMENT_NOTES_MAX_LENGTH} caracteres.`,
+      );
+    }
 
     const ipAddress = req.ip || req.socket.remoteAddress;
-    const correlationId = req.headers['x-correlation-id'] as string;
+    // Identificador ya validado por CorrelationIdMiddleware; la cabecera cruda puede ser inválida
+    const correlationId = req.correlationId;
 
     const data = await this.movementService.adjustInventory(
       {
@@ -96,7 +114,7 @@ export class InventoryMovementController {
         adjustmentType: body.adjustmentType,
         quantityBaseUnits: body.quantityBaseUnits,
         reason: body.reason.trim(),
-        notes: body.notes,
+        notes: notes || undefined,
       },
       user.id,
       ipAddress,

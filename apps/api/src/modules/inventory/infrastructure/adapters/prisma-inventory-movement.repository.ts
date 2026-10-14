@@ -1,7 +1,11 @@
 import { businessDayStart, businessDayEnd } from '../../../../common/utils/business-date';
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { prisma, Prisma } from '@farmacia/database';
-import { IInventoryMovementRepository } from '../../application/ports/inventory-movement.repository.port';
+import {
+  IInventoryMovementRepository,
+  WithinMovementTransaction,
+} from '../../application/ports/inventory-movement.repository.port';
+import { LotProductMismatchException } from '../../domain/exceptions/inventory.exceptions';
 import type {
   InventoryMovementDto,
   InventoryMovementQueryFilters,
@@ -16,11 +20,14 @@ export class PrismaInventoryMovementRepository
   public async recordMovement(
     payload: RecordInventoryMovementPayload,
     userId?: string,
+    withinTransaction?: WithinMovementTransaction,
   ): Promise<InventoryMovementDto> {
     return prisma.$transaction(async (tx) => {
       // 1. Bloqueo pesimista del lote: serializa los cambios de saldo concurrentes
-      const lockedLots = await tx.$queryRaw<Array<{ id: string; current_quantity: number }>>`
-        SELECT id, current_quantity
+      const lockedLots = await tx.$queryRaw<
+        Array<{ id: string; product_id: string; lot_number: string; current_quantity: number }>
+      >`
+        SELECT id, product_id, lot_number, current_quantity
         FROM inventory_lots
         WHERE id = ${payload.lotId}::uuid
         FOR UPDATE
@@ -29,7 +36,15 @@ export class PrismaInventoryMovementRepository
       if (!lockedLots.length) {
         throw new BadRequestException('El lote especificado no existe.');
       }
-      const lot = { id: lockedLots[0].id, currentQuantity: lockedLots[0].current_quantity };
+      const lot = {
+        id: lockedLots[0].id,
+        productId: lockedLots[0].product_id,
+        currentQuantity: lockedLots[0].current_quantity,
+      };
+      // FARM-AUD-004: el producto lo define el lote bloqueado, no el identificador recibido
+      if (lot.productId !== payload.productId) {
+        throw new LotProductMismatchException(lockedLots[0].lot_number);
+      }
 
       const newBalance = lot.currentQuantity + payload.quantityBaseUnits;
       if (newBalance < 0) {
@@ -56,8 +71,8 @@ export class PrismaInventoryMovementRepository
       const movement = await tx.inventoryMovement.create({
         data: {
           movementType: payload.movementType,
-          productId: payload.productId,
-          lotId: payload.lotId,
+          productId: lot.productId,
+          lotId: lot.id,
           presentationId: payload.presentationId || null,
           quantityBaseUnits: payload.quantityBaseUnits,
           presentationFactorHistorical: payload.presentationFactorHistorical ?? 1,
@@ -65,6 +80,7 @@ export class PrismaInventoryMovementRepository
           balanceAfterBaseUnits: newBalance,
           referenceDocumentType: payload.referenceDocumentType || null,
           referenceDocumentId: payload.referenceDocumentId || null,
+          reason: payload.reason || null,
           notes: payload.notes || null,
           createdByUserId: userId || null,
         },
@@ -81,7 +97,7 @@ export class PrismaInventoryMovementRepository
         },
       });
 
-      return {
+      const result: InventoryMovementDto = {
         id: movement.id,
         movementType: movement.movementType as any,
         productId: movement.productId,
@@ -93,6 +109,7 @@ export class PrismaInventoryMovementRepository
         balanceAfterBaseUnits: movement.balanceAfterBaseUnits,
         referenceDocumentType: movement.referenceDocumentType,
         referenceDocumentId: movement.referenceDocumentId,
+        reason: movement.reason,
         notes: movement.notes,
         createdByUserId: movement.createdByUserId,
         createdAt: movement.createdAt.toISOString(),
@@ -108,6 +125,8 @@ export class PrismaInventoryMovementRepository
           : undefined,
         presentation: movement.presentation,
       };
+      await withinTransaction?.(tx, result);
+      return result;
     });
   }
 
@@ -166,6 +185,7 @@ export class PrismaInventoryMovementRepository
         balanceAfterBaseUnits: m.balanceAfterBaseUnits,
         referenceDocumentType: m.referenceDocumentType,
         referenceDocumentId: m.referenceDocumentId,
+        reason: m.reason,
         notes: m.notes,
         createdByUserId: m.createdByUserId,
         createdAt: m.createdAt.toISOString(),

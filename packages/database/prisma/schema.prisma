@@ -269,6 +269,7 @@ model InventoryLot {
   debitNoteLines  DebitNoteLine[]
 
   @@unique([productId, locationId, lotNumber])
+  @@unique([id, productId])
   @@index([productId])
   @@index([locationId])
   @@index([productId, expirationDate, currentQuantity])
@@ -288,12 +289,14 @@ model InventoryMovement {
   balanceAfterBaseUnits       Int                  @map("balance_after_base_units")
   referenceDocumentType       String?              @map("reference_document_type") @db.VarChar(50)
   referenceDocumentId         String?              @map("reference_document_id") @db.VarChar(100)
+  reason                      String?              @db.VarChar(250)
   notes                       String?              @db.VarChar(500)
   createdByUserId             String?              @map("created_by_user_id") @db.Uuid
   createdAt                   DateTime             @default(now()) @map("created_at") @db.Timestamptz
 
   product                     Product              @relation(fields: [productId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  lot                         InventoryLot         @relation(fields: [lotId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  // FARM-AUD-004: el producto del movimiento es siempre el dueño del lote
+  lot                         InventoryLot         @relation(fields: [lotId, productId], references: [id, productId], onDelete: Restrict, onUpdate: Cascade)
   presentation                ProductPresentation? @relation(fields: [presentationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   user                        User?                @relation(fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 

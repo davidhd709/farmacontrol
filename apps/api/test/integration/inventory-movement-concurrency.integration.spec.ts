@@ -64,6 +64,8 @@ describe('Movimientos de inventario concurrentes sobre un mismo lote (PostgreSQL
           lotId,
           quantityBaseUnits: delta,
           referenceDocumentType: 'AJUSTE_MANUAL',
+          // FARM-AUD-012: todo ajuste manual lleva motivo (restricción de la base)
+          reason: 'Ajuste concurrente',
           notes: 'Ajuste concurrente',
         }),
       ),
@@ -96,6 +98,7 @@ describe('Movimientos de inventario concurrentes sobre un mismo lote (PostgreSQL
         lotId,
         quantityBaseUnits: -101,
         referenceDocumentType: 'AJUSTE_MANUAL',
+        reason: 'Faltante en conteo',
       }),
     ).rejects.toThrow(/Inventario insuficiente/);
 
