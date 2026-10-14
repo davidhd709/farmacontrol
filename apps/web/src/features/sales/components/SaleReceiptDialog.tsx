@@ -30,14 +30,12 @@ export const SaleReceiptDialog: React.FC<SaleReceiptDialogProps> = ({
   onClose,
   onNewSale,
 }) => {
-  if (!sale) return null;
-
   const handlePrint = () => {
     window.print();
   };
 
   React.useEffect(() => {
-    if (!open) return;
+    if (!open || !sale) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Enter') {
         e.preventDefault();
@@ -50,7 +48,9 @@ export const SaleReceiptDialog: React.FC<SaleReceiptDialogProps> = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [open, onClose, onNewSale]);
+  }, [open, sale, onClose, onNewSale]);
+
+  if (!sale) return null;
 
   return (
     <Dialog
