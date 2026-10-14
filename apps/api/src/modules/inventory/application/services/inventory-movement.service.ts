@@ -38,37 +38,41 @@ export class InventoryMovementService {
 
     const movementType = isIncrement ? 'AJUSTE_POSITIVO' : 'AJUSTE_NEGATIVO';
 
-    const movement = await this.movementRepository.recordMovement(
+    // La auditoría se confirma en la misma transacción: sin ella no queda saldo ni kardex
+    return this.movementRepository.recordMovement(
       {
         movementType,
         productId: payload.productId,
         lotId: payload.lotId,
         quantityBaseUnits: delta,
+        // FARM-AUD-012: el motivo va en su propio campo; un ajuste manual no tiene documento
         referenceDocumentType: 'AJUSTE_MANUAL',
-        referenceDocumentId: `MOTIVO: ${payload.reason}`,
-        notes: payload.notes || payload.reason,
-      },
-      userId,
-    );
-
-    await this.auditService.recordEvent({
-      userId,
-      action: 'INVENTORY_MANUAL_ADJUSTMENT',
-      entity: 'InventoryMovement',
-      entityId: movement.id,
-      details: {
-        adjustmentType: payload.adjustmentType,
-        productId: payload.productId,
-        lotId: payload.lotId,
-        quantityBaseUnits: delta,
         reason: payload.reason,
-        balanceAfter: movement.balanceAfterBaseUnits,
+        notes: payload.notes || undefined,
       },
-      ipAddress,
-      correlationId,
-    });
-
-    return movement;
+      userId,
+      async (tx, movement) => {
+        await this.auditService.recordEvent(
+          {
+            userId,
+            action: 'INVENTORY_MANUAL_ADJUSTMENT',
+            entity: 'InventoryMovement',
+            entityId: movement.id,
+            details: {
+              adjustmentType: payload.adjustmentType,
+              productId: movement.productId,
+              lotId: movement.lotId,
+              quantityBaseUnits: delta,
+              reason: payload.reason,
+              balanceAfter: movement.balanceAfterBaseUnits,
+            },
+            ipAddress,
+            correlationId,
+          },
+          tx,
+        );
+      },
+    );
   }
 
   public async getMovements(

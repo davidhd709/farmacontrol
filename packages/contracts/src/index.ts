@@ -513,6 +513,8 @@ export interface InventoryMovementDto {
   balanceAfterBaseUnits: number;
   referenceDocumentType?: string | null;
   referenceDocumentId?: string | null;
+  /** Motivo de un ajuste manual (FARM-AUD-012); null en movimientos anteriores o no manuales. */
+  reason?: string | null;
   notes?: string | null;
   createdByUserId?: string | null;
   createdAt: string;
@@ -544,6 +546,7 @@ export interface RecordInventoryMovementPayload {
   quantityCommercial?: number | string;
   referenceDocumentType?: string;
   referenceDocumentId?: string;
+  reason?: string;
   notes?: string;
 }
 
@@ -578,6 +581,10 @@ export interface AllocateFefoPayload {
 }
 
 export type InventoryAdjustmentType = 'INCREMENTO' | 'DECREMENTO';
+
+/** Límites de texto de un ajuste manual: columnas `reason` y `notes` de inventory_movements. */
+export const INVENTORY_ADJUSTMENT_REASON_MAX_LENGTH = 250;
+export const INVENTORY_MOVEMENT_NOTES_MAX_LENGTH = 500;
 
 export interface AdjustInventoryPayload {
   productId: string;

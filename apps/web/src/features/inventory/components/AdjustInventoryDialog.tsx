@@ -12,7 +12,12 @@ import {
   Typography,
   Box,
 } from '@mui/material';
-import type { InventoryLotDto, ProductDto } from '@farmacia/contracts';
+import {
+  INVENTORY_ADJUSTMENT_REASON_MAX_LENGTH,
+  INVENTORY_MOVEMENT_NOTES_MAX_LENGTH,
+  type InventoryLotDto,
+  type ProductDto,
+} from '@farmacia/contracts';
 import { adjustInventory } from '../api/inventory.api';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
 
@@ -202,6 +207,8 @@ export const AdjustInventoryDialog = ({
               required
               fullWidth
               disabled={isSubmitting}
+              slotProps={{ htmlInput: { maxLength: INVENTORY_ADJUSTMENT_REASON_MAX_LENGTH } }}
+              helperText={`${reason.length}/${INVENTORY_ADJUSTMENT_REASON_MAX_LENGTH}`}
             />
 
             <TextField
@@ -212,6 +219,8 @@ export const AdjustInventoryDialog = ({
               rows={2}
               fullWidth
               disabled={isSubmitting}
+              slotProps={{ htmlInput: { maxLength: INVENTORY_MOVEMENT_NOTES_MAX_LENGTH } }}
+              helperText={`${notes.length}/${INVENTORY_MOVEMENT_NOTES_MAX_LENGTH}`}
             />
 
             {selectedLot && (

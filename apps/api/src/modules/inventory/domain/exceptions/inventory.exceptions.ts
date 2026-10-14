@@ -36,3 +36,11 @@ export class InsufficientInventoryException extends InventoryDomainException {
     this.name = 'InsufficientInventoryException';
   }
 }
+
+/** FARM-AUD-004: el lote indicado pertenece a otro producto; el ajuste no toca existencias. */
+export class LotProductMismatchException extends InventoryDomainException {
+  constructor(lotNumber: string) {
+    super(`El lote '${lotNumber}' no pertenece al producto indicado.`);
+    this.name = 'LotProductMismatchException';
+  }
+}

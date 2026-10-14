@@ -258,9 +258,12 @@ export const InventoryMovementsPage = () => {
                           {m.balanceAfterBaseUnits}
                         </TableCell>
                         <TableCell sx={{ fontSize: '0.875rem' }}>
-                          {m.referenceDocumentType
-                            ? `${m.referenceDocumentType}: ${m.referenceDocumentId || ''}`
-                            : m.notes || '—'}
+                          {/* FARM-AUD-012: los ajustes nuevos guardan el motivo en su propio campo */}
+                          {m.reason
+                            ? `Motivo: ${m.reason}`
+                            : m.referenceDocumentType
+                              ? `${m.referenceDocumentType}: ${m.referenceDocumentId || ''}`
+                              : m.notes || '—'}
                         </TableCell>
                       </TableRow>
                     ))}
