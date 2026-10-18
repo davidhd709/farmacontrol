@@ -188,7 +188,7 @@ describe('RBAC Frontend — usePermissions y PermissionGate (Slice 003.3)', () =
   });
 
   describe('AuthenticatedHomePage adaptada por RBAC', () => {
-    it('muestra las tarjetas de POS pero oculta Administración para un cajero', () => {
+    it('oculta ventas sin reports:read y Administración para un cajero', () => {
       const authValue = createMockAuthContextValue({
         id: 'u-cajero',
         username: 'cajero_operativo',
@@ -204,8 +204,8 @@ describe('RBAC Frontend — usePermissions y PermissionGate (Slice 003.3)', () =
       expect(screen.getByText('cajero')).toBeInTheDocument();
 
       // Módulo POS debe existir
-      expect(screen.getByText('Punto de Venta (POS)')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Nueva Venta' })).toBeInTheDocument();
+      expect(screen.queryByText('Ventas de hoy')).not.toBeInTheDocument();
+      expect(screen.queryByText('Punto de Venta (POS)')).not.toBeInTheDocument();
 
       // Módulo de Administración / Gestión de Usuarios NO debe existir para el cajero
       expect(screen.queryByTestId('users-nav-btn')).not.toBeInTheDocument();
@@ -227,7 +227,7 @@ describe('RBAC Frontend — usePermissions y PermissionGate (Slice 003.3)', () =
 
       renderWithContext(<AuthenticatedHomePage />, authValue);
 
-      expect(screen.getByText('Punto de Venta (POS)')).toBeInTheDocument();
+      expect(screen.queryByText('Ventas de hoy')).not.toBeInTheDocument();
       expect(screen.queryByText('Gestión de Usuarios')).not.toBeInTheDocument();
       expect(screen.queryByTestId('users-nav-btn')).not.toBeInTheDocument();
     });

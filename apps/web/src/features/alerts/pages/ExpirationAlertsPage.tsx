@@ -1,3 +1,6 @@
+import { Link, useSearchParams } from 'react-router-dom';
+import { usePermissions } from '../../auth/hooks/usePermissions';
+import { SYSTEM_PERMISSIONS } from '@farmacia/contracts';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { HomeBackButton } from '../../../components/HomeBackButton';
@@ -6,6 +9,7 @@ import {
   Button,
   Card,
   CardContent,
+  CardActionArea,
   Chip,
   FormControl,
   InputLabel,
@@ -26,16 +30,27 @@ import {
   Pagination,
 } from '@mui/material';
 import type { ExpirationSeverity, InventoryAlertDto } from '@farmacia/contracts';
-import {
-  fetchExpirations,
-  fetchAlertsSummary,
-  triggerAlertsEvaluation,
-} from '../api/alerts.api';
+import { fetchExpirations, fetchAlertsSummary, triggerAlertsEvaluation } from '../api/alerts.api';
 
 export function ExpirationAlertsPage() {
   const queryClient = useQueryClient();
 
-  const [severity, setSeverity] = useState<string>('ALL');
+  const { hasPermission } = usePermissions();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlSeverity = searchParams.get('severity');
+  const severity =
+    urlSeverity && ['VENCIDO', 'CRITICO', 'ALERTA', 'PROXIMO'].includes(urlSeverity)
+      ? urlSeverity
+      : 'ALL';
+  const setSeverity = (value: string) => {
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      if (value === 'ALL') next.delete('severity');
+      else next.set('severity', value);
+      return next;
+    });
+    setPage(1);
+  };
   const [search, setSearch] = useState<string>('');
   const [page, setPage] = useState<number>(1);
   const [actionMessage, setActionMessage] = useState<{
@@ -217,17 +232,26 @@ export function ExpirationAlertsPage() {
           }}
         >
           <Card variant="outlined" sx={{ borderRadius: 2 }}>
-            <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: 0.5 }}>
-                TOTAL EN RIESGO
-              </Typography>
-              <Typography variant="h4" sx={{ fontWeight: 800, mt: 0.5, fontVariantNumeric: 'tabular-nums' }}>
-                {summaryQuery.data?.totalActive ?? 0}
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                Lotes activos con stock
-              </Typography>
-            </CardContent>
+            <CardActionArea onClick={() => setSeverity('ALL')}>
+              <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ fontWeight: 600, letterSpacing: 0.5 }}
+                >
+                  TOTAL EN RIESGO
+                </Typography>
+                <Typography
+                  variant="h4"
+                  sx={{ fontWeight: 800, mt: 0.5, fontVariantNumeric: 'tabular-nums' }}
+                >
+                  {summaryQuery.data?.totalActive ?? 0}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Lotes activos con stock
+                </Typography>
+              </CardContent>
+            </CardActionArea>
           </Card>
 
           <Card
@@ -238,17 +262,27 @@ export function ExpirationAlertsPage() {
               borderColor: 'rgba(211, 47, 47, 0.25)',
             }}
           >
-            <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-              <Typography variant="caption" color="error.main" sx={{ fontWeight: 700, letterSpacing: 0.5 }}>
-                🔴 VENCIDOS (≤ 0d)
-              </Typography>
-              <Typography variant="h4" color="error.main" sx={{ fontWeight: 800, mt: 0.5, fontVariantNumeric: 'tabular-nums' }}>
-                {summaryQuery.data?.vencidos ?? 0}
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                Retiro urgente de anaquel
-              </Typography>
-            </CardContent>
+            <CardActionArea onClick={() => setSeverity('VENCIDO')}>
+              <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                <Typography
+                  variant="caption"
+                  color="error.main"
+                  sx={{ fontWeight: 700, letterSpacing: 0.5 }}
+                >
+                  🔴 VENCIDOS (≤ 0d)
+                </Typography>
+                <Typography
+                  variant="h4"
+                  color="error.main"
+                  sx={{ fontWeight: 800, mt: 0.5, fontVariantNumeric: 'tabular-nums' }}
+                >
+                  {summaryQuery.data?.vencidos ?? 0}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Retiro urgente de anaquel
+                </Typography>
+              </CardContent>
+            </CardActionArea>
           </Card>
 
           <Card
@@ -259,17 +293,30 @@ export function ExpirationAlertsPage() {
               borderColor: 'rgba(237, 108, 2, 0.25)',
             }}
           >
-            <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-              <Typography variant="caption" sx={{ color: '#c25e00', fontWeight: 700, letterSpacing: 0.5 }}>
-                🟠 CRÍTICOS (&lt; 30d)
-              </Typography>
-              <Typography variant="h4" sx={{ color: '#c25e00', fontWeight: 800, mt: 0.5, fontVariantNumeric: 'tabular-nums' }}>
-                {summaryQuery.data?.criticos ?? 0}
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                Rotación inmediata FEFO
-              </Typography>
-            </CardContent>
+            <CardActionArea onClick={() => setSeverity('CRITICO')}>
+              <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                <Typography
+                  variant="caption"
+                  sx={{ color: '#c25e00', fontWeight: 700, letterSpacing: 0.5 }}
+                >
+                  🟠 CRÍTICOS (&lt; 30d)
+                </Typography>
+                <Typography
+                  variant="h4"
+                  sx={{
+                    color: '#c25e00',
+                    fontWeight: 800,
+                    mt: 0.5,
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
+                  {summaryQuery.data?.criticos ?? 0}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Rotación inmediata FEFO
+                </Typography>
+              </CardContent>
+            </CardActionArea>
           </Card>
 
           <Card
@@ -280,17 +327,27 @@ export function ExpirationAlertsPage() {
               borderColor: 'rgba(237, 108, 2, 0.2)',
             }}
           >
-            <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-              <Typography variant="caption" color="warning.dark" sx={{ fontWeight: 700, letterSpacing: 0.5 }}>
-                🟡 EN ALERTA (31-60d)
-              </Typography>
-              <Typography variant="h4" color="warning.dark" sx={{ fontWeight: 800, mt: 0.5, fontVariantNumeric: 'tabular-nums' }}>
-                {summaryQuery.data?.alertas ?? 0}
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                Priorizar en dispensación
-              </Typography>
-            </CardContent>
+            <CardActionArea onClick={() => setSeverity('ALERTA')}>
+              <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                <Typography
+                  variant="caption"
+                  color="warning.dark"
+                  sx={{ fontWeight: 700, letterSpacing: 0.5 }}
+                >
+                  🟡 EN ALERTA (31-60d)
+                </Typography>
+                <Typography
+                  variant="h4"
+                  color="warning.dark"
+                  sx={{ fontWeight: 800, mt: 0.5, fontVariantNumeric: 'tabular-nums' }}
+                >
+                  {summaryQuery.data?.alertas ?? 0}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Priorizar en dispensación
+                </Typography>
+              </CardContent>
+            </CardActionArea>
           </Card>
 
           <Card
@@ -301,17 +358,27 @@ export function ExpirationAlertsPage() {
               borderColor: 'rgba(2, 136, 209, 0.2)',
             }}
           >
-            <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-              <Typography variant="caption" color="info.main" sx={{ fontWeight: 700, letterSpacing: 0.5 }}>
-                🔵 PRÓXIMOS (61-90d)
-              </Typography>
-              <Typography variant="h4" color="info.main" sx={{ fontWeight: 800, mt: 0.5, fontVariantNumeric: 'tabular-nums' }}>
-                {summaryQuery.data?.proximos ?? 0}
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                Monitoreo preventivo
-              </Typography>
-            </CardContent>
+            <CardActionArea onClick={() => setSeverity('PROXIMO')}>
+              <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                <Typography
+                  variant="caption"
+                  color="info.main"
+                  sx={{ fontWeight: 700, letterSpacing: 0.5 }}
+                >
+                  🔵 PRÓXIMOS (61-90d)
+                </Typography>
+                <Typography
+                  variant="h4"
+                  color="info.main"
+                  sx={{ fontWeight: 800, mt: 0.5, fontVariantNumeric: 'tabular-nums' }}
+                >
+                  {summaryQuery.data?.proximos ?? 0}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Monitoreo preventivo
+                </Typography>
+              </CardContent>
+            </CardActionArea>
           </Card>
         </Box>
 
@@ -320,6 +387,7 @@ export function ExpirationAlertsPage() {
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: 'center' }}>
             <TextField
               size="small"
+              label="Buscar alertas"
               placeholder="Buscar por producto, código o lote…"
               value={search}
               onChange={(e) => {
@@ -388,12 +456,19 @@ export function ExpirationAlertsPage() {
                     Stock Disponible
                   </TableCell>
                   <TableCell sx={{ fontWeight: 700 }}>Ubicación</TableCell>
+                  {hasPermission(SYSTEM_PERMISSIONS.INVENTORY_READ) && (
+                    <TableCell>Movimientos</TableCell>
+                  )}
                 </TableRow>
               </TableHead>
               <TableBody>
                 {alertsQuery.isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
+                    <TableCell
+                      colSpan={hasPermission(SYSTEM_PERMISSIONS.INVENTORY_READ) ? 8 : 7}
+                      align="center"
+                      sx={{ py: 6 }}
+                    >
                       <CircularProgress size={32} />
                       <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                         Cargando alertas de inventario…
@@ -402,17 +477,28 @@ export function ExpirationAlertsPage() {
                   </TableRow>
                 ) : alertsQuery.isError ? (
                   <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
+                    <TableCell
+                      colSpan={hasPermission(SYSTEM_PERMISSIONS.INVENTORY_READ) ? 8 : 7}
+                      align="center"
+                      sx={{ py: 4 }}
+                    >
                       <Alert severity="error">
-                        Error al cargar las alertas. Por favor verifica tu sesión o intenta nuevamente.
+                        Error al cargar las alertas. Por favor verifica tu sesión o intenta
+                        nuevamente.
                       </Alert>
                     </TableCell>
                   </TableRow>
                 ) : alertsQuery.data?.items?.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
+                    <TableCell
+                      colSpan={hasPermission(SYSTEM_PERMISSIONS.INVENTORY_READ) ? 8 : 7}
+                      align="center"
+                      sx={{ py: 6 }}
+                    >
                       <Typography variant="h6" color="text.secondary" gutterBottom>
-                        No se encontraron lotes en riesgo de vencimiento
+                        {search || severity !== 'ALL'
+                          ? 'No hay resultados con estos filtros'
+                          : 'No se encontraron lotes en riesgo de vencimiento'}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
                         {search || severity !== 'ALL'
@@ -449,17 +535,15 @@ export function ExpirationAlertsPage() {
                               item.daysRemaining <= 0
                                 ? 'error.main'
                                 : item.daysRemaining <= 30
-                                ? '#ed6c02'
-                                : 'text.secondary',
+                                  ? '#ed6c02'
+                                  : 'text.secondary',
                             fontWeight: item.daysRemaining <= 30 ? 700 : 400,
                           }}
                         >
                           {formatDaysText(item.daysRemaining)}
                         </Typography>
                       </TableCell>
-                      <TableCell>
-                        {getSeverityChip(item.severity, item.daysRemaining)}
-                      </TableCell>
+                      <TableCell>{getSeverityChip(item.severity, item.daysRemaining)}</TableCell>
                       <TableCell align="right">
                         <Typography variant="body2" sx={{ fontWeight: 700 }}>
                           {item.currentQuantity}
@@ -471,6 +555,17 @@ export function ExpirationAlertsPage() {
                       <TableCell>
                         <Typography variant="body2">{item.locationName || 'General'}</Typography>
                       </TableCell>
+                      {hasPermission(SYSTEM_PERMISSIONS.INVENTORY_READ) && (
+                        <TableCell>
+                          <Button
+                            component={Link}
+                            to={`/inventory/movements?lotId=${encodeURIComponent(item.lotId)}`}
+                            aria-label={`Ver movimientos del lote ${item.lotNumber}`}
+                          >
+                            Ver movimientos
+                          </Button>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))
                 )}

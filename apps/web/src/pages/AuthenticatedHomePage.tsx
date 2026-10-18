@@ -1,4 +1,5 @@
-import { useNavigate } from 'react-router-dom';
+import type { ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Avatar,
   Box,
@@ -12,56 +13,115 @@ import {
   Typography,
   Skeleton,
 } from '@mui/material';
-import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
-import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
-import WarningAmberIcon from '@mui/icons-material/WarningAmber';
-import MonetizationOnIcon from '@mui/icons-material/MonetizationOn';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import { SYSTEM_PERMISSIONS } from '@farmacia/contracts';
 import { useAuth } from '../features/auth/hooks/useAuth';
 import { usePermissions } from '../features/auth/hooks/usePermissions';
-import { PermissionGate } from '../features/auth/components/PermissionGate';
 import { useQuery } from '@tanstack/react-query';
 import { fetchAlertsSummary } from '../features/alerts/api/alerts.api';
 import { fetchCashBalance } from '../features/cash/api/cash.api';
-import { fetchReceivables } from '../features/receivables/api/receivables.api';
+import { fetchReceivablesAgingSummary } from '../features/receivables/api/receivables.api';
+import { getBankAccountSummary } from '../features/treasury/api/treasury.api';
+import { fetchSalesReport } from '../features/reports/api/reports.api';
+import { businessToday } from '../utils/business-date';
+
+const currency = (value: number | string) =>
+  new Intl.NumberFormat('es-CO', {
+    style: 'currency',
+    currency: 'COP',
+    minimumFractionDigits: 2,
+  }).format(typeof value === 'string' ? Number(value) : value);
+
+function MetricCard({
+  title,
+  period,
+  query,
+  children,
+  to,
+  action,
+}: {
+  title: string;
+  period: string;
+  query: { isPending: boolean; isError: boolean; refetch: () => unknown };
+  children: ReactNode;
+  to: string;
+  action: string;
+}) {
+  return (
+    <Card variant="outlined" component="section" aria-label={title} sx={{ borderRadius: 3 }}>
+      <CardContent>
+        <Stack spacing={1.5}>
+          <Typography component="h2" variant="subtitle2">
+            {title}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {period}
+          </Typography>
+          {query.isError ? (
+            <Stack spacing={1}>
+              <Typography role="status">No disponible</Typography>
+              <Button
+                onClick={() => {
+                  query.refetch();
+                }}
+              >
+                Reintentar {title}
+              </Button>
+            </Stack>
+          ) : query.isPending ? (
+            <Skeleton aria-label={`Cargando ${title}`} height={40} />
+          ) : (
+            children
+          )}
+          <Button component={Link} to={to} variant="outlined">
+            {action}
+          </Button>
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
 
 export function AuthenticatedHomePage() {
-  const navigate = useNavigate();
   const { user } = useAuth();
-  const { roles, permissions } = usePermissions();
-
-  // 1. Resumen de alertas de vencimiento
+  const { roles, permissions, hasPermission } = usePermissions();
+  const today = businessToday();
+  const canReadAlerts =
+    hasPermission(SYSTEM_PERMISSIONS.INVENTORY_READ) &&
+    hasPermission(SYSTEM_PERMISSIONS.ALERTS_READ);
   const alertsQuery = useQuery({
     queryKey: ['dashboard', 'alerts-summary'],
     queryFn: fetchAlertsSummary,
+    enabled: canReadAlerts,
     refetchInterval: 30000,
   });
-
-  // 2. Saldo de caja actual
   const cashQuery = useQuery({
     queryKey: ['dashboard', 'cash-balance'],
     queryFn: fetchCashBalance,
+    enabled: hasPermission(SYSTEM_PERMISSIONS.CASH_READ),
     refetchInterval: 30000,
   });
-
-  // 3. Saldo pendiente en cuentas por cobrar
+  const banksQuery = useQuery({
+    queryKey: ['dashboard', 'banks-summary'],
+    queryFn: getBankAccountSummary,
+    enabled: hasPermission(SYSTEM_PERMISSIONS.TREASURY_READ),
+    refetchInterval: 30000,
+  });
   const receivablesQuery = useQuery({
     queryKey: ['dashboard', 'receivables-summary'],
-    queryFn: () => fetchReceivables({ page: 1, pageSize: 50 }),
+    queryFn: fetchReceivablesAgingSummary,
+    enabled: hasPermission(SYSTEM_PERMISSIONS.RECEIVABLES_READ),
+    refetchInterval: 30000,
+  });
+  const salesQuery = useQuery({
+    queryKey: ['dashboard', 'sales', today],
+    queryFn: () => fetchSalesReport({ fromDate: today, toDate: today }),
+    enabled: hasPermission(SYSTEM_PERMISSIONS.REPORTS_READ),
     refetchInterval: 30000,
   });
 
-  const alerts = alertsQuery.data;
-  const criticalCount = (alerts?.vencidos ?? 0) + (alerts?.criticos ?? 0);
-  const cashBalance = cashQuery.data?.currentBalance ?? 0;
-
-  const totalReceivablesBalance = (receivablesQuery.data?.items ?? []).reduce(
-    (acc, curr) => acc + (curr.status === 'PENDIENTE' ? Number(curr.balance) : 0),
-    0,
-  );
-
   const todayFormatted = new Intl.DateTimeFormat('es-CO', {
+    timeZone: 'America/Bogota',
     weekday: 'long',
     year: 'numeric',
     month: 'long',
@@ -147,362 +207,97 @@ export function AuthenticatedHomePage() {
             </Box>
           </Paper>
 
-          {/* Tarjetas de Métricas en Tiempo Real (KPIs del Negocio) */}
-          <Box>
-            <Typography
-              variant="subtitle2"
-              sx={{ fontWeight: 800, color: 'text.secondary', mb: 1.5, letterSpacing: '0.05em' }}
-            >
-              MÉTRICAS Y ESTADO OPERATIVO EN TIEMPO REAL
-            </Typography>
-
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
-                gap: 2,
-              }}
-            >
-              {/* KPI 1: Facturación y Punto de Venta */}
-              <PermissionGate
-                anyOf={[SYSTEM_PERMISSIONS.SALES_CREATE, SYSTEM_PERMISSIONS.SALES_READ]}
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
+              gap: 2,
+            }}
+          >
+            {hasPermission(SYSTEM_PERMISSIONS.CASH_READ) && (
+              <MetricCard
+                title="Efectivo en Caja"
+                period="Saldo actual"
+                query={cashQuery}
+                to="/cash"
+                action="Arqueo y Movimientos"
               >
-                <Card
-                  variant="outlined"
-                  sx={{
-                    borderRadius: 3,
-                    bgcolor: '#FFFFFF',
-                    transition: 'all 0.2s ease',
-                    '&:hover': {
-                      boxShadow: '0 4px 12px rgba(15, 118, 110, 0.1)',
-                      borderColor: 'primary.main',
-                    },
-                  }}
-                >
-                  <CardContent sx={{ p: 2.5 }}>
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'flex-start',
-                        mb: 1.5,
-                      }}
-                    >
-                      <Box>
-                        <Typography
-                          variant="caption"
-                          sx={{
-                            fontWeight: 700,
-                            color: 'text.secondary',
-                            textTransform: 'uppercase',
-                          }}
-                        >
-                          Punto de Venta (POS)
-                        </Typography>
-                        <Typography
-                          variant="h6"
-                          sx={{ fontWeight: 800, mt: 0.5, color: 'text.primary' }}
-                        >
-                          Dispensación FEFO
-                        </Typography>
-                      </Box>
-                      <Box
-                        sx={{
-                          width: 42,
-                          height: 42,
-                          borderRadius: 2.5,
-                          bgcolor: 'rgba(15, 118, 110, 0.1)',
-                          color: 'primary.main',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                      >
-                        <PointOfSaleIcon />
-                      </Box>
-                    </Box>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{ fontSize: '0.8rem', mb: 2 }}
-                    >
-                      Facturación ágil con salida atómica e inmutable en inventario.
-                    </Typography>
-                    <PermissionGate permission={SYSTEM_PERMISSIONS.SALES_CREATE}>
-                      <Button
-                        variant="contained"
-                        size="small"
-                        color="primary"
-                        fullWidth
-                        onClick={() => navigate('/pos')}
-                        data-testid="pos-nav-btn"
-                        sx={{ fontWeight: 700, textTransform: 'none' }}
-                      >
-                        Nueva Venta
-                      </Button>
-                    </PermissionGate>
-                  </CardContent>
-                </Card>
-              </PermissionGate>
-
-              {/* KPI 2: Control de Caja en Efectivo */}
-              <PermissionGate permission={SYSTEM_PERMISSIONS.CASH_READ}>
-                <Card
-                  variant="outlined"
-                  sx={{
-                    borderRadius: 3,
-                    bgcolor: '#FFFFFF',
-                    transition: 'all 0.2s ease',
-                    '&:hover': {
-                      boxShadow: '0 4px 12px rgba(16, 185, 129, 0.12)',
-                      borderColor: 'success.main',
-                    },
-                  }}
-                >
-                  <CardContent sx={{ p: 2.5 }}>
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'flex-start',
-                        mb: 1.5,
-                      }}
-                    >
-                      <Box>
-                        <Typography
-                          variant="caption"
-                          sx={{
-                            fontWeight: 700,
-                            color: 'text.secondary',
-                            textTransform: 'uppercase',
-                          }}
-                        >
-                          Efectivo en Caja
-                        </Typography>
-                        {cashQuery.isLoading ? (
-                          <Skeleton width={100} height={32} />
-                        ) : (
-                          <Typography
-                            variant="h5"
-                            sx={{ fontWeight: 800, mt: 0.5, color: 'success.dark' }}
-                          >
-                            ${cashBalance.toLocaleString('es-CO', { minimumFractionDigits: 2 })}
-                          </Typography>
-                        )}
-                      </Box>
-                      <Box
-                        sx={{
-                          width: 42,
-                          height: 42,
-                          borderRadius: 2.5,
-                          bgcolor: 'rgba(16, 185, 129, 0.1)',
-                          color: '#10B981',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                      >
-                        <AccountBalanceWalletIcon />
-                      </Box>
-                    </Box>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{ fontSize: '0.8rem', mb: 2 }}
-                    >
-                      Saldo en caja disponible para operaciones y devoluciones.
-                    </Typography>
+                <Typography variant="h5">
+                  {cashQuery.data && currency(cashQuery.data.currentBalance)}
+                </Typography>
+              </MetricCard>
+            )}
+            {hasPermission(SYSTEM_PERMISSIONS.TREASURY_READ) && (
+              <MetricCard
+                title="Bancos"
+                period="Saldo actual"
+                query={banksQuery}
+                to="/treasury/bank-accounts"
+                action="Ver cuentas bancarias"
+              >
+                <Typography variant="h5">
+                  {banksQuery.data && currency(banksQuery.data.totalBalance)}
+                </Typography>
+              </MetricCard>
+            )}
+            {hasPermission(SYSTEM_PERMISSIONS.RECEIVABLES_READ) && (
+              <MetricCard
+                title="Cartera de Clientes"
+                period="Saldo pendiente actual · todas las cuentas"
+                query={receivablesQuery}
+                to="/receivables"
+                action="Ver Cuentas por Cobrar"
+              >
+                <Typography variant="h5">
+                  {receivablesQuery.data && currency(receivablesQuery.data.totalPending)}
+                </Typography>
+              </MetricCard>
+            )}
+            {hasPermission(SYSTEM_PERMISSIONS.REPORTS_READ) && (
+              <MetricCard
+                title="Ventas de hoy"
+                period={`Hoy: ${today} · Bogotá`}
+                query={salesQuery}
+                to={`/reports?tab=sales&fromDate=${today}&toDate=${today}`}
+                action="Ver ventas de hoy"
+              >
+                <Box>
+                  <Typography variant="h5">
+                    {salesQuery.data && currency(salesQuery.data.totalAmount)}
+                  </Typography>
+                  <Typography>{salesQuery.data?.totalSales} ventas</Typography>
+                </Box>
+              </MetricCard>
+            )}
+            {canReadAlerts && (
+              <MetricCard
+                title="Alertas de vencimiento"
+                period="Lotes activos con stock · estado actual"
+                query={alertsQuery}
+                to="/alerts"
+                action="Revisar Alertas"
+              >
+                <Stack spacing={1}>
+                  {(
+                    [
+                      ['VENCIDO', 'Vencidos', alertsQuery.data?.vencidos],
+                      ['CRITICO', 'Críticos', alertsQuery.data?.criticos],
+                      ['ALERTA', 'En alerta', alertsQuery.data?.alertas],
+                      ['PROXIMO', 'Próximos', alertsQuery.data?.proximos],
+                    ] as const
+                  ).map(([severity, label, count]) => (
                     <Button
-                      variant="outlined"
-                      size="small"
-                      color="inherit"
-                      fullWidth
-                      onClick={() => navigate('/cash')}
-                      sx={{ textTransform: 'none', fontWeight: 600 }}
+                      key={severity}
+                      component={Link}
+                      to={`/alerts?severity=${severity}`}
+                      sx={{ justifyContent: 'flex-start' }}
                     >
-                      Arqueo y Movimientos
+                      {label}: {count}
                     </Button>
-                  </CardContent>
-                </Card>
-              </PermissionGate>
-
-              {/* KPI 3: Alertas de Vencimiento de Lotes */}
-              <PermissionGate permission={SYSTEM_PERMISSIONS.INVENTORY_READ}>
-                <Card
-                  variant="outlined"
-                  sx={{
-                    borderRadius: 3,
-                    bgcolor: '#FFFFFF',
-                    borderColor: criticalCount > 0 ? 'error.light' : 'divider',
-                    transition: 'all 0.2s ease',
-                    '&:hover': { boxShadow: '0 4px 12px rgba(239, 68, 68, 0.12)' },
-                  }}
-                >
-                  <CardContent sx={{ p: 2.5 }}>
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'flex-start',
-                        mb: 1.5,
-                      }}
-                    >
-                      <Box>
-                        <Typography
-                          variant="caption"
-                          sx={{
-                            fontWeight: 700,
-                            color: 'text.secondary',
-                            textTransform: 'uppercase',
-                          }}
-                        >
-                          Lotes en Riesgo
-                        </Typography>
-                        {alertsQuery.isLoading ? (
-                          <Skeleton width={80} height={32} />
-                        ) : (
-                          <Typography
-                            variant="h5"
-                            sx={{
-                              fontWeight: 800,
-                              mt: 0.5,
-                              color: criticalCount > 0 ? 'error.main' : 'text.primary',
-                            }}
-                          >
-                            {criticalCount}{' '}
-                            <Typography
-                              component="span"
-                              variant="caption"
-                              sx={{ color: 'text.secondary', fontWeight: 600 }}
-                            >
-                              lotes
-                            </Typography>
-                          </Typography>
-                        )}
-                      </Box>
-                      <Box
-                        sx={{
-                          width: 42,
-                          height: 42,
-                          borderRadius: 2.5,
-                          bgcolor:
-                            criticalCount > 0
-                              ? 'rgba(239, 68, 68, 0.1)'
-                              : 'rgba(245, 158, 11, 0.1)',
-                          color: criticalCount > 0 ? 'error.main' : '#F59E0B',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                      >
-                        <WarningAmberIcon />
-                      </Box>
-                    </Box>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{ fontSize: '0.8rem', mb: 2 }}
-                    >
-                      {alerts?.vencidos ?? 0} vencidos • {alerts?.criticos ?? 0} críticos (&lt;30d).
-                    </Typography>
-                    <Button
-                      variant={criticalCount > 0 ? 'contained' : 'outlined'}
-                      color={criticalCount > 0 ? 'error' : 'inherit'}
-                      size="small"
-                      fullWidth
-                      onClick={() => navigate('/alerts')}
-                      sx={{ textTransform: 'none', fontWeight: 600 }}
-                    >
-                      Revisar Alertas
-                    </Button>
-                  </CardContent>
-                </Card>
-              </PermissionGate>
-
-              {/* KPI 4: Cartera Pendiente por Cobrar */}
-              <PermissionGate permission={SYSTEM_PERMISSIONS.RECEIVABLES_READ}>
-                <Card
-                  variant="outlined"
-                  sx={{
-                    borderRadius: 3,
-                    bgcolor: '#FFFFFF',
-                    transition: 'all 0.2s ease',
-                    '&:hover': {
-                      boxShadow: '0 4px 12px rgba(14, 165, 233, 0.12)',
-                      borderColor: 'info.main',
-                    },
-                  }}
-                >
-                  <CardContent sx={{ p: 2.5 }}>
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'flex-start',
-                        mb: 1.5,
-                      }}
-                    >
-                      <Box>
-                        <Typography
-                          variant="caption"
-                          sx={{
-                            fontWeight: 700,
-                            color: 'text.secondary',
-                            textTransform: 'uppercase',
-                          }}
-                        >
-                          Cartera de Clientes
-                        </Typography>
-                        {receivablesQuery.isLoading ? (
-                          <Skeleton width={100} height={32} />
-                        ) : (
-                          <Typography
-                            variant="h5"
-                            sx={{ fontWeight: 800, mt: 0.5, color: 'text.primary' }}
-                          >
-                            $
-                            {totalReceivablesBalance.toLocaleString('es-CO', {
-                              minimumFractionDigits: 2,
-                            })}
-                          </Typography>
-                        )}
-                      </Box>
-                      <Box
-                        sx={{
-                          width: 42,
-                          height: 42,
-                          borderRadius: 2.5,
-                          bgcolor: 'rgba(14, 165, 233, 0.1)',
-                          color: '#0EA5E9',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                      >
-                        <MonetizationOnIcon />
-                      </Box>
-                    </Box>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{ fontSize: '0.8rem', mb: 2 }}
-                    >
-                      Créditos comerciales pendientes de recaudo y abonos.
-                    </Typography>
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      color="inherit"
-                      fullWidth
-                      onClick={() => navigate('/receivables')}
-                      sx={{ textTransform: 'none', fontWeight: 600 }}
-                    >
-                      Ver Cuentas por Cobrar
-                    </Button>
-                  </CardContent>
-                </Card>
-              </PermissionGate>
-            </Box>
+                  ))}
+                </Stack>
+              </MetricCard>
+            )}
           </Box>
 
           {/* Panel de Resumen Rápido y Notificaciones de Seguridad */}
