@@ -1,6 +1,7 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { prisma, PrismaClient, Prisma } from '@farmacia/database';
 import { IPurchaseRepository } from '../domain/purchase.repository';
+import { IdempotencyService } from '../../../common/idempotency/idempotency.service';
 import { PayablesLedger } from '../../payables/application/payables-ledger';
 import { InventoryLedger } from '../../inventory/application/inventory-ledger';
 import { Purchase, PurchaseLine } from '../domain/purchase.entity';
@@ -15,6 +16,8 @@ import { PurchaseQueryFilters } from '@farmacia/contracts';
 @Injectable()
 export class PrismaPurchaseRepository implements IPurchaseRepository {
   private readonly client: PrismaClient;
+  /** Solo se usa su reintento ante conflictos de serialización (40001/40P01). */
+  private readonly retry = new IdempotencyService();
 
   constructor(
     @Optional() customClient?: PrismaClient,
@@ -31,7 +34,11 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
     afterSaveTx?: (tx: any, savedPurchase: Purchase) => Promise<void>,
   ): Promise<Purchase> {
     try {
-      return await this.saveInTransaction(purchase, defaultLocationId, actorUserId, afterSaveTx);
+      // Dos recepciones simultáneas del mismo lote chocan en SERIALIZABLE (40001): se repite la
+      // transacción completa en lugar de rechazar una compra válida
+      return await this.retry.retryOnSerialization(() =>
+        this.saveInTransaction(purchase, defaultLocationId, actorUserId, afterSaveTx),
+      );
     } catch (error) {
       // UNIQUE (supplier_id, invoice_number): también cubre dos recepciones simultáneas
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
