@@ -6,6 +6,8 @@ import { SYSTEM_PERMISSIONS, SYSTEM_ROLES, type SaleDto } from '@farmacia/contra
 import { AuthContext, type AuthContextValue } from '../src/features/auth/context/auth-context';
 import * as salesApi from '../src/features/sales/api/sales.api';
 import { SalesHistoryPage } from '../src/features/sales/pages/SalesHistoryPage';
+import { CreditNoteDialog } from '../src/features/sales/components/CreditNoteDialog';
+import * as accountingApi from '../src/features/accounting/api/accounting.api';
 import { appTheme } from '../src/theme/app-theme';
 
 const mockSalesList: SaleDto[] = [
@@ -193,4 +195,60 @@ describe('SalesHistoryPage (Frontend Historial y Anulación UX-04 / UX-05)', () 
       );
     });
   });
+});
+
+describe('Formulario nota crédito', () => {
+  it('muestra errores y foco sin enviar una devolución inválida', async () => {
+    const api = vi.spyOn(accountingApi, 'createSaleCreditNote');
+    render(<CreditNoteDialog open sale={mockSalesList[0]} onClose={vi.fn()} onCreated={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar nota crédito' }));
+    expect(
+      await screen.findByText('Selecciona al menos una cantidad a devolver.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('El motivo debe tener mínimo 5 caracteres.')).toBeInTheDocument();
+    expect(screen.getByRole('spinbutton')).toHaveFocus();
+    expect(api).not.toHaveBeenCalled();
+  });
+
+  it.each(['EFECTIVO', 'TRANSFERENCIA', 'CREDITO'] as const)(
+    'conserva payload y medio de reembolso para %s, evita doble envío y conserva clave al reintentar',
+    async (paymentMethod) => {
+      const api = vi
+        .spyOn(accountingApi, 'createSaleCreditNote')
+        .mockRejectedValueOnce(new Error('Fallo temporal'))
+        .mockReturnValue(new Promise(() => {}));
+      render(
+        <CreditNoteDialog
+          open
+          sale={{ ...mockSalesList[0], paymentMethod }}
+          onClose={vi.fn()}
+          onCreated={vi.fn()}
+        />,
+      );
+      fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '2' } });
+      fireEvent.change(screen.getByLabelText(/Motivo de la devolución/), {
+        target: { value: '  Envase roto  ' },
+      });
+      fireEvent.click(screen.getByRole('checkbox'));
+      fireEvent.click(screen.getByRole('button', { name: 'Confirmar nota crédito' }));
+      expect(await screen.findByText('Fallo temporal')).toBeInTheDocument();
+      const confirm = screen.getByRole('button', { name: 'Confirmar nota crédito' });
+      fireEvent.click(confirm);
+      fireEvent.click(confirm);
+      await waitFor(() => expect(api).toHaveBeenCalledTimes(2));
+      expect(api.mock.calls[0]).toEqual([
+        'sale-001',
+        {
+          saleId: 'sale-001',
+          reason: 'Envase roto',
+          restock: false,
+          refundMethod: paymentMethod === 'CREDITO' ? 'CREDITO_CARTERA' : paymentMethod,
+          items: [{ saleLineId: 'line-1', quantityCommercial: 2 }],
+        },
+        expect.any(String),
+      ]);
+      expect(api.mock.calls[1]).toEqual(api.mock.calls[0]);
+      expect(screen.getByRole('button', { name: 'Registrando…' })).toBeDisabled();
+    },
+  );
 });
