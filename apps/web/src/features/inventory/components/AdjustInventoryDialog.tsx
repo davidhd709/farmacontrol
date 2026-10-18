@@ -1,4 +1,10 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { Controller, useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import {
+  createAdjustInventorySchema,
+  type AdjustInventoryFormValues,
+} from '../validation/adjust-inventory.schema';
 import {
   Dialog,
   DialogTitle,
@@ -36,77 +42,66 @@ export const AdjustInventoryDialog = ({
   products,
   lots,
 }: AdjustInventoryDialogProps) => {
-  const [productId, setProductId] = useState('');
-  const [lotId, setLotId] = useState('');
-  const [adjustmentType, setAdjustmentType] = useState<'INCREMENTO' | 'DECREMENTO'>('INCREMENTO');
-  const [quantity, setQuantity] = useState(1);
-  const [reason, setReason] = useState('');
-  const [notes, setNotes] = useState('');
-
+  const {
+    control,
+    watch,
+    setValue,
+    resetField,
+    handleSubmit,
+    formState: { isSubmitting },
+  } = useForm<AdjustInventoryFormValues>({
+    resolver: zodResolver(createAdjustInventorySchema(lots)),
+    defaultValues: {
+      productId: '',
+      lotId: '',
+      adjustmentType: 'INCREMENTO',
+      quantity: 1,
+      reason: '',
+      notes: '',
+    },
+  });
+  const { productId, lotId, adjustmentType, quantity, reason, notes } = watch();
+  const submittingRef = useRef(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const availableLots = lots.filter((l) => (productId ? l.productId === productId : true));
   const selectedLot = lots.find((l) => l.id === lotId);
   const selectedProduct = products.find((p) => p.id === productId);
 
-  const handlePreSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handlePreSubmit = handleSubmit(() => {
     setErrorMessage(null);
-
-    if (!productId) {
-      setErrorMessage('Seleccione el producto a ajustar.');
-      return;
-    }
-    if (!lotId) {
-      setErrorMessage('Seleccione el lote específico.');
-      return;
-    }
-    if (!reason.trim()) {
-      setErrorMessage('La justificación o motivo del ajuste es obligatoria.');
-      return;
-    }
-    if (quantity <= 0) {
-      setErrorMessage('La cantidad debe ser mayor a 0.');
-      return;
-    }
-
-    if (adjustmentType === 'DECREMENTO' && selectedLot && quantity > selectedLot.currentQuantity) {
-      setErrorMessage(
-        `No puede descontar más de la existencia actual del lote (${selectedLot.currentQuantity}).`,
-      );
-      return;
-    }
-
     setConfirmOpen(true);
-  };
+  });
 
-  const handleConfirmAdjust = async () => {
+  const handleConfirmAdjust = handleSubmit(async (values) => {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     try {
-      setIsSubmitting(true);
       await adjustInventory({
-        productId,
-        lotId,
-        adjustmentType,
-        quantityBaseUnits: quantity,
-        reason: reason.trim(),
-        notes: notes.trim() || undefined,
+        productId: values.productId,
+        lotId: values.lotId,
+        adjustmentType: values.adjustmentType,
+        quantityBaseUnits: values.quantity,
+        reason: values.reason.trim(),
+        notes: values.notes.trim() || undefined,
       });
 
-      setReason('');
-      setNotes('');
-      setQuantity(1);
+      resetField('reason');
+      resetField('notes');
+      resetField('quantity');
       setConfirmOpen(false);
       onSuccess();
       onClose();
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Error al procesar el ajuste de inventario.');
+    } catch (err) {
+      setErrorMessage(
+        err instanceof Error ? err.message : 'Error al procesar el ajuste de inventario.',
+      );
       setConfirmOpen(false);
     } finally {
-      setIsSubmitting(false);
+      submittingRef.current = false;
     }
-  };
+  });
 
   return (
     <Dialog
@@ -123,104 +118,160 @@ export const AdjustInventoryDialog = ({
         },
       }}
     >
-      <form onSubmit={handlePreSubmit}>
-        <DialogTitle sx={{ fontWeight: 700 }}>
-          Ajuste Manual de Inventario (Supervisor)
-        </DialogTitle>
+      <form noValidate onSubmit={handlePreSubmit}>
+        <DialogTitle sx={{ fontWeight: 700 }}>Ajuste Manual de Inventario (Supervisor)</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2.5}>
             {errorMessage && <Alert severity="error">{errorMessage}</Alert>}
 
             <Alert severity="warning">
-              Esta operación impacta de manera directa el libro mayor de movimientos (Kardex) y
-              el saldo disponible en unidades base. Requiere motivo formal auditado.
+              Esta operación impacta de manera directa el libro mayor de movimientos (Kardex) y el
+              saldo disponible en unidades base. Requiere motivo formal auditado.
             </Alert>
 
-            <TextField
-              select
-              label="Producto"
-              value={productId}
-              onChange={(e) => {
-                setProductId(e.target.value);
-                setLotId('');
-              }}
-              required
-              fullWidth
-              disabled={isSubmitting}
-            >
-              {products.map((p) => (
-                <MenuItem key={p.id} value={p.id}>
-                  {p.code} — {p.name}
-                </MenuItem>
-              ))}
-            </TextField>
-
-            <TextField
-              select
-              label="Lote Específico"
-              value={lotId}
-              onChange={(e) => setLotId(e.target.value)}
-              required
-              fullWidth
-              disabled={isSubmitting || !productId}
-              helperText={
-                selectedLot
-                  ? `Saldo actual: ${selectedLot.currentQuantity} ${selectedLot.product?.baseUnit || 'UNIDADES'} (Vence: ${selectedLot.expirationDate})`
-                  : 'Seleccione primero el producto'
-              }
-            >
-              {availableLots.map((l) => (
-                <MenuItem key={l.id} value={l.id}>
-                  {l.lotNumber} — Saldo: {l.currentQuantity} (Vence: {l.expirationDate})
-                </MenuItem>
-              ))}
-            </TextField>
-
-            <TextField
-              select
-              label="Tipo de Ajuste"
-              value={adjustmentType}
-              onChange={(e) => setAdjustmentType(e.target.value as any)}
-              required
-              fullWidth
-              disabled={isSubmitting}
-            >
-              <MenuItem value="INCREMENTO">Incremento (+ Ingreso de sobrante o conteo)</MenuItem>
-              <MenuItem value="DECREMENTO">Decremento (- Merma, avería o pérdida)</MenuItem>
-            </TextField>
-
-            <TextField
-              label="Cantidad a Ajustar (en unidades base)"
-              type="number"
-              value={quantity}
-              onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value || '1', 10)))}
-              required
-              fullWidth
-              disabled={isSubmitting}
+            <Controller
+              name="productId"
+              control={control}
+              render={({ field: { ref, ...field }, fieldState }) => (
+                <TextField
+                  select
+                  label="Producto"
+                  {...field}
+                  inputRef={ref}
+                  error={Boolean(fieldState.error)}
+                  helperText={fieldState.error?.message}
+                  onChange={(e) => {
+                    field.onChange(e);
+                    setValue('lotId', '');
+                  }}
+                  required
+                  fullWidth
+                  disabled={isSubmitting}
+                >
+                  {products.map((p) => (
+                    <MenuItem key={p.id} value={p.id}>
+                      {p.code} — {p.name}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              )}
             />
 
-            <TextField
-              label="Motivo Justificado (Obligatorio)"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="Ej. Conteo físico mensual, frasco averiado en estantería..."
-              required
-              fullWidth
-              disabled={isSubmitting}
-              slotProps={{ htmlInput: { maxLength: INVENTORY_ADJUSTMENT_REASON_MAX_LENGTH } }}
-              helperText={`${reason.length}/${INVENTORY_ADJUSTMENT_REASON_MAX_LENGTH}`}
+            <Controller
+              name="lotId"
+              control={control}
+              render={({ field: { ref, ...field }, fieldState }) => (
+                <TextField
+                  select
+                  label="Lote Específico"
+                  {...field}
+                  inputRef={ref}
+                  error={Boolean(fieldState.error)}
+                  required
+                  fullWidth
+                  disabled={isSubmitting || !productId}
+                  helperText={
+                    fieldState.error?.message ||
+                    (selectedLot
+                      ? `Saldo actual: ${selectedLot.currentQuantity} ${selectedLot.product?.baseUnit || 'UNIDADES'} (Vence: ${selectedLot.expirationDate})`
+                      : 'Seleccione primero el producto')
+                  }
+                >
+                  {availableLots.map((l) => (
+                    <MenuItem key={l.id} value={l.id}>
+                      {l.lotNumber} — Saldo: {l.currentQuantity} (Vence: {l.expirationDate})
+                    </MenuItem>
+                  ))}
+                </TextField>
+              )}
             />
 
-            <TextField
-              label="Notas Adicionales (Opcional)"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              multiline
-              rows={2}
-              fullWidth
-              disabled={isSubmitting}
-              slotProps={{ htmlInput: { maxLength: INVENTORY_MOVEMENT_NOTES_MAX_LENGTH } }}
-              helperText={`${notes.length}/${INVENTORY_MOVEMENT_NOTES_MAX_LENGTH}`}
+            <Controller
+              name="adjustmentType"
+              control={control}
+              render={({ field: { ref, ...field }, fieldState }) => (
+                <TextField
+                  select
+                  label="Tipo de Ajuste"
+                  {...field}
+                  inputRef={ref}
+                  error={Boolean(fieldState.error)}
+                  helperText={fieldState.error?.message}
+                  required
+                  fullWidth
+                  disabled={isSubmitting}
+                >
+                  <MenuItem value="INCREMENTO">
+                    Incremento (+ Ingreso de sobrante o conteo)
+                  </MenuItem>
+                  <MenuItem value="DECREMENTO">Decremento (- Merma, avería o pérdida)</MenuItem>
+                </TextField>
+              )}
+            />
+
+            <Controller
+              name="quantity"
+              control={control}
+              render={({ field: { ref, ...field }, fieldState }) => (
+                <TextField
+                  label="Cantidad a Ajustar (en unidades base)"
+                  type="number"
+                  {...field}
+                  inputRef={ref}
+                  error={Boolean(fieldState.error)}
+                  helperText={fieldState.error?.message}
+                  onChange={(e) =>
+                    field.onChange(e.target.value === '' ? 0 : Number(e.target.value))
+                  }
+                  required
+                  fullWidth
+                  disabled={isSubmitting}
+                />
+              )}
+            />
+
+            <Controller
+              name="reason"
+              control={control}
+              render={({ field: { ref, ...field }, fieldState }) => (
+                <TextField
+                  label="Motivo Justificado (Obligatorio)"
+                  {...field}
+                  inputRef={ref}
+                  error={Boolean(fieldState.error)}
+                  placeholder="Ej. Conteo físico mensual, frasco averiado en estantería..."
+                  required
+                  fullWidth
+                  disabled={isSubmitting}
+                  slotProps={{ htmlInput: { maxLength: INVENTORY_ADJUSTMENT_REASON_MAX_LENGTH } }}
+                  helperText={
+                    fieldState.error?.message ||
+                    `${reason.length}/${INVENTORY_ADJUSTMENT_REASON_MAX_LENGTH}`
+                  }
+                />
+              )}
+            />
+
+            <Controller
+              name="notes"
+              control={control}
+              render={({ field: { ref, ...field }, fieldState }) => (
+                <TextField
+                  label="Notas Adicionales (Opcional)"
+                  {...field}
+                  inputRef={ref}
+                  error={Boolean(fieldState.error)}
+                  multiline
+                  rows={2}
+                  fullWidth
+                  disabled={isSubmitting}
+                  slotProps={{ htmlInput: { maxLength: INVENTORY_MOVEMENT_NOTES_MAX_LENGTH } }}
+                  helperText={
+                    fieldState.error?.message ||
+                    `${notes.length}/${INVENTORY_MOVEMENT_NOTES_MAX_LENGTH}`
+                  }
+                />
+              )}
             />
 
             {selectedLot && (
@@ -242,7 +293,12 @@ export const AdjustInventoryDialog = ({
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button onClick={onClose} disabled={isSubmitting} color="inherit" sx={{ textTransform: 'none' }}>
+          <Button
+            onClick={onClose}
+            disabled={isSubmitting}
+            color="inherit"
+            sx={{ textTransform: 'none' }}
+          >
             Cancelar
           </Button>
           <Button
@@ -266,7 +322,9 @@ export const AdjustInventoryDialog = ({
       {/* DIÁLOGO CONFIRMACIÓN: ASENTAR AJUSTE */}
       <ConfirmDialog
         open={confirmOpen}
-        onClose={() => setConfirmOpen(false)}
+        onClose={() => {
+          if (!submittingRef.current) setConfirmOpen(false);
+        }}
         onConfirm={handleConfirmAdjust}
         isLoading={isSubmitting}
         title="Confirmar Ajuste en Kardex"
@@ -274,8 +332,14 @@ export const AdjustInventoryDialog = ({
           <Stack spacing={1}>
             <Typography variant="body2" color="text.secondary">
               ¿Estás seguro de registrar un ajuste de tipo{' '}
-              <strong>{adjustmentType === 'INCREMENTO' ? 'INCREMENTO (+)' : 'DECREMENTO (-)'}</strong> por{' '}
-              <strong>{quantity} {selectedLot?.product?.baseUnit || 'unidades'}</strong>?
+              <strong>
+                {adjustmentType === 'INCREMENTO' ? 'INCREMENTO (+)' : 'DECREMENTO (-)'}
+              </strong>{' '}
+              por{' '}
+              <strong>
+                {quantity} {selectedLot?.product?.baseUnit || 'unidades'}
+              </strong>
+              ?
             </Typography>
             <Typography variant="body2" color="text.secondary">
               <strong>Producto:</strong> {selectedProduct?.name || selectedLot?.product?.name}
@@ -287,7 +351,8 @@ export const AdjustInventoryDialog = ({
               <strong>Motivo:</strong> {reason}
             </Typography>
             <Typography variant="caption" color="warning.main" sx={{ mt: 1, display: 'block' }}>
-              ⚠️ Esta operación generará un movimiento de inventario inmutable y actualizará el saldo físico del lote.
+              ⚠️ Esta operación generará un movimiento de inventario inmutable y actualizará el
+              saldo físico del lote.
             </Typography>
           </Stack>
         }
