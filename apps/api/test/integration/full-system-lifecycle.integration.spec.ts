@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import { INestApplication } from '@nestjs/common';
@@ -687,6 +688,7 @@ describe('Full System Multi-day Lifecycle Simulation (PostgreSQL Real)', () => {
       const res = await request(app.getHttpServer())
         .post('/api/v1/expenses')
         .set('Cookie', adminCookie)
+        .set('Idempotency-Key', randomUUID())
         .send({
           categoryId: expenseCategoryIdPower,
           description: 'Factura de luz Enel Colombia',
@@ -705,6 +707,7 @@ describe('Full System Multi-day Lifecycle Simulation (PostgreSQL Real)', () => {
       const res = await request(app.getHttpServer())
         .post('/api/v1/expenses')
         .set('Cookie', adminCookie)
+        .set('Idempotency-Key', randomUUID())
         .send({
           categoryId: expenseCategoryIdRent,
           description: 'Arrendamiento local comercial Enero',

@@ -1,4 +1,5 @@
 import { businessToday } from '../../../common/utils/business-date';
+import { IdempotencyService } from '../../../common/idempotency/idempotency.service';
 import { Injectable, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
 import { prisma, Prisma } from '@farmacia/database';
 import { CashService } from '../../cash/application/cash.service';
@@ -61,6 +62,10 @@ type FullExpense = Prisma.ExpenseGetPayload<{ include: typeof fullExpenseInclude
 
 @Injectable()
 export class ExpensesService {
+  // Registrar un gasto o su pago mueve dinero o causa una cuenta por pagar: un reintento
+  // con la misma clave devuelve el resultado original en lugar de duplicarlo (AGENTS.md §6).
+  private readonly idempotencyService = new IdempotencyService();
+
   constructor(
     private readonly cashService: CashService,
     @Optional() private readonly accountingEngine?: AccountingEngineService,
@@ -118,7 +123,14 @@ export class ExpensesService {
     };
   }
 
-  async createExpense(payload: CreateExpensePayload, userId: string): Promise<ExpenseDto> {
+  async createExpense(
+    payload: CreateExpensePayload,
+    userId: string,
+    idempotencyKey?: string,
+  ): Promise<ExpenseDto> {
+    if (!idempotencyKey?.trim()) {
+      throw new BadRequestException('Idempotency-Key es obligatorio para registrar un gasto.');
+    }
     validateUuid(payload.categoryId, 'ID de categoría de gasto');
     const category = await prisma.expenseCategory.findUnique({
       where: { id: payload.categoryId },
@@ -170,7 +182,14 @@ export class ExpensesService {
     const amountPaidStr = isCredit ? '0.00' : amountStr;
     const balanceStr = isCredit ? amountStr : '0.00';
 
-    const created = await prisma.$transaction(async (tx) => {
+    const endpoint = '/api/v1/expenses';
+    const requestHash = this.idempotencyService.computeHash(endpoint, userId, payload);
+    const key = idempotencyKey!;
+
+    const created = await this.idempotencyService.retryOnSerialization(() => prisma.$transaction(async (tx) => {
+      const cached = await this.idempotencyService.getRecord(key, requestHash, tx, 'http');
+      if (cached) return cached.responseBody as { id: string };
+
       const expense = await tx.expense.create({
         data: {
           categoryId: payload.categoryId,
@@ -235,16 +254,28 @@ export class ExpensesService {
         );
       }
 
-      return expense;
+      await this.idempotencyService.saveRecord(
+        { key, endpoint, requestHash, userId, responseStatus: 201, responseBody: { id: expense.id } },
+        tx,
+      );
+      return { id: expense.id };
     }, {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-    });
+    }));
 
     return this.findById(created.id);
   }
 
-  async payExpense(expenseId: string, payload: CreateExpensePaymentPayload, userId: string): Promise<ExpenseDto> {
+  async payExpense(
+    expenseId: string,
+    payload: CreateExpensePaymentPayload,
+    userId: string,
+    idempotencyKey?: string,
+  ): Promise<ExpenseDto> {
     validateUuid(expenseId, 'ID de gasto');
+    if (!idempotencyKey?.trim()) {
+      throw new BadRequestException('Idempotency-Key es obligatorio para registrar un pago.');
+    }
     const payCents = validateExpenseAmount(payload.amount);
     const payStr = centsToMoneyString(payCents);
 
@@ -262,7 +293,13 @@ export class ExpensesService {
 
     const paymentDate = new Date(payload.paymentDate || businessToday());
 
-    await prisma.$transaction(async (tx) => {
+    const endpoint = `/api/v1/expenses/${expenseId}/payments`;
+    const requestHash = this.idempotencyService.computeHash(endpoint, userId, payload);
+    const key = idempotencyKey!;
+
+    await this.idempotencyService.retryOnSerialization(() => prisma.$transaction(async (tx) => {
+      if (await this.idempotencyService.getRecord(key, requestHash, tx, 'http')) return;
+
       const rows = await tx.$queryRaw<Array<{ id: string; balance: Prisma.Decimal; amount_paid: Prisma.Decimal; status: string; description: string; beneficiary: string; document_number: string | null }>>`
         SELECT id, balance, amount_paid, status, description, beneficiary, document_number
         FROM expenses
@@ -354,9 +391,14 @@ export class ExpensesService {
           tx,
         );
       }
+
+      await this.idempotencyService.saveRecord(
+        { key, endpoint, requestHash, userId, responseStatus: 201, responseBody: { paymentId: payment.id } },
+        tx,
+      );
     }, {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-    });
+    }));
 
     return this.findById(expenseId);
   }

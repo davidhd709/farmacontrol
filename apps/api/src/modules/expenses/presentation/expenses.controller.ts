@@ -12,6 +12,7 @@ import {
   Query,
   UseGuards,
   ParseUUIDPipe,
+  Headers,
 } from '@nestjs/common';
 import { ExpensesService } from '../application/expenses.service';
 import {
@@ -102,8 +103,9 @@ export class ExpensesController {
     )
     payload: CreateExpensePayload,
     @CurrentUser() user: AuthenticatedUserContext,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
   ): Promise<ExpenseDto> {
-    return this.service.createExpense(payload, user.id);
+    return this.service.createExpense(payload, user.id, idempotencyKey);
   }
 
   @Post(':id/payments')
@@ -121,8 +123,9 @@ export class ExpensesController {
     )
     payload: CreateExpensePaymentPayload,
     @CurrentUser() user: AuthenticatedUserContext,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
   ): Promise<ExpenseDto> {
-    return this.service.payExpense(id, payload, user.id);
+    return this.service.payExpense(id, payload, user.id, idempotencyKey);
   }
 
   @Post(':id/cancel')

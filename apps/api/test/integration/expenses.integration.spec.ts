@@ -1,8 +1,14 @@
+import { randomUUID } from 'node:crypto';
 import { beforeAll, beforeEach, afterAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { Test } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
-import { prisma, cleanTestDatabase, seedRbac, AccountingPurpose as DbPurpose } from '@farmacia/database';
+import {
+  prisma,
+  cleanTestDatabase,
+  seedRbac,
+  AccountingPurpose as DbPurpose,
+} from '@farmacia/database';
 import { AppModule } from '../../src/app.module';
 import { UserProvisioningService } from '../../src/modules/identity/application/services/user-provisioning.service';
 import { AuthService } from '../../src/modules/identity/application/services/auth.service';
@@ -195,6 +201,7 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
       const res = await request(app.getHttpServer())
         .post('/api/v1/expenses')
         .set('Cookie', cookie)
+        .set('Idempotency-Key', randomUUID())
         .send({
           categoryId: category.id,
           description: 'Compra de resmas de papel para caja',
@@ -245,6 +252,7 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
       const res = await request(app.getHttpServer())
         .post('/api/v1/expenses')
         .set('Cookie', cookie)
+        .set('Idempotency-Key', randomUUID())
         .send({
           categoryId: category.id,
           description: 'Factura de luz mes de septiembre',
@@ -260,7 +268,9 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
       expect(res.body.status).toBe('PAGADO');
 
       // 1. Saldo bancario disminuido
-      const updatedBank = await prisma.bankAccount.findUniqueOrThrow({ where: { id: bankAccount.id } });
+      const updatedBank = await prisma.bankAccount.findUniqueOrThrow({
+        where: { id: bankAccount.id },
+      });
       expect(updatedBank.currentBalance.toFixed(2)).toBe('4650000.00');
 
       // 2. Movimiento bancario de retiro
@@ -292,6 +302,7 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
       const res = await request(app.getHttpServer())
         .post('/api/v1/expenses')
         .set('Cookie', cookie)
+        .set('Idempotency-Key', randomUUID())
         .send({
           categoryId: category.id,
           description: 'Factura de acueducto con vencimiento a fin de mes',
@@ -342,12 +353,14 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
           paymentMethod: 'CREDITO',
         },
         adminUserId,
+        randomUUID(),
       );
 
       // Abono parcial de $120.000 en efectivo
       const payRes = await request(app.getHttpServer())
         .post(`/api/v1/expenses/${expense.id}/payments`)
         .set('Cookie', cookie)
+        .set('Idempotency-Key', randomUUID())
         .send({
           amount: '120000.00',
           paymentDate: '2026-10-05',
@@ -381,6 +394,7 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
       const payFinal = await request(app.getHttpServer())
         .post(`/api/v1/expenses/${expense.id}/payments`)
         .set('Cookie', cookie)
+        .set('Idempotency-Key', randomUUID())
         .send({
           amount: '80000.00',
           paymentDate: '2026-10-10',
@@ -411,6 +425,7 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
           paymentMethod: 'CREDITO',
         },
         adminUserId,
+        randomUUID(),
       );
 
       const paidExpense = await expensesService.payExpense(
@@ -421,6 +436,7 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
           paymentMethod: 'EFECTIVO',
         },
         adminUserId,
+        randomUUID(),
       );
 
       expect(paidExpense.status).toBe('PAGADO');
@@ -472,6 +488,7 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
           paymentMethod: 'EFECTIVO',
         },
         adminUserId,
+        randomUUID(),
       );
 
       const cancelRes = await request(app.getHttpServer())
@@ -502,11 +519,112 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
     });
   });
 
+  describe('Idempotencia de gastos y pagos', () => {
+    it('exige Idempotency-Key y un reintento con la misma clave no duplica gasto ni egreso', async () => {
+      const { accounts } = await setupPucAndTreasury();
+      const category = await categoriesService.create({
+        name: 'Aseo y cafetería',
+        accountId: accounts.get('519530')!,
+      });
+      const body = {
+        categoryId: category.id,
+        description: 'Insumos de aseo',
+        beneficiary: 'Distribuidora Limpia',
+        amount: '30000.00',
+        expenseDate: '2026-10-01',
+        paymentMethod: 'EFECTIVO',
+      };
+
+      await request(app.getHttpServer())
+        .post('/api/v1/expenses')
+        .set('Cookie', cookie)
+        .send(body)
+        .expect(400);
+
+      const key = randomUUID();
+      const first = await request(app.getHttpServer())
+        .post('/api/v1/expenses')
+        .set('Cookie', cookie)
+        .set('Idempotency-Key', key)
+        .send(body)
+        .expect(201);
+      const retry = await request(app.getHttpServer())
+        .post('/api/v1/expenses')
+        .set('Cookie', cookie)
+        .set('Idempotency-Key', key)
+        .send(body)
+        .expect(201);
+
+      expect(retry.body.id).toBe(first.body.id);
+      expect(await prisma.expense.count({ where: { description: 'Insumos de aseo' } })).toBe(1);
+      expect(
+        await prisma.cashMovement.count({
+          where: { referenceDocumentType: 'EXPENSE', referenceDocumentId: first.body.id },
+        }),
+      ).toBe(1);
+
+      // Misma clave con otro contenido: conflicto, no un segundo gasto
+      await request(app.getHttpServer())
+        .post('/api/v1/expenses')
+        .set('Cookie', cookie)
+        .set('Idempotency-Key', key)
+        .send({ ...body, amount: '31000.00' })
+        .expect(409);
+    });
+
+    it('dos pagos simultáneos con la misma clave registran un solo abono', async () => {
+      const { accounts } = await setupPucAndTreasury();
+      const category = await categoriesService.create({
+        name: 'Servicios públicos',
+        accountId: accounts.get('519530')!,
+      });
+      const expense = await expensesService.createExpense(
+        {
+          categoryId: category.id,
+          description: 'Energía octubre',
+          beneficiary: 'Electrificadora',
+          amount: '90000.00',
+          expenseDate: '2026-10-01',
+          dueDate: '2026-10-25',
+          paymentMethod: 'CREDITO',
+        },
+        adminUserId,
+        randomUUID(),
+      );
+
+      const key = randomUUID();
+      const pay = () =>
+        request(app.getHttpServer())
+          .post(`/api/v1/expenses/${expense.id}/payments`)
+          .set('Cookie', cookie)
+          .set('Idempotency-Key', key)
+          .send({ amount: '40000.00', paymentDate: '2026-10-05', paymentMethod: 'EFECTIVO' });
+      const [a, b] = await Promise.all([pay(), pay()]);
+
+      expect([a.status, b.status]).toEqual([201, 201]);
+      expect(await prisma.expensePayment.count({ where: { expenseId: expense.id } })).toBe(1);
+      const stored = await prisma.expense.findUniqueOrThrow({ where: { id: expense.id } });
+      expect(stored.balance.toFixed(2)).toBe('50000.00');
+
+      await request(app.getHttpServer())
+        .post(`/api/v1/expenses/${expense.id}/payments`)
+        .set('Cookie', cookie)
+        .send({ amount: '10000.00', paymentDate: '2026-10-06', paymentMethod: 'EFECTIVO' })
+        .expect(400);
+    });
+  });
+
   describe('Reportes, Filtros y Seguridad RBAC', () => {
     it('calcula KPIs acumulados en el endpoint de resumen', async () => {
       const { accounts } = await setupPucAndTreasury();
-      const catLuz = await categoriesService.create({ name: 'Energía', accountId: accounts.get('513530')! });
-      const catAgua = await categoriesService.create({ name: 'Agua', accountId: accounts.get('513525')! });
+      const catLuz = await categoriesService.create({
+        name: 'Energía',
+        accountId: accounts.get('513530')!,
+      });
+      const catAgua = await categoriesService.create({
+        name: 'Agua',
+        accountId: accounts.get('513525')!,
+      });
 
       // 1 pagado
       await expensesService.createExpense(
@@ -519,6 +637,7 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
           paymentMethod: 'EFECTIVO',
         },
         adminUserId,
+        randomUUID(),
       );
 
       // 1 pendiente
@@ -533,6 +652,7 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
           paymentMethod: 'CREDITO',
         },
         adminUserId,
+        randomUUID(),
       );
 
       const res = await request(app.getHttpServer())
@@ -551,6 +671,7 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
       const res = await request(app.getHttpServer())
         .post('/api/v1/expenses')
         .set('Cookie', cashierCookie)
+        .set('Idempotency-Key', randomUUID())
         .send({
           categoryId: '00000000-0000-0000-0000-000000000000',
           description: 'Test sin permisos',
