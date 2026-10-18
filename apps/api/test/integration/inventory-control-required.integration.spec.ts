@@ -220,17 +220,24 @@ describe('Control de inventario obligatorio en catálogo y ventas (FARM-AUD-002)
         items: [{ productId: product.id, quantityCommercial: 1 }],
       });
 
-      expect(response.status, JSON.stringify(response.body)).toBe(400);
+      expect(response.status, JSON.stringify(response.body)).toBe(409);
       expect(response.body.message).toMatch(/Caldero 20 cm/);
       expect(response.body.message).toMatch(/regulari[cz]/i);
       expect(await snapshot()).toEqual(before);
-      expect((await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lot.id } })).currentQuantity).toBe(5);
+      expect(
+        (await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lot.id } })).currentQuantity,
+      ).toBe(5);
     });
 
     it('rechaza la venta a crédito sin abrir cuenta por cobrar', async () => {
       const { product } = await createLegacyProductWithStock(5);
       const customer = await prisma.customer.create({
-        data: { documentType: 'CC', documentNumber: '1030405060', name: 'Cliente Crédito', isActive: true },
+        data: {
+          documentType: 'CC',
+          documentNumber: '1030405060',
+          name: 'Cliente Crédito',
+          isActive: true,
+        },
       });
       const before = await snapshot();
 
@@ -240,7 +247,7 @@ describe('Control de inventario obligatorio en catálogo y ventas (FARM-AUD-002)
         items: [{ productId: product.id, quantityCommercial: 1 }],
       });
 
-      expect(response.status, JSON.stringify(response.body)).toBe(400);
+      expect(response.status, JSON.stringify(response.body)).toBe(409);
       expect(await snapshot()).toEqual(before);
     });
 
@@ -268,9 +275,12 @@ describe('Control de inventario obligatorio en catálogo y ventas (FARM-AUD-002)
         ],
       });
 
-      expect(response.status, JSON.stringify(response.body)).toBe(400);
+      expect(response.status, JSON.stringify(response.body)).toBe(409);
       expect(await snapshot()).toEqual(before);
-      expect((await prisma.inventoryLot.findUniqueOrThrow({ where: { id: tracked.id } })).currentQuantity).toBe(50);
+      expect(
+        (await prisma.inventoryLot.findUniqueOrThrow({ where: { id: tracked.id } }))
+          .currentQuantity,
+      ).toBe(50);
     });
 
     it('al regularizar el producto (activar el control) se vende con FEFO sobre sus lotes', async () => {
@@ -289,8 +299,14 @@ describe('Control de inventario obligatorio en catálogo y ventas (FARM-AUD-002)
       });
 
       expect(response.status, JSON.stringify(response.body)).toBe(201);
-      expect((await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lot.id } })).currentQuantity).toBe(3);
-      expect(await prisma.inventoryMovement.count({ where: { productId: product.id, movementType: 'SALIDA_VENTA' } })).toBe(1);
+      expect(
+        (await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lot.id } })).currentQuantity,
+      ).toBe(3);
+      expect(
+        await prisma.inventoryMovement.count({
+          where: { productId: product.id, movementType: 'SALIDA_VENTA' },
+        }),
+      ).toBe(1);
     });
   });
 
@@ -356,14 +372,22 @@ describe('Control de inventario obligatorio en catálogo y ventas (FARM-AUD-002)
 
       expect(response.status, JSON.stringify(response.body)).toBe(201);
       expect(response.body.status).toBe('COMPLETED');
-      expect((await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lot.id } })).currentQuantity).toBe(990);
-      const allocations = await prisma.saleLotAllocation.findMany({ where: { saleId: response.body.id } });
-      expect(allocations).toEqual([expect.objectContaining({ lotId: lot.id, quantityBaseUnits: 10 })]);
+      expect(
+        (await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lot.id } })).currentQuantity,
+      ).toBe(990);
+      const allocations = await prisma.saleLotAllocation.findMany({
+        where: { saleId: response.body.id },
+      });
+      expect(allocations).toEqual([
+        expect.objectContaining({ lotId: lot.id, quantityBaseUnits: 10 }),
+      ]);
       const kardex = await prisma.inventoryMovement.findMany({
         where: { productId },
         orderBy: { createdAt: 'asc' },
       });
-      expect(kardex.map((m) => [m.movementType, m.quantityBaseUnits, m.balanceAfterBaseUnits])).toEqual([
+      expect(
+        kardex.map((m) => [m.movementType, m.quantityBaseUnits, m.balanceAfterBaseUnits]),
+      ).toEqual([
         ['ENTRADA_COMPRA', 1000, 1000],
         ['SALIDA_VENTA', 10, 990],
       ]);
@@ -386,7 +410,9 @@ describe('Control de inventario obligatorio en catálogo y ventas (FARM-AUD-002)
       });
       expect(tablets.status, JSON.stringify(tablets.body)).toBe(201);
 
-      expect((await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lot.id } })).currentQuantity).toBe(965);
+      expect(
+        (await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lot.id } })).currentQuantity,
+      ).toBe(965);
 
       const kardex = await prisma.inventoryMovement.findMany({
         where: { productId },
@@ -440,9 +466,15 @@ describe('Control de inventario obligatorio en catálogo y ventas (FARM-AUD-002)
 
       expect(responses.filter((r) => r.status === 201)).toHaveLength(1);
       expect(responses.filter((r) => r.status !== 201).every((r) => r.status === 400)).toBe(true);
-      expect((await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lot.id } })).currentQuantity).toBe(0);
+      expect(
+        (await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lot.id } })).currentQuantity,
+      ).toBe(0);
       expect(await prisma.sale.count()).toBe(1);
-      expect(await prisma.inventoryMovement.count({ where: { productId, movementType: 'SALIDA_VENTA' } })).toBe(1);
+      expect(
+        await prisma.inventoryMovement.count({
+          where: { productId, movementType: 'SALIDA_VENTA' },
+        }),
+      ).toBe(1);
     });
 
     it('Caso 7: la anulación devuelve las unidades al lote original', async () => {
@@ -453,7 +485,9 @@ describe('Control de inventario obligatorio en catálogo y ventas (FARM-AUD-002)
         items: [{ productId, presentationId: blisterId, quantityCommercial: 2 }],
       });
       expect(sale.status, JSON.stringify(sale.body)).toBe(201);
-      expect((await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lot.id } })).currentQuantity).toBe(980);
+      expect(
+        (await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lot.id } })).currentQuantity,
+      ).toBe(980);
 
       const cancel = await request(app.getHttpServer())
         .post(`/api/v1/sales/${sale.body.id}/cancel`)
@@ -462,11 +496,17 @@ describe('Control de inventario obligatorio en catálogo y ventas (FARM-AUD-002)
 
       expect(cancel.status, JSON.stringify(cancel.body)).toBe(200);
       expect(cancel.body.status).toBe('CANCELLED');
-      expect((await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lot.id } })).currentQuantity).toBe(1000);
+      expect(
+        (await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lot.id } })).currentQuantity,
+      ).toBe(1000);
       const returned = await prisma.inventoryMovement.findFirstOrThrow({
         where: { productId, movementType: 'DEVOLUCION_CLIENTE' },
       });
-      expect([returned.lotId, returned.quantityBaseUnits, returned.balanceAfterBaseUnits]).toEqual([lot.id, 20, 1000]);
+      expect([returned.lotId, returned.quantityBaseUnits, returned.balanceAfterBaseUnits]).toEqual([
+        lot.id,
+        20,
+        1000,
+      ]);
     });
   });
 });

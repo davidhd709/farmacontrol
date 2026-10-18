@@ -1,3 +1,4 @@
+import { DomainError } from '../../../common/domain-error';
 /**
  * Aritmética monetaria de la venta en centavos enteros (bigint).
  * Los importes de entrada llegan como number con a lo sumo dos decimales;
@@ -9,12 +10,12 @@ const EPSILON = 1e-6;
 /** Convierte un valor con hasta dos decimales a centésimas exactas. */
 export function toHundredths(value: number, label: string): bigint {
   if (!Number.isFinite(value)) {
-    throw new Error(`${label} no es un número válido.`);
+    throw new DomainError(`${label} no es un número válido.`, 'validation');
   }
   const scaled = value * 100;
   const rounded = Math.round(scaled);
   if (Math.abs(scaled - rounded) > EPSILON) {
-    throw new Error(`${label} admite como máximo dos decimales (${value}).`);
+    throw new DomainError(`${label} admite como máximo dos decimales (${value}).`, 'validation');
   }
   return BigInt(rounded);
 }

@@ -1,3 +1,4 @@
+import { DomainError } from '../../../common/domain-error';
 import {
   ACCOUNT_NATURES,
   ACCOUNT_TYPES,
@@ -87,9 +88,21 @@ export function validatePurposeAccountType(
     throw new AccountingValidationError(`La cuenta no tiene un tipo compatible con ${purpose}.`);
 }
 
-export class AccountingValidationError extends Error {}
-export class AccountingConflictError extends Error {}
-export class AccountingNotFoundError extends Error {}
+export class AccountingValidationError extends DomainError {
+  constructor(message: string) {
+    super(message, 'validation');
+  }
+}
+export class AccountingConflictError extends DomainError {
+  constructor(message: string) {
+    super(message, 'conflict');
+  }
+}
+export class AccountingNotFoundError extends DomainError {
+  constructor(message: string) {
+    super(message, 'not_found');
+  }
+}
 
 export function validateAccountFields(input: {
   code: unknown;

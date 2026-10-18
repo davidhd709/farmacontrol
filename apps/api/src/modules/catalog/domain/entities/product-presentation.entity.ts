@@ -1,3 +1,4 @@
+import { DomainError } from '../../../../common/domain-error';
 import type { ProductPresentationDto } from '@farmacia/contracts';
 
 export interface CreateProductPresentationProps {
@@ -94,17 +95,19 @@ export class ProductPresentation {
 
   public static create(props: CreateProductPresentationProps): ProductPresentation {
     if (!props.productId || !props.productId.trim()) {
-      throw new Error('El ID del producto asociado es requerido.');
+      throw new DomainError('El ID del producto asociado es requerido.', 'validation');
     }
     const name = ProductPresentation.validateName(props.name);
     const barcode = ProductPresentation.validateBarcode(props.barcode);
-    const quantityContained = ProductPresentation.validateQuantityContained(props.quantityContained ?? 1);
+    const quantityContained = ProductPresentation.validateQuantityContained(
+      props.quantityContained ?? 1,
+    );
     const conversionFactor = ProductPresentation.validateConversionFactor(props.conversionFactor);
     const price = ProductPresentation.validatePrice(props.price, 'precio');
     const cost = ProductPresentation.validatePrice(props.cost ?? 0, 'costo');
 
     if (props.containedPresentationId && props.id && props.containedPresentationId === props.id) {
-      throw new Error('Una presentación no puede contenerse a sí misma.');
+      throw new DomainError('Una presentación no puede contenerse a sí misma.', 'validation');
     }
 
     const now = new Date();
@@ -237,13 +240,16 @@ export class ProductPresentation {
    */
   public toBaseUnits(presentationQuantity: number): number {
     if (typeof presentationQuantity !== 'number' || isNaN(presentationQuantity)) {
-      throw new Error('La cantidad de presentación debe ser un número válido.');
+      throw new DomainError('La cantidad de presentación debe ser un número válido.', 'validation');
     }
     if (presentationQuantity < 0) {
-      throw new Error('La cantidad de presentación no puede ser negativa.');
+      throw new DomainError('La cantidad de presentación no puede ser negativa.', 'validation');
     }
     if (!Number.isInteger(presentationQuantity)) {
-      throw new Error('La cantidad de presentación comercial debe ser un número entero discreto.');
+      throw new DomainError(
+        'La cantidad de presentación comercial debe ser un número entero discreto.',
+        'validation',
+      );
     }
     return presentationQuantity * this._conversionFactor;
   }
@@ -256,13 +262,19 @@ export class ProductPresentation {
     remainderBaseUnits: number;
   } {
     if (typeof baseUnitsQuantity !== 'number' || isNaN(baseUnitsQuantity)) {
-      throw new Error('La cantidad en unidades base debe ser un número válido.');
+      throw new DomainError(
+        'La cantidad en unidades base debe ser un número válido.',
+        'validation',
+      );
     }
     if (baseUnitsQuantity < 0) {
-      throw new Error('La cantidad en unidades base no puede ser negativa.');
+      throw new DomainError('La cantidad en unidades base no puede ser negativa.', 'validation');
     }
     if (!Number.isInteger(baseUnitsQuantity)) {
-      throw new Error('La cantidad en unidades base debe ser un número entero discreto.');
+      throw new DomainError(
+        'La cantidad en unidades base debe ser un número entero discreto.',
+        'validation',
+      );
     }
 
     const wholePresentations = Math.floor(baseUnitsQuantity / this._conversionFactor);
@@ -295,12 +307,14 @@ export class ProductPresentation {
     }
     if (props.containedPresentationId !== undefined) {
       if (props.containedPresentationId === this._id) {
-        throw new Error('Una presentación no puede contenerse a sí misma.');
+        throw new DomainError('Una presentación no puede contenerse a sí misma.', 'validation');
       }
       this._containedPresentationId = props.containedPresentationId?.trim() || null;
     }
     if (props.quantityContained !== undefined) {
-      this._quantityContained = ProductPresentation.validateQuantityContained(props.quantityContained);
+      this._quantityContained = ProductPresentation.validateQuantityContained(
+        props.quantityContained,
+      );
     }
     if (props.name !== undefined) {
       this._name = ProductPresentation.validateName(props.name);
@@ -363,10 +377,13 @@ export class ProductPresentation {
   private static validateName(name: string): string {
     const trimmed = name ? name.trim() : '';
     if (!trimmed) {
-      throw new Error('El nombre de la presentación comercial es requerido.');
+      throw new DomainError('El nombre de la presentación comercial es requerido.', 'validation');
     }
     if (trimmed.length < 1 || trimmed.length > 100) {
-      throw new Error('El nombre de la presentación comercial debe tener entre 1 y 100 caracteres.');
+      throw new DomainError(
+        'El nombre de la presentación comercial debe tener entre 1 y 100 caracteres.',
+        'validation',
+      );
     }
     return trimmed;
   }
@@ -380,33 +397,48 @@ export class ProductPresentation {
       return null;
     }
     if (trimmed.length < 3 || trimmed.length > 50) {
-      throw new Error('El código de barras de la presentación debe tener entre 3 y 50 caracteres.');
+      throw new DomainError(
+        'El código de barras de la presentación debe tener entre 3 y 50 caracteres.',
+        'validation',
+      );
     }
     return trimmed;
   }
 
   private static validateQuantityContained(quantity: number): number {
     if (typeof quantity !== 'number' || isNaN(quantity)) {
-      throw new Error('La cantidad contenida debe ser un número.');
+      throw new DomainError('La cantidad contenida debe ser un número.', 'validation');
     }
     if (!Number.isInteger(quantity)) {
-      throw new Error('La cantidad contenida debe ser un número entero discreto.');
+      throw new DomainError(
+        'La cantidad contenida debe ser un número entero discreto.',
+        'validation',
+      );
     }
     if (quantity <= 0) {
-      throw new Error('La cantidad contenida debe ser estrictamente mayor a cero.');
+      throw new DomainError(
+        'La cantidad contenida debe ser estrictamente mayor a cero.',
+        'validation',
+      );
     }
     return quantity;
   }
 
   private static validateConversionFactor(factor: number): number {
     if (typeof factor !== 'number' || isNaN(factor)) {
-      throw new Error('El factor de conversión debe ser un número.');
+      throw new DomainError('El factor de conversión debe ser un número.', 'validation');
     }
     if (!Number.isInteger(factor)) {
-      throw new Error('El factor de conversión a unidad base debe ser un número entero (RN-AG-02).');
+      throw new DomainError(
+        'El factor de conversión a unidad base debe ser un número entero (RN-AG-02).',
+        'validation',
+      );
     }
     if (factor <= 0) {
-      throw new Error('El factor de conversión debe ser estrictamente mayor a cero (RN-004).');
+      throw new DomainError(
+        'El factor de conversión debe ser estrictamente mayor a cero (RN-004).',
+        'validation',
+      );
     }
     return factor;
   }
@@ -414,10 +446,10 @@ export class ProductPresentation {
   private static validatePrice(value: number | string, fieldName: string): string {
     const num = typeof value === 'string' ? parseFloat(value) : value;
     if (isNaN(num)) {
-      throw new Error(`El valor para ${fieldName} no es un número válido.`);
+      throw new DomainError(`El valor para ${fieldName} no es un número válido.`, 'validation');
     }
     if (num < 0) {
-      throw new Error(`El ${fieldName} no puede ser un valor negativo.`);
+      throw new DomainError(`El ${fieldName} no puede ser un valor negativo.`, 'validation');
     }
     return num.toFixed(2);
   }

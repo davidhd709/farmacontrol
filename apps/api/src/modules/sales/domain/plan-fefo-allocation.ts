@@ -1,3 +1,4 @@
+import { DomainError } from '../../../common/domain-error';
 /** Candidatos ya filtrados y ordenados por FEFO por el contrato de inventario. */
 export interface FefoCandidate {
   id: string;
@@ -10,7 +11,10 @@ export function planFefoAllocation<T extends FefoCandidate>(
   requiredBaseUnits: number,
 ): { allocations: { lot: T; quantityBaseUnits: number }[]; shortfallBaseUnits: number } {
   if (!Number.isSafeInteger(requiredBaseUnits) || requiredBaseUnits <= 0) {
-    throw new Error('Las unidades base requeridas deben ser un entero positivo seguro.');
+    throw new DomainError(
+      'Las unidades base requeridas deben ser un entero positivo seguro.',
+      'validation',
+    );
   }
   const allocations: { lot: T; quantityBaseUnits: number }[] = [];
   let remaining = requiredBaseUnits;

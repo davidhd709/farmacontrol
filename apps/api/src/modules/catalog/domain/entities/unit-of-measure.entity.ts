@@ -1,3 +1,4 @@
+import { DomainError } from '../../../../common/domain-error';
 import type { UnitOfMeasureDto } from '@farmacia/contracts';
 
 export interface CreateUnitOfMeasureProps {
@@ -131,10 +132,10 @@ export class UnitOfMeasure {
   private static validateCode(code: string): string {
     const trimmed = code ? code.trim().toUpperCase() : '';
     if (!trimmed) {
-      throw new Error('El código de la unidad de medida es requerido.');
+      throw new DomainError('El código de la unidad de medida es requerido.', 'validation');
     }
     if (trimmed.length < 1 || trimmed.length > 20) {
-      throw new Error('El código debe tener entre 1 y 20 caracteres.');
+      throw new DomainError('El código debe tener entre 1 y 20 caracteres.', 'validation');
     }
     return trimmed;
   }
@@ -142,10 +143,10 @@ export class UnitOfMeasure {
   private static validateName(name: string): string {
     const trimmed = name ? name.trim() : '';
     if (!trimmed) {
-      throw new Error('El nombre de la unidad de medida es requerido.');
+      throw new DomainError('El nombre de la unidad de medida es requerido.', 'validation');
     }
     if (trimmed.length < 2 || trimmed.length > 100) {
-      throw new Error('El nombre debe tener entre 2 y 100 caracteres.');
+      throw new DomainError('El nombre debe tener entre 2 y 100 caracteres.', 'validation');
     }
     return trimmed;
   }

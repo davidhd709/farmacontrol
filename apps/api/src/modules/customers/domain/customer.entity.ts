@@ -1,3 +1,4 @@
+import { DomainError } from '../../../common/domain-error';
 import { CustomerDto, CustomerDocumentType } from '@farmacia/contracts';
 
 export interface CustomerProperties {
@@ -30,11 +31,11 @@ export class Customer {
   }): Customer {
     const trimmedDoc = payload.documentNumber.trim();
     if (!trimmedDoc) {
-      throw new Error('El número de documento del cliente es obligatorio');
+      throw new DomainError('El número de documento del cliente es obligatorio', 'validation');
     }
     const trimmedName = payload.name.trim();
     if (!trimmedName) {
-      throw new Error('El nombre o razón social del cliente es obligatorio');
+      throw new DomainError('El nombre o razón social del cliente es obligatorio', 'validation');
     }
 
     const now = new Date();
@@ -116,14 +117,17 @@ export class Customer {
     if (payload.documentNumber !== undefined) {
       const trimmed = payload.documentNumber.trim();
       if (!trimmed) {
-        throw new Error('El número de documento del cliente no puede ser vacío');
+        throw new DomainError(
+          'El número de documento del cliente no puede ser vacío',
+          'validation',
+        );
       }
       this.props.documentNumber = trimmed;
     }
     if (payload.name !== undefined) {
       const trimmed = payload.name.trim();
       if (!trimmed) {
-        throw new Error('El nombre del cliente no puede ser vacío');
+        throw new DomainError('El nombre del cliente no puede ser vacío', 'validation');
       }
       this.props.name = trimmed;
     }
@@ -138,7 +142,10 @@ export class Customer {
     }
     if (payload.isActive !== undefined) {
       if (this.props.isDefault && !payload.isActive) {
-        throw new Error('No se puede desactivar el cliente predeterminado (Consumidor Final)');
+        throw new DomainError(
+          'No se puede desactivar el cliente predeterminado (Consumidor Final)',
+          'conflict',
+        );
       }
       this.props.isActive = payload.isActive;
     }
@@ -147,7 +154,7 @@ export class Customer {
 
   public deactivate(): void {
     if (this.props.isDefault) {
-      throw new Error('No se puede inactivar el cliente predeterminado');
+      throw new DomainError('No se puede inactivar el cliente predeterminado', 'conflict');
     }
     this.props.isActive = false;
     this.props.updatedAt = new Date();

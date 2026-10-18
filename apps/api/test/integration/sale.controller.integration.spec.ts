@@ -1,3 +1,4 @@
+import { AuditService } from '../../src/modules/audit/application/services/audit.service';
 import { randomUUID } from 'crypto';
 import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest';
 import request from 'supertest';
@@ -177,8 +178,14 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
   });
 
   it('vende el lote que vence hoy Bogotá a las 23:30 y registra asiento en octubre', async () => {
-    await prisma.inventoryLot.update({ where: { id: lot1Id }, data: { expirationDate: new Date('2026-10-10T00:00:00Z') } });
-    await prisma.inventoryLot.update({ where: { id: lot2Id }, data: { expirationDate: new Date('2026-10-11T00:00:00Z') } });
+    await prisma.inventoryLot.update({
+      where: { id: lot1Id },
+      data: { expirationDate: new Date('2026-10-10T00:00:00Z') },
+    });
+    await prisma.inventoryLot.update({
+      where: { id: lot2Id },
+      data: { expirationDate: new Date('2026-10-11T00:00:00Z') },
+    });
     const mappings = [
       { purpose: 'CASH', code: '110505', type: 'ASSET' },
       { purpose: 'SALES_EXCLUDED', code: '413502', type: 'INCOME' },
@@ -186,20 +193,34 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
       { purpose: 'INVENTORY', code: '143501', type: 'ASSET' },
     ] as const;
     for (const mapping of mappings) {
-      const account = await prisma.account.create({ data: {
-        code: mapping.code, name: mapping.purpose, type: mapping.type,
-        level: 1, allowsMovement: true,
-      } });
-      await prisma.companyAccountingMapping.create({ data: {
-        purpose: mapping.purpose, accountId: account.id, status: 'ACTIVE',
-        effectiveFrom: new Date('2026-01-01T00:00:00Z'),
-      } });
+      const account = await prisma.account.create({
+        data: {
+          code: mapping.code,
+          name: mapping.purpose,
+          type: mapping.type,
+          level: 1,
+          allowsMovement: true,
+        },
+      });
+      await prisma.companyAccountingMapping.create({
+        data: {
+          purpose: mapping.purpose,
+          accountId: account.id,
+          status: 'ACTIVE',
+          effectiveFrom: new Date('2026-01-01T00:00:00Z'),
+        },
+      });
     }
-    await prisma.fiscalPeriod.create({ data: {
-      year: 2026, month: 10, name: 'Octubre 2026',
-      startDate: new Date('2026-10-01T00:00:00Z'),
-      endDate: new Date('2026-10-31T00:00:00Z'), status: 'OPEN',
-    } });
+    await prisma.fiscalPeriod.create({
+      data: {
+        year: 2026,
+        month: 10,
+        name: 'Octubre 2026',
+        startDate: new Date('2026-10-01T00:00:00Z'),
+        endDate: new Date('2026-10-31T00:00:00Z'),
+        status: 'OPEN',
+      },
+    });
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-10T23:30:00-05:00'));
     try {
@@ -207,16 +228,22 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
         .post('/api/v1/sales/confirm')
         .set('Idempotency-Key', randomUUID())
         .set('Cookie', cajeroCookie)
-        .send({ paymentMethod: 'EFECTIVO', items: [{ productId, presentationId, quantityCommercial: 1 }] });
+        .send({
+          paymentMethod: 'EFECTIVO',
+          items: [{ productId, presentationId, quantityCommercial: 1 }],
+        });
       expect(res.status, JSON.stringify(res.body)).toBe(201);
       expect(res.body.lines[0].lotAllocations[0].lotNumber).toBe('LOTE-FEFO-01');
       const entry = await prisma.journalEntry.findUniqueOrThrow({
         where: { sourceType_sourceId: { sourceType: 'SALE', sourceId: res.body.id } },
       });
       expect(entry.entryDate.toISOString().slice(0, 10)).toBe('2026-10-10');
-      const period = await prisma.fiscalPeriod.findFirstOrThrow({ where: {
-        startDate: { lte: entry.entryDate }, endDate: { gte: entry.entryDate },
-      } });
+      const period = await prisma.fiscalPeriod.findFirstOrThrow({
+        where: {
+          startDate: { lte: entry.entryDate },
+          endDate: { gte: entry.entryDate },
+        },
+      });
       expect([period.year, period.month]).toEqual([2026, 10]);
     } finally {
       vi.useRealTimers();
@@ -364,18 +391,21 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
       paymentMethod: 'EFECTIVO',
       items: [{ productId, presentationId, quantityCommercial: 1 }],
     };
-    const send = () => request(app.getHttpServer())
-      .post('/api/v1/sales/confirm')
-      .set('Cookie', cajeroCookie)
-      .set('Idempotency-Key', key)
-      .send(payload);
+    const send = () =>
+      request(app.getHttpServer())
+        .post('/api/v1/sales/confirm')
+        .set('Cookie', cajeroCookie)
+        .set('Idempotency-Key', key)
+        .send(payload);
 
     const [first, second] = await Promise.all([send(), send()]);
     expect(first.status).toBe(201);
     expect(second.status).toBe(201);
     expect(second.body).toEqual(first.body);
     expect(await prisma.sale.count()).toBe(1);
-    expect(await prisma.inventoryMovement.count({ where: { referenceDocumentType: 'SALE' } })).toBe(1);
+    expect(await prisma.inventoryMovement.count({ where: { referenceDocumentType: 'SALE' } })).toBe(
+      1,
+    );
   });
 
   it('procesa de nuevo una clave expirada y reemplaza su registro', async () => {
@@ -384,11 +414,12 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
       paymentMethod: 'EFECTIVO',
       items: [{ productId, presentationId, quantityCommercial: 1 }],
     };
-    const send = () => request(app.getHttpServer())
-      .post('/api/v1/sales/confirm')
-      .set('Cookie', cajeroCookie)
-      .set('Idempotency-Key', key)
-      .send(payload);
+    const send = () =>
+      request(app.getHttpServer())
+        .post('/api/v1/sales/confirm')
+        .set('Cookie', cajeroCookie)
+        .set('Idempotency-Key', key)
+        .send(payload);
 
     const first = await send();
     expect(first.status).toBe(201);
@@ -629,7 +660,7 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
       .post(`/api/v1/sales/${saleRes.body.id}/cancel`)
       .set('Cookie', supervisorCookie)
       .send({ reason: 'Sin fondos para devolver' });
-    expect(rejected.status).toBe(400);
+    expect(rejected.status).toBe(409);
     expect((await prisma.sale.findUniqueOrThrow({ where: { id: saleRes.body.id } })).status).toBe(
       'COMPLETED',
     );
@@ -814,7 +845,11 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
         where: { receivableId: receivable.id },
       });
 
-      return { saleId: saleRes.body.id as string, receivableId: receivable.id, paymentId: payment.id };
+      return {
+        saleId: saleRes.body.id as string,
+        receivableId: receivable.id,
+        paymentId: payment.id,
+      };
     }
 
     it('rechaza anular una venta a crédito con abonos vigentes sin tocar lotes ni cartera', async () => {
@@ -882,7 +917,7 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
           request(app.getHttpServer())
             .post(`/api/v1/receivables/${receivable.id}/payments`)
             .set('Cookie', supervisorCookie)
-        .set('Idempotency-Key', randomUUID())
+            .set('Idempotency-Key', randomUUID())
             .send({ amount: 100, paymentMethod: 'EFECTIVO' }),
         ]);
 
@@ -911,7 +946,9 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
 
       const receivable = await prisma.receivable.findUniqueOrThrow({ where: { id: receivableId } });
       expect(receivable.status).toBe('ANULADA');
-      const payment = await prisma.receivablePayment.findUniqueOrThrow({ where: { id: paymentId } });
+      const payment = await prisma.receivablePayment.findUniqueOrThrow({
+        where: { id: paymentId },
+      });
       expect(payment.isReversed).toBe(false);
     });
   });
@@ -934,5 +971,96 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
       .set('Cookie', cajeroCookie)
       .send({ reason: 'Sin permiso de anular' });
     expect(resCancel.status).toBe(403);
+  });
+  it('un fallo después de auditar revierte venta, FEFO, caja e idempotencia y responde 500', async () => {
+    const audit = app.get(AuditService);
+    const recordEvent = audit.recordEvent.bind(audit);
+    const spy = vi.spyOn(audit, 'recordEvent').mockImplementation(async (input, tx) => {
+      const event = await recordEvent(input, tx);
+      if (input.action === 'sales:sale_confirmed') {
+        expect(tx).toBeDefined();
+        expect(
+          await (tx as Prisma.TransactionClient).auditEvent.count({ where: { id: event.id } }),
+        ).toBe(1);
+        throw new Error('Fallo interno posterior a auditoría de venta');
+      }
+      return event;
+    });
+    const payload = {
+      paymentMethod: 'EFECTIVO',
+      amountPaid: 5000,
+      items: [{ productId, presentationId, quantityCommercial: 1 }],
+    };
+    try {
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/sales/confirm')
+        .set('Cookie', cajeroCookie)
+        .set('Idempotency-Key', 'atomic-sale')
+        .send(payload);
+      expect(response.status).toBe(500);
+      expect(await prisma.sale.count()).toBe(0);
+      expect(await prisma.cashMovement.count()).toBe(0);
+      expect(await prisma.inventoryMovement.count()).toBe(0);
+      expect(
+        (await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lot1Id } })).currentQuantity,
+      ).toBe(10);
+      expect(await prisma.auditEvent.count({ where: { action: 'sales:sale_confirmed' } })).toBe(0);
+      expect(await prisma.idempotencyKey.count({ where: { key: 'atomic-sale' } })).toBe(0);
+    } finally {
+      spy.mockRestore();
+    }
+    await request(app.getHttpServer())
+      .post('/api/v1/sales/confirm')
+      .set('Cookie', cajeroCookie)
+      .set('Idempotency-Key', 'atomic-sale')
+      .send(payload)
+      .expect(201);
+    await request(app.getHttpServer())
+      .post('/api/v1/sales/confirm')
+      .set('Cookie', cajeroCookie)
+      .set('Idempotency-Key', 'atomic-sale')
+      .send(payload)
+      .expect(201);
+    expect(await prisma.sale.count()).toBe(1);
+    expect(await prisma.auditEvent.count({ where: { action: 'sales:sale_confirmed' } })).toBe(1);
+  });
+
+  it('la anulación responde 500 y revierte todas sus escrituras si falla después de auditar', async () => {
+    const sale = await request(app.getHttpServer())
+      .post('/api/v1/sales/confirm')
+      .set('Cookie', cajeroCookie)
+      .set('Idempotency-Key', 'atomic-cancel')
+      .send({
+        paymentMethod: 'EFECTIVO',
+        amountPaid: 5000,
+        items: [{ productId, presentationId, quantityCommercial: 1 }],
+      })
+      .expect(201);
+    const audit = app.get(AuditService);
+    const recordEvent = audit.recordEvent.bind(audit);
+    const spy = vi.spyOn(audit, 'recordEvent').mockImplementation(async (input, tx) => {
+      const event = await recordEvent(input, tx);
+      if (input.action === 'sales:sale_cancelled')
+        throw new Error('Fallo interno posterior a auditoría de anulación');
+      return event;
+    });
+    try {
+      await request(app.getHttpServer())
+        .post(`/api/v1/sales/${sale.body.id}/cancel`)
+        .set('Cookie', supervisorCookie)
+        .send({ reason: 'Prueba atómica' })
+        .expect(500);
+      expect((await prisma.sale.findUniqueOrThrow({ where: { id: sale.body.id } })).status).toBe(
+        'COMPLETED',
+      );
+      expect(
+        (await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lot1Id } })).currentQuantity,
+      ).toBe(0);
+      expect(await prisma.cashMovement.count()).toBe(1);
+      expect(await prisma.inventoryMovement.count()).toBe(1);
+      expect(await prisma.auditEvent.count({ where: { action: 'sales:sale_cancelled' } })).toBe(0);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

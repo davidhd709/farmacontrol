@@ -1,4 +1,5 @@
-import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
+import { DomainError } from '../domain-error';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@farmacia/database';
 import { createHash } from 'crypto';
 import { IdempotencyConflictException } from './idempotency.errors';
@@ -54,7 +55,10 @@ export class IdempotencyService {
     }
     if (existing.requestHash !== expectedHash) {
       if (conflict === 'http') {
-        throw new ConflictException('Idempotency-Key ya se utilizó con una solicitud diferente.');
+        throw new DomainError(
+          'Idempotency-Key ya se utilizó con una solicitud diferente.',
+          'conflict',
+        );
       }
       throw new IdempotencyConflictException(key);
     }

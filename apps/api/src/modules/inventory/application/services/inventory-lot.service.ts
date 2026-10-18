@@ -1,3 +1,4 @@
+import { prisma } from '@farmacia/database';
 import {
   Injectable,
   Inject,
@@ -53,10 +54,7 @@ export class InventoryLotService {
     productId: string,
     locationId?: string,
   ): Promise<InventoryLotDto[]> {
-    const lots = await this.lotRepository.findAvailableLotsByProductFefo(
-      productId,
-      locationId,
-    );
+    const lots = await this.lotRepository.findAvailableLotsByProductFefo(productId, locationId);
     return lots.map((lot) => lot.toDto());
   }
 
@@ -68,74 +66,77 @@ export class InventoryLotService {
   ): Promise<InventoryLotDto> {
     const product = await this.productRepository.findById(payload.productId);
     if (!product) {
-      throw new NotFoundException(
-        `Producto con ID "${payload.productId}" no encontrado.`,
-      );
+      throw new NotFoundException(`Producto con ID "${payload.productId}" no encontrado.`);
     }
 
-    let location = await this.lotRepository.findLocationById(payload.locationId);
-    if (!location) {
-      // Intentar obtener o crear ubicación por defecto si no existe
-      location = await this.lotRepository.findDefaultLocation();
+    return prisma.$transaction(async (tx) => {
+      let location = await this.lotRepository.findLocationById(payload.locationId);
       if (!location) {
-        location = await this.lotRepository.saveLocation(
-          new Location({
-            code: 'DEF-01',
-            name: 'Ubicación General',
-            isDefault: true,
-          }),
-        );
+        // Intentar obtener o crear ubicación por defecto si no existe
+        location = await this.lotRepository.findDefaultLocation();
+        if (!location) {
+          location = await this.lotRepository.saveLocation(
+            new Location({
+              code: 'DEF-01',
+              name: 'Ubicación General',
+              isDefault: true,
+            }),
+            tx,
+          );
+        }
       }
-    }
 
-    const existingLot =
-      await this.lotRepository.findByProductLocationAndLotNumber(
+      const existingLot = await this.lotRepository.findByProductLocationAndLotNumber(
         product.id,
         location.id,
         payload.lotNumber,
       );
 
-    if (existingLot) {
-      throw new ConflictException(
-        `Ya existe un lote con número "${payload.lotNumber}" para este producto en la ubicación seleccionada.`,
-      );
-    }
-
-    try {
-      const lot = InventoryLot.create({
-        productId: product.id,
-        locationId: location.id,
-        lotNumber: payload.lotNumber,
-        expirationDate: payload.expirationDate,
-        currentQuantity: payload.initialQuantity ?? 0,
-      });
-
-      const savedLot = await this.lotRepository.createWithInitialStock(lot, userId);
-
-      await this.auditService.recordEvent({
-        userId,
-        action: 'CREATE_INVENTORY_LOT',
-        entity: 'InventoryLot',
-        entityId: savedLot.id,
-        details: {
-          productId: savedLot.productId,
-          productCode: product.code,
-          productName: product.name,
-          lotNumber: savedLot.lotNumber,
-          expirationDate: savedLot.expirationDate.toISOString(),
-          initialQuantity: savedLot.currentQuantity,
-        },
-        ipAddress,
-        correlationId,
-      });
-
-      return savedLot.toDto();
-    } catch (err: any) {
-      if (err.name === 'InventoryDomainException' || err.name === 'InvalidLotDataException') {
-        throw new BadRequestException(err.message);
+      if (existingLot) {
+        throw new ConflictException(
+          `Ya existe un lote con número "${payload.lotNumber}" para este producto en la ubicación seleccionada.`,
+        );
       }
-      throw err;
-    }
+
+      try {
+        const lot = InventoryLot.create({
+          productId: product.id,
+          locationId: location.id,
+          lotNumber: payload.lotNumber,
+          expirationDate: payload.expirationDate,
+          currentQuantity: payload.initialQuantity ?? 0,
+        });
+
+        const savedLot = await this.lotRepository.createWithInitialStock(lot, userId, tx);
+
+        await this.auditService.recordEvent(
+          {
+            userId,
+            action: 'CREATE_INVENTORY_LOT',
+            entity: 'InventoryLot',
+            entityId: savedLot.id,
+            details: {
+              productId: savedLot.productId,
+              productCode: product.code,
+              productName: product.name,
+              lotNumber: savedLot.lotNumber,
+              expirationDate: savedLot.expirationDate.toISOString(),
+              initialQuantity: savedLot.currentQuantity,
+            },
+            ipAddress,
+            correlationId,
+          },
+          tx,
+        );
+
+        return savedLot.toDto();
+      } catch (err: any) {
+        if (err.name === 'InventoryDomainException' || err.name === 'InvalidLotDataException') {
+          throw new BadRequestException(err.message);
+        }
+        throw err;
+      }
+    });
   }
 
   // Métodos de Ubicaciones
@@ -169,21 +170,26 @@ export class InventoryLotService {
       isDefault: payload.isDefault ?? false,
     });
 
-    const saved = await this.lotRepository.saveLocation(location);
+    return prisma.$transaction(async (tx) => {
+      const saved = await this.lotRepository.saveLocation(location, tx);
 
-    await this.auditService.recordEvent({
-      userId,
-      action: 'CREATE_LOCATION',
-      entity: 'Location',
-      entityId: saved.id,
-      details: {
-        code: saved.code,
-        name: saved.name,
-      },
-      ipAddress,
-      correlationId,
+      await this.auditService.recordEvent(
+        {
+          userId,
+          action: 'CREATE_LOCATION',
+          entity: 'Location',
+          entityId: saved.id,
+          details: {
+            code: saved.code,
+            name: saved.name,
+          },
+          ipAddress,
+          correlationId,
+        },
+        tx,
+      );
+
+      return saved.toDto();
     });
-
-    return saved.toDto();
   }
 }

@@ -1,3 +1,4 @@
+import { DomainError } from '../../../common/domain-error';
 import type { ReceivableStatus } from '@farmacia/contracts';
 
 export type { ReceivableStatus };
@@ -24,19 +25,21 @@ export class Receivable {
    */
   applyPayment(amount: number): void {
     if (this.status !== 'PENDIENTE') {
-      throw new Error(
+      throw new DomainError(
         `No se puede abonar a una cuenta en estado "${this.status}"`,
+        'conflict',
       );
     }
     if (amount <= 0) {
-      throw new Error('El monto del abono debe ser mayor a cero');
+      throw new DomainError('El monto del abono debe ser mayor a cero', 'validation');
     }
     // Comparar con precisión: redondear a 2 decimales
     const roundedAmount = Math.round(amount * 100) / 100;
     const roundedBalance = Math.round(this.balance * 100) / 100;
     if (roundedAmount > roundedBalance) {
-      throw new Error(
+      throw new DomainError(
         `El monto del abono (${roundedAmount}) supera el saldo pendiente (${roundedBalance})`,
+        'conflict',
       );
     }
     this.amountPaid = Math.round((this.amountPaid + roundedAmount) * 100) / 100;

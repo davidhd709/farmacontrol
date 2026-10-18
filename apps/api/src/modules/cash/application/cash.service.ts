@@ -1,3 +1,4 @@
+import { prisma, Prisma } from '@farmacia/database';
 import {
   Inject,
   Injectable,
@@ -38,12 +39,12 @@ export class CashService {
     @Inject(CASH_MOVEMENT_REPOSITORY)
     private readonly cashRepository: ICashMovementRepository,
     @Optional()
-    private readonly auditService?: AuditService
+    private readonly auditService?: AuditService,
   ) {}
 
   async registerMovement(
     payload: CreateCashMovementPayload,
-    auditCtx: AuditContext = {}
+    auditCtx: AuditContext = {},
   ): Promise<CashMovementDto> {
     const userId = auditCtx.userId;
     if (!userId) {
@@ -56,38 +57,47 @@ export class CashService {
     }
 
     try {
-      const savedMovement = await this.cashRepository.saveTransactional({
-        movementType: payload.movementType,
-        amount: payload.amount,
-        paymentMethod,
-        reason: payload.reason,
-        referenceDocumentType: payload.referenceDocumentType,
-        referenceDocumentId: payload.referenceDocumentId,
-        createdByUserId: userId,
-      });
-
-      // Auditoría
-      if (this.auditService) {
-        await this.auditService.recordEvent({
-          action: 'cash:movement_created',
-          entity: 'CashMovement',
-          entityId: savedMovement.id,
-          userId,
-          ipAddress: auditCtx.ipAddress || null,
-          correlationId: auditCtx.correlationId || null,
-          details: {
-            movementType: savedMovement.movementType,
-            amount: savedMovement.amount,
-            paymentMethod: savedMovement.paymentMethod,
-            reason: savedMovement.reason,
-            balanceAfter: savedMovement.balanceAfter,
-            referenceDocumentType: savedMovement.referenceDocumentType,
-            referenceDocumentId: savedMovement.referenceDocumentId,
+      const persist = async (tx?: Prisma.TransactionClient) => {
+        const savedMovement = await this.cashRepository.saveTransactional(
+          {
+            movementType: payload.movementType,
+            amount: payload.amount,
+            paymentMethod,
+            reason: payload.reason,
+            referenceDocumentType: payload.referenceDocumentType,
+            referenceDocumentId: payload.referenceDocumentId,
+            createdByUserId: userId,
           },
-        });
-      }
+          tx,
+        );
 
-      return this.toDto(savedMovement);
+        // Auditoría
+        if (this.auditService) {
+          await this.auditService.recordEvent(
+            {
+              action: 'cash:movement_created',
+              entity: 'CashMovement',
+              entityId: savedMovement.id,
+              userId,
+              ipAddress: auditCtx.ipAddress || null,
+              correlationId: auditCtx.correlationId || null,
+              details: {
+                movementType: savedMovement.movementType,
+                amount: savedMovement.amount,
+                paymentMethod: savedMovement.paymentMethod,
+                reason: savedMovement.reason,
+                balanceAfter: savedMovement.balanceAfter,
+                referenceDocumentType: savedMovement.referenceDocumentType,
+                referenceDocumentId: savedMovement.referenceDocumentId,
+              },
+            },
+            tx,
+          );
+        }
+
+        return this.toDto(savedMovement);
+      };
+      return this.auditService ? prisma.$transaction(persist) : persist();
     } catch (err: any) {
       if (
         err instanceof InvalidCashAmountException ||
@@ -105,7 +115,7 @@ export class CashService {
   }
 
   async listMovements(
-    filters: CashMovementQueryFilters
+    filters: CashMovementQueryFilters,
   ): Promise<PaginatedResponse<CashMovementDto>> {
     const page = Math.max(Number(filters.page) || 1, 1);
     const limit = Math.max(Number(filters.limit) || 20, 1);
@@ -144,7 +154,7 @@ export class CashService {
       referenceDocumentType?: string;
       referenceDocumentId?: string;
       createdByUserId: string;
-    }
+    },
   ): Promise<void> {
     const paymentMethod = payload.paymentMethod === undefined ? 'EFECTIVO' : payload.paymentMethod;
     if (paymentMethod !== 'EFECTIVO') {
@@ -160,7 +170,7 @@ export class CashService {
         referenceDocumentId: payload.referenceDocumentId,
         createdByUserId: payload.createdByUserId,
       },
-      tx
+      tx,
     );
   }
 

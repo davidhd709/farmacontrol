@@ -1,8 +1,6 @@
+import { DomainError } from '../../../../common/domain-error';
 import { Inject, Injectable } from '@nestjs/common';
-import {
-  USER_REPOSITORY_PORT,
-  UserRepositoryPort,
-} from '../ports/user.repository.port';
+import { USER_REPOSITORY_PORT, UserRepositoryPort } from '../ports/user.repository.port';
 import { PasswordService } from './password.service';
 import { User } from '../../domain/entities/user.entity';
 import { Username } from '../../domain/value-objects/username.vo';
@@ -24,7 +22,7 @@ export class UserProvisioningService {
   constructor(
     @Inject(USER_REPOSITORY_PORT)
     private readonly userRepository: UserRepositoryPort,
-    private readonly passwordService: PasswordService
+    private readonly passwordService: PasswordService,
   ) {}
 
   /**
@@ -40,9 +38,7 @@ export class UserProvisioningService {
       throw new UserAlreadyExistsException(usernameVo.value);
     }
 
-    const passwordHash = await this.passwordService.hashPassword(
-      command.password
-    );
+    const passwordHash = await this.passwordService.hashPassword(command.password);
 
     const user = User.create({
       username: usernameVo,
@@ -59,13 +55,12 @@ export class UserProvisioningService {
    * Si la base de datos ya contiene usuarios, rechaza la operación para evitar
    * re-aprovisionamientos accidentales o sobreescritura de credenciales.
    */
-  public async provisionInitialUser(
-    command: ProvisionInitialAdminCommand
-  ): Promise<User> {
+  public async provisionInitialUser(command: ProvisionInitialAdminCommand): Promise<User> {
     const existingCount = await this.userRepository.count();
     if (existingCount > 0) {
-      throw new Error(
-        'Aprovisionamiento rechazado: ya existen usuarios registrados en la base de datos.'
+      throw new DomainError(
+        'Aprovisionamiento rechazado: ya existen usuarios registrados en la base de datos.',
+        'conflict',
       );
     }
 

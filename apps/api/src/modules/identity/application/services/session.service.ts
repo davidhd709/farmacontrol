@@ -1,12 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
-import {
-  SESSION_TOKEN_PORT,
-  SessionTokenPort,
-} from '../ports/session-token.port';
-import {
-  SESSION_REPOSITORY_PORT,
-  SessionRepositoryPort,
-} from '../ports/session.repository.port';
+import { SESSION_TOKEN_PORT, SessionTokenPort } from '../ports/session-token.port';
+import { SESSION_REPOSITORY_PORT, SessionRepositoryPort } from '../ports/session.repository.port';
 import { Session } from '../../domain/entities/session.entity';
 import { InvalidSessionDurationException } from '../../domain/exceptions/identity.exceptions';
 
@@ -46,7 +40,7 @@ export class SessionService {
     @Inject(SESSION_TOKEN_PORT)
     private readonly tokenPort: SessionTokenPort,
     @Inject(SESSION_REPOSITORY_PORT)
-    private readonly sessionRepository: SessionRepositoryPort
+    private readonly sessionRepository: SessionRepositoryPort,
   ) {}
 
   /**
@@ -59,7 +53,8 @@ export class SessionService {
    */
   public async createSession(
     userId: string,
-    durationMs: number = DEFAULT_SESSION_DURATION_MS
+    durationMs: number = DEFAULT_SESSION_DURATION_MS,
+    tx?: unknown,
   ): Promise<CreatedSessionOutput> {
     // F-21: Validación estricta de duración de sesión (debe ser entero positivo finito)
     if (
@@ -69,7 +64,7 @@ export class SessionService {
       durationMs <= 0
     ) {
       throw new InvalidSessionDurationException(
-        'La duración de la sesión debe ser un número entero positivo finito de milisegundos.'
+        'La duración de la sesión debe ser un número entero positivo finito de milisegundos.',
       );
     }
 
@@ -82,7 +77,9 @@ export class SessionService {
       expiresAt,
     });
 
-    const persistedSession = await this.sessionRepository.create(domainSession);
+    const persistedSession = tx
+      ? await this.sessionRepository.create(domainSession, tx)
+      : await this.sessionRepository.create(domainSession);
 
     return {
       session: persistedSession,
@@ -103,7 +100,7 @@ export class SessionService {
   public async validateSession(
     rawToken: string,
     touchUsage = true,
-    now: Date = new Date()
+    now: Date = new Date(),
   ): Promise<Session | null> {
     // F-19: Validación temprana de longitud y formato hexadecimal estricto
     if (
@@ -127,8 +124,7 @@ export class SessionService {
         // F-20: Throttling de 5 minutos para actualización de lastUsedAt
         const lastUsed = session.lastUsedAt;
         const shouldUpdate =
-          !lastUsed ||
-          now.getTime() - lastUsed.getTime() >= SESSION_USAGE_THROTTLE_MS;
+          !lastUsed || now.getTime() - lastUsed.getTime() >= SESSION_USAGE_THROTTLE_MS;
 
         if (shouldUpdate) {
           session.recordUsage(now);
@@ -150,7 +146,7 @@ export class SessionService {
    * @param rawToken Token en texto plano recibido del cliente.
    * @returns true si la sesión existía y fue revocada; false en caso contrario.
    */
-  public async revokeSession(rawToken: string): Promise<boolean> {
+  public async revokeSession(rawToken: string, tx?: unknown): Promise<boolean> {
     if (
       !rawToken ||
       typeof rawToken !== 'string' ||
@@ -162,16 +158,20 @@ export class SessionService {
 
     try {
       const tokenHash = this.tokenPort.hash(rawToken);
-      const session = await this.sessionRepository.findByTokenHash(tokenHash);
+      const session = tx
+        ? await this.sessionRepository.findByTokenHash(tokenHash, tx)
+        : await this.sessionRepository.findByTokenHash(tokenHash);
 
       if (!session) {
         return false;
       }
 
       session.revoke();
-      await this.sessionRepository.update(session);
+      if (tx) await this.sessionRepository.update(session, tx);
+      else await this.sessionRepository.update(session);
       return true;
-    } catch {
+    } catch (error) {
+      if (tx) throw error;
       return false;
     }
   }

@@ -1,4 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+// Prueba unitaria: la transacción que abre el servicio no debe llegar a PostgreSQL
+vi.mock('@farmacia/database', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@farmacia/database')>()),
+  prisma: { $transaction: (work: (tx: unknown) => unknown) => work({}) },
+}));
 import { CashService } from '../../src/modules/cash/application/cash.service';
 import { ICashMovementRepository } from '../../src/modules/cash/domain/cash-movement.repository';
 import { CashMovement } from '../../src/modules/cash/domain/cash-movement.entity';
@@ -152,7 +158,9 @@ describe('CashService & Cash Entities (Unit)', () => {
           entity: 'CashMovement',
           userId: 'user-cajero',
           correlationId: 'corr-123',
-        })
+        }),
+        // La auditoría se registra con la misma transacción del movimiento
+        expect.anything(),
       );
     });
 
@@ -166,7 +174,7 @@ describe('CashService & Cash Entities (Unit)', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('transforma InsufficientCashBalanceException en BadRequestException legible', async () => {
+    it('propaga InsufficientCashBalanceException como conflicto de dominio (409)', async () => {
       vi.spyOn(repository, 'saveTransactional').mockRejectedValueOnce(
         new InsufficientCashBalanceException(20000, 50000)
       );
@@ -180,7 +188,7 @@ describe('CashService & Cash Entities (Unit)', () => {
           },
           { userId: 'user-1' }
         )
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toMatchObject({ kind: 'conflict', message: expect.stringContaining('Saldo insuficiente') });
     });
   });
 

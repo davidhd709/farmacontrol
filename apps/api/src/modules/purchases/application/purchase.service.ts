@@ -1,5 +1,11 @@
 import { businessToday } from '../../../common/utils/business-date';
-import { Inject, Injectable, Optional, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Optional,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { prisma, PrismaClient } from '@farmacia/database';
 import {
   PurchaseDto,
@@ -38,10 +44,7 @@ export class PurchaseService {
     this.client = customClient ?? prisma;
   }
 
-  async receivePurchase(
-    input: ReceivePurchasePayload,
-    auditCtx?: AuditContext
-  ): Promise<Purchase> {
+  async receivePurchase(input: ReceivePurchasePayload, auditCtx?: AuditContext): Promise<Purchase> {
     // 1. Validar Proveedor
     const supplier = await this.client.supplier.findUnique({
       where: { id: input.supplierId },
@@ -59,7 +62,9 @@ export class PurchaseService {
       orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
     });
     if (!defaultLocation) {
-      throw new BadRequestException('No existe ninguna ubicación de inventario activa para recepcionar mercancía');
+      throw new BadRequestException(
+        'No existe ninguna ubicación de inventario activa para recepcionar mercancía',
+      );
     }
 
     if (!input.lines || input.lines.length === 0) {
@@ -89,17 +94,17 @@ export class PurchaseService {
         });
         if (!pres || pres.productId !== product.id) {
           throw new BadRequestException(
-            `La presentación "${lineInput.presentationId}" no es válida para el producto "${product.name}"`
+            `La presentación "${lineInput.presentationId}" no es válida para el producto "${product.name}"`,
           );
         }
         if (!pres.isActive) {
           throw new BadRequestException(
-            `La presentación "${pres.name}" del producto "${product.name}" está inactiva`
+            `La presentación "${pres.name}" del producto "${product.name}" está inactiva`,
           );
         }
         if (!pres.purchaseEnabled) {
           throw new BadRequestException(
-            `La presentación "${pres.name}" del producto "${product.name}" no está habilitada para compras`
+            `La presentación "${pres.name}" del producto "${product.name}" no está habilitada para compras`,
           );
         }
         conversionFactor = pres.conversionFactor;
@@ -109,7 +114,7 @@ export class PurchaseService {
       const expirationDate = new Date(lineInput.expirationDate);
       if (isNaN(expirationDate.getTime())) {
         throw new BadRequestException(
-          `Fecha de vencimiento inválida para el producto "${product.name}"`
+          `Fecha de vencimiento inválida para el producto "${product.name}"`,
         );
       }
 
@@ -117,10 +122,7 @@ export class PurchaseService {
       const expZero = expirationDate.toISOString().slice(0, 10);
 
       if (expZero <= today) {
-        throw new ExpiredLotDateException(
-          lineInput.lotNumber,
-          lineInput.expirationDate
-        );
+        throw new ExpiredLotDateException(lineInput.lotNumber, lineInput.expirationDate);
       }
 
       const commercialQty = Number(lineInput.quantityCommercial);
@@ -175,6 +177,28 @@ export class PurchaseService {
       locationId,
       auditCtx?.userId ?? null,
       async (tx, p) => {
+        // 6. Registrar Auditoría
+        if (this.auditService) {
+          await this.auditService.recordEvent(
+            {
+              action: 'purchases:purchase_received',
+              entity: 'Purchase',
+              entityId: p.id,
+              userId: auditCtx?.userId || null,
+              ipAddress: auditCtx?.ipAddress || null,
+              correlationId: auditCtx?.correlationId || null,
+              details: {
+                supplierId: supplier.id,
+                supplierName: supplier.name,
+                invoiceNumber: p.invoiceNumber,
+                totalAmount: p.totalAmount,
+                linesCount: p.lines.length,
+              },
+            },
+            tx,
+          );
+        }
+
         if (this.accountingEngine) {
           await this.accountingEngine.handlePurchaseReceived(
             {
@@ -191,25 +215,6 @@ export class PurchaseService {
       },
     );
 
-    // 6. Registrar Auditoría
-    if (this.auditService) {
-      await this.auditService.recordEvent({
-        action: 'purchases:purchase_received',
-        entity: 'Purchase',
-        entityId: savedPurchase.id,
-        userId: auditCtx?.userId || null,
-        ipAddress: auditCtx?.ipAddress || null,
-        correlationId: auditCtx?.correlationId || null,
-        details: {
-          supplierId: supplier.id,
-          supplierName: supplier.name,
-          invoiceNumber: savedPurchase.invoiceNumber,
-          totalAmount: savedPurchase.totalAmount,
-          linesCount: savedPurchase.lines.length,
-        },
-      });
-    }
-
     return savedPurchase;
   }
 
@@ -221,9 +226,7 @@ export class PurchaseService {
     return purchase;
   }
 
-  async getPurchases(
-    filters: PurchaseQueryFilters
-  ): Promise<PaginatedResponse<PurchaseDto>> {
+  async getPurchases(filters: PurchaseQueryFilters): Promise<PaginatedResponse<PurchaseDto>> {
     const page = Math.max(1, filters.page ?? 1);
     const pageSize = Math.min(100, Math.max(1, filters.pageSize ?? 20));
 

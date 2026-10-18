@@ -1,3 +1,4 @@
+import { ApiResponse } from '@nestjs/swagger';
 import { QueryShapeValidationPipe } from '../../../../common/pagination/request-shape.pipe';
 import {
   Controller,
@@ -30,7 +31,6 @@ import { RequirePermissions } from '../../../identity/presentation/decorators/re
 import { CurrentUser } from '../../../identity/presentation/decorators/current-user.decorator';
 import {
   PurchaseNotFoundException,
-  SupplierNotActiveException,
   ExpiredLotDateException,
   DuplicatePurchaseInvoiceException,
   LotConflictException,
@@ -42,6 +42,13 @@ export class PurchaseController {
   constructor(private readonly purchaseService: PurchaseService) {}
 
   @Post('receive')
+  @ApiResponse({ status: 400, description: 'Datos de compra inválidos.' })
+  @ApiResponse({ status: 404, description: 'Proveedor o producto no encontrado.' })
+  @ApiResponse({
+    status: 409,
+    description: 'Factura duplicada o estado incompatible para recibir.',
+  })
+  @ApiResponse({ status: 500, description: 'Fallo interno; la recepción se revierte.' })
   @HttpCode(HttpStatus.CREATED)
   @RequirePermissions(SYSTEM_PERMISSIONS.PURCHASES_RECEIVE)
   public async receive(
@@ -60,7 +67,7 @@ export class PurchaseController {
       if (error instanceof HttpException) {
         throw error;
       }
-      if (error instanceof SupplierNotActiveException || error instanceof ExpiredLotDateException) {
+      if (error instanceof ExpiredLotDateException) {
         throw new BadRequestException(error.message);
       }
       if (
@@ -68,9 +75,6 @@ export class PurchaseController {
         error instanceof LotConflictException
       ) {
         throw new ConflictException(error.message);
-      }
-      if (error instanceof Error) {
-        throw new BadRequestException(error.message);
       }
       throw error;
     }

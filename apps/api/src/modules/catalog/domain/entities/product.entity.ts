@@ -1,3 +1,4 @@
+import { DomainError } from '../../../../common/domain-error';
 import type { ProductDto, ProductPresentationDto } from '@farmacia/contracts';
 import { ProductLotControlRequiredException } from '../exceptions/product.exceptions';
 
@@ -237,7 +238,7 @@ export class Product {
     }
     if (props.categoryId !== undefined) {
       if (!props.categoryId.trim()) {
-        throw new Error('La categoría del producto es requerida.');
+        throw new DomainError('La categoría del producto es requerida.', 'validation');
       }
       this._categoryId = props.categoryId;
     }
@@ -302,10 +303,13 @@ export class Product {
   private static validateCode(code: string): string {
     const trimmed = code ? code.trim() : '';
     if (!trimmed) {
-      throw new Error('El código interno (SKU) del producto es requerido.');
+      throw new DomainError('El código interno (SKU) del producto es requerido.', 'validation');
     }
     if (trimmed.length < 2 || trimmed.length > 50) {
-      throw new Error('El código interno (SKU) debe tener entre 2 y 50 caracteres.');
+      throw new DomainError(
+        'El código interno (SKU) debe tener entre 2 y 50 caracteres.',
+        'validation',
+      );
     }
     return trimmed;
   }
@@ -313,10 +317,13 @@ export class Product {
   private static validateName(name: string): string {
     const trimmed = name ? name.trim() : '';
     if (!trimmed) {
-      throw new Error('El nombre comercial del producto es requerido.');
+      throw new DomainError('El nombre comercial del producto es requerido.', 'validation');
     }
     if (trimmed.length < 2 || trimmed.length > 150) {
-      throw new Error('El nombre comercial debe tener entre 2 y 150 caracteres.');
+      throw new DomainError(
+        'El nombre comercial debe tener entre 2 y 150 caracteres.',
+        'validation',
+      );
     }
     return trimmed;
   }
@@ -330,7 +337,10 @@ export class Product {
       return null;
     }
     if (trimmed.length < 3 || trimmed.length > 50) {
-      throw new Error('El código de barras debe tener entre 3 y 50 caracteres si se proporciona.');
+      throw new DomainError(
+        'El código de barras debe tener entre 3 y 50 caracteres si se proporciona.',
+        'validation',
+      );
     }
     return trimmed;
   }
@@ -338,10 +348,10 @@ export class Product {
   private static validatePrice(value: number | string, fieldName: string): string {
     const num = typeof value === 'string' ? parseFloat(value) : value;
     if (isNaN(num)) {
-      throw new Error(`El valor para ${fieldName} no es un número válido.`);
+      throw new DomainError(`El valor para ${fieldName} no es un número válido.`, 'validation');
     }
     if (num < 0) {
-      throw new Error(`El ${fieldName} no puede ser un valor negativo.`);
+      throw new DomainError(`El ${fieldName} no puede ser un valor negativo.`, 'validation');
     }
     return num.toFixed(2);
   }

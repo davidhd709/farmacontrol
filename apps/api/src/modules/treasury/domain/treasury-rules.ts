@@ -1,23 +1,21 @@
+import { DomainError } from '../../../common/domain-error';
 import type { BankAccountType, BankMovementType } from '@farmacia/contracts';
 
-export class TreasuryValidationError extends Error {
+export class TreasuryValidationError extends DomainError {
   constructor(message: string) {
-    super(message);
-    this.name = 'TreasuryValidationError';
+    super(message, 'validation');
   }
 }
 
-export class TreasuryNotFoundError extends Error {
+export class TreasuryNotFoundError extends DomainError {
   constructor(message: string) {
-    super(message);
-    this.name = 'TreasuryNotFoundError';
+    super(message, 'not_found');
   }
 }
 
-export class TreasuryConflictError extends Error {
+export class TreasuryConflictError extends DomainError {
   constructor(message: string) {
-    super(message);
-    this.name = 'TreasuryConflictError';
+    super(message, 'conflict');
   }
 }
 
@@ -27,7 +25,9 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 export function parseMoneyToCents(value: unknown, name: string): bigint {
   if (typeof value !== 'string' || !MONEY_RE.test(value)) {
-    throw new TreasuryValidationError(`${name} debe ser un valor monetario decimal válido (máx 2 decimales).`);
+    throw new TreasuryValidationError(
+      `${name} debe ser un valor monetario decimal válido (máx 2 decimales).`,
+    );
   }
   const parts = value.split('.');
   const intPart = BigInt(parts[0]);
@@ -66,7 +66,9 @@ export function calculateNewBalanceCents(
   const balanceAfter = currentBalanceCents + delta;
 
   if (!allowOverdraft && balanceAfter < 0n) {
-    throw new TreasuryValidationError('Fondos insuficientes: el movimiento excede el saldo disponible en la cuenta bancaria.');
+    throw new TreasuryConflictError(
+      'Fondos insuficientes: el movimiento excede el saldo disponible en la cuenta bancaria.',
+    );
   }
 
   return {
@@ -77,20 +79,31 @@ export function calculateNewBalanceCents(
 
 export function validateBankName(bankName: unknown): string {
   if (typeof bankName !== 'string' || !bankName.trim() || bankName.trim().length > 100) {
-    throw new TreasuryValidationError('El nombre del banco o entidad es obligatorio (máx 100 caracteres).');
+    throw new TreasuryValidationError(
+      'El nombre del banco o entidad es obligatorio (máx 100 caracteres).',
+    );
   }
   return bankName.trim();
 }
 
 export function validateAccountType(accountType: unknown): BankAccountType {
-  if (typeof accountType !== 'string' || !['AHORROS', 'CORRIENTE', 'DIGITAL'].includes(accountType)) {
-    throw new TreasuryValidationError('Tipo de cuenta inválido. Tipos permitidos: AHORROS, CORRIENTE, DIGITAL.');
+  if (
+    typeof accountType !== 'string' ||
+    !['AHORROS', 'CORRIENTE', 'DIGITAL'].includes(accountType)
+  ) {
+    throw new TreasuryValidationError(
+      'Tipo de cuenta inválido. Tipos permitidos: AHORROS, CORRIENTE, DIGITAL.',
+    );
   }
   return accountType as BankAccountType;
 }
 
 export function validateAccountNumber(accountNumber: unknown): string {
-  if (typeof accountNumber !== 'string' || !accountNumber.trim() || accountNumber.trim().length > 50) {
+  if (
+    typeof accountNumber !== 'string' ||
+    !accountNumber.trim() ||
+    accountNumber.trim().length > 50
+  ) {
     throw new TreasuryValidationError('El número de cuenta es obligatorio (máx 50 caracteres).');
   }
   return accountNumber.trim();
@@ -98,14 +111,18 @@ export function validateAccountNumber(accountNumber: unknown): string {
 
 export function validateAccountName(name: unknown): string {
   if (typeof name !== 'string' || !name.trim() || name.trim().length > 150) {
-    throw new TreasuryValidationError('El nombre descriptivo de la cuenta es obligatorio (máx 150 caracteres).');
+    throw new TreasuryValidationError(
+      'El nombre descriptivo de la cuenta es obligatorio (máx 150 caracteres).',
+    );
   }
   return name.trim();
 }
 
 export function validateConcept(concept: unknown): string {
   if (typeof concept !== 'string' || !concept.trim() || concept.trim().length > 255) {
-    throw new TreasuryValidationError('El concepto del movimiento es obligatorio (máx 255 caracteres).');
+    throw new TreasuryValidationError(
+      'El concepto del movimiento es obligatorio (máx 255 caracteres).',
+    );
   }
   return concept.trim();
 }

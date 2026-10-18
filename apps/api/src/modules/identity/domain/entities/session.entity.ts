@@ -1,3 +1,4 @@
+import { DomainError } from '../../../../common/domain-error';
 import {
   InvalidSessionTokenException,
   SessionExpiredException,
@@ -49,7 +50,7 @@ export class Session {
     expiresAt: Date,
     createdAt?: Date,
     lastUsedAt?: Date,
-    revokedAt?: Date
+    revokedAt?: Date,
   ) {
     this._id = id;
     this._userId = userId;
@@ -65,17 +66,24 @@ export class Session {
    */
   public static create(props: CreateSessionProps): Session {
     if (!props.userId || props.userId.trim().length === 0) {
-      throw new Error('El identificador de usuario (userId) es obligatorio.');
+      throw new DomainError('El identificador de usuario (userId) es obligatorio.', 'validation');
     }
 
     if (!props.tokenHash || !SHA256_HEX_REGEX.test(props.tokenHash)) {
       throw new InvalidSessionTokenException(
-        'El tokenHash debe ser una cadena hexadecimal válida de 64 caracteres (SHA-256).'
+        'El tokenHash debe ser una cadena hexadecimal válida de 64 caracteres (SHA-256).',
       );
     }
 
-    if (!props.expiresAt || !(props.expiresAt instanceof Date) || isNaN(props.expiresAt.getTime())) {
-      throw new Error('La fecha de expiración (expiresAt) es obligatoria y debe ser una fecha válida.');
+    if (
+      !props.expiresAt ||
+      !(props.expiresAt instanceof Date) ||
+      isNaN(props.expiresAt.getTime())
+    ) {
+      throw new DomainError(
+        'La fecha de expiración (expiresAt) es obligatoria y debe ser una fecha válida.',
+        'validation',
+      );
     }
 
     return new Session(
@@ -85,7 +93,7 @@ export class Session {
       props.expiresAt,
       props.createdAt,
       props.lastUsedAt,
-      props.revokedAt
+      props.revokedAt,
     );
   }
 
@@ -100,7 +108,7 @@ export class Session {
       props.expiresAt,
       props.createdAt,
       props.lastUsedAt ?? undefined,
-      props.revokedAt ?? undefined
+      props.revokedAt ?? undefined,
     );
   }
 

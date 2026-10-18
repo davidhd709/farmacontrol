@@ -1,3 +1,4 @@
+import { prisma, Prisma } from '@farmacia/database';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import {
   SupplierDto,
@@ -50,34 +51,44 @@ export class SupplierService {
       address: input.address,
     });
 
-    await this.supplierRepository.save(supplier);
-    // Terceros unificado: el proveedor también queda como tercero
-    await this.thirdPartyService?.registerRole('supplier', {
-      id: supplier.id,
-      documentNumber: supplier.taxId,
-      name: supplier.name,
-      contactName: supplier.contactName,
-      phone: supplier.phone,
-      email: supplier.email,
-      address: supplier.address,
-    });
-
-    if (this.auditService) {
-      await this.auditService.recordEvent({
-        action: 'suppliers:supplier_created',
-        entity: 'Supplier',
-        entityId: supplier.id,
-        userId: auditCtx?.userId || null,
-        ipAddress: auditCtx?.ipAddress || null,
-        correlationId: auditCtx?.correlationId || null,
-        details: {
-          taxId: supplier.taxId,
+    const persist = async (tx?: Prisma.TransactionClient) => {
+      await this.supplierRepository.save(supplier, tx);
+      // Terceros unificado: el proveedor también queda como tercero
+      await this.thirdPartyService?.registerRole(
+        'supplier',
+        {
+          id: supplier.id,
+          documentNumber: supplier.taxId,
           name: supplier.name,
+          contactName: supplier.contactName,
+          phone: supplier.phone,
+          email: supplier.email,
+          address: supplier.address,
         },
-      });
-    }
+        tx,
+      );
 
-    return supplier;
+      if (this.auditService) {
+        await this.auditService.recordEvent(
+          {
+            action: 'suppliers:supplier_created',
+            entity: 'Supplier',
+            entityId: supplier.id,
+            userId: auditCtx?.userId || null,
+            ipAddress: auditCtx?.ipAddress || null,
+            correlationId: auditCtx?.correlationId || null,
+            details: {
+              taxId: supplier.taxId,
+              name: supplier.name,
+            },
+          },
+          tx,
+        );
+      }
+
+      return supplier;
+    };
+    return this.auditService ? prisma.$transaction(persist) : persist();
   }
 
   async getSupplierById(id: string): Promise<Supplier> {
@@ -126,47 +137,59 @@ export class SupplierService {
     }
 
     supplier.update(input);
-    await this.supplierRepository.save(supplier);
+    const persist = async (tx?: Prisma.TransactionClient) => {
+      await this.supplierRepository.save(supplier, tx);
 
-    if (this.auditService) {
-      await this.auditService.recordEvent({
-        action: 'suppliers:supplier_updated',
-        entity: 'Supplier',
-        entityId: supplier.id,
-        userId: auditCtx?.userId || null,
-        ipAddress: auditCtx?.ipAddress || null,
-        correlationId: auditCtx?.correlationId || null,
-        details: {
-          taxId: supplier.taxId,
-          name: supplier.name,
-          isActive: supplier.isActive,
-        },
-      });
-    }
+      if (this.auditService) {
+        await this.auditService.recordEvent(
+          {
+            action: 'suppliers:supplier_updated',
+            entity: 'Supplier',
+            entityId: supplier.id,
+            userId: auditCtx?.userId || null,
+            ipAddress: auditCtx?.ipAddress || null,
+            correlationId: auditCtx?.correlationId || null,
+            details: {
+              taxId: supplier.taxId,
+              name: supplier.name,
+              isActive: supplier.isActive,
+            },
+          },
+          tx,
+        );
+      }
 
-    return supplier;
+      return supplier;
+    };
+    return this.auditService ? prisma.$transaction(persist) : persist();
   }
 
   async deactivateSupplier(id: string, auditCtx?: AuditContext): Promise<Supplier> {
     const supplier = await this.getSupplierById(id);
     supplier.deactivate();
-    await this.supplierRepository.save(supplier);
+    const persist = async (tx?: Prisma.TransactionClient) => {
+      await this.supplierRepository.save(supplier, tx);
 
-    if (this.auditService) {
-      await this.auditService.recordEvent({
-        action: 'suppliers:supplier_deactivated',
-        entity: 'Supplier',
-        entityId: supplier.id,
-        userId: auditCtx?.userId || null,
-        ipAddress: auditCtx?.ipAddress || null,
-        correlationId: auditCtx?.correlationId || null,
-        details: {
-          taxId: supplier.taxId,
-          name: supplier.name,
-        },
-      });
-    }
+      if (this.auditService) {
+        await this.auditService.recordEvent(
+          {
+            action: 'suppliers:supplier_deactivated',
+            entity: 'Supplier',
+            entityId: supplier.id,
+            userId: auditCtx?.userId || null,
+            ipAddress: auditCtx?.ipAddress || null,
+            correlationId: auditCtx?.correlationId || null,
+            details: {
+              taxId: supplier.taxId,
+              name: supplier.name,
+            },
+          },
+          tx,
+        );
+      }
 
-    return supplier;
+      return supplier;
+    };
+    return this.auditService ? prisma.$transaction(persist) : persist();
   }
 }

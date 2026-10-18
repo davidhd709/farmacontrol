@@ -35,7 +35,9 @@ export interface MovementFilter {
 }
 
 const LEDGER_INCLUDE = { ledgerAccount: { select: { code: true, name: true } } } as const;
-type BankAccountWithLedger = BankAccount & { ledgerAccount?: { code: string; name: string } | null };
+type BankAccountWithLedger = BankAccount & {
+  ledgerAccount?: { code: string; name: string } | null;
+};
 
 /**
  * La subcuenta del PUC de una cuenta bancaria debe ser del disponible (grupo 11, sin la caja
@@ -49,13 +51,19 @@ async function validateLedgerAccount(
   const id = validateUuid(ledgerAccountId, 'Subcuenta del PUC');
   const account = await client.account.findUnique({ where: { id } });
   if (!account) throw new TreasuryValidationError('La subcuenta del PUC no existe.');
-  if (account.type !== 'ASSET' || !account.code.startsWith('11') || account.code.startsWith('1105')) {
+  if (
+    account.type !== 'ASSET' ||
+    !account.code.startsWith('11') ||
+    account.code.startsWith('1105')
+  ) {
     throw new TreasuryValidationError(
       'La cuenta bancaria debe vincularse a una subcuenta de bancos del PUC (grupo 11, distinta de caja 1105).',
     );
   }
   if (!account.isActive || !account.allowsMovement) {
-    throw new TreasuryValidationError('La subcuenta del PUC debe estar activa y permitir movimientos.');
+    throw new TreasuryValidationError(
+      'La subcuenta del PUC debe estar activa y permitir movimientos.',
+    );
   }
   const taken = await client.bankAccount.findFirst({
     where: { ledgerAccountId: id, ...(bankAccountId ? { id: { not: bankAccountId } } : {}) },
@@ -251,43 +259,47 @@ export class TreasuryService {
     }
     if (dto.ledgerAccountId !== undefined) {
       // Afecta solo los asientos posteriores; los ya registrados conservan su cuenta
-      data.ledgerAccount = { connect: { id: await validateLedgerAccount(prisma, dto.ledgerAccountId, id) } };
+      data.ledgerAccount = {
+        connect: { id: await validateLedgerAccount(prisma, dto.ledgerAccountId, id) },
+      };
     }
 
     if (Object.keys(data).length === 0) {
       throw new TreasuryValidationError('No se especificaron campos válidos para actualizar.');
     }
 
-    const updated = await prisma.bankAccount.update({
-      where: { id },
-      data,
-      include: LEDGER_INCLUDE,
-    });
+    return prisma.$transaction(async (tx) => {
+      const updated = await tx.bankAccount.update({
+        where: { id },
+        data,
+        include: LEDGER_INCLUDE,
+      });
 
-    await prisma.auditEvent.create({
-      data: {
-        action: 'treasury:bank_account_updated',
-        entity: 'BankAccount',
-        entityId: id,
-        userId,
-        details: {
-          before: {
-            name: current.name,
-            isActive: current.isActive,
-            notes: current.notes,
-            ledgerAccountId: current.ledgerAccountId,
-          },
-          after: {
-            name: updated.name,
-            isActive: updated.isActive,
-            notes: updated.notes,
-            ledgerAccountId: updated.ledgerAccountId,
-          },
-        } as unknown as Prisma.InputJsonValue,
-      },
-    });
+      await tx.auditEvent.create({
+        data: {
+          action: 'treasury:bank_account_updated',
+          entity: 'BankAccount',
+          entityId: id,
+          userId,
+          details: {
+            before: {
+              name: current.name,
+              isActive: current.isActive,
+              notes: current.notes,
+              ledgerAccountId: current.ledgerAccountId,
+            },
+            after: {
+              name: updated.name,
+              isActive: updated.isActive,
+              notes: updated.notes,
+              ledgerAccountId: updated.ledgerAccountId,
+            },
+          } as unknown as Prisma.InputJsonValue,
+        },
+      });
 
-    return mapAccountToDto(updated);
+      return mapAccountToDto(updated);
+    });
   }
 
   async getSummary(): Promise<BankAccountsSummaryDto> {
@@ -322,7 +334,9 @@ export class TreasuryService {
     const externalReference =
       typeof dto.externalReference === 'string' ? dto.externalReference.trim() || null : null;
     const referenceDocumentType =
-      typeof dto.referenceDocumentType === 'string' ? dto.referenceDocumentType.trim() || null : null;
+      typeof dto.referenceDocumentType === 'string'
+        ? dto.referenceDocumentType.trim() || null
+        : null;
     const referenceDocumentId =
       typeof dto.referenceDocumentId === 'string' ? dto.referenceDocumentId.trim() || null : null;
 
@@ -338,7 +352,9 @@ export class TreasuryService {
     return prisma.$transaction(
       async (tx) => {
         // Obtenemos la cuenta con bloqueo exclusivo a nivel de fila
-        const rows = await tx.$queryRaw<Array<{ id: string; current_balance: Prisma.Decimal; is_active: boolean }>>`
+        const rows = await tx.$queryRaw<
+          Array<{ id: string; current_balance: Prisma.Decimal; is_active: boolean }>
+        >`
           SELECT id, current_balance, is_active
           FROM bank_accounts
           WHERE id = ${accountId}::uuid
@@ -350,7 +366,9 @@ export class TreasuryService {
           throw new TreasuryNotFoundError('Cuenta bancaria no encontrada.');
         }
         if (!locked.is_active) {
-          throw new TreasuryValidationError('No se pueden registrar movimientos en una cuenta bancaria inactiva.');
+          throw new TreasuryValidationError(
+            'No se pueden registrar movimientos en una cuenta bancaria inactiva.',
+          );
         }
 
         const currentBalanceCents = parseMoneyToCents(
@@ -441,7 +459,10 @@ export class TreasuryService {
       if (filter.fromDate) {
         const from = new Date(filter.fromDate);
         if (!Number.isNaN(from.getTime())) {
-          where.movementDate.gte = typeof filter.fromDate === 'string' && filter.fromDate.length === 10 ? businessDayStart(filter.fromDate) : from;
+          where.movementDate.gte =
+            typeof filter.fromDate === 'string' && filter.fromDate.length === 10
+              ? businessDayStart(filter.fromDate)
+              : from;
         }
       }
       if (filter.toDate) {
@@ -450,7 +471,8 @@ export class TreasuryService {
           if (typeof filter.toDate === 'string' && filter.toDate.length === 10) {
             where.movementDate.lte = businessDayEnd(filter.toDate);
           }
-          if (!(typeof filter.toDate === 'string' && filter.toDate.length === 10)) where.movementDate.lte = to;
+          if (!(typeof filter.toDate === 'string' && filter.toDate.length === 10))
+            where.movementDate.lte = to;
         }
       }
     }
@@ -505,7 +527,9 @@ export class TreasuryService {
         }
 
         if (movement.referenceDocumentType === 'REVERSAL') {
-          throw new TreasuryValidationError('No se puede reversar un movimiento que ya es una reversión.');
+          throw new TreasuryValidationError(
+            'No se puede reversar un movimiento que ya es una reversión.',
+          );
         }
 
         // Verificar si ya fue reversado previamente
@@ -525,7 +549,9 @@ export class TreasuryService {
           movement.movementType === 'DEPOSIT' || movement.movementType === 'TRANSFER_IN';
         const reversalType = isOriginalInflow ? 'WITHDRAWAL' : 'DEPOSIT';
 
-        const rows = await tx.$queryRaw<Array<{ id: string; current_balance: Prisma.Decimal; is_active: boolean }>>`
+        const rows = await tx.$queryRaw<
+          Array<{ id: string; current_balance: Prisma.Decimal; is_active: boolean }>
+        >`
           SELECT id, current_balance, is_active
           FROM bank_accounts
           WHERE id = ${accountId}::uuid
@@ -537,7 +563,9 @@ export class TreasuryService {
           throw new TreasuryNotFoundError('Cuenta bancaria no encontrada.');
         }
         if (!locked.is_active) {
-          throw new TreasuryValidationError('No se pueden registrar reversiones en una cuenta bancaria inactiva.');
+          throw new TreasuryValidationError(
+            'No se pueden registrar reversiones en una cuenta bancaria inactiva.',
+          );
         }
 
         const currentBalanceCents = parseMoneyToCents(

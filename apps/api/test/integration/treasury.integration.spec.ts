@@ -86,13 +86,25 @@ describe('Treasury & Bank Accounts (Slice 11.4 Integration with PostgreSQL)', ()
     const created = await request(app.getHttpServer())
       .post(root)
       .set('Cookie', adminCookie)
-      .send({ bankName: 'Banco Operativo', accountType: 'AHORROS', accountNumber: '1234567890', name: 'Recaudos', ledgerAccountId: await ledger() });
+      .send({
+        bankName: 'Banco Operativo',
+        accountType: 'AHORROS',
+        accountNumber: '1234567890',
+        name: 'Recaudos',
+        ledgerAccountId: await ledger(),
+      });
     expect(created.status).toBe(201);
 
     const shortNumber = await request(app.getHttpServer())
       .post(root)
       .set('Cookie', adminCookie)
-      .send({ bankName: 'Medio Corto', accountType: 'DIGITAL', accountNumber: '123', name: 'Billetera', ledgerAccountId: await ledger() });
+      .send({
+        bankName: 'Medio Corto',
+        accountType: 'DIGITAL',
+        accountNumber: '123',
+        name: 'Billetera',
+        ledgerAccountId: await ledger(),
+      });
     expect(shortNumber.status).toBe(201);
 
     const res = await request(app.getHttpServer())
@@ -100,8 +112,18 @@ describe('Treasury & Bank Accounts (Slice 11.4 Integration with PostgreSQL)', ()
       .set('Cookie', cashierCookie);
     expect(res.status).toBe(200);
     expect(res.body).toEqual([
-      { id: created.body.id, name: 'Recaudos', bankName: 'Banco Operativo', accountNumberLast4: '7890' },
-      { id: shortNumber.body.id, name: 'Billetera', bankName: 'Medio Corto', accountNumberLast4: '' },
+      {
+        id: created.body.id,
+        name: 'Recaudos',
+        bankName: 'Banco Operativo',
+        accountNumberLast4: '7890',
+      },
+      {
+        id: shortNumber.body.id,
+        name: 'Billetera',
+        bankName: 'Medio Corto',
+        accountNumberLast4: '',
+      },
     ]);
     expect(JSON.stringify(res.body)).not.toContain('1234567890');
     expect(JSON.stringify(res.body)).not.toContain('"123"');
@@ -114,9 +136,7 @@ describe('Treasury & Bank Accounts (Slice 11.4 Integration with PostgreSQL)', ()
   });
 
   it('deniega 403 Forbidden a un cajero al intentar gestionar o consultar cuentas bancarias', async () => {
-    const resGet = await request(app.getHttpServer())
-      .get(root)
-      .set('Cookie', cashierCookie);
+    const resGet = await request(app.getHttpServer()).get(root).set('Cookie', cashierCookie);
     expect(resGet.status).toBe(403);
 
     const resPost = await request(app.getHttpServer())
@@ -246,7 +266,7 @@ describe('Treasury & Bank Accounts (Slice 11.4 Integration with PostgreSQL)', ()
         amount: '150000.00',
         concept: 'Retiro excesivo',
       });
-    expect(overdraft.status).toBe(400);
+    expect(overdraft.status).toBe(409);
     expect(overdraft.body.message).toMatch(/Fondos insuficientes/);
 
     // 5. Verificar saldo final en la cuenta

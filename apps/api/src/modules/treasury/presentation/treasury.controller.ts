@@ -1,3 +1,4 @@
+import { ApiResponse } from '@nestjs/swagger';
 import {
   RequestShapeValidationPipe,
   RequestFieldValidationPipe,
@@ -176,6 +177,11 @@ export class TreasuryController {
   }
 
   @Post('bank-accounts/:id/movements')
+  @ApiResponse({
+    status: 409,
+    description: 'Saldo insuficiente o conflicto con el estado de la operación.',
+  })
+  @ApiResponse({ status: 500, description: 'Fallo interno; el movimiento se revierte.' })
   @RequirePermissions(SYSTEM_PERMISSIONS.TREASURY_MANAGE)
   @HttpCode(HttpStatus.CREATED)
   async createMovement(

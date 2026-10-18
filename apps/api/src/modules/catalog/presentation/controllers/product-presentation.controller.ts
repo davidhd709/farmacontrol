@@ -82,9 +82,6 @@ export class ProductPresentationController {
       ) {
         throw new ConflictException(err.message);
       }
-      if (err instanceof Error) {
-        throw new BadRequestException(err.message);
-      }
       throw err;
     }
   }
@@ -191,9 +188,6 @@ export class ProductPresentationController {
       if (err instanceof CannotDeactivateDefaultPresentationException) {
         throw new BadRequestException(err.message);
       }
-      if (err instanceof Error) {
-        throw new BadRequestException(err.message);
-      }
       throw err;
     }
   }
@@ -224,9 +218,6 @@ export class ProductPresentationController {
         throw new NotFoundException(err.message);
       }
       if (err instanceof CannotDeactivateDefaultPresentationException) {
-        throw new BadRequestException(err.message);
-      }
-      if (err instanceof Error) {
         throw new BadRequestException(err.message);
       }
       throw err;
@@ -268,9 +259,6 @@ export class ProductPresentationController {
     } catch (err) {
       if (err instanceof ProductPresentationNotFoundException) {
         throw new NotFoundException(err.message);
-      }
-      if (err instanceof Error) {
-        throw new BadRequestException(err.message);
       }
       throw err;
     }

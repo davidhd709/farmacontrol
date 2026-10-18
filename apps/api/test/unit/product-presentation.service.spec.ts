@@ -1,4 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+// Prueba unitaria: la transacción que abre el servicio no debe llegar a PostgreSQL
+vi.mock('@farmacia/database', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@farmacia/database')>()),
+  prisma: { $transaction: (work: (tx: unknown) => unknown) => work({}) },
+}));
 import { ProductPresentationService } from '../../src/modules/catalog/application/services/product-presentation.service';
 import type { ProductPresentationRepositoryPort } from '../../src/modules/catalog/application/ports/product-presentation.repository.port';
 import type { ProductRepositoryPort } from '../../src/modules/catalog/application/ports/product.repository.port';
@@ -102,7 +108,11 @@ describe('ProductPresentationService (Application Unit)', () => {
     expect(result.conversionFactor).toBe(30);
     expect(result.isDefault).toBe(true);
 
-    expect(presentationRepository.unsetDefaultPresentations).toHaveBeenCalledWith('prod-123');
+    expect(presentationRepository.unsetDefaultPresentations).toHaveBeenCalledWith(
+      'prod-123',
+      undefined,
+      expect.anything(),
+    );
     expect(presentationRepository.save).toHaveBeenCalledTimes(1);
     expect(auditService.recordEvent).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -111,6 +121,8 @@ describe('ProductPresentationService (Application Unit)', () => {
         userId: 'admin-1',
         correlationId: 'corr-presentation-1',
       }),
+      // Misma transacción que la escritura auditada
+      expect.anything(),
     );
   });
 
@@ -254,7 +266,10 @@ describe('ProductPresentationService (Application Unit)', () => {
     });
 
     expect(updated.conversionFactor).toBe(20);
-    expect(presentationRepository.updateAndPropagateFactors).toHaveBeenCalledWith(blister);
+    expect(presentationRepository.updateAndPropagateFactors).toHaveBeenCalledWith(
+      blister,
+      expect.anything(),
+    );
     expect(presentationRepository.update).not.toHaveBeenCalled();
   });
 

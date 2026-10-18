@@ -77,8 +77,9 @@ export class PrismaProductRepository implements ProductRepositoryPort {
     return this.toDomain(record);
   }
 
-  public async save(product: Product): Promise<Product> {
-    const record = await this.client.product.create({
+  public async save(product: Product, tx?: unknown): Promise<Product> {
+    const db = (tx as Prisma.TransactionClient | undefined) ?? this.client;
+    const record = await db.product.create({
       data: {
         id: product.id,
         categoryId: product.categoryId,
@@ -109,8 +110,9 @@ export class PrismaProductRepository implements ProductRepositoryPort {
     return this.toDomain(record);
   }
 
-  public async update(product: Product): Promise<Product> {
-    const record = await this.client.product.update({
+  public async update(product: Product, tx?: unknown): Promise<Product> {
+    const db = (tx as Prisma.TransactionClient | undefined) ?? this.client;
+    const record = await db.product.update({
       where: { id: product.id },
       data: {
         categoryId: product.categoryId,

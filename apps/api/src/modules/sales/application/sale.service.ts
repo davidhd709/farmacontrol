@@ -1,3 +1,4 @@
+import { DomainError } from '../../../common/domain-error';
 import { businessToday, addCalendarDays, calendarDate } from '../../../common/utils/business-date';
 import {
   BadRequestException,
@@ -207,7 +208,7 @@ export class SaleService {
     idempotencyKey?: string,
   ): Promise<SaleDto> {
     if (!payload.items || payload.items.length === 0) {
-      throw new Error('La venta debe incluir al menos un producto.');
+      throw new DomainError('La venta debe incluir al menos un producto.', 'validation');
     }
     const key = idempotencyKey?.trim();
     if (!key) {
@@ -251,254 +252,260 @@ export class SaleService {
     );
 
     // Transacción ACID completa en PostgreSQL con reintentos ante conflictos de serialización
-    const { sale: saleResult, replayed } = await executeWithRetry(async () => {
-      return this.client.$transaction(async (tx) => {
-        // 1. Verificación de Idempotencia dentro de la transacción: un reintento por
-        // conflicto con una petición duplicada concurrente encuentra la venta ya registrada
-        const cached = await this.idempotencyService.getRecord(key, requestHash, tx);
-        if (cached) {
-          return { sale: cached.responseBody as SaleDto, replayed: true };
-        }
+    const { sale: saleResult } = await executeWithRetry(async () => {
+      return this.client.$transaction(
+        async (tx) => {
+          // 1. Verificación de Idempotencia dentro de la transacción: un reintento por
+          // conflicto con una petición duplicada concurrente encuentra la venta ya registrada
+          const cached = await this.idempotencyService.getRecord(key, requestHash, tx);
+          if (cached) {
+            return { sale: cached.responseBody as SaleDto, replayed: true };
+          }
 
-        // 2.1. Resolver Cliente
-      let customerId = payload.customerId;
-      let customerName = 'Consumidor Final (Cuantías Menores)';
-      let customerDoc = '222222222222';
+          // 2.1. Resolver Cliente
+          let customerId = payload.customerId;
+          let customerName = 'Consumidor Final (Cuantías Menores)';
+          let customerDoc = '222222222222';
 
-      if (customerId) {
-        const customer = await tx.customer.findUnique({
-          where: { id: customerId },
-        });
-        if (!customer) {
-          throw new Error(`Cliente con id '${customerId}' no existe.`);
-        }
-        customerName = customer.name;
-        customerDoc = customer.documentNumber;
-      } else {
-        const defaultCust = await tx.customer.findFirst({
-          where: { isDefault: true, isActive: true },
-        });
-        if (defaultCust) {
-          customerId = defaultCust.id;
-          customerName = defaultCust.name;
-          customerDoc = defaultCust.documentNumber;
-        } else {
-          throw new Error('No se encontró el cliente por defecto (Consumidor Final).');
-        }
-      }
+          if (customerId) {
+            const customer = await tx.customer.findUnique({
+              where: { id: customerId },
+            });
+            if (!customer) {
+              throw new DomainError(`Cliente con id '${customerId}' no existe.`, 'not_found');
+            }
+            customerName = customer.name;
+            customerDoc = customer.documentNumber;
+          } else {
+            const defaultCust = await tx.customer.findFirst({
+              where: { isDefault: true, isActive: true },
+            });
+            if (defaultCust) {
+              customerId = defaultCust.id;
+              customerName = defaultCust.name;
+              customerDoc = defaultCust.documentNumber;
+            } else {
+              throw new Error('No se encontró el cliente por defecto (Consumidor Final).');
+            }
+          }
 
-      // 2.2. Consecutivo de Factura
-      const invoiceNumber = await this.saleRepository.generateNextInvoiceNumber(tx);
+          // 2.2. Consecutivo de Factura
+          const invoiceNumber = await this.saleRepository.generateNextInvoiceNumber(tx);
 
-      // 2.3. Procesar Líneas y Asignación FEFO
-      const saleId = crypto.randomUUID();
-      const saleLines: SaleLine[] = [];
-      const allLotAllocations: SaleLotAllocation[] = [];
+          // 2.3. Procesar Líneas y Asignación FEFO
+          const saleId = crypto.randomUUID();
+          const saleLines: SaleLine[] = [];
+          const allLotAllocations: SaleLotAllocation[] = [];
 
-      for (const item of payload.items) {
-        const resolved = await this.resolveSaleItem(tx, item);
-        const { product, factor, presentationName, requiredBaseUnits } = resolved;
-        const unitPrice =
-          item.unitPriceOverride !== undefined ? item.unitPriceOverride : resolved.unitPrice;
-        const lineId = crypto.randomUUID();
-        const lineAllocations: SaleLotAllocation[] = [];
+          for (const item of payload.items) {
+            const resolved = await this.resolveSaleItem(tx, item);
+            const { product, factor, presentationName, requiredBaseUnits } = resolved;
+            const unitPrice =
+              item.unitPriceOverride !== undefined ? item.unitPriceOverride : resolved.unitPrice;
+            const lineId = crypto.randomUUID();
+            const lineAllocations: SaleLotAllocation[] = [];
 
-        // Asignación FEFO con bloqueo concurrente
-        // Bloquear lotes disponibles ordenados por vencimiento ascendente
-        const availableLots = await this.inventoryLedger.lockFefoCandidates(
-          tx,
-          product.id,
-          businessToday(),
-        );
+            // Asignación FEFO con bloqueo concurrente
+            // Bloquear lotes disponibles ordenados por vencimiento ascendente
+            const availableLots = await this.inventoryLedger.lockFefoCandidates(
+              tx,
+              product.id,
+              businessToday(),
+            );
 
-        const totalAvailable = availableLots.reduce((acc, l) => acc + l.current_quantity, 0);
-        if (totalAvailable < requiredBaseUnits) {
-          throw new InsufficientStockException(product.name, requiredBaseUnits, totalAvailable);
-        }
+            const totalAvailable = availableLots.reduce((acc, l) => acc + l.current_quantity, 0);
+            if (totalAvailable < requiredBaseUnits) {
+              throw new InsufficientStockException(product.name, requiredBaseUnits, totalAvailable);
+            }
 
-        const plan = planFefoAllocation(availableLots, requiredBaseUnits);
-        for (const { lot, quantityBaseUnits: take } of plan.allocations) {
-          // Descontar existencias del lote y registrar Kardex inmutable
-          await this.inventoryLedger.changeLotQuantity(tx, lot.id, -take, {
-            movementType: 'SALIDA_VENTA',
-            productId: product.id,
-            presentationId: item.presentationId || null,
-            quantityBaseUnits: take,
-            presentationFactorHistorical: factor,
-            referenceDocumentType: 'SALE',
-            referenceDocumentId: invoiceNumber,
-            notes: `Venta POS ${invoiceNumber} - Despacho FEFO`,
-            createdByUserId: auditCtx.userId || null,
+            const plan = planFefoAllocation(availableLots, requiredBaseUnits);
+            for (const { lot, quantityBaseUnits: take } of plan.allocations) {
+              // Descontar existencias del lote y registrar Kardex inmutable
+              await this.inventoryLedger.changeLotQuantity(tx, lot.id, -take, {
+                movementType: 'SALIDA_VENTA',
+                productId: product.id,
+                presentationId: item.presentationId || null,
+                quantityBaseUnits: take,
+                presentationFactorHistorical: factor,
+                referenceDocumentType: 'SALE',
+                referenceDocumentId: invoiceNumber,
+                notes: `Venta POS ${invoiceNumber} - Despacho FEFO`,
+                createdByUserId: auditCtx.userId || null,
+              });
+
+              const alloc = SaleLotAllocation.create({
+                saleId,
+                saleLineId: lineId,
+                lotId: lot.id,
+                lotNumber: lot.lot_number,
+                expirationDate: new Date(lot.expiration_date).toISOString().split('T')[0],
+                quantityBaseUnits: take,
+              });
+
+              lineAllocations.push(alloc);
+              allLotAllocations.push(alloc);
+            }
+
+            const saleLine = SaleLine.create({
+              id: lineId,
+              saleId,
+              productId: product.id,
+              productCode: product.code,
+              productName: product.name,
+              presentationId: item.presentationId || null,
+              presentationName,
+              presentationFactorHistorical: factor,
+              quantityCommercial: item.quantityCommercial,
+              unitPrice,
+              discount: item.discount ?? 0,
+              unitCostBase: new Prisma.Decimal(product.baseCost).toFixed(2),
+              lotAllocations: lineAllocations,
+            });
+
+            saleLines.push(saleLine);
+          }
+
+          // 2.4. Crear Entidad Sale
+          const sale = Sale.create({
+            id: saleId,
+            invoiceNumber,
+            customerId: customerId!,
+            customerName,
+            customerDocument: customerDoc,
+            paymentMethod: payload.paymentMethod,
+            bankAccountId: payload.paymentMethod === 'TRANSFERENCIA' ? payload.bankAccountId : null,
+            lines: saleLines,
+            amountPaid: payload.amountPaid,
+            notes: payload.notes,
+            createdById: auditCtx.userId || '00000000-0000-0000-0000-000000000000',
           });
 
-          const alloc = SaleLotAllocation.create({
-            saleId,
-            saleLineId: lineId,
-            lotId: lot.id,
-            lotNumber: lot.lot_number,
-            expirationDate: new Date(lot.expiration_date).toISOString().split('T')[0],
-            quantityBaseUnits: take,
-          });
+          // 2.5. Persistir Venta y Asignaciones
+          await this.saleRepository.save(sale, tx);
 
-          lineAllocations.push(alloc);
-          allLotAllocations.push(alloc);
-        }
+          if (payload.paymentMethod === 'TRANSFERENCIA') {
+            if (
+              payload.amountPaid !== undefined &&
+              parseMoneyToCents(String(payload.amountPaid), 'Monto recibido') !==
+                parseMoneyToCents(new Prisma.Decimal(sale.total).toFixed(2), 'Total de venta')
+            ) {
+              throw new DomainError(
+                'En una transferencia, el monto recibido debe coincidir con el total de la venta.',
+                'validation',
+              );
+            }
+            await recordSourceBankMovement(tx, {
+              bankAccountId: payload.bankAccountId!,
+              movementType: 'DEPOSIT',
+              amount: new Prisma.Decimal(sale.total).toFixed(2),
+              concept: `Venta mostrador comprobante ${sale.invoiceNumber}`,
+              referenceDocumentType: 'SALE',
+              referenceDocumentId: sale.invoiceNumber,
+              createdById: auditCtx.userId || '00000000-0000-0000-0000-000000000000',
+            });
+          }
 
-        const saleLine = SaleLine.create({
-          id: lineId,
-          saleId,
-          productId: product.id,
-          productCode: product.code,
-          productName: product.name,
-          presentationId: item.presentationId || null,
-          presentationName,
-          presentationFactorHistorical: factor,
-          quantityCommercial: item.quantityCommercial,
-          unitPrice,
-          discount: item.discount ?? 0,
-          unitCostBase: new Prisma.Decimal(product.baseCost).toFixed(2),
-          lotAllocations: lineAllocations,
-        });
+          // 2.6. Movimiento de Caja si es Efectivo
+          if (payload.paymentMethod === 'EFECTIVO') {
+            const saleAmountCents = parseMoneyToCents(
+              new Prisma.Decimal(sale.total).toFixed(2),
+              'Total de venta',
+            );
+            await this.cashService.recordMovementInTransaction(tx, {
+              movementType: 'INGRESO_VENTA',
+              amount: centsToMoneyString(saleAmountCents),
+              paymentMethod: 'EFECTIVO',
+              reason: `Venta mostrador comprobante ${sale.invoiceNumber}`,
+              referenceDocumentType: 'SALE',
+              referenceDocumentId: sale.invoiceNumber,
+              createdByUserId: auditCtx.userId || '00000000-0000-0000-0000-000000000000',
+            });
+          }
 
-        saleLines.push(saleLine);
-      }
+          // 2.7. Cuenta por Cobrar si es Crédito
+          if (payload.paymentMethod === 'CREDITO') {
+            const dueDate = calendarDate(addCalendarDays(businessToday(), 30));
+            await this.receivablesLedger.openForSale(tx, {
+              saleId: sale.id,
+              customerId: customerId!,
+              total: new Prisma.Decimal(sale.total).toFixed(2),
+              dueDate,
+              notes: payload.notes || `Venta a crédito comprobante ${sale.invoiceNumber}`,
+            });
+          }
 
-      // 2.4. Crear Entidad Sale
-      const sale = Sale.create({
-        id: saleId,
-        invoiceNumber,
-        customerId: customerId!,
-        customerName,
-        customerDocument: customerDoc,
-        paymentMethod: payload.paymentMethod,
-        bankAccountId: payload.paymentMethod === 'TRANSFERENCIA' ? payload.bankAccountId : null,
-        lines: saleLines,
-        amountPaid: payload.amountPaid,
-        notes: payload.notes,
-        createdById: auditCtx.userId || '00000000-0000-0000-0000-000000000000',
-      });
+          // 2.6.1. Contabilidad automática de partida doble (asiento automático)
+          if (this.accountingEngine) {
+            await this.accountingEngine.handleSaleConfirmed(
+              {
+                id: sale.id,
+                invoiceNumber: sale.invoiceNumber,
+                total: sale.total,
+                subtotal: sale.subtotal,
+                taxTotal: sale.taxTotal,
+                discountTotal: sale.discountTotal,
+                paymentMethod: sale.paymentMethod,
+                bankAccountId: sale.bankAccountId ?? null,
+                createdById: sale.createdById,
+                createdAt: sale.createdAt,
+                lines: sale.lines.map((l) => ({
+                  productId: l.productId,
+                  quantityCommercial: l.quantityCommercial,
+                  quantityBaseUnits: l.quantityBaseUnits,
+                  presentationFactorHistorical: l.presentationFactorHistorical,
+                  lotAllocations: l.lotAllocations.map((a) => ({
+                    lotId: a.lotId,
+                    quantityBaseUnits: a.quantityBaseUnits,
+                  })),
+                })),
+              },
+              tx,
+            );
+          }
 
-      // 2.5. Persistir Venta y Asignaciones
-      await this.saleRepository.save(sale, tx);
+          const dto = sale.toDto();
 
-      if (payload.paymentMethod === 'TRANSFERENCIA') {
-        if (
-          payload.amountPaid !== undefined &&
-          parseMoneyToCents(String(payload.amountPaid), 'Monto recibido') !==
-            parseMoneyToCents(new Prisma.Decimal(sale.total).toFixed(2), 'Total de venta')
-        ) {
-          throw new Error(
-            'En una transferencia, el monto recibido debe coincidir con el total de la venta.',
+          // 2.7. Guardar registro de Idempotencia dentro de la transacción
+          await this.idempotencyService.saveRecord(
+            {
+              key,
+              userId: auditCtx.userId || '00000000-0000-0000-0000-000000000000',
+              endpoint: SALE_CONFIRM_ENDPOINT,
+              requestHash,
+              responseStatus: 201,
+              responseBody: dto,
+              ttlHours: 24,
+            },
+            tx,
           );
-        }
-        await recordSourceBankMovement(tx, {
-          bankAccountId: payload.bankAccountId!,
-          movementType: 'DEPOSIT',
-          amount: new Prisma.Decimal(sale.total).toFixed(2),
-          concept: `Venta mostrador comprobante ${sale.invoiceNumber}`,
-          referenceDocumentType: 'SALE',
-          referenceDocumentId: sale.invoiceNumber,
-          createdById: auditCtx.userId || '00000000-0000-0000-0000-000000000000',
-        });
-      }
 
-      // 2.6. Movimiento de Caja si es Efectivo
-      if (payload.paymentMethod === 'EFECTIVO') {
-        const saleAmountCents = parseMoneyToCents(
-          new Prisma.Decimal(sale.total).toFixed(2),
-          'Total de venta',
-        );
-        await this.cashService.recordMovementInTransaction(tx, {
-          movementType: 'INGRESO_VENTA',
-          amount: centsToMoneyString(saleAmountCents),
-          paymentMethod: 'EFECTIVO',
-          reason: `Venta mostrador comprobante ${sale.invoiceNumber}`,
-          referenceDocumentType: 'SALE',
-          referenceDocumentId: sale.invoiceNumber,
-          createdByUserId: auditCtx.userId || '00000000-0000-0000-0000-000000000000',
-        });
-      }
+          if (this.auditService) {
+            await this.auditService.recordEvent(
+              {
+                action: 'sales:sale_confirmed',
+                entity: 'Sale',
+                entityId: dto.id,
+                userId: auditCtx.userId || null,
+                details: {
+                  invoiceNumber: dto.invoiceNumber,
+                  total: dto.total,
+                  paymentMethod: dto.paymentMethod,
+                  itemsCount: dto.lines.length,
+                },
+                ipAddress: auditCtx.ipAddress || null,
+                correlationId: auditCtx.correlationId || null,
+              },
+              tx,
+            );
+          }
 
-      // 2.7. Cuenta por Cobrar si es Crédito
-      if (payload.paymentMethod === 'CREDITO') {
-        const dueDate = calendarDate(addCalendarDays(businessToday(), 30));
-        await this.receivablesLedger.openForSale(tx, {
-          saleId: sale.id,
-          customerId: customerId!,
-          total: new Prisma.Decimal(sale.total).toFixed(2),
-          dueDate,
-          notes: payload.notes || `Venta a crédito comprobante ${sale.invoiceNumber}`,
-        });
-      }
-
-      // 2.6.1. Contabilidad automática de partida doble (asiento automático)
-      if (this.accountingEngine) {
-        await this.accountingEngine.handleSaleConfirmed(
-          {
-            id: sale.id,
-            invoiceNumber: sale.invoiceNumber,
-            total: sale.total,
-            subtotal: sale.subtotal,
-            taxTotal: sale.taxTotal,
-            discountTotal: sale.discountTotal,
-            paymentMethod: sale.paymentMethod,
-            bankAccountId: sale.bankAccountId ?? null,
-            createdById: sale.createdById,
-            createdAt: sale.createdAt,
-            lines: sale.lines.map((l) => ({
-              productId: l.productId,
-              quantityCommercial: l.quantityCommercial,
-              quantityBaseUnits: l.quantityBaseUnits,
-              presentationFactorHistorical: l.presentationFactorHistorical,
-              lotAllocations: l.lotAllocations.map((a) => ({
-                lotId: a.lotId,
-                quantityBaseUnits: a.quantityBaseUnits,
-              })),
-            })),
-          },
-          tx,
-        );
-      }
-
-      const dto = sale.toDto();
-
-      // 2.7. Guardar registro de Idempotencia dentro de la transacción
-      await this.idempotencyService.saveRecord(
+          return { sale: dto, replayed: false };
+        },
         {
-          key,
-          userId: auditCtx.userId || '00000000-0000-0000-0000-000000000000',
-          endpoint: SALE_CONFIRM_ENDPOINT,
-          requestHash,
-          responseStatus: 201,
-          responseBody: dto,
-          ttlHours: 24,
+          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
         },
-        tx,
       );
-
-      return { sale: dto, replayed: false };
-    }, {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
     });
-  });
-
-    // 3. Auditoría asíncrona fuera de la transacción (un reintento no es una venta nueva)
-    if (this.auditService && !replayed) {
-      await this.auditService.recordEvent({
-        action: 'sales:sale_confirmed',
-        entity: 'Sale',
-        entityId: saleResult.id,
-        userId: auditCtx.userId || null,
-        details: {
-          invoiceNumber: saleResult.invoiceNumber,
-          total: saleResult.total,
-          paymentMethod: saleResult.paymentMethod,
-          itemsCount: saleResult.lines.length,
-        },
-        ipAddress: auditCtx.ipAddress || null,
-        correlationId: auditCtx.correlationId || null,
-      });
-    }
 
     return saleResult;
   }
@@ -528,7 +535,7 @@ export class SaleService {
   public async cancelSale(id: string, reason: string, auditCtx: AuditContext): Promise<SaleDto> {
     const trimmedReason = reason?.trim();
     if (!trimmedReason) {
-      throw new Error('El motivo de anulación es obligatorio');
+      throw new DomainError('El motivo de anulación es obligatorio', 'validation');
     }
 
     const sale = await this.saleRepository.findById(id);
@@ -541,114 +548,125 @@ export class SaleService {
 
     // Transacción ACID de reversión con reintentos ante conflictos de concurrencia
     const cancelledDto = await executeWithRetry(async () => {
-      return this.client.$transaction(async (tx) => {
-        const lockedSales = await tx.$queryRaw<Array<{ status: string }>>`
+      return this.client.$transaction(
+        async (tx) => {
+          const lockedSales = await tx.$queryRaw<Array<{ status: string }>>`
         SELECT status FROM sales WHERE id = ${id}::uuid FOR UPDATE
       `;
-      if (!lockedSales.length) throw new SaleNotFoundException(id);
-      if (lockedSales[0].status === 'CANCELLED') {
-        throw new SaleAlreadyCancelledException(sale.invoiceNumber);
-      }
-      // Una nota crédito ya devolvió parte de la venta: anularla reintegraría dos veces
-      const creditNotesCount = await tx.creditNote.count({ where: { saleId: id } });
-      if (creditNotesCount > 0) {
-        throw new SaleHasCreditNotesException(sale.invoiceNumber, creditNotesCount);
-      }
-      // Anular con abonos vigentes dejaría dinero recibido sin devolver ni reversar
-      if (sale.paymentMethod === 'CREDITO') {
-        // Mismo bloqueo de fila que toma el registro de abonos: serializa abono y anulación
-        await tx.$queryRaw`SELECT id FROM receivables WHERE sale_id = ${id}::uuid FOR UPDATE`;
-        const activePayments = await tx.receivablePayment.count({
-          where: { receivable: { saleId: id }, isReversed: false },
-        });
-        if (activePayments > 0) {
-          throw new SaleHasReceivablePaymentsException(sale.invoiceNumber, activePayments);
-        }
-      }
-      sale.cancel();
-      await this.saleRepository.save(sale, tx);
+          if (!lockedSales.length) throw new SaleNotFoundException(id);
+          if (lockedSales[0].status === 'CANCELLED') {
+            throw new SaleAlreadyCancelledException(sale.invoiceNumber);
+          }
+          // Una nota crédito ya devolvió parte de la venta: anularla reintegraría dos veces
+          const creditNotesCount = await tx.creditNote.count({ where: { saleId: id } });
+          if (creditNotesCount > 0) {
+            throw new SaleHasCreditNotesException(sale.invoiceNumber, creditNotesCount);
+          }
+          // Anular con abonos vigentes dejaría dinero recibido sin devolver ni reversar
+          if (sale.paymentMethod === 'CREDITO') {
+            // Mismo bloqueo de fila que toma el registro de abonos: serializa abono y anulación
+            await tx.$queryRaw`SELECT id FROM receivables WHERE sale_id = ${id}::uuid FOR UPDATE`;
+            const activePayments = await tx.receivablePayment.count({
+              where: { receivable: { saleId: id }, isReversed: false },
+            });
+            if (activePayments > 0) {
+              throw new SaleHasReceivablePaymentsException(sale.invoiceNumber, activePayments);
+            }
+          }
+          sale.cancel();
+          await this.saleRepository.save(sale, tx);
 
-      // Reintegrar unidades a los lotes originales exactos
-      for (const line of sale.lines) {
-        for (const alloc of line.lotAllocations) {
-          await this.inventoryLedger.changeLotQuantity(tx, alloc.lotId, alloc.quantityBaseUnits, {
-            movementType: 'DEVOLUCION_CLIENTE',
-            productId: line.productId,
-            presentationId: line.presentationId || null,
-            quantityBaseUnits: alloc.quantityBaseUnits,
-            presentationFactorHistorical: line.presentationFactorHistorical,
-            referenceDocumentType: 'SALE_CANCEL',
-            referenceDocumentId: sale.invoiceNumber,
-            notes: `Anulación venta ${sale.invoiceNumber}. Motivo: ${trimmedReason}`,
-            createdByUserId: auditCtx.userId || null,
-          });
-        }
-      }
+          // Reintegrar unidades a los lotes originales exactos
+          for (const line of sale.lines) {
+            for (const alloc of line.lotAllocations) {
+              await this.inventoryLedger.changeLotQuantity(
+                tx,
+                alloc.lotId,
+                alloc.quantityBaseUnits,
+                {
+                  movementType: 'DEVOLUCION_CLIENTE',
+                  productId: line.productId,
+                  presentationId: line.presentationId || null,
+                  quantityBaseUnits: alloc.quantityBaseUnits,
+                  presentationFactorHistorical: line.presentationFactorHistorical,
+                  referenceDocumentType: 'SALE_CANCEL',
+                  referenceDocumentId: sale.invoiceNumber,
+                  notes: `Anulación venta ${sale.invoiceNumber}. Motivo: ${trimmedReason}`,
+                  createdByUserId: auditCtx.userId || null,
+                },
+              );
+            }
+          }
 
-      // Revertir en caja si fue en efectivo
-      if (sale.paymentMethod === 'EFECTIVO') {
-        const saleAmountCents = parseMoneyToCents(
-          new Prisma.Decimal(sale.total).toFixed(2),
-          'Total de venta',
-        );
-        await this.cashService.recordMovementInTransaction(tx, {
-          movementType: 'EGRESO_MANUAL',
-          amount: centsToMoneyString(saleAmountCents),
-          paymentMethod: 'EFECTIVO',
-          reason: `Reversión por anulación de venta ${sale.invoiceNumber}: ${trimmedReason}`,
-          referenceDocumentType: 'SALE_CANCEL',
-          referenceDocumentId: sale.invoiceNumber,
-          createdByUserId: auditCtx.userId || '00000000-0000-0000-0000-000000000000',
-        });
-      }
-      if (sale.paymentMethod === 'TRANSFERENCIA') {
-        if (!sale.bankAccountId)
-          throw new Error('La venta por transferencia no conserva una cuenta bancaria.');
-        await recordSourceBankMovement(tx, {
-          bankAccountId: sale.bankAccountId,
-          movementType: 'WITHDRAWAL',
-          amount: new Prisma.Decimal(sale.total).toFixed(2),
-          concept: `Reversión por anulación de venta ${sale.invoiceNumber}: ${trimmedReason}`,
-          referenceDocumentType: 'SALE_CANCEL',
-          referenceDocumentId: sale.invoiceNumber,
-          createdById: auditCtx.userId || '00000000-0000-0000-0000-000000000000',
-        });
-      }
-      if (sale.paymentMethod === 'CREDITO') {
-        await this.receivablesLedger.cancelForSale(tx, sale.id, trimmedReason);
-      }
+          // Revertir en caja si fue en efectivo
+          if (sale.paymentMethod === 'EFECTIVO') {
+            const saleAmountCents = parseMoneyToCents(
+              new Prisma.Decimal(sale.total).toFixed(2),
+              'Total de venta',
+            );
+            await this.cashService.recordMovementInTransaction(tx, {
+              movementType: 'EGRESO_MANUAL',
+              amount: centsToMoneyString(saleAmountCents),
+              paymentMethod: 'EFECTIVO',
+              reason: `Reversión por anulación de venta ${sale.invoiceNumber}: ${trimmedReason}`,
+              referenceDocumentType: 'SALE_CANCEL',
+              referenceDocumentId: sale.invoiceNumber,
+              createdByUserId: auditCtx.userId || '00000000-0000-0000-0000-000000000000',
+            });
+          }
+          if (sale.paymentMethod === 'TRANSFERENCIA') {
+            if (!sale.bankAccountId)
+              throw new Error('La venta por transferencia no conserva una cuenta bancaria.');
+            await recordSourceBankMovement(tx, {
+              bankAccountId: sale.bankAccountId,
+              movementType: 'WITHDRAWAL',
+              amount: new Prisma.Decimal(sale.total).toFixed(2),
+              concept: `Reversión por anulación de venta ${sale.invoiceNumber}: ${trimmedReason}`,
+              referenceDocumentType: 'SALE_CANCEL',
+              referenceDocumentId: sale.invoiceNumber,
+              createdById: auditCtx.userId || '00000000-0000-0000-0000-000000000000',
+            });
+          }
+          if (sale.paymentMethod === 'CREDITO') {
+            await this.receivablesLedger.cancelForSale(tx, sale.id, trimmedReason);
+          }
 
-      // Reversión contable automática
-      if (this.accountingEngine) {
-        await this.accountingEngine.handleSaleCancelled(
-          sale.id,
-          trimmedReason,
-          auditCtx.userId || undefined,
-          tx,
-        );
-      }
+          // Reversión contable automática
+          if (this.accountingEngine) {
+            await this.accountingEngine.handleSaleCancelled(
+              sale.id,
+              trimmedReason,
+              auditCtx.userId || undefined,
+              tx,
+            );
+          }
 
-      return sale.toDto();
-    }, {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-    });
-  });
+          if (this.auditService) {
+            await this.auditService.recordEvent(
+              {
+                action: 'sales:sale_cancelled',
+                entity: 'Sale',
+                entityId: sale.id,
+                userId: auditCtx.userId || null,
+                details: {
+                  invoiceNumber: sale.invoiceNumber,
+                  reason: trimmedReason,
+                  total: sale.total,
+                },
+                ipAddress: auditCtx.ipAddress || null,
+                correlationId: auditCtx.correlationId || null,
+              },
+              tx,
+            );
+          }
 
-    if (this.auditService) {
-      await this.auditService.recordEvent({
-        action: 'sales:sale_cancelled',
-        entity: 'Sale',
-        entityId: sale.id,
-        userId: auditCtx.userId || null,
-        details: {
-          invoiceNumber: sale.invoiceNumber,
-          reason: trimmedReason,
-          total: sale.total,
+          return sale.toDto();
         },
-        ipAddress: auditCtx.ipAddress || null,
-        correlationId: auditCtx.correlationId || null,
-      });
-    }
+        {
+          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        },
+      );
+    });
 
     return cancelledDto;
   }

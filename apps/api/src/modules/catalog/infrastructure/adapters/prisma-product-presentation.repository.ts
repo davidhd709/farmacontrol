@@ -102,8 +102,9 @@ export class PrismaProductPresentationRepository implements ProductPresentationR
     return records.map((r) => this.toDomain(r));
   }
 
-  public async save(presentation: ProductPresentation): Promise<ProductPresentation> {
-    const record = await this.client.productPresentation.create({
+  public async save(presentation: ProductPresentation, tx?: unknown): Promise<ProductPresentation> {
+    const db = (tx as Prisma.TransactionClient | undefined) ?? this.client;
+    const record = await db.productPresentation.create({
       data: {
         id: presentation.id,
         productId: presentation.productId,
@@ -130,8 +131,12 @@ export class PrismaProductPresentationRepository implements ProductPresentationR
     return this.toDomain(record);
   }
 
-  public async update(presentation: ProductPresentation): Promise<ProductPresentation> {
-    const record = await this.client.productPresentation.update({
+  public async update(
+    presentation: ProductPresentation,
+    tx?: unknown,
+  ): Promise<ProductPresentation> {
+    const db = (tx as Prisma.TransactionClient | undefined) ?? this.client;
+    const record = await db.productPresentation.update({
       where: { id: presentation.id },
       data: {
         unitOfMeasureId: presentation.unitOfMeasureId,
@@ -158,8 +163,9 @@ export class PrismaProductPresentationRepository implements ProductPresentationR
 
   public async updateAndPropagateFactors(
     presentation: ProductPresentation,
+    externalTx?: unknown,
   ): Promise<ProductPresentation> {
-    return this.client.$transaction(async (tx) => {
+    const persist = async (tx: Prisma.TransactionClient) => {
       const record = await tx.productPresentation.update({
         where: { id: presentation.id },
         data: {
@@ -190,7 +196,10 @@ export class PrismaProductPresentationRepository implements ProductPresentationR
       );
 
       return this.toDomain(record);
-    });
+    };
+    return externalTx
+      ? persist(externalTx as Prisma.TransactionClient)
+      : this.client.$transaction(persist);
   }
 
   private async propagateDescendantFactors(
@@ -213,8 +222,13 @@ export class PrismaProductPresentationRepository implements ProductPresentationR
     }
   }
 
-  public async unsetDefaultPresentations(productId: string, exceptId?: string): Promise<void> {
-    await this.client.productPresentation.updateMany({
+  public async unsetDefaultPresentations(
+    productId: string,
+    exceptId?: string,
+    tx?: unknown,
+  ): Promise<void> {
+    const db = (tx as Prisma.TransactionClient | undefined) ?? this.client;
+    await db.productPresentation.updateMany({
       where: {
         productId,
         isDefault: true,
