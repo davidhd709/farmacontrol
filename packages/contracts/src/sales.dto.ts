@@ -73,6 +73,45 @@ export interface ConfirmSalePayload {
   items: ConfirmSaleLineItemPayload[];
 }
 
+// ===== VISTA PREVIA FEFO (POS) =====
+// Consulta de sólo lectura: muestra qué lotes usaría la venta si se confirmara ahora. No
+// reserva existencias; la asignación definitiva la hace la confirmación con bloqueo.
+
+export interface FefoPreviewLinePayload {
+  productId: string;
+  presentationId?: string | null;
+  quantityCommercial: number;
+}
+
+export interface FefoPreviewPayload {
+  items: FefoPreviewLinePayload[];
+}
+
+export interface FefoPreviewAllocationDto {
+  lotId: string;
+  lotNumber: string;
+  /** Día de vencimiento (YYYY-MM-DD) */
+  expirationDate: string;
+  quantityBaseUnits: number;
+}
+
+export interface FefoPreviewLineDto {
+  productId: string;
+  presentationId: string | null;
+  requiredBaseUnits: number;
+  /** Unidades vendibles que quedan para esta línea después de las líneas anteriores del mismo producto */
+  availableBaseUnits: number;
+  /** Unidades que faltan; 0 cuando la línea se cubre completa */
+  shortfallBaseUnits: number;
+  allocations: FefoPreviewAllocationDto[];
+}
+
+export interface FefoPreviewDto {
+  /** Día de negocio (Bogotá) usado para excluir lotes vencidos */
+  businessDay: string;
+  lines: FefoPreviewLineDto[];
+}
+
 export interface SaleQueryFilters {
   invoiceNumber?: string;
   customerId?: string;

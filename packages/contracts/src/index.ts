@@ -970,8 +970,17 @@ export interface InventoryValuationItemDto {
   basePrice: number;
   totalCostValue: number;
   totalPriceValue: number;
+  /**
+   * Margen potencial (T-32): valorización al precio menos valorización al costo. No es
+   * utilidad realizada. `null` cuando falta el costo o el precio del producto.
+   */
+  potentialMargin: number | null;
+  /** Dato que impide calcular el margen potencial; `null` si el producto está completo */
+  valuationIssue: InventoryValuationIssue | null;
   activeLotsCount: number;
 }
+
+export type InventoryValuationIssue = 'MISSING_COST' | 'MISSING_PRICE' | 'MISSING_COST_AND_PRICE';
 
 export interface InventoryValuationReportDto {
   generatedAt: string;
@@ -979,7 +988,49 @@ export interface InventoryValuationReportDto {
   totalUnits: number;
   totalCostValuation: number;
   totalPriceValuation: number;
+  /** Suma del margen potencial de los productos completos (excluye los que tienen `valuationIssue`) */
+  totalPotentialMargin: number;
+  /** Productos con existencias que no entran en el margen por falta de costo o precio */
+  productsWithValuationIssues: number;
   items: InventoryValuationItemDto[];
+}
+
+// ===== PRODUCTOS MÁS VENDIDOS (T-34) =====
+
+export type TopProductsSortBy = 'units' | 'value';
+
+export interface TopProductsFilter extends ReportDateFilter {
+  /** Orden principal; por defecto `units` */
+  sortBy?: TopProductsSortBy;
+  /** Cantidad de posiciones, de 1 a 100; por defecto 20 */
+  limit?: number;
+}
+
+export interface TopProductItemDto {
+  rank: number;
+  productId: string;
+  productCode: string;
+  productName: string;
+  baseUnit: string;
+  /** Ventas no anuladas del período, en unidad base (presentaciones ya convertidas) */
+  soldBaseUnits: number;
+  /** Devoluciones por notas crédito emitidas en el período, en unidad base */
+  returnedBaseUnits: number;
+  netBaseUnits: number;
+  soldValue: number;
+  returnedValue: number;
+  netValue: number;
+  /** Ventas distintas en las que aparece el producto */
+  salesCount: number;
+}
+
+export interface TopProductsReportDto {
+  generatedAt: string;
+  fromDate: string | null;
+  toDate: string | null;
+  sortBy: TopProductsSortBy;
+  limit: number;
+  items: TopProductItemDto[];
 }
 
 export interface ExpirationReportItemDto {
