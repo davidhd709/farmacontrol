@@ -25,6 +25,19 @@ export interface LockedLot {
   is_active: boolean;
 }
 
+/** Consulta común: ambos flujos deben considerar exactamente los mismos lotes y orden. */
+function fefoCandidatesQuery(productId: string, businessDay: string): Prisma.Sql {
+  return Prisma.sql`
+    SELECT id, lot_number, expiration_date, current_quantity, is_active
+    FROM inventory_lots
+    WHERE product_id = ${productId}::uuid
+      AND is_active = true
+      AND current_quantity > 0
+      AND expiration_date >= ${businessDay}::date
+    ORDER BY expiration_date ASC, created_at ASC
+  `;
+}
+
 /**
  * Contrato transaccional de inventario para otros módulos (ventas, notas, compras).
  * Es la única vía para tocar lotes y kardex desde fuera del módulo: siempre dentro de
@@ -37,16 +50,18 @@ export class InventoryLedger {
    * con vencimiento igual o posterior al día de negocio indicado.
    */
   async lockFefoCandidates(tx: Tx, productId: string, businessDay: string): Promise<LockedLot[]> {
-    return tx.$queryRaw<LockedLot[]>`
-      SELECT id, lot_number, expiration_date, current_quantity, is_active
-      FROM inventory_lots
-      WHERE product_id = ${productId}::uuid
-        AND is_active = true
-        AND current_quantity > 0
-        AND expiration_date >= ${businessDay}::date
-      ORDER BY expiration_date ASC, created_at ASC
-      FOR UPDATE
-    `;
+    return tx.$queryRaw<LockedLot[]>(
+      Prisma.sql`${fefoCandidatesQuery(productId, businessDay)} FOR UPDATE`,
+    );
+  }
+
+  /** Consulta de sólo lectura, sin bloqueo ni reserva de los lotes disponibles. */
+  async listFefoCandidates(
+    client: Tx,
+    productId: string,
+    businessDay: string,
+  ): Promise<LockedLot[]> {
+    return client.$queryRaw<LockedLot[]>(fefoCandidatesQuery(productId, businessDay));
   }
 
   /** Bloquea un lote por id; null si no existe. */
