@@ -1,8 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, apiRequest } from '../src/api/http-client';
+import {
+  ApiError,
+  apiRequest,
+  setUnauthorizedHandler,
+  NO_PERMISSION_MESSAGE,
+} from '../src/api/http-client';
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  setUnauthorizedHandler(undefined);
 });
 
 describe('apiRequest', () => {
@@ -59,4 +65,38 @@ describe('apiRequest', () => {
       }),
     );
   });
+});
+
+it('uniforma los errores 403 aunque el backend responda en inglés', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ message: 'Forbidden resource' }), {
+        status: 403,
+        headers: { 'content-type': 'application/json' },
+      }),
+    ),
+  );
+  await expect(apiRequest('products')).rejects.toMatchObject({
+    status: 403,
+    message: NO_PERMISSION_MESSAGE,
+  });
+  expect(new ApiError('Forbidden', 403).message).toBe(NO_PERMISSION_MESSAGE);
+});
+
+it('avisa en cualquier 401 salvo auth/me y auth/login y permite quitar el manejador', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockImplementation(async () => new Response(null, { status: 401 })),
+  );
+  const handler = vi.fn();
+  const unregister = setUnauthorizedHandler(handler);
+  for (const path of ['auth/me', '/auth/login', '/auth/me?refresh=1'])
+    await expect(apiRequest(path)).rejects.toMatchObject({ status: 401 });
+  expect(handler).not.toHaveBeenCalled();
+  await expect(apiRequest('products')).rejects.toMatchObject({ status: 401 });
+  expect(handler).toHaveBeenCalledOnce();
+  unregister();
+  await expect(apiRequest('sales')).rejects.toMatchObject({ status: 401 });
+  expect(handler).toHaveBeenCalledOnce();
 });

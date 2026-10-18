@@ -10,6 +10,7 @@ import { apiRequest } from '../../../api/http-client';
 
 export async function fetchProducts(
   filters: ProductQueryFilters = {},
+  signal?: AbortSignal,
 ): Promise<PaginatedResponse<ProductDto>> {
   const query = new URLSearchParams();
 
@@ -42,6 +43,7 @@ export async function fetchProducts(
 
   return apiRequest<PaginatedResponse<ProductDto>>(endpoint, {
     method: 'GET',
+    signal,
   });
 }
 
@@ -74,7 +76,9 @@ export async function deactivateProduct(id: string): Promise<ProductDto> {
   });
 }
 
-export async function fetchProductPresentations(productId: string): Promise<ProductPresentationDto[]> {
+export async function fetchProductPresentations(
+  productId: string,
+): Promise<ProductPresentationDto[]> {
   return apiRequest<ProductPresentationDto[]>(`products/${productId}/presentations`, {
     method: 'GET',
   });

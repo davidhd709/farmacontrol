@@ -13,15 +13,10 @@ import {
 } from '@mui/material';
 import { Controller, useForm } from 'react-hook-form';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { loginDestination, type LoginLocationState } from '../routes/login-destination';
 import { ApiError } from '../../../api/http-client';
 import { useAuth } from '../hooks/useAuth';
 import { loginSchema, type LoginFormValues } from '../validation/login.schema';
-
-interface LoginLocationState {
-  from?: {
-    pathname?: string;
-  };
-}
 
 function getLoginErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
@@ -67,7 +62,7 @@ export function LoginPage() {
   const onSubmit = handleSubmit(async (values) => {
     try {
       await login(values);
-      navigate(locationState?.from?.pathname || '/', { replace: true });
+      navigate(loginDestination(locationState), { replace: true });
     } catch (error) {
       setError('root', {
         type: 'server',
