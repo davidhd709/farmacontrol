@@ -78,7 +78,67 @@ jobs:
         run: pnpm lint
 
       - name: Typecheck TypeScript
-        run: pnpm typecheck
+        run: |
+          pnpm typecheck
+          pnpm typecheck:e2e
 
       - name: Run Automated Tests (PostgreSQL temporal)
         run: pnpm test
+
+  e2e:
+    name: E2E (Playwright)
+    runs-on: ubuntu-latest
+    needs: quality-gate
+
+    # API y web compiladas sobre un PostgreSQL temporal propio (pnpm test:e2e)
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://prisma:prisma@127.0.0.1:1/prisma_validate?schema=public
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12.5.1
+
+      - name: Setup Node.js (v22 LTS)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      # El script de base temporal exige el cliente PostgreSQL 18 aunque E2E no haga respaldos
+      - name: Install PostgreSQL 18 client (PGDG)
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          . /etc/os-release
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-client-18
+          echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
+
+      - name: Install dependencies (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Prisma Generate
+        run: pnpm db:generate
+
+      - name: Install Chromium for Playwright
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run E2E
+        run: pnpm test:e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: .test-runs/e2e-*
+          retention-days: 7

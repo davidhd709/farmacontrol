@@ -144,8 +144,10 @@ signal_scenario TERM 143
 echo "== 6. Ejecución correcta"
 bash "${RUNNER}" --project @farmacia/worker > "${WORK}/ok.out" 2>&1 < /dev/null
 status=$?
-[ "${status}" = "0" ] && grep -q "Tests  9 passed" "${WORK}/ok.out" \
-  && ok "worker: 9 pruebas aprobadas (código 0)" || ko "código ${status}"
+# Sin fijar el número de pruebas: crece con el worker; basta que todas pasen
+[ "${status}" = "0" ] && grep -Eq "Tests  [0-9]+ passed" "${WORK}/ok.out" \
+  && ! grep -Eq "Tests  .*failed" "${WORK}/ok.out" \
+  && ok "worker: pruebas aprobadas (código 0)" || ko "código ${status}"
 assert_no_leftovers "$(run_id_of "${WORK}/ok.out")" "ejecución correcta"
 
 echo "== Señuelo"
