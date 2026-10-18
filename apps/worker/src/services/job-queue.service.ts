@@ -1,6 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { prisma, PrismaClient } from '@farmacia/database';
+import { prisma, PrismaClient, type BackgroundJob } from '@farmacia/database';
 import { ExpirationEvaluatorService } from './expiration-evaluator.service';
+
+// Sin configuración de tiempos en el worker: 15 min cubren el lote de 5 evaluaciones
+// con timeout de 2 min cada una. Un trabajo más antiguo se considera interrumpido.
+const PROCESSING_TIMEOUT_MS = 15 * 60 * 1000;
+const RETRY_DELAY_MS = 60 * 1000;
 
 /** Un día calendario (YYYY-MM-DD) se evalúa como ese día en Bogotá (UTC-05:00), no como medianoche UTC. */
 function businessReferenceDate(value: string): Date {
@@ -27,8 +32,25 @@ export class JobQueueService {
     let processedCount = 0;
 
     try {
-      // Reclamar hasta 5 trabajos pendientes cuya fecha programada sea <= now
       const now = new Date();
+      const interruptedBefore = new Date(now.getTime() - PROCESSING_TIMEOUT_MS);
+      const retryAt = new Date(now.getTime() + RETRY_DELAY_MS);
+      // UPDATE condicional atómico: PostgreSQL vuelve a comprobar el estado si otro
+      // consumidor recuperó o terminó la fila mientras esperaba su bloqueo.
+      await this.db.$executeRaw`
+        UPDATE background_jobs
+        SET status = CASE WHEN attempts < max_attempts THEN 'PENDING' ELSE 'FAILED' END,
+            scheduled_at = CASE WHEN attempts < max_attempts THEN ${retryAt} ELSE scheduled_at END,
+            started_at = NULL,
+            completed_at = NULL,
+            last_error = CASE WHEN attempts < max_attempts
+              THEN 'Trabajo interrumpido; se reintenta automáticamente'
+              ELSE 'Trabajo interrumpido; intentos agotados' END,
+            updated_at = ${now}
+        WHERE status = 'PROCESSING' AND started_at < ${interruptedBefore}
+      `;
+
+      // Reclamar hasta 5 trabajos pendientes cuya fecha programada sea <= now
       const pendingJobs = await this.db.$transaction(async (tx) => {
         const claimed = await tx.$queryRaw<Array<{ id: string }>>`
           SELECT id FROM background_jobs
@@ -50,8 +72,11 @@ export class JobQueueService {
         processedCount++;
         await this.executeJob(job);
       }
-    } catch (err: any) {
-      this.logger.error(`[Worker JobQueue] Error al reclamar trabajos: ${err.message}`, err.stack);
+    } catch (err: unknown) {
+      this.logger.error(
+        `[Worker JobQueue] Error al recuperar o reclamar trabajos: ${err instanceof Error ? err.message : String(err)}`,
+        err instanceof Error ? err.stack : undefined,
+      );
     } finally {
       this.isProcessing = false;
     }
@@ -59,23 +84,45 @@ export class JobQueueService {
     return processedCount;
   }
 
-  private async executeJob(job: any): Promise<void> {
+  private async executeJob(job: BackgroundJob): Promise<void> {
     this.logger.log(`[Worker JobQueue] Procesando trabajo ${job.id} (${job.jobType})`);
+    // Una ejecución que reaparece tras ser recuperada no puede finalizar otro intento.
+    const claimedAttempt = {
+      id: job.id,
+      status: 'PROCESSING',
+      startedAt: job.startedAt,
+      attempts: job.attempts,
+    };
 
     try {
       if (job.jobType === 'EVALUATE_EXPIRATIONS') {
         const payloadDate =
           job.payload && typeof job.payload === 'object' && 'referenceDate' in job.payload
-            ? businessReferenceDate(String((job.payload as any).referenceDate))
+            ? businessReferenceDate(String(job.payload.referenceDate))
             : new Date();
-        await this.expirationEvaluator.evaluate(payloadDate);
+        const result = await this.expirationEvaluator.evaluate(payloadDate);
+        if (result.skipped) {
+          await this.db.backgroundJob.updateMany({
+            where: claimedAttempt,
+            data: {
+              status: 'PENDING',
+              scheduledAt: new Date(Date.now() + RETRY_DELAY_MS),
+              startedAt: null,
+              completedAt: null,
+              attempts: { decrement: 1 },
+              lastError:
+                'Evaluación omitida: bloqueo de vencimientos ocupado; se reintenta automáticamente',
+            },
+          });
+          return;
+        }
       } else {
         this.logger.warn(`[Worker JobQueue] Tipo de trabajo desconocido: ${job.jobType}`);
       }
 
       // Marcar como COMPLETED
-      await this.db.backgroundJob.update({
-        where: { id: job.id },
+      const completed = await this.db.backgroundJob.updateMany({
+        where: claimedAttempt,
         data: {
           status: 'COMPLETED',
           completedAt: new Date(),
@@ -83,19 +130,20 @@ export class JobQueueService {
         },
       });
 
-      this.logger.log(`[Worker JobQueue] Trabajo ${job.id} finalizado exitosamente.`);
-    } catch (error: any) {
-      this.logger.error(
-        `[Worker JobQueue] Falló ejecución del trabajo ${job.id}: ${error.message}`,
-      );
+      if (completed.count > 0) {
+        this.logger.log(`[Worker JobQueue] Trabajo ${job.id} finalizado exitosamente.`);
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`[Worker JobQueue] Falló ejecución del trabajo ${job.id}: ${message}`);
       const newAttempts = job.attempts;
       const isFailed = newAttempts >= job.maxAttempts;
 
-      await this.db.backgroundJob.update({
-        where: { id: job.id },
+      await this.db.backgroundJob.updateMany({
+        where: claimedAttempt,
         data: {
           status: isFailed ? 'FAILED' : 'PENDING',
-          lastError: error.message || String(error),
+          lastError: message,
           // Si no es fallo definitivo, reprogramar reintento exponencial (ej. 30s * intentos)
           scheduledAt: isFailed ? undefined : new Date(Date.now() + 30000 * newAttempts),
         },

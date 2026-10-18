@@ -65,6 +65,14 @@ describe('Worker concurrency (PostgreSQL real)', () => {
       evaluate: async (date: Date) => {
         calls.push(date.getTime());
         await new Promise((resolve) => setTimeout(resolve, 30));
+        return {
+          skipped: false,
+          evaluatedLots: 0,
+          createdAlerts: 0,
+          updatedAlerts: 0,
+          resolvedAlerts: 0,
+          timestamp: date.toISOString(),
+        };
       },
     } as unknown as ExpirationEvaluatorService;
     const [first, second] = await Promise.all([
