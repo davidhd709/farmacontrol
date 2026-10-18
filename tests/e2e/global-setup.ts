@@ -24,13 +24,6 @@ export default async function globalSetup() {
   const cashier = { username: 'e2e_cajero', password: `Cajero-${uniqueCode('PW')}` };
   await call(admin, 'post', 'users', { ...cashier, roles: ['cajero'] });
 
-  // Una instalación nueva no trae ubicaciones; sin una activa no se puede recibir mercancía
-  await call(admin, 'post', 'inventory/locations', {
-    code: 'BOD-E2E',
-    name: 'Bodega principal',
-    isDefault: true,
-  });
-
   const category = await call<{ id: string }>(admin, 'post', 'categories', {
     name: `Categoría ${uniqueCode('E2E')}`,
   });
