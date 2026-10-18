@@ -4,6 +4,17 @@ const DEFAULT_API_URL = '/api/v1';
 
 const apiUrl = (import.meta.env.VITE_API_URL || DEFAULT_API_URL).replace(/\/$/, '');
 
+export const NO_PERMISSION_MESSAGE =
+  'No tienes permiso para realizar esta acción. Si lo necesitas, pide a un administrador que lo asigne a tu rol.';
+
+let unauthorizedHandler: (() => void) | undefined;
+export function setUnauthorizedHandler(handler?: () => void) {
+  unauthorizedHandler = handler;
+  return () => {
+    if (unauthorizedHandler === handler) unauthorizedHandler = undefined;
+  };
+}
+
 interface NestErrorPayload {
   message?: string | string[];
   error?: string;
@@ -15,7 +26,7 @@ export class ApiError extends Error {
   public readonly payload: unknown;
 
   constructor(message: string, status: number, payload?: unknown) {
-    super(message);
+    super(status === 403 ? NO_PERMISSION_MESSAGE : message);
     this.name = 'ApiError';
     this.status = status;
     this.payload = payload;
@@ -68,6 +79,10 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
     );
   }
 
+  const normalizedPath = path.replace(/^\//, '').split('?')[0].replace(/\/$/, '');
+  if (response.status === 401 && !['auth/me', 'auth/login'].includes(normalizedPath)) {
+    unauthorizedHandler?.();
+  }
   const payload = await parseResponse(response);
   if (!response.ok) {
     throw new ApiError(

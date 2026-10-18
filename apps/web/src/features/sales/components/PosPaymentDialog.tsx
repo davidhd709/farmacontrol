@@ -18,24 +18,47 @@ import {
   Select,
   MenuItem,
 } from '@mui/material';
-import type { SalePaymentMethod } from '@farmacia/contracts';
+import { useQuery } from '@tanstack/react-query';
+import { fetchFefoPreview } from '../api/sales.api';
+import { FefoAllocationSummary } from './FefoAllocationSummary';
+import { toCents, formatMoney } from '../../../utils/money';
+import type { FefoPreviewPayload, SalePaymentMethod } from '@farmacia/contracts';
 import { useBankAccountOptions } from '../../treasury/hooks/useTreasury';
 
 interface PosPaymentDialogProps {
   open: boolean;
+  items: FefoPreviewPayload['items'];
+  productNames: Record<string, string>;
   total: number;
   onClose: () => void;
-  onConfirm: (paymentMethod: SalePaymentMethod, amountPaid: number, notes?: string, bankAccountId?: string) => Promise<void>;
+  onConfirm: (
+    paymentMethod: SalePaymentMethod,
+    amountPaid: number,
+    notes?: string,
+    bankAccountId?: string,
+  ) => Promise<void>;
   loading: boolean;
 }
 
 export const PosPaymentDialog: React.FC<PosPaymentDialogProps> = ({
   open,
   total,
+  items,
+  productNames,
   onClose,
   onConfirm,
   loading,
 }) => {
+  const preview = useQuery({
+    queryKey: ['sales', 'fefo-preview', items],
+    queryFn: ({ signal }) => fetchFefoPreview({ items }, signal),
+    enabled: open && items.length > 0,
+    staleTime: 0,
+    retry: false,
+  });
+  const hasShortfall =
+    !preview.isError && Boolean(preview.data?.lines.some((line) => line.shortfallBaseUnits > 0));
+  const previewPending = preview.isFetching || (open && preview.isPending);
   const [paymentMethod, setPaymentMethod] = useState<SalePaymentMethod>('EFECTIVO');
   const [amountPaidStr, setAmountPaidStr] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
@@ -54,15 +77,30 @@ export const PosPaymentDialog: React.FC<PosPaymentDialogProps> = ({
   }, [open, total]);
 
   const amountPaidNum = Number(amountPaidStr) || 0;
-  const changeGiven = paymentMethod === 'EFECTIVO' ? Math.max(0, amountPaidNum - total) : 0;
+  const totalCents = toCents(total);
+  let amountPaidCents = 0;
+  let invalidAmount = false;
+  try {
+    amountPaidCents = toCents(amountPaidStr || '0');
+  } catch {
+    invalidAmount = true;
+  }
+  const changeGiven = paymentMethod === 'EFECTIVO' ? Math.max(0, amountPaidCents - totalCents) : 0;
 
   const handleConfirm = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+    if (loading || previewPending || hasShortfall) return;
 
     if (paymentMethod === 'EFECTIVO') {
-      if (amountPaidNum < total) {
-        setErrorMsg(`El monto recibido ($${amountPaidNum.toLocaleString()}) es inferior al total ($${total.toLocaleString()}).`);
+      if (invalidAmount) {
+        setErrorMsg('Ingresa un monto recibido válido.');
+        return;
+      }
+      if (amountPaidCents < totalCents) {
+        setErrorMsg(
+          `El monto recibido (${formatMoney(amountPaidCents)}) es inferior al total (${formatMoney(totalCents)}).`,
+        );
         return;
       }
     }
@@ -72,7 +110,12 @@ export const PosPaymentDialog: React.FC<PosPaymentDialogProps> = ({
     }
 
     try {
-      await onConfirm(paymentMethod, amountPaidNum, notes.trim() || undefined, bankAccountId || undefined);
+      await onConfirm(
+        paymentMethod,
+        amountPaidNum,
+        notes.trim() || undefined,
+        bankAccountId || undefined,
+      );
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Error al procesar el pago.');
     }
@@ -88,6 +131,7 @@ export const PosPaymentDialog: React.FC<PosPaymentDialogProps> = ({
   return (
     <Dialog
       open={open}
+      aria-labelledby="pos-payment-title"
       onClose={loading ? undefined : onClose}
       maxWidth="xs"
       fullWidth
@@ -101,7 +145,9 @@ export const PosPaymentDialog: React.FC<PosPaymentDialogProps> = ({
       }}
     >
       <form onSubmit={handleConfirm}>
-        <DialogTitle sx={{ fontWeight: 700, pb: 1 }}>Cobro y Liquidación de Venta</DialogTitle>
+        <DialogTitle id="pos-payment-title" sx={{ fontWeight: 700, pb: 1 }}>
+          Cobro y Liquidación de Venta
+        </DialogTitle>
         <DialogContent dividers>
           {errorMsg && (
             <Alert severity="error" sx={{ mb: 2 }}>
@@ -109,15 +155,39 @@ export const PosPaymentDialog: React.FC<PosPaymentDialogProps> = ({
             </Alert>
           )}
 
-          <Box sx={{ mb: 2, textAlign: 'center', py: 1.5, bgcolor: 'primary.50', borderRadius: 1.5, border: '1px solid', borderColor: 'primary.200' }}>
-            <Typography variant="body2" color="text.secondary">Total a Pagar</Typography>
+          <Box
+            sx={{
+              mb: 2,
+              textAlign: 'center',
+              py: 1.5,
+              bgcolor: 'primary.50',
+              borderRadius: 1.5,
+              border: '1px solid',
+              borderColor: 'primary.200',
+            }}
+          >
+            <Typography variant="body2" color="text.secondary">
+              Total a Pagar
+            </Typography>
             <Typography variant="h4" sx={{ fontWeight: 800, color: 'primary.main' }}>
-              ${total.toLocaleString('es-CO')}
+              {formatMoney(totalCents)}
             </Typography>
           </Box>
 
-          <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>Medio de Pago</Typography>
+          <FefoAllocationSummary
+            data={preview.isError ? undefined : preview.data}
+            loading={previewPending}
+            error={preview.isError}
+            productNames={productNames}
+          />
+          {previewPending && (
+            <Typography role="status">Espera la vista previa para confirmar.</Typography>
+          )}
+          <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+            Medio de Pago
+          </Typography>
           <RadioGroup
+            aria-label="Medio de pago"
             row
             value={paymentMethod}
             onChange={(e) => {
@@ -130,11 +200,21 @@ export const PosPaymentDialog: React.FC<PosPaymentDialogProps> = ({
             sx={{ mb: 2, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1 }}
           >
             <FormControlLabel value="EFECTIVO" control={<Radio size="small" />} label="Efectivo" />
-            <FormControlLabel value="TRANSFERENCIA" control={<Radio size="small" />} label="Transferencia" />
+            <FormControlLabel
+              value="TRANSFERENCIA"
+              control={<Radio size="small" />}
+              label="Transferencia"
+            />
           </RadioGroup>
 
           {paymentMethod === 'TRANSFERENCIA' && (
-            <FormControl fullWidth size="small" sx={{ mb: 2 }} required error={bankAccounts.isError}>
+            <FormControl
+              fullWidth
+              size="small"
+              sx={{ mb: 2 }}
+              required
+              error={bankAccounts.isError}
+            >
               <InputLabel id="sale-bank-account-label">Cuenta que recibe</InputLabel>
               <Select
                 labelId="sale-bank-account-label"
@@ -144,10 +224,15 @@ export const PosPaymentDialog: React.FC<PosPaymentDialogProps> = ({
                 disabled={loading || bankAccounts.isPending || bankAccounts.isError}
               >
                 {(bankAccounts.data ?? []).map((account) => (
-                  <MenuItem key={account.id} value={account.id}>{account.name} · {account.bankName}{account.accountNumberLast4 ? ` ···${account.accountNumberLast4}` : ''}</MenuItem>
+                  <MenuItem key={account.id} value={account.id}>
+                    {account.name} · {account.bankName}
+                    {account.accountNumberLast4 ? ` ···${account.accountNumberLast4}` : ''}
+                  </MenuItem>
                 ))}
               </Select>
-              {bankAccounts.isError && <Alert severity="error">No se pudieron consultar las cuentas bancarias.</Alert>}
+              {bankAccounts.isError && (
+                <Alert severity="error">No se pudieron consultar las cuentas bancarias.</Alert>
+              )}
             </FormControl>
           )}
 
@@ -168,15 +253,27 @@ export const PosPaymentDialog: React.FC<PosPaymentDialogProps> = ({
               />
 
               {/* Sugerencias de pago rápido con billetes comunes */}
-              <Box sx={{ display: 'flex', gap: 0.8, flexWrap: 'wrap', mb: 1.5, alignItems: 'center' }}>
-                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, mr: 0.5 }}>
+              <Box
+                sx={{ display: 'flex', gap: 0.8, flexWrap: 'wrap', mb: 1.5, alignItems: 'center' }}
+              >
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ fontWeight: 600, mr: 0.5 }}
+                >
                   Rápido:
                 </Typography>
                 <Button
                   size="small"
                   variant={amountPaidNum === total ? 'contained' : 'outlined'}
                   onClick={() => setAmountPaidStr(String(total))}
-                  sx={{ py: 0.2, px: 0.8, fontSize: '0.75rem', minWidth: 'auto', textTransform: 'none' }}
+                  sx={{
+                    py: 0.2,
+                    px: 0.8,
+                    fontSize: '0.75rem',
+                    minWidth: 'auto',
+                    textTransform: 'none',
+                  }}
                 >
                   Exacto
                 </Button>
@@ -186,17 +283,39 @@ export const PosPaymentDialog: React.FC<PosPaymentDialogProps> = ({
                     size="small"
                     variant={amountPaidNum === denom ? 'contained' : 'outlined'}
                     onClick={() => setAmountPaidStr(String(denom))}
-                    sx={{ py: 0.2, px: 0.8, fontSize: '0.75rem', minWidth: 'auto', textTransform: 'none' }}
+                    sx={{
+                      py: 0.2,
+                      px: 0.8,
+                      fontSize: '0.75rem',
+                      minWidth: 'auto',
+                      textTransform: 'none',
+                    }}
                   >
                     ${denom.toLocaleString('es-CO')}
                   </Button>
                 ))}
               </Box>
 
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1.5, bgcolor: changeGiven > 0 ? 'success.50' : 'background.default', borderRadius: 1.5, border: 1, borderColor: changeGiven > 0 ? 'success.200' : 'divider' }}>
-                <Typography variant="body2" sx={{ fontWeight: 600 }}>Cambio / Devuelta:</Typography>
-                <Typography variant="subtitle1" sx={{ fontWeight: 800, color: changeGiven > 0 ? 'success.dark' : 'text.primary' }}>
-                  ${changeGiven.toLocaleString('es-CO')}
+              <Box
+                sx={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  p: 1.5,
+                  bgcolor: changeGiven > 0 ? 'success.50' : 'background.default',
+                  borderRadius: 1.5,
+                  border: 1,
+                  borderColor: changeGiven > 0 ? 'success.200' : 'divider',
+                }}
+              >
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  Cambio / Devuelta:
+                </Typography>
+                <Typography
+                  variant="subtitle1"
+                  sx={{ fontWeight: 800, color: changeGiven > 0 ? 'success.dark' : 'text.primary' }}
+                >
+                  {formatMoney(changeGiven)}
                 </Typography>
               </Box>
             </Box>
@@ -214,14 +333,19 @@ export const PosPaymentDialog: React.FC<PosPaymentDialogProps> = ({
         </DialogContent>
 
         <DialogActions sx={{ p: 2 }}>
-          <Button onClick={onClose} disabled={loading} color="inherit" sx={{ textTransform: 'none' }}>
+          <Button
+            onClick={onClose}
+            disabled={loading}
+            color="inherit"
+            sx={{ textTransform: 'none' }}
+          >
             Cancelar
           </Button>
           <Button
             type="submit"
             variant="contained"
             color="primary"
-            disabled={loading}
+            disabled={loading || previewPending || hasShortfall}
             data-testid="confirm-payment-btn"
             startIcon={loading ? <CircularProgress size={18} color="inherit" /> : null}
             sx={{

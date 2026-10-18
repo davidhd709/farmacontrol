@@ -1,5 +1,6 @@
-import { useMemo, type PropsWithChildren } from 'react';
+import { useCallback, useEffect, useMemo, type PropsWithChildren } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { setUnauthorizedHandler } from '../../../api/http-client';
 import { authApi } from '../api/auth.api';
 import type { AuthUser, LoginCredentials } from '../auth.types';
 import { AuthContext, type AuthContextValue, type AuthStatus } from './auth-context';
@@ -8,11 +9,28 @@ export const authQueryKey = ['auth', 'current-user'] as const;
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const queryClient = useQueryClient();
+  const removeUserQueries = useCallback(() => {
+    queryClient.removeQueries({
+      predicate: (query) => JSON.stringify(query.queryKey) !== JSON.stringify(authQueryKey),
+    });
+  }, [queryClient]);
+  const clearSession = useCallback(() => {
+    void queryClient.cancelQueries();
+    queryClient.setQueryData<AuthUser | null>(authQueryKey, null);
+    removeUserQueries();
+  }, [queryClient, removeUserQueries]);
+  useEffect(() => setUnauthorizedHandler(clearSession), [clearSession]);
   const sessionQuery = useQuery({
     queryKey: authQueryKey,
     queryFn: ({ signal }) => authApi.getCurrentUser(signal),
     staleTime: 60_000,
   });
+
+  // Active observers can recreate a query while the protected tree is unmounting.
+  // Purge again after the unauthenticated render, including auth/me returning null.
+  useEffect(() => {
+    if (sessionQuery.data === null) removeUserQueries();
+  }, [sessionQuery.data, removeUserQueries]);
 
   const loginMutation = useMutation({
     mutationFn: (credentials: LoginCredentials) => authApi.login(credentials),
@@ -23,9 +41,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const logoutMutation = useMutation({
     mutationFn: () => authApi.logout(),
-    onSuccess: () => {
-      queryClient.setQueryData<AuthUser | null>(authQueryKey, null);
-    },
+    onSuccess: clearSession,
   });
 
   let status: AuthStatus = 'unauthenticated';

@@ -13,17 +13,24 @@ import {
   TableRow,
   Chip,
   Alert,
-  Autocomplete,
   Divider,
   MenuItem,
   IconButton,
   Tooltip,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
-import type { CustomerDto, ProductDto, ProductPresentationDto, SaleDto, SalePaymentMethod } from '@farmacia/contracts';
+import type {
+  CustomerDto,
+  ProductDto,
+  ProductPresentationDto,
+  SaleDto,
+  SalePaymentMethod,
+} from '@farmacia/contracts';
 import { fetchDefaultCustomer } from '../../customers/api/customers.api';
 import { CustomerFormDialog } from '../../customers/components/CustomerFormDialog';
-import { fetchProducts } from '../../catalog/api/products.api';
+import { PosProductSearch } from '../components/PosProductSearch';
+import { PosCustomerSelector } from '../components/PosCustomerSelector';
+import { fromCents, toCents, formatMoney, lineAmounts } from '../../../utils/money';
 import { confirmSale } from '../api/sales.api';
 import { PosPaymentDialog } from '../components/PosPaymentDialog';
 import { SaleReceiptDialog } from '../components/SaleReceiptDialog';
@@ -35,6 +42,7 @@ interface CartItem {
   productCode: string;
   productName: string;
   baseUnit: string;
+  // Monetary fields in this cart are integer cents; API payloads retain major units.
   basePrice: number;
   availableStock?: number;
   availablePresentations?: ProductPresentationDto[];
@@ -56,12 +64,9 @@ export const PosPage: React.FC = () => {
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
 
   // Búsqueda de Productos
-  const [productOptions, setProductOptions] = useState<ProductDto[]>([]);
-  const productOptionsRef = useRef<ProductDto[]>([]);
   // Clave de idempotencia estable mientras el contenido de la venta no cambie: un reintento
   // tras un fallo de red no puede registrar la venta dos veces.
   const saleRetryRef = useRef<{ fingerprint: string; key: string } | null>(null);
-  const [productLoading, setProductLoading] = useState(false);
 
   // Carrito de Ventas
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -106,7 +111,7 @@ export const PosPage: React.FC = () => {
     const initDefaultCustomer = async () => {
       try {
         const def = await fetchDefaultCustomer();
-        setSelectedCustomer(def);
+        setSelectedCustomer((current) => current ?? def);
       } catch (err) {
         console.error('Error al cargar cliente por defecto:', err);
       }
@@ -114,30 +119,15 @@ export const PosPage: React.FC = () => {
     initDefaultCustomer();
   }, []);
 
-  // Búsqueda de productos
-  const handleSearchProducts = async (term: string) => {
-    if (!term || term.trim().length < 2) {
-      setProductOptions([]);
-      return;
-    }
-    setProductLoading(true);
-    try {
-      const res = await fetchProducts({ search: term.trim() });
-      const items = res.items.filter((p) => p.isActive);
-      productOptionsRef.current = items;
-      setProductOptions(items);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setProductLoading(false);
-    }
-  };
-
   // Calcular el total de unidades base de un producto ya reservadas en las demás líneas del carrito
-  const getCartProductTotalBaseUnits = (items: CartItem[], productId: string, excludeIndex = -1): number => {
+  const getCartProductTotalBaseUnits = (
+    items: CartItem[],
+    productId: string,
+    excludeIndex = -1,
+  ): number => {
     return items.reduce((acc, it, idx) => {
       if (idx === excludeIndex || it.productId !== productId) return acc;
-      return acc + (it.quantityCommercial * it.presentationFactor);
+      return acc + it.quantityCommercial * it.presentationFactor;
     }, 0);
   };
 
@@ -176,22 +166,22 @@ export const PosPage: React.FC = () => {
 
     const chosenPres = presentation !== undefined ? presentation : defaultSalePres;
     const factor = chosenPres ? chosenPres.conversionFactor : 1;
-    const price = Number(chosenPres ? chosenPres.price : product.basePrice);
+    const price = toCents(chosenPres ? chosenPres.price : product.basePrice);
     const presId = chosenPres ? chosenPres.id : null;
     const presName = chosenPres ? chosenPres.name : null;
 
     setCart((prev) => {
       const existingIdx = prev.findIndex(
-        (item) => item.productId === product.id && item.presentationId === presId
+        (item) => item.productId === product.id && item.presentationId === presId,
       );
 
       const otherBase = getCartProductTotalBaseUnits(prev, product.id, existingIdx);
       const newQty = existingIdx >= 0 ? prev[existingIdx].quantityCommercial + 1 : 1;
-      const totalBaseRequired = otherBase + (newQty * factor);
+      const totalBaseRequired = otherBase + newQty * factor;
 
       if (product.availableStock !== undefined && totalBaseRequired > product.availableStock) {
         setErrorMsg(
-          `Stock insuficiente para "${product.name}": requiere ${totalBaseRequired} ${product.baseUnit}, pero sólo hay ${product.availableStock} disponibles.`
+          `Stock insuficiente para "${product.name}": requiere ${totalBaseRequired} ${product.baseUnit}, pero sólo hay ${product.availableStock} disponibles.`,
         );
         return prev;
       }
@@ -199,14 +189,18 @@ export const PosPage: React.FC = () => {
       if (existingIdx >= 0) {
         const updated = [...prev];
         const item = updated[existingIdx];
-        const subtotal = newQty * item.unitPrice - item.discount;
-        const taxAmount = (subtotal * (item.taxRate / 100));
+        const { subtotal, taxAmount, total } = lineAmounts(
+          newQty,
+          item.unitPrice,
+          item.discount,
+          item.taxRate,
+        );
         updated[existingIdx] = {
           ...item,
           quantityCommercial: newQty,
           subtotal,
           taxAmount,
-          total: subtotal + taxAmount,
+          total,
         };
         return updated;
       }
@@ -224,7 +218,7 @@ export const PosPage: React.FC = () => {
           productCode: product.code,
           productName: product.name,
           baseUnit: product.baseUnit,
-          basePrice: Number(product.basePrice),
+          basePrice: toCents(product.basePrice),
           availableStock: product.availableStock,
           availablePresentations: salePresentations,
           presentationId: presId,
@@ -249,20 +243,24 @@ export const PosPage: React.FC = () => {
       const pres = item.availablePresentations?.find((p) => p.id === newPresId) || null;
       const factor = pres ? pres.conversionFactor : 1;
       const otherBase = getCartProductTotalBaseUnits(prev, item.productId, index);
-      const totalBaseRequired = otherBase + (item.quantityCommercial * factor);
+      const totalBaseRequired = otherBase + item.quantityCommercial * factor;
 
       if (item.availableStock !== undefined && totalBaseRequired > item.availableStock) {
         setErrorMsg(
-          `Stock insuficiente para "${item.productName}" en esta presentación: requiere ${totalBaseRequired} ${item.baseUnit}, pero sólo hay ${item.availableStock} disponibles.`
+          `Stock insuficiente para "${item.productName}" en esta presentación: requiere ${totalBaseRequired} ${item.baseUnit}, pero sólo hay ${item.availableStock} disponibles.`,
         );
         return prev;
       }
 
       setErrorMsg(null);
-      const unitPrice = pres ? Number(pres.price) : item.basePrice;
+      const unitPrice = pres ? toCents(pres.price) : item.basePrice;
       const presName = pres ? pres.name : null;
-      const subtotal = Math.max(0, item.quantityCommercial * unitPrice - item.discount);
-      const taxAmount = subtotal * (item.taxRate / 100);
+      const { subtotal, taxAmount, total } = lineAmounts(
+        item.quantityCommercial,
+        unitPrice,
+        item.discount,
+        item.taxRate,
+      );
 
       const updated = [...prev];
       updated[index] = {
@@ -273,36 +271,40 @@ export const PosPage: React.FC = () => {
         unitPrice,
         subtotal,
         taxAmount,
-        total: subtotal + taxAmount,
+        total,
       };
       return updated;
     });
   };
 
   const handleUpdateQty = (index: number, newQty: number) => {
-    if (newQty <= 0) return;
+    if (!Number.isSafeInteger(newQty) || newQty <= 0) return;
     setCart((prev) => {
       const item = prev[index];
       const otherBase = getCartProductTotalBaseUnits(prev, item.productId, index);
-      const totalBaseRequired = otherBase + (newQty * item.presentationFactor);
+      const totalBaseRequired = otherBase + newQty * item.presentationFactor;
 
       if (item.availableStock !== undefined && totalBaseRequired > item.availableStock) {
         setErrorMsg(
-          `Stock insuficiente para "${item.productName}": requiere ${totalBaseRequired} ${item.baseUnit}, pero sólo hay ${item.availableStock} disponibles.`
+          `Stock insuficiente para "${item.productName}": requiere ${totalBaseRequired} ${item.baseUnit}, pero sólo hay ${item.availableStock} disponibles.`,
         );
         return prev;
       }
 
       setErrorMsg(null);
       const updated = [...prev];
-      const subtotal = Math.max(0, newQty * item.unitPrice - item.discount);
-      const taxAmount = (subtotal * (item.taxRate / 100));
+      const { subtotal, taxAmount, total } = lineAmounts(
+        newQty,
+        item.unitPrice,
+        item.discount,
+        item.taxRate,
+      );
       updated[index] = {
         ...item,
         quantityCommercial: newQty,
         subtotal,
         taxAmount,
-        total: subtotal + taxAmount,
+        total,
       };
       return updated;
     });
@@ -328,7 +330,7 @@ export const PosPage: React.FC = () => {
     paymentMethod: SalePaymentMethod,
     amountPaid: number,
     notes?: string,
-    bankAccountId?: string
+    bankAccountId?: string,
   ) => {
     if (cart.length === 0) {
       throw new Error('El carrito de venta está vacío.');
@@ -347,7 +349,7 @@ export const PosPage: React.FC = () => {
           productId: item.productId,
           presentationId: item.presentationId || undefined,
           quantityCommercial: item.quantityCommercial,
-          discount: item.discount > 0 ? item.discount : undefined,
+          discount: item.discount > 0 ? fromCents(item.discount) : undefined,
         })),
       };
 
@@ -361,8 +363,6 @@ export const PosPage: React.FC = () => {
       setPaymentDialogOpen(false);
       setReceiptSale(completedSale);
       setCart([]);
-      setProductOptions([]);
-      productOptionsRef.current = [];
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al procesar la venta';
       setErrorMsg(msg);
@@ -375,7 +375,16 @@ export const PosPage: React.FC = () => {
   return (
     <Box sx={{ p: { xs: 2, md: 3 }, maxWidth: 1400, margin: '0 auto' }}>
       {/* Encabezado y Selector de Cliente */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 2 }}>
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          mb: 2,
+          flexWrap: 'wrap',
+          gap: 2,
+        }}
+      >
         <Box>
           <Typography variant="h5" component="h1" sx={{ fontWeight: 800, color: 'text.primary' }}>
             Punto de Venta (POS)
@@ -386,24 +395,34 @@ export const PosPage: React.FC = () => {
         </Box>
 
         {/* Tarjeta de Cliente Activo */}
-        <Paper variant="outlined" sx={{ p: 1.5, display: 'flex', alignItems: 'center', gap: 2, bgcolor: 'background.paper' }}>
-          <Box>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Cliente Actual:</Typography>
+        <Paper
+          variant="outlined"
+          sx={{
+            p: 1.5,
+            display: 'flex',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            maxWidth: '100%',
+            gap: 2,
+            bgcolor: 'background.paper',
+          }}
+        >
+          <Box sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+              Cliente Actual:
+            </Typography>
             <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
               {selectedCustomer ? selectedCustomer.name : 'Cargando cliente...'}
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              Doc: {selectedCustomer?.documentNumber} {selectedCustomer?.isDefault && '(Consumidor Final)'}
+              Doc: {selectedCustomer?.documentNumber}{' '}
+              {selectedCustomer?.isDefault && '(Consumidor Final)'}
             </Typography>
           </Box>
-          <Button
-            size="small"
-            variant="outlined"
-            onClick={() => setCustomerModalOpen(true)}
-            sx={{ textTransform: 'none' }}
-          >
-            + Cambiar / Nuevo
-          </Button>
+          <PosCustomerSelector
+            onSelect={setSelectedCustomer}
+            onCreate={() => setCustomerModalOpen(true)}
+          />
         </Paper>
       </Box>
 
@@ -414,103 +433,20 @@ export const PosPage: React.FC = () => {
       )}
 
       {/* Grid Principal: Búsqueda y Carrito vs Totales */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1fr 340px' }, gap: 3, alignItems: 'start' }}>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', lg: '1fr 340px' },
+          gap: 3,
+          alignItems: 'start',
+        }}
+      >
         <Box>
           {/* Barra de Búsqueda Rápida de Productos */}
           <Paper sx={{ p: 2, mb: 2 }} elevation={1}>
-            <Autocomplete
-              data-testid="pos-product-autocomplete"
-              options={productOptions}
-              getOptionLabel={(opt) => `${opt.code} - ${opt.name} (${opt.baseUnit})`}
-              getOptionDisabled={(opt) =>
-                !opt.requiresLotControl || (opt.availableStock !== undefined && opt.availableStock <= 0)
-              }
-              loading={productLoading}
-              onInputChange={(_, value) => handleSearchProducts(value)}
-              onChange={(_, value) => {
-                if (value) {
-                  handleAddToCart(value, null);
-                }
-              }}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  inputRef={searchInputRef}
-                  label="Buscar producto por nombre, código o escáner..."
-                  placeholder="Ej: Amoxicilina, MED-001..."
-                  size="small"
-                  autoFocus
-                  onChange={(e) => handleSearchProducts(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && productOptionsRef.current.length > 0) {
-                      e.preventDefault();
-                      handleAddToCart(productOptionsRef.current[0], null);
-                    }
-                  }}
-                />
-              )}
-              renderOption={(props, opt) => {
-                const isOutOfStock = opt.availableStock !== undefined && opt.availableStock <= 0;
-                const needsRegularization = !opt.requiresLotControl;
-                return (
-                  <li {...props} key={opt.id}>
-                    <Box sx={{ width: '100%', py: 0.5, opacity: isOutOfStock || needsRegularization ? 0.6 : 1 }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                          {opt.name}
-                        </Typography>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          {needsRegularization ? (
-                            <Chip
-                              size="small"
-                              label="No vendible: regularizar en catálogo"
-                              color="warning"
-                              variant="outlined"
-                              sx={{ height: 20, fontSize: '0.68rem', fontWeight: 700 }}
-                            />
-                          ) : opt.availableStock !== undefined && (
-                            <Chip
-                              size="small"
-                              label={
-                                isOutOfStock
-                                  ? 'Sin stock'
-                                  : `Disp: ${opt.availableStock} ${opt.baseUnit}`
-                              }
-                              color={
-                                isOutOfStock
-                                  ? 'error'
-                                  : opt.availableStock > 10
-                                  ? 'success'
-                                  : 'warning'
-                              }
-                              variant={isOutOfStock ? 'filled' : 'outlined'}
-                              sx={{ height: 20, fontSize: '0.68rem', fontWeight: 700 }}
-                            />
-                          )}
-                          <Typography variant="body2" sx={{ fontWeight: 700, color: 'primary.main', whiteSpace: 'nowrap' }}>
-                            ${Number(opt.basePrice).toLocaleString('es-CO')} / {opt.baseUnit}
-                          </Typography>
-                        </Box>
-                      </Box>
-                      <Box sx={{ display: 'flex', gap: 0.8, alignItems: 'center', mt: 0.5, flexWrap: 'wrap' }}>
-                        <Typography variant="caption" color="text.secondary">
-                          SKU: {opt.code} • Base: {opt.baseUnit} {opt.requiresLotControl && '• FEFO'}
-                        </Typography>
-                        {opt.presentations && opt.presentations.length > 0 && opt.presentations.map((pr) => (
-                          <Chip
-                            key={pr.id}
-                            size="small"
-                            label={`${pr.name} (x${pr.conversionFactor}): $${Number(pr.price).toLocaleString('es-CO')}`}
-                            variant={pr.isDefault ? 'filled' : 'outlined'}
-                            color={pr.isDefault ? 'primary' : 'default'}
-                            sx={{ height: 18, fontSize: '0.65rem' }}
-                          />
-                        ))}
-                      </Box>
-                    </Box>
-                  </li>
-                );
-              }}
+            <PosProductSearch
+              inputRef={searchInputRef}
+              onSelect={(product) => handleAddToCart(product, null)}
             />
           </Paper>
 
@@ -520,10 +456,18 @@ export const PosPage: React.FC = () => {
               <TableHead sx={{ bgcolor: 'action.hover' }}>
                 <TableRow>
                   <TableCell sx={{ fontWeight: 600 }}>Producto / Unidad de Venta</TableCell>
-                  <TableCell align="center" sx={{ fontWeight: 600, width: 120 }}>Cantidad</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 600 }}>Precio Unit.</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 600 }}>Total</TableCell>
-                  <TableCell align="center" sx={{ fontWeight: 600, width: 80 }}>Acción</TableCell>
+                  <TableCell align="center" sx={{ fontWeight: 600, width: 120 }}>
+                    Cantidad
+                  </TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 600 }}>
+                    Precio Unit.
+                  </TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 600 }}>
+                    Total
+                  </TableCell>
+                  <TableCell align="center" sx={{ fontWeight: 600, width: 80 }}>
+                    Acción
+                  </TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -546,28 +490,44 @@ export const PosPage: React.FC = () => {
                           <Box sx={{ mt: 0.5, mb: 0.5 }}>
                             <TextField
                               select
+                              label={`Presentación de ${item.productName}`}
                               size="small"
                               value={item.presentationId || ''}
-                              onChange={(e) => handleChangePresentation(idx, e.target.value || null)}
+                              onChange={(e) =>
+                                handleChangePresentation(idx, e.target.value || null)
+                              }
                               sx={{ minWidth: 200 }}
                               slotProps={{ select: { sx: { py: 0.4, fontSize: '0.8rem' } } }}
                             >
                               <MenuItem value="" sx={{ fontSize: '0.8rem' }}>
-                                Unidad Base ({item.baseUnit}) — ${item.basePrice.toLocaleString('es-CO')}
+                                Unidad Base ({item.baseUnit}) — {formatMoney(item.basePrice)}
                               </MenuItem>
                               {item.availablePresentations.map((p) => (
                                 <MenuItem key={p.id} value={p.id} sx={{ fontSize: '0.8rem' }}>
-                                  {p.name} (x{p.conversionFactor} {item.baseUnit}) — ${Number(p.price).toLocaleString('es-CO')}
+                                  {p.name} (x{p.conversionFactor} {item.baseUnit}) —{' '}
+                                  {formatMoney(toCents(p.price))}
                                 </MenuItem>
                               ))}
                             </TextField>
                           </Box>
                         ) : (
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ display: 'block' }}
+                          >
                             Unidad base individual ({item.baseUnit})
                           </Typography>
                         )}
-                        <Box sx={{ display: 'flex', gap: 0.8, alignItems: 'center', mt: 0.5, flexWrap: 'wrap' }}>
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            gap: 0.8,
+                            alignItems: 'center',
+                            mt: 0.5,
+                            flexWrap: 'wrap',
+                          }}
+                        >
                           <Chip
                             label={`FEFO: descuenta ${item.quantityCommercial * item.presentationFactor} ${item.baseUnit}`}
                             size="small"
@@ -580,12 +540,14 @@ export const PosPage: React.FC = () => {
                               label={`Disp: ${item.availableStock} ${item.baseUnit}`}
                               size="small"
                               color={
-                                item.quantityCommercial * item.presentationFactor > item.availableStock
+                                item.quantityCommercial * item.presentationFactor >
+                                item.availableStock
                                   ? 'error'
                                   : 'default'
                               }
                               variant={
-                                item.quantityCommercial * item.presentationFactor > item.availableStock
+                                item.quantityCommercial * item.presentationFactor >
+                                item.availableStock
                                   ? 'filled'
                                   : 'outlined'
                               }
@@ -595,12 +557,30 @@ export const PosPage: React.FC = () => {
                         </Box>
                       </TableCell>
                       <TableCell align="center">
-                        <Box sx={{ display: 'inline-flex', alignItems: 'center', border: 1, borderColor: 'divider', borderRadius: 1.5, p: 0.2, bgcolor: 'background.paper' }}>
+                        <Box
+                          sx={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            border: 1,
+                            borderColor: 'divider',
+                            borderRadius: 1.5,
+                            p: 0.2,
+                            bgcolor: 'background.paper',
+                          }}
+                        >
                           <Button
                             size="small"
                             onClick={() => handleUpdateQty(idx, item.quantityCommercial - 1)}
                             disabled={item.quantityCommercial <= 1}
-                            sx={{ minWidth: 26, width: 26, height: 26, p: 0, fontSize: '0.95rem', lineHeight: 1, fontWeight: 700 }}
+                            sx={{
+                              minWidth: 26,
+                              width: 26,
+                              height: 26,
+                              p: 0,
+                              fontSize: '0.95rem',
+                              lineHeight: 1,
+                              fontWeight: 700,
+                            }}
                             aria-label="Disminuir cantidad"
                           >
                             -
@@ -610,25 +590,50 @@ export const PosPage: React.FC = () => {
                             size="small"
                             value={item.quantityCommercial}
                             onChange={(e) => handleUpdateQty(idx, Number(e.target.value))}
-                            slotProps={{ htmlInput: { min: 1, step: 1, style: { textAlign: 'center', width: 40, padding: '2px 4px', fontSize: '0.875rem', fontWeight: 700 } } }}
+                            slotProps={{
+                              htmlInput: {
+                                min: 1,
+                                step: 1,
+                                'aria-label': `Cantidad de ${item.productName}`,
+                                style: {
+                                  textAlign: 'center',
+                                  width: 40,
+                                  padding: '2px 4px',
+                                  fontSize: '0.875rem',
+                                  fontWeight: 700,
+                                },
+                              },
+                            }}
                             variant="standard"
-                            sx={{ '& .MuiInput-underline:before': { borderBottom: 'none' }, '& .MuiInput-underline:hover:not(.Mui-disabled):before': { borderBottom: 'none' }, '& .MuiInput-underline:after': { borderBottom: 'none' } }}
+                            sx={{
+                              '& .MuiInput-underline:before': { borderBottom: 'none' },
+                              '& .MuiInput-underline:hover:not(.Mui-disabled):before': {
+                                borderBottom: 'none',
+                              },
+                              '& .MuiInput-underline:after': { borderBottom: 'none' },
+                            }}
                           />
                           <Button
                             size="small"
                             onClick={() => handleUpdateQty(idx, item.quantityCommercial + 1)}
-                            sx={{ minWidth: 26, width: 26, height: 26, p: 0, fontSize: '0.95rem', lineHeight: 1, fontWeight: 700 }}
+                            sx={{
+                              minWidth: 26,
+                              width: 26,
+                              height: 26,
+                              p: 0,
+                              fontSize: '0.95rem',
+                              lineHeight: 1,
+                              fontWeight: 700,
+                            }}
                             aria-label="Aumentar cantidad"
                           >
                             +
                           </Button>
                         </Box>
                       </TableCell>
-                      <TableCell align="right">
-                        ${item.unitPrice.toLocaleString('es-CO')}
-                      </TableCell>
+                      <TableCell align="right">{formatMoney(item.unitPrice)}</TableCell>
                       <TableCell align="right" sx={{ fontWeight: 700 }}>
-                        ${item.total.toLocaleString('es-CO')}
+                        {formatMoney(item.total)}
                       </TableCell>
                       <TableCell align="center">
                         <Tooltip title="Eliminar ítem">
@@ -662,33 +667,45 @@ export const PosPage: React.FC = () => {
 
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 2 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-              <Typography variant="body2" color="text.secondary">Artículos:</Typography>
-              <Typography variant="body2" sx={{ fontWeight: 600 }}>{cart.length} líneas</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Artículos:
+              </Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                {cart.length} líneas
+              </Typography>
             </Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-              <Typography variant="body2" color="text.secondary">Subtotal:</Typography>
-              <Typography variant="body2">${cartSubtotal.toLocaleString('es-CO')}</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Subtotal:
+              </Typography>
+              <Typography variant="body2">{formatMoney(cartSubtotal)}</Typography>
             </Box>
             {cartDiscount > 0 && (
               <Box sx={{ display: 'flex', justifyContent: 'space-between', color: 'error.main' }}>
                 <Typography variant="body2">Descuentos:</Typography>
-                <Typography variant="body2">-${cartDiscount.toLocaleString('es-CO')}</Typography>
+                <Typography variant="body2">-{formatMoney(cartDiscount)}</Typography>
               </Box>
             )}
             {cartTax > 0 && (
               <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                <Typography variant="body2" color="text.secondary">Impuestos:</Typography>
-                <Typography variant="body2">${cartTax.toLocaleString('es-CO')}</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Impuestos:
+                </Typography>
+                <Typography variant="body2">{formatMoney(cartTax)}</Typography>
               </Box>
             )}
           </Box>
 
           <Divider sx={{ my: 1.5 }} />
 
-          <Box sx={{ textAlign: 'center', py: 1.5, mb: 2, bgcolor: 'primary.50', borderRadius: 1.5 }}>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>TOTAL A PAGAR</Typography>
+          <Box
+            sx={{ textAlign: 'center', py: 1.5, mb: 2, bgcolor: 'primary.50', borderRadius: 1.5 }}
+          >
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+              TOTAL A PAGAR
+            </Typography>
             <Typography variant="h4" sx={{ fontWeight: 800, color: 'primary.main' }}>
-              ${cartTotal.toLocaleString('es-CO')}
+              {formatMoney(cartTotal)}
             </Typography>
           </Box>
 
@@ -748,7 +765,13 @@ export const PosPage: React.FC = () => {
       {/* Diálogo de Cobro y Medio de Pago */}
       <PosPaymentDialog
         open={paymentDialogOpen}
-        total={cartTotal}
+        total={fromCents(cartTotal)}
+        items={cart.map((item) => ({
+          productId: item.productId,
+          presentationId: item.presentationId,
+          quantityCommercial: item.quantityCommercial,
+        }))}
+        productNames={Object.fromEntries(cart.map((item) => [item.productId, item.productName]))}
         onClose={() => setPaymentDialogOpen(false)}
         onConfirm={handleConfirmSale}
         loading={paymentLoading}
@@ -806,8 +829,24 @@ export const PosPage: React.FC = () => {
       {/* Notificación modal estilo SweetAlert2 */}
       <SweetModal
         open={snackbar.open}
-        type={snackbar.severity === 'error' ? 'error' : snackbar.severity === 'warning' ? 'warning' : snackbar.severity === 'info' ? 'info' : 'success'}
-        title={snackbar.severity === 'error' ? '¡Error!' : snackbar.severity === 'warning' ? '¡Atención!' : snackbar.severity === 'info' ? 'Información' : '¡Buen trabajo!'}
+        type={
+          snackbar.severity === 'error'
+            ? 'error'
+            : snackbar.severity === 'warning'
+              ? 'warning'
+              : snackbar.severity === 'info'
+                ? 'info'
+                : 'success'
+        }
+        title={
+          snackbar.severity === 'error'
+            ? '¡Error!'
+            : snackbar.severity === 'warning'
+              ? '¡Atención!'
+              : snackbar.severity === 'info'
+                ? 'Información'
+                : '¡Buen trabajo!'
+        }
         text={snackbar.message}
         confirmText="OK"
         onConfirm={() => setSnackbar((prev) => ({ ...prev, open: false }))}

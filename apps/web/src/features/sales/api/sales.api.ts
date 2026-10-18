@@ -1,5 +1,7 @@
 import type {
   SaleDto,
+  FefoPreviewPayload,
+  FefoPreviewDto,
   ConfirmSalePayload,
   SaleQueryFilters,
   PaginatedResponse,
@@ -8,7 +10,7 @@ import { apiRequest } from '../../../api/http-client';
 
 export async function confirmSale(
   payload: ConfirmSalePayload,
-  idempotencyKey?: string
+  idempotencyKey?: string,
 ): Promise<SaleDto> {
   const headers: Record<string, string> = {};
   if (idempotencyKey) {
@@ -23,7 +25,7 @@ export async function confirmSale(
 }
 
 export async function fetchSales(
-  filters: SaleQueryFilters = {}
+  filters: SaleQueryFilters = {},
 ): Promise<PaginatedResponse<SaleDto>> {
   const query = new URLSearchParams();
 
@@ -36,10 +38,7 @@ export async function fetchSales(
   if (filters.limit) query.set('limit', String(filters.limit));
 
   const qs = query.toString();
-  return apiRequest<PaginatedResponse<SaleDto>>(
-    qs ? `sales?${qs}` : 'sales',
-    { method: 'GET' }
-  );
+  return apiRequest<PaginatedResponse<SaleDto>>(qs ? `sales?${qs}` : 'sales', { method: 'GET' });
 }
 
 export async function fetchSaleById(id: string): Promise<SaleDto> {
@@ -52,5 +51,16 @@ export async function cancelSale(id: string, reason: string): Promise<SaleDto> {
   return apiRequest<SaleDto>(`sales/${id}/cancel`, {
     method: 'POST',
     body: JSON.stringify({ reason }),
+  });
+}
+
+export function fetchFefoPreview(
+  payload: FefoPreviewPayload,
+  signal?: AbortSignal,
+): Promise<FefoPreviewDto> {
+  return apiRequest<FefoPreviewDto>('sales/fefo-preview', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    signal,
   });
 }

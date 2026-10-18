@@ -8,7 +8,8 @@ import type {
 import { apiRequest } from '../../../api/http-client';
 
 export async function fetchCustomers(
-  filters: CustomerQueryFilters = {}
+  filters: CustomerQueryFilters = {},
+  signal?: AbortSignal,
 ): Promise<PaginatedResponse<CustomerDto>> {
   const query = new URLSearchParams();
 
@@ -18,10 +19,10 @@ export async function fetchCustomers(
   if (filters.limit) query.set('limit', String(filters.limit));
 
   const qs = query.toString();
-  return apiRequest<PaginatedResponse<CustomerDto>>(
-    qs ? `customers?${qs}` : 'customers',
-    { method: 'GET' }
-  );
+  return apiRequest<PaginatedResponse<CustomerDto>>(qs ? `customers?${qs}` : 'customers', {
+    method: 'GET',
+    signal,
+  });
 }
 
 export async function fetchDefaultCustomer(): Promise<CustomerDto> {
@@ -36,9 +37,7 @@ export async function fetchCustomerById(id: string): Promise<CustomerDto> {
   });
 }
 
-export async function createCustomer(
-  payload: CreateCustomerPayload
-): Promise<CustomerDto> {
+export async function createCustomer(payload: CreateCustomerPayload): Promise<CustomerDto> {
   return apiRequest<CustomerDto>('customers', {
     method: 'POST',
     body: JSON.stringify(payload),
@@ -47,7 +46,7 @@ export async function createCustomer(
 
 export async function updateCustomer(
   id: string,
-  payload: UpdateCustomerPayload
+  payload: UpdateCustomerPayload,
 ): Promise<CustomerDto> {
   return apiRequest<CustomerDto>(`customers/${id}`, {
     method: 'PUT',
