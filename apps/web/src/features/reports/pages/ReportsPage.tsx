@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { TopProductsSection } from '../components/TopProductsSection';
+import { ValuationMarginSummary, valuationIssueLabel } from '../components/ValuationMarginSummary';
 import { useQuery } from '@tanstack/react-query';
 import { HomeBackButton } from '../../../components/HomeBackButton';
 import {
@@ -34,18 +37,25 @@ import {
 import { QuickDateRange } from '../../../components/QuickDateRange';
 import type { SupplierReturnStatus } from '@farmacia/contracts';
 
-type ReportTab = 'valuation' | 'expirations' | 'supplier-returns' | 'sales' | 'cash';
+type ReportTab =
+  'valuation' | 'expirations' | 'supplier-returns' | 'sales' | 'cash' | 'top-products';
 
-const RETURN_STATUS: Record<SupplierReturnStatus, { label: string; color: 'warning' | 'error' | 'default' }> = {
+const RETURN_STATUS: Record<
+  SupplierReturnStatus,
+  { label: string; color: 'warning' | 'error' | 'default' }
+> = {
   AVISAR_AHORA: { label: 'Avisar al proveedor', color: 'warning' },
   AVISO_ATRASADO: { label: 'Aviso atrasado', color: 'error' },
   FUERA_DE_PLAZO: { label: 'Fuera del plazo de devolución', color: 'default' },
 };
 
 export function ReportsPage() {
-  const [activeTab, setActiveTab] = useState<ReportTab>('valuation');
-  const [fromDate, setFromDate] = useState<string>('');
-  const [toDate, setToDate] = useState<string>('');
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<ReportTab>(
+    searchParams.get('tab') === 'sales' ? 'sales' : 'valuation',
+  );
+  const [fromDate, setFromDate] = useState<string>(searchParams.get('fromDate') ?? '');
+  const [toDate, setToDate] = useState<string>(searchParams.get('toDate') ?? '');
   const [isExporting, setIsExporting] = useState<boolean>(false);
   const [exportError, setExportError] = useState<string | null>(null);
 
@@ -73,14 +83,16 @@ export function ReportsPage() {
   // 3. Ventas por período
   const salesQuery = useQuery({
     queryKey: ['reports', 'sales', fromDate, toDate],
-    queryFn: () => fetchSalesReport({ fromDate: fromDate || undefined, toDate: toDate || undefined }),
+    queryFn: () =>
+      fetchSalesReport({ fromDate: fromDate || undefined, toDate: toDate || undefined }),
     enabled: activeTab === 'sales',
   });
 
   // 4. Movimientos de Caja
   const cashQuery = useQuery({
     queryKey: ['reports', 'cash', fromDate, toDate],
-    queryFn: () => fetchCashSummaryReport({ fromDate: fromDate || undefined, toDate: toDate || undefined }),
+    queryFn: () =>
+      fetchCashSummaryReport({ fromDate: fromDate || undefined, toDate: toDate || undefined }),
     enabled: activeTab === 'cash',
   });
 
@@ -88,7 +100,8 @@ export function ReportsPage() {
     setIsExporting(true);
     setExportError(null);
     try {
-      let reportKey: 'inventory-valuation' | 'expirations' | 'sales' | 'cash-summary' | 'supplier-returns';
+      let reportKey:
+        'inventory-valuation' | 'expirations' | 'sales' | 'cash-summary' | 'supplier-returns';
       if (activeTab === 'valuation') reportKey = 'inventory-valuation';
       else if (activeTab === 'expirations') reportKey = 'expirations';
       else if (activeTab === 'supplier-returns') reportKey = 'supplier-returns';
@@ -128,20 +141,23 @@ export function ReportsPage() {
               Reportes Operativos y Exportación
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Consultas consolidadas, análisis de existencias, auditoría de ventas y movimientos de caja en tiempo real.
+              Consultas consolidadas, análisis de existencias, auditoría de ventas y movimientos de
+              caja en tiempo real.
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
             <HomeBackButton />
-            <Button
-              variant="contained"
-              color="primary"
-              onClick={() => void handleExportCsv()}
-              disabled={isExporting}
-              data-testid="export-csv-btn"
-            >
-              {isExporting ? 'Exportando…' : '📥 Exportar a CSV / Excel'}
-            </Button>
+            {activeTab !== 'top-products' && (
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={() => void handleExportCsv()}
+                disabled={isExporting}
+                data-testid="export-csv-btn"
+              >
+                {isExporting ? 'Exportando…' : '📥 Exportar a CSV / Excel'}
+              </Button>
+            )}
           </Box>
         </Box>
 
@@ -161,17 +177,36 @@ export function ReportsPage() {
             data-testid="reports-tabs"
           >
             <Tab label="📦 Inventario Valorizado" value="valuation" data-testid="tab-valuation" />
-            <Tab label="⏳ Lotes y Vencimientos" value="expirations" data-testid="tab-expirations" />
-            <Tab label="Devoluciones a proveedor" value="supplier-returns" data-testid="tab-supplier-returns" />
+            <Tab
+              label="⏳ Lotes y Vencimientos"
+              value="expirations"
+              data-testid="tab-expirations"
+            />
+            <Tab
+              label="Devoluciones a proveedor"
+              value="supplier-returns"
+              data-testid="tab-supplier-returns"
+            />
             <Tab label="💰 Ventas por Período" value="sales" data-testid="tab-sales" />
+            <Tab
+              label="Productos más vendidos"
+              value="top-products"
+              data-testid="tab-top-products"
+            />
             <Tab label="💵 Movimientos de Caja" value="cash" data-testid="tab-cash" />
           </Tabs>
         </Paper>
 
+        {activeTab === 'top-products' && <TopProductsSection />}
+
         {/* Filtros de Fecha (para Ventas y Caja) */}
         {(activeTab === 'sales' || activeTab === 'cash') && (
           <Paper variant="outlined" sx={{ p: 2 }}>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: 'center' }}>
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={2}
+              sx={{ alignItems: 'center' }}
+            >
               <Typography variant="body2" sx={{ fontWeight: 600 }}>
                 Rango de fechas:
               </Typography>
@@ -274,6 +309,8 @@ export function ReportsPage() {
               </Card>
             </Box>
 
+            <ValuationMarginSummary query={valuationQuery} />
+
             {/* Tabla */}
             <Paper variant="outlined">
               <TableContainer>
@@ -283,29 +320,55 @@ export function ReportsPage() {
                       <TableCell sx={{ fontWeight: 700 }}>Código</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Medicamento / Producto</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Categoría</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }} align="right">Stock Actual</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }} align="right">Costo Unitario</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }} align="right">Precio Unitario</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }} align="right">Valor al Costo</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }} align="right">Valor a la Venta</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }} align="right">
+                        Stock Actual
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 700 }} align="right">
+                        Costo Unitario
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 700 }} align="right">
+                        Precio Unitario
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 700 }} align="right">
+                        Valor al Costo
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 700 }} align="right">
+                        Valor a la Venta
+                      </TableCell>
+                      <TableCell align="right">Margen potencial</TableCell>
+                      <TableCell>Datos de valoración</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {valuationQuery.isLoading ? (
                       <TableRow>
-                        <TableCell colSpan={8} align="center" sx={{ py: 6 }}>
+                        <TableCell colSpan={10} align="center" sx={{ py: 6 }}>
                           <CircularProgress size={32} />
+                        </TableCell>
+                      </TableRow>
+                    ) : valuationQuery.isError ? (
+                      <TableRow>
+                        <TableCell colSpan={10}>
+                          <Alert severity="error">
+                            No fue posible cargar el inventario valorizado.
+                          </Alert>
                         </TableCell>
                       </TableRow>
                     ) : valuationQuery.data?.items.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
-                          <Typography color="text.secondary">No hay productos en inventario.</Typography>
+                        <TableCell colSpan={10} align="center" sx={{ py: 4 }}>
+                          <Typography color="text.secondary">
+                            No hay productos en inventario.
+                          </Typography>
                         </TableCell>
                       </TableRow>
                     ) : (
                       valuationQuery.data?.items.map((row) => (
-                        <TableRow key={row.productId} hover data-testid={`val-row-${row.productCode}`}>
+                        <TableRow
+                          key={row.productId}
+                          hover
+                          data-testid={`val-row-${row.productCode}`}
+                        >
                           <TableCell sx={{ fontWeight: 600 }}>{row.productCode}</TableCell>
                           <TableCell>{row.productName}</TableCell>
                           <TableCell>{row.categoryName}</TableCell>
@@ -314,9 +377,21 @@ export function ReportsPage() {
                           </TableCell>
                           <TableCell align="right">{formatCurrency(row.baseCost)}</TableCell>
                           <TableCell align="right">{formatCurrency(row.basePrice)}</TableCell>
-                          <TableCell align="right" sx={{ fontWeight: 600 }}>{formatCurrency(row.totalCostValue)}</TableCell>
+                          <TableCell align="right" sx={{ fontWeight: 600 }}>
+                            {formatCurrency(row.totalCostValue)}
+                          </TableCell>
                           <TableCell align="right" sx={{ fontWeight: 700, color: 'success.main' }}>
                             {formatCurrency(row.totalPriceValue)}
+                          </TableCell>
+                          <TableCell align="right">
+                            {row.potentialMargin === null
+                              ? 'No disponible'
+                              : formatCurrency(row.potentialMargin)}
+                          </TableCell>
+                          <TableCell>
+                            {row.valuationIssue
+                              ? valuationIssueLabel[row.valuationIssue]
+                              : 'Completo'}
                           </TableCell>
                         </TableRow>
                       ))

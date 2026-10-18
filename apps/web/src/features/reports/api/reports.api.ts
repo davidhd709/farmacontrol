@@ -5,6 +5,8 @@ import type {
   InventoryValuationReportDto,
   ReportDateFilter,
   SalesReportDto,
+  TopProductsFilter,
+  TopProductsReportDto,
 } from '@farmacia/contracts';
 import { apiRequest } from '../../../api/http-client';
 import { businessToday } from '../../../utils/business-date';
@@ -18,24 +20,28 @@ interface ApiResponse<T> {
 }
 
 function unwrapReportData<T>(res: ApiResponse<T> | T): T {
-  if (res && typeof res === 'object' && 'data' in res && (res as ApiResponse<T>).data !== undefined) {
+  if (
+    res &&
+    typeof res === 'object' &&
+    'data' in res &&
+    (res as ApiResponse<T>).data !== undefined
+  ) {
     return (res as ApiResponse<T>).data as T;
   }
   return res as T;
 }
 
 export async function fetchInventoryValuationReport(): Promise<InventoryValuationReportDto> {
-  const res = await apiRequest<ApiResponse<InventoryValuationReportDto> | InventoryValuationReportDto>(
-    'reports/inventory-valuation',
-    { method: 'GET' }
-  );
+  const res = await apiRequest<
+    ApiResponse<InventoryValuationReportDto> | InventoryValuationReportDto
+  >('reports/inventory-valuation', { method: 'GET' });
   return unwrapReportData(res);
 }
 
 export async function fetchSupplierReturnsReport(): Promise<SupplierReturnReportDto> {
   const res = await apiRequest<ApiResponse<SupplierReturnReportDto> | SupplierReturnReportDto>(
     'reports/supplier-returns',
-    { method: 'GET' }
+    { method: 'GET' },
   );
   return unwrapReportData(res);
 }
@@ -43,7 +49,7 @@ export async function fetchSupplierReturnsReport(): Promise<SupplierReturnReport
 export async function fetchExpirationsReport(): Promise<ExpirationsReportDto> {
   const res = await apiRequest<ApiResponse<ExpirationsReportDto> | ExpirationsReportDto>(
     'reports/expirations',
-    { method: 'GET' }
+    { method: 'GET' },
   );
   return unwrapReportData(res);
 }
@@ -61,7 +67,9 @@ export async function fetchSalesReport(filter: ReportDateFilter = {}): Promise<S
   return unwrapReportData(res);
 }
 
-export async function fetchCashSummaryReport(filter: ReportDateFilter = {}): Promise<CashSummaryReportDto> {
+export async function fetchCashSummaryReport(
+  filter: ReportDateFilter = {},
+): Promise<CashSummaryReportDto> {
   const query = new URLSearchParams();
   if (filter.fromDate) query.set('fromDate', filter.fromDate);
   if (filter.toDate) query.set('toDate', filter.toDate);
@@ -74,17 +82,41 @@ export async function fetchCashSummaryReport(filter: ReportDateFilter = {}): Pro
   return unwrapReportData(res);
 }
 
+function topProductsParams(filter: TopProductsFilter): URLSearchParams {
+  const query = new URLSearchParams();
+  if (filter.fromDate) query.set('fromDate', filter.fromDate);
+  if (filter.toDate) query.set('toDate', filter.toDate);
+  if (filter.sortBy) query.set('sortBy', filter.sortBy);
+  if (filter.limit !== undefined) query.set('limit', String(filter.limit));
+  return query;
+}
+
+export async function fetchTopProductsReport(
+  filter: TopProductsFilter = {},
+): Promise<TopProductsReportDto> {
+  const query = topProductsParams(filter);
+  const res = await apiRequest<ApiResponse<TopProductsReportDto> | TopProductsReportDto>(
+    `reports/top-products?${query.toString()}`,
+    { method: 'GET' },
+  );
+  return unwrapReportData(res);
+}
+
 /**
  * Descarga directamente el reporte solicitado en formato CSV con UTF-8 BOM.
  */
 export async function downloadReportCsv(
-  reportPath: 'inventory-valuation' | 'expirations' | 'sales' | 'cash-summary' | 'supplier-returns',
-  filter: ReportDateFilter = {},
+  reportPath:
+    | 'inventory-valuation'
+    | 'expirations'
+    | 'sales'
+    | 'cash-summary'
+    | 'supplier-returns'
+    | 'top-products',
+  filter: TopProductsFilter = {},
 ): Promise<void> {
-  const query = new URLSearchParams();
+  const query = topProductsParams(filter);
   query.set('format', 'csv');
-  if (filter.fromDate) query.set('fromDate', filter.fromDate);
-  if (filter.toDate) query.set('toDate', filter.toDate);
 
   const url = `${apiUrl}/reports/${reportPath}?${query.toString()}`;
   const response = await fetch(url, {

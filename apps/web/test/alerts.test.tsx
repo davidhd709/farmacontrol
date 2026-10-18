@@ -1,8 +1,10 @@
 import { ThemeProvider } from '@mui/material';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { SYSTEM_PERMISSIONS } from '@farmacia/contracts';
+import { AuthContext, type AuthContextValue } from '../src/features/auth/context/auth-context';
 import type { AlertsSummaryDto, InventoryAlertDto } from '@farmacia/contracts';
 import * as alertsApi from '../src/features/alerts/api/alerts.api';
 import { ExpirationAlertsPage } from '../src/features/alerts/pages/ExpirationAlertsPage';
@@ -100,16 +102,42 @@ const mockAlerts: InventoryAlertDto[] = [
   },
 ];
 
-const renderPage = () => {
+function Location() {
+  const location = useLocation();
+  return (
+    <output aria-label="Ubicación">
+      {location.pathname}
+      {location.search}
+    </output>
+  );
+}
+
+const renderPage = (
+  path = '/alerts',
+  permissions: string[] = [SYSTEM_PERMISSIONS.INVENTORY_READ, SYSTEM_PERMISSIONS.ALERTS_READ],
+) => {
+  const auth: AuthContextValue = {
+    user: { id: 'operator', username: 'Operador', isActive: true, roles: [], permissions },
+    status: 'authenticated',
+    sessionError: null,
+    isLoggingIn: false,
+    isLoggingOut: false,
+    login: vi.fn(),
+    logout: vi.fn(),
+    retrySession: vi.fn(),
+  };
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <ThemeProvider theme={appTheme}>
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
-          <ExpirationAlertsPage />
-        </MemoryRouter>
+        <AuthContext.Provider value={auth}>
+          <MemoryRouter initialEntries={[path]}>
+            <ExpirationAlertsPage />
+            <Location />
+          </MemoryRouter>
+        </AuthContext.Provider>
       </QueryClientProvider>
     </ThemeProvider>,
   );
@@ -131,9 +159,7 @@ describe('ExpirationAlertsPage (UX-14 — Alertas de Vencimiento)', () => {
   it('debe renderizar el título de la pantalla, las tarjetas de métricas y la tabla con lotes', async () => {
     renderPage();
 
-    expect(
-      screen.getByText(/Alertas de Vencimiento de Lotes/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Alertas de Vencimiento de Lotes/i)).toBeInTheDocument();
 
     // Esperar datos cargados en tarjetas de resumen
     await waitFor(() => {
@@ -176,6 +202,68 @@ describe('ExpirationAlertsPage (UX-14 — Alertas de Vencimiento)', () => {
     });
   });
 
+  it('abre CRITICO desde URL, filtra filas, enlaza movimientos y limpia la severidad', async () => {
+    vi.mocked(alertsApi.fetchExpirations).mockImplementation(async (filters) => ({
+      items: mockAlerts.filter((row) => !filters?.severity || row.severity === filters.severity),
+      total: 1,
+      page: 1,
+      pageSize: 10,
+      totalPages: 1,
+    }));
+    renderPage('/alerts?severity=CRITICO');
+    expect(await screen.findByText('LOT-CRIT-02')).toBeInTheDocument();
+    expect(screen.queryByText('LOT-VENC-01')).not.toBeInTheDocument();
+    expect(alertsApi.fetchExpirations).toHaveBeenCalledWith(
+      expect.objectContaining({ severity: 'CRITICO', page: 1 }),
+    );
+    expect(
+      screen.getByRole('link', { name: 'Ver movimientos del lote LOT-CRIT-02' }),
+    ).toHaveAttribute('href', '/inventory/movements?lotId=lot-2');
+    fireEvent.click(screen.getByRole('button', { name: 'Limpiar filtros' }));
+    expect(screen.getByLabelText('Ubicación')).toHaveTextContent('/alerts');
+    expect(screen.getByLabelText('Ubicación')).not.toHaveTextContent('severity');
+    expect(await screen.findByText('LOT-VENC-01')).toBeInTheDocument();
+  });
+
+  it('contador actualiza URL y búsqueda y filtros reinician paginación', async () => {
+    vi.mocked(alertsApi.fetchExpirations).mockResolvedValue({
+      items: mockAlerts,
+      total: 20,
+      page: 1,
+      pageSize: 10,
+      totalPages: 2,
+    });
+    renderPage();
+    await screen.findByText('LOT-CRIT-02');
+    fireEvent.click(screen.getByRole('button', { name: /page 2/i }));
+    await waitFor(() =>
+      expect(alertsApi.fetchExpirations).toHaveBeenLastCalledWith(
+        expect.objectContaining({ page: 2 }),
+      ),
+    );
+    fireEvent.change(screen.getByPlaceholderText(/Buscar por producto/i), {
+      target: { value: 'LOT' },
+    });
+    await waitFor(() =>
+      expect(alertsApi.fetchExpirations).toHaveBeenLastCalledWith(
+        expect.objectContaining({ page: 1, search: 'LOT' }),
+      ),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /CRÍTICOS/ }));
+    expect(screen.getByLabelText('Ubicación')).toHaveTextContent('severity=CRITICO');
+    await waitFor(() =>
+      expect(alertsApi.fetchExpirations).toHaveBeenLastCalledWith(
+        expect.objectContaining({ severity: 'CRITICO', page: 1 }),
+      ),
+    );
+  });
+
+  it('oculta acceso a movimientos sin inventory:read', async () => {
+    renderPage('/alerts', [SYSTEM_PERMISSIONS.ALERTS_READ]);
+    await screen.findByText('LOT-CRIT-02');
+    expect(screen.queryByRole('link', { name: /Ver movimientos/ })).not.toBeInTheDocument();
+  });
+
   it('debe disparar escaneo manual de lotes al presionar "Escanear Lotes Ahora"', async () => {
     vi.spyOn(alertsApi, 'triggerAlertsEvaluation').mockResolvedValue({
       evaluatedLots: 10,
@@ -196,9 +284,7 @@ describe('ExpirationAlertsPage (UX-14 — Alertas de Vencimiento)', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('action-feedback-alert')).toBeInTheDocument();
-      expect(
-        screen.getByText(/Escaneo completado: 10 lotes analizados/),
-      ).toBeInTheDocument();
+      expect(screen.getByText(/Escaneo completado: 10 lotes analizados/)).toBeInTheDocument();
     });
   });
 });

@@ -17,7 +17,7 @@ import {
   Alert,
   CircularProgress,
 } from '@mui/material';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import TuneIcon from '@mui/icons-material/Tune';
@@ -32,6 +32,8 @@ import { fetchProducts } from '../../catalog/api/products.api';
 import { formatSignedQuantity, movementDirection } from '../movement-direction';
 
 export const InventoryMovementsPage = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const lotId = searchParams.get('lotId') || '';
   const [movements, setMovements] = useState<InventoryMovementDto[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
@@ -59,6 +61,7 @@ export const InventoryMovementsPage = () => {
       setErrorMessage(null);
       const res = await fetchInventoryMovements({
         productId: selectedProductId || undefined,
+        lotId: lotId || undefined,
         movementType: selectedType || undefined,
         page: page + 1,
         pageSize,
@@ -70,7 +73,7 @@ export const InventoryMovementsPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedProductId, selectedType, page, pageSize]);
+  }, [selectedProductId, selectedType, page, pageSize, lotId]);
 
   useEffect(() => {
     loadFilterData();
@@ -148,6 +151,28 @@ export const InventoryMovementsPage = () => {
         </Box>
       </Box>
 
+      {lotId && (
+        <Alert
+          severity="info"
+          sx={{ mb: 2 }}
+          action={
+            <Button
+              onClick={() => {
+                setSearchParams((previous) => {
+                  const next = new URLSearchParams(previous);
+                  next.delete('lotId');
+                  return next;
+                });
+                setPage(0);
+              }}
+            >
+              Limpiar filtro de lote
+            </Button>
+          }
+        >
+          Mostrando movimientos del lote seleccionado
+        </Alert>
+      )}
         {/* Filtros */}
         <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>

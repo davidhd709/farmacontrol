@@ -5,7 +5,7 @@ import type {
   InventoryAlertDto,
   PaginatedResponse,
 } from '@farmacia/contracts';
-import { apiRequest } from '../../../api/http-client';
+import { apiRequestData } from '../../../api/http-client';
 
 export async function fetchExpirations(
   filters: AlertsQueryFilters = {},
@@ -19,20 +19,20 @@ export async function fetchExpirations(
   if (filters.pageSize) query.set('pageSize', String(filters.pageSize));
 
   const qs = query.toString();
-  return apiRequest<PaginatedResponse<InventoryAlertDto>>(
+  return apiRequestData<PaginatedResponse<InventoryAlertDto>>(
     qs ? `alerts/expirations?${qs}` : 'alerts/expirations',
     { method: 'GET' },
   );
 }
 
 export async function fetchAlertsSummary(): Promise<AlertsSummaryDto> {
-  return apiRequest<AlertsSummaryDto>('alerts/summary', { method: 'GET' });
+  return apiRequestData<AlertsSummaryDto>('alerts/summary', { method: 'GET' });
 }
 
 export async function triggerAlertsEvaluation(
   referenceDate?: string,
 ): Promise<EvaluationResultDto> {
-  return apiRequest<EvaluationResultDto>('alerts/evaluate', {
+  return apiRequestData<EvaluationResultDto>('alerts/evaluate', {
     method: 'POST',
     body: JSON.stringify(referenceDate ? { referenceDate } : {}),
   });
