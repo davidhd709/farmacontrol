@@ -18,7 +18,7 @@ Este documento resume qué se corrigió desde la auditoría técnica, qué falta
 | 7 | Decisiones del cliente | EN PROGRESO: preguntas listas para la contadora (`docs/PREGUNTAS_CONTADORA.md`) y para el dueño (sección 4), sin respuesta |
 | 8 | Aceptación (UAT) y release v1.0.0 | EN PROGRESO: runbook de UAT y manual por rol listos; faltan el ambiente, la simulación con el cliente, la auditoría final y el tag |
 
-**Calidad al corte:** ver la sección 8 (resultados de la validación final).
+**Calidad al corte:** 1366 pruebas en 166 archivos y 10 flujos E2E en verde; detalle en la sección 8.
 
 ## 2. Qué se hizo
 
@@ -238,4 +238,16 @@ Ninguna se implementó por supuesto; las que se tocaron quedaron con la opción 
 
 ## 8. Validación final de esta ronda
 
-(se completa al cerrar la integración)
+Ejecutada el 18 de octubre sobre la rama integrada (fases 5 y 6, deuda y Vitest 4.1.11):
+
+| Comando | Resultado |
+|---|---|
+| `pnpm typecheck` y `pnpm typecheck:e2e` | Sin errores |
+| `pnpm lint` | 0 errores; 149 advertencias (antes 163), todas `no-explicit-any` o tamaño de componentes ya existentes |
+| `pnpm build` | Correcto |
+| `pnpm test` (PostgreSQL 18 temporal) | **1366 pruebas en 166 archivos, todas en verde** (línea base de `main`: 1051 en 148) |
+| `pnpm test:e2e` (Playwright) | **10 de 10 flujos en verde** |
+| `bash tests/infra/check-test-runner.sh` | 28 de 28 verificaciones |
+| `pnpm audit` | Sin críticas; quedan `deepmerge-ts` (alta, solo CLI de Prisma), `uuid` y `js-yaml` (moderadas, sin uso explotable) |
+
+La auditoría independiente con `codex-auditor` no se pudo ejecutar porque Codex alcanzó su límite de uso. El orquestador hizo una revisión de seguridad de los cambios sin bloqueantes, pero hay que repetir la auditoría con Codex antes de fusionar a `main`.
