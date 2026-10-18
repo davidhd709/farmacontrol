@@ -1,3 +1,4 @@
+import { DomainError } from '../../../common/domain-error';
 import {
   SaleStatus,
   SalePaymentMethod,
@@ -33,7 +34,10 @@ export class SaleLotAllocation {
     createdAt?: Date;
   }): SaleLotAllocation {
     if (props.quantityBaseUnits <= 0) {
-      throw new Error('La cantidad de unidades base asignadas del lote debe ser mayor a cero');
+      throw new DomainError(
+        'La cantidad de unidades base asignadas del lote debe ser mayor a cero',
+        'validation',
+      );
     }
     return new SaleLotAllocation({
       id: props.id ?? crypto.randomUUID(),
@@ -124,10 +128,10 @@ export class SaleLine {
     createdAt?: Date;
   }): SaleLine {
     if (payload.quantityCommercial <= 0) {
-      throw new Error('La cantidad vendida debe ser mayor a cero');
+      throw new DomainError('La cantidad vendida debe ser mayor a cero', 'validation');
     }
     if (payload.unitPrice < 0) {
-      throw new Error('El precio unitario no puede ser negativo');
+      throw new DomainError('El precio unitario no puede ser negativo', 'validation');
     }
 
     const factor = payload.presentationFactorHistorical ?? 1;
@@ -141,11 +145,12 @@ export class SaleLine {
 
     const grossCents = divideHalfUp(quantityHundredths * unitPriceCents, 100n);
     if (discountCents < 0n) {
-      throw new Error('El descuento no puede ser negativo.');
+      throw new DomainError('El descuento no puede ser negativo.', 'validation');
     }
     if (discountCents > grossCents) {
-      throw new Error(
+      throw new DomainError(
         `El descuento (${centsToNumber(discountCents)}) supera el valor de la línea (${centsToNumber(grossCents)}).`,
+        'validation',
       );
     }
     const subtotalCents = grossCents - discountCents;
@@ -307,7 +312,7 @@ export class Sale {
     createdByUsername?: string;
   }): Sale {
     if (!payload.lines || payload.lines.length === 0) {
-      throw new Error('Una venta debe contener al menos un producto');
+      throw new DomainError('Una venta debe contener al menos un producto', 'validation');
     }
 
     const sumCents = (pick: (l: SaleLine) => number, label: string) =>
@@ -322,8 +327,9 @@ export class Sale {
         ? toHundredths(payload.amountPaid, 'El monto recibido')
         : totalCents;
     if (payload.paymentMethod === 'EFECTIVO' && amountPaidCents < totalCents) {
-      throw new Error(
+      throw new DomainError(
         `El monto recibido ($${centsToNumber(amountPaidCents)}) no cubre el valor total de la venta ($${centsToNumber(totalCents)})`,
+        'validation',
       );
     }
     const changeCents =
@@ -430,7 +436,7 @@ export class Sale {
 
   public cancel(): void {
     if (this.props.status === 'CANCELLED') {
-      throw new Error('La venta ya se encuentra anulada');
+      throw new DomainError('La venta ya se encuentra anulada', 'conflict');
     }
     this.props.status = 'CANCELLED';
     this.props.updatedAt = new Date();

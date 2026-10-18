@@ -1,3 +1,4 @@
+import { DomainError } from '../../../common/domain-error';
 export type CreditNoteRefundMethod = 'EFECTIVO' | 'TRANSFERENCIA' | 'CREDITO_CARTERA';
 
 const SUPPORTED_REFUND_METHODS: readonly CreditNoteRefundMethod[] = [
@@ -42,9 +43,9 @@ export interface LotAllocationForReturn {
 /**
  * Orden FEFO original de la venta: primero el lote que vencía antes.
  */
-export function sortAllocationsFefo<T extends { lotId: string; quantityBaseUnits: number; lot: { expirationDate: Date } }>(
-  allocations: T[],
-): LotAllocationForReturn[] {
+export function sortAllocationsFefo<
+  T extends { lotId: string; quantityBaseUnits: number; lot: { expirationDate: Date } },
+>(allocations: T[]): LotAllocationForReturn[] {
   return allocations
     .map((a) => ({
       lotId: a.lotId,
@@ -93,7 +94,10 @@ export function splitReturnAcrossLots(
   }
 
   if (pending > 0) {
-    throw new Error('La devolución supera las unidades asignadas a los lotes de la venta.');
+    throw new DomainError(
+      'La devolución supera las unidades asignadas a los lotes de la venta.',
+      'conflict',
+    );
   }
   return portions;
 }

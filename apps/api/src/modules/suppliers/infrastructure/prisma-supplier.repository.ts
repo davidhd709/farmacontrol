@@ -1,5 +1,5 @@
 import { Injectable, Optional } from '@nestjs/common';
-import { prisma, PrismaClient } from '@farmacia/database';
+import { prisma, Prisma, PrismaClient } from '@farmacia/database';
 import { ISupplierRepository } from '../domain/supplier.repository';
 import { Supplier } from '../domain/supplier.entity';
 import { SupplierQueryFilters } from '@farmacia/contracts';
@@ -12,8 +12,9 @@ export class PrismaSupplierRepository implements ISupplierRepository {
     this.client = customClient ?? prisma;
   }
 
-  async save(supplier: Supplier): Promise<void> {
-    await this.client.supplier.upsert({
+  async save(supplier: Supplier, tx?: unknown): Promise<void> {
+    const db = (tx as Prisma.TransactionClient | undefined) ?? this.client;
+    await db.supplier.upsert({
       where: { id: supplier.id },
       create: {
         id: supplier.id,

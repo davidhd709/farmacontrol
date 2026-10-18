@@ -14,12 +14,10 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
-  HttpException,
   ParseUUIDPipe,
 } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiOkResponse, ApiResponse } from '@nestjs/swagger';
 import type { Request } from 'express';
-import { Prisma } from '@farmacia/database';
 import {
   SYSTEM_PERMISSIONS,
   SaleDto,
@@ -142,6 +140,10 @@ export class SaleController {
   }
 
   @Post('confirm')
+  @ApiResponse({ status: 400, description: 'Datos inválidos o existencias insuficientes.' })
+  @ApiResponse({ status: 404, description: 'Cliente solicitado no encontrado.' })
+  @ApiResponse({ status: 409, description: 'Conflicto de estado o de idempotencia.' })
+  @ApiResponse({ status: 500, description: 'Fallo interno; la operación se revierte.' })
   @HttpCode(HttpStatus.CREATED)
   @RequirePermissions(SYSTEM_PERMISSIONS.SALES_CREATE)
   public async confirmSale(
@@ -162,18 +164,11 @@ export class SaleController {
         idempotencyKey,
       );
     } catch (error) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
       if (error instanceof InsufficientStockException) {
         throw new BadRequestException(error.message);
       }
       if (error instanceof IdempotencyConflictException) {
         throw new ConflictException(error.message);
-      }
-      // Los errores de Prisma siguen al filtro global (409/404 sin mensaje interno).
-      if (error instanceof Error && !(error instanceof Prisma.PrismaClientKnownRequestError)) {
-        throw new BadRequestException(error.message);
       }
       throw error;
     }
@@ -237,9 +232,6 @@ export class SaleController {
         error instanceof SaleHasReceivablePaymentsException
       ) {
         throw new ConflictException(error.message);
-      }
-      if (error instanceof Error) {
-        throw new BadRequestException(error.message);
       }
       throw error;
     }

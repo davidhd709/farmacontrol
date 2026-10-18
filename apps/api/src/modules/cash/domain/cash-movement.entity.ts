@@ -1,8 +1,6 @@
+import { DomainError } from '../../../common/domain-error';
 import { CashMovementType, PaymentMethod } from '@farmacia/contracts';
-import {
-  InvalidCashAmountException,
-  InvalidCashMovementTypeException,
-} from './cash.exceptions';
+import { InvalidCashAmountException, InvalidCashMovementTypeException } from './cash.exceptions';
 
 export interface CashMovementProps {
   id?: string;
@@ -64,11 +62,11 @@ export class CashMovement {
     }
 
     if (!props.reason || props.reason.trim().length === 0) {
-      throw new Error('El motivo del movimiento de caja es obligatorio');
+      throw new DomainError('El motivo del movimiento de caja es obligatorio', 'validation');
     }
 
     if (props.balanceAfter < 0) {
-      throw new Error('El saldo acumulado de caja no puede ser negativo');
+      throw new DomainError('El saldo acumulado de caja no puede ser negativo', 'conflict');
     }
   }
 
@@ -117,17 +115,11 @@ export class CashMovement {
   }
 
   public isIncome(): boolean {
-    return (
-      this._movementType === 'INGRESO_VENTA' ||
-      this._movementType === 'INGRESO_MANUAL'
-    );
+    return this._movementType === 'INGRESO_VENTA' || this._movementType === 'INGRESO_MANUAL';
   }
 
   public isExpense(): boolean {
-    return (
-      this._movementType === 'EGRESO_MANUAL' ||
-      this._movementType === 'EGRESO_PAGO_PROVEEDOR'
-    );
+    return this._movementType === 'EGRESO_MANUAL' || this._movementType === 'EGRESO_PAGO_PROVEEDOR';
   }
 
   public affectsPhysicalCash(): boolean {

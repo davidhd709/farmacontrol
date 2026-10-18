@@ -1,3 +1,4 @@
+import { DomainError } from '../../../../common/domain-error';
 import { CategoryDto } from '@farmacia/contracts';
 
 export interface CreateCategoryProps {
@@ -78,11 +79,7 @@ export class Category {
     return this._updatedAt;
   }
 
-  public update(props: {
-    name?: string;
-    description?: string | null;
-    isActive?: boolean;
-  }): void {
+  public update(props: { name?: string; description?: string | null; isActive?: boolean }): void {
     if (props.name !== undefined) {
       this._name = Category.validateName(props.name);
     }
@@ -108,13 +105,19 @@ export class Category {
   private static validateName(name: string): string {
     const trimmed = name ? name.trim() : '';
     if (!trimmed) {
-      throw new Error('El nombre de la categoría no puede estar vacío.');
+      throw new DomainError('El nombre de la categoría no puede estar vacío.', 'validation');
     }
     if (trimmed.length < 2) {
-      throw new Error('El nombre de la categoría debe tener al menos 2 caracteres.');
+      throw new DomainError(
+        'El nombre de la categoría debe tener al menos 2 caracteres.',
+        'validation',
+      );
     }
     if (trimmed.length > 100) {
-      throw new Error('El nombre de la categoría no puede exceder 100 caracteres.');
+      throw new DomainError(
+        'El nombre de la categoría no puede exceder 100 caracteres.',
+        'validation',
+      );
     }
     return trimmed;
   }
@@ -128,7 +131,10 @@ export class Category {
       return null;
     }
     if (trimmed.length > 255) {
-      throw new Error('La descripción de la categoría no puede exceder 255 caracteres.');
+      throw new DomainError(
+        'La descripción de la categoría no puede exceder 255 caracteres.',
+        'validation',
+      );
     }
     return trimmed;
   }

@@ -72,9 +72,6 @@ export class ProductController {
       if (err instanceof ProductCategoryNotFoundException) {
         throw new BadRequestException(err.message);
       }
-      if (err instanceof Error) {
-        throw new BadRequestException(err.message);
-      }
       throw err;
     }
   }
@@ -172,9 +169,6 @@ export class ProductController {
       if (err instanceof ProductCategoryNotFoundException) {
         throw new BadRequestException(err.message);
       }
-      if (err instanceof Error) {
-        throw new BadRequestException(err.message);
-      }
       throw err;
     }
   }
@@ -202,9 +196,6 @@ export class ProductController {
     } catch (err) {
       if (err instanceof ProductNotFoundException) {
         throw new NotFoundException(err.message);
-      }
-      if (err instanceof Error) {
-        throw new BadRequestException(err.message);
       }
       throw err;
     }

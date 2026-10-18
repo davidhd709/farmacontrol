@@ -67,9 +67,6 @@ export class CustomerController {
       if (error instanceof CustomerAlreadyExistsException) {
         throw new ConflictException(error.message);
       }
-      if (error instanceof Error) {
-        throw new BadRequestException(error.message);
-      }
       throw error;
     }
   }
@@ -142,9 +139,6 @@ export class CustomerController {
       }
       if (error instanceof CustomerAlreadyExistsException) {
         throw new ConflictException(error.message);
-      }
-      if (error instanceof Error) {
-        throw new BadRequestException(error.message);
       }
       throw error;
     }

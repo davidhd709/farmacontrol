@@ -10,12 +10,12 @@ export interface SessionRepositoryPort {
   /**
    * Persiste una nueva entidad Session en la base de datos.
    */
-  create(session: Session): Promise<Session>;
+  create(session: Session, tx?: unknown): Promise<Session>;
 
   /**
    * Recupera una entidad Session por su hash determinista de token (tokenHash).
    */
-  findByTokenHash(tokenHash: string): Promise<Session | null>;
+  findByTokenHash(tokenHash: string, tx?: unknown): Promise<Session | null>;
 
   /**
    * Recupera una entidad Session por su identificador primario (UUID).
@@ -25,7 +25,7 @@ export interface SessionRepositoryPort {
   /**
    * Actualiza los datos mutables de la sesión (lastUsedAt, revokedAt).
    */
-  update(session: Session): Promise<Session>;
+  update(session: Session, tx?: unknown): Promise<Session>;
 
   /**
    * Elimina físicamente una sesión por su identificador.

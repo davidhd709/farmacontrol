@@ -1,3 +1,4 @@
+import { DomainError } from '../../../common/domain-error';
 import { businessToday } from '../../../common/utils/business-date';
 import { PurchaseDto, PurchaseLineDto } from '@farmacia/contracts';
 
@@ -73,50 +74,60 @@ export class PurchaseLine {
 
   public static create(props: CreatePurchaseLineProps): PurchaseLine {
     if (!props.productId) {
-      throw new Error('El producto es obligatorio en cada línea de compra');
+      throw new DomainError('El producto es obligatorio en cada línea de compra', 'validation');
     }
     if (!props.lotNumber || !props.lotNumber.trim()) {
-      throw new Error('El número de lote es obligatorio');
+      throw new DomainError('El número de lote es obligatorio', 'validation');
     }
     if (!props.expirationDate || isNaN(props.expirationDate.getTime())) {
-      throw new Error('La fecha de vencimiento es obligatoria y debe ser una fecha válida');
+      throw new DomainError(
+        'La fecha de vencimiento es obligatoria y debe ser una fecha válida',
+        'validation',
+      );
     }
 
     const today = businessToday();
     const expDate = props.expirationDate.toISOString().slice(0, 10);
 
     if (expDate <= today) {
-      throw new Error(
-        `La fecha de vencimiento (${props.expirationDate.toISOString().split('T')[0]}) no puede ser anterior ni igual a hoy`
+      throw new DomainError(
+        `La fecha de vencimiento (${props.expirationDate.toISOString().split('T')[0]}) no puede ser anterior ni igual a hoy`,
+        'validation',
       );
     }
 
     if (props.quantityCommercial <= 0) {
-      throw new Error('La cantidad comercial debe ser estrictamente mayor a 0');
+      throw new DomainError('La cantidad comercial debe ser estrictamente mayor a 0', 'validation');
     }
     if (props.conversionFactor <= 0) {
-      throw new Error('El factor de conversión debe ser mayor a 0');
+      throw new DomainError('El factor de conversión debe ser mayor a 0', 'validation');
     }
     if (props.unitCost < 0) {
-      throw new Error('El costo unitario no puede ser negativo');
+      throw new DomainError('El costo unitario no puede ser negativo', 'validation');
     }
 
     const exactBaseUnits = props.quantityCommercial * props.conversionFactor;
     const quantityBaseUnits = props.quantityBaseUnits ?? Math.round(exactBaseUnits);
     // El inventario se lleva en unidades base enteras: no se redondea en silencio
-    if (props.quantityBaseUnits === undefined && Math.abs(exactBaseUnits - quantityBaseUnits) > 1e-6) {
-      throw new Error(
+    if (
+      props.quantityBaseUnits === undefined &&
+      Math.abs(exactBaseUnits - quantityBaseUnits) > 1e-6
+    ) {
+      throw new DomainError(
         `La cantidad ${props.quantityCommercial} con factor ${props.conversionFactor} no equivale a unidades base enteras.`,
+        'validation',
       );
     }
 
     if (quantityBaseUnits <= 0) {
-      throw new Error('La cantidad en unidades base calculada debe ser mayor a 0');
+      throw new DomainError(
+        'La cantidad en unidades base calculada debe ser mayor a 0',
+        'validation',
+      );
     }
 
     const subtotal =
-      props.subtotal ??
-      Math.round(props.quantityCommercial * props.unitCost * 100) / 100;
+      props.subtotal ?? Math.round(props.quantityCommercial * props.unitCost * 100) / 100;
 
     const now = new Date();
     return new PurchaseLine({
@@ -146,21 +157,51 @@ export class PurchaseLine {
     this._lotId = lotId;
   }
 
-  public get id(): string { return this._id; }
-  public get purchaseId(): string | undefined { return this._purchaseId; }
-  public get productId(): string { return this._productId; }
-  public get productName(): string | undefined { return this._productName; }
-  public get presentationId(): string | null { return this._presentationId; }
-  public get presentationName(): string | null | undefined { return this._presentationName; }
-  public get lotId(): string { return this._lotId; }
-  public get lotNumber(): string { return this._lotNumber; }
-  public get expirationDate(): Date { return this._expirationDate; }
-  public get quantityCommercial(): number { return this._quantityCommercial; }
-  public get conversionFactor(): number { return this._conversionFactor; }
-  public get quantityBaseUnits(): number { return this._quantityBaseUnits; }
-  public get unitCost(): number { return this._unitCost; }
-  public get subtotal(): number { return this._subtotal; }
-  public get createdAt(): Date { return this._createdAt; }
+  public get id(): string {
+    return this._id;
+  }
+  public get purchaseId(): string | undefined {
+    return this._purchaseId;
+  }
+  public get productId(): string {
+    return this._productId;
+  }
+  public get productName(): string | undefined {
+    return this._productName;
+  }
+  public get presentationId(): string | null {
+    return this._presentationId;
+  }
+  public get presentationName(): string | null | undefined {
+    return this._presentationName;
+  }
+  public get lotId(): string {
+    return this._lotId;
+  }
+  public get lotNumber(): string {
+    return this._lotNumber;
+  }
+  public get expirationDate(): Date {
+    return this._expirationDate;
+  }
+  public get quantityCommercial(): number {
+    return this._quantityCommercial;
+  }
+  public get conversionFactor(): number {
+    return this._conversionFactor;
+  }
+  public get quantityBaseUnits(): number {
+    return this._quantityBaseUnits;
+  }
+  public get unitCost(): number {
+    return this._unitCost;
+  }
+  public get subtotal(): number {
+    return this._subtotal;
+  }
+  public get createdAt(): Date {
+    return this._createdAt;
+  }
 
   public toDto(): PurchaseLineDto {
     return {
@@ -258,16 +299,16 @@ export class Purchase {
 
   public static create(props: CreatePurchaseProps): Purchase {
     if (!props.supplierId) {
-      throw new Error('El proveedor es obligatorio para registrar la compra');
+      throw new DomainError('El proveedor es obligatorio para registrar la compra', 'validation');
     }
     if (!props.invoiceNumber || !props.invoiceNumber.trim()) {
-      throw new Error('El número de factura o comprobante es obligatorio');
+      throw new DomainError('El número de factura o comprobante es obligatorio', 'validation');
     }
     if (!props.purchaseDate || isNaN(props.purchaseDate.getTime())) {
-      throw new Error('La fecha de compra es obligatoria');
+      throw new DomainError('La fecha de compra es obligatoria', 'validation');
     }
     if (!props.lines || props.lines.length === 0) {
-      throw new Error('La compra debe contener al menos una línea de producto');
+      throw new DomainError('La compra debe contener al menos una línea de producto', 'validation');
     }
 
     const totalAmount =
@@ -298,22 +339,54 @@ export class Purchase {
     return new Purchase(props);
   }
 
-  public get id(): string { return this._id; }
-  public get supplierId(): string { return this._supplierId; }
-  public get supplierName(): string | undefined { return this._supplierName; }
-  public get supplierTaxId(): string | undefined { return this._supplierTaxId; }
-  public get invoiceNumber(): string { return this._invoiceNumber; }
-  public get purchaseDate(): Date { return this._purchaseDate; }
-  public get dueDate(): Date | null | undefined { return this._dueDate; }
-  public get paymentCondition(): string | null | undefined { return this._paymentCondition; }
-  public get totalAmount(): number { return this._totalAmount; }
-  public get status(): string { return this._status; }
-  public get notes(): string | null { return this._notes; }
-  public get receivedByUserId(): string | null { return this._receivedByUserId; }
-  public get receivedByUsername(): string | null | undefined { return this._receivedByUsername; }
-  public get lines(): PurchaseLine[] { return [...this._lines]; }
-  public get createdAt(): Date { return this._createdAt; }
-  public get updatedAt(): Date { return this._updatedAt; }
+  public get id(): string {
+    return this._id;
+  }
+  public get supplierId(): string {
+    return this._supplierId;
+  }
+  public get supplierName(): string | undefined {
+    return this._supplierName;
+  }
+  public get supplierTaxId(): string | undefined {
+    return this._supplierTaxId;
+  }
+  public get invoiceNumber(): string {
+    return this._invoiceNumber;
+  }
+  public get purchaseDate(): Date {
+    return this._purchaseDate;
+  }
+  public get dueDate(): Date | null | undefined {
+    return this._dueDate;
+  }
+  public get paymentCondition(): string | null | undefined {
+    return this._paymentCondition;
+  }
+  public get totalAmount(): number {
+    return this._totalAmount;
+  }
+  public get status(): string {
+    return this._status;
+  }
+  public get notes(): string | null {
+    return this._notes;
+  }
+  public get receivedByUserId(): string | null {
+    return this._receivedByUserId;
+  }
+  public get receivedByUsername(): string | null | undefined {
+    return this._receivedByUsername;
+  }
+  public get lines(): PurchaseLine[] {
+    return [...this._lines];
+  }
+  public get createdAt(): Date {
+    return this._createdAt;
+  }
+  public get updatedAt(): Date {
+    return this._updatedAt;
+  }
 
   public toDto(): PurchaseDto {
     return {

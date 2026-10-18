@@ -63,28 +63,34 @@ export class ProductService {
       categoryName: category.name,
     });
 
-    const saved = await this.productRepository.save(product);
+    const persist = async (tx?: Prisma.TransactionClient) => {
+      const saved = await this.productRepository.save(product, tx);
 
-    if (this.auditService) {
-      await this.auditService.recordEvent({
-        userId: auditCtx?.userId || null,
-        action: 'catalog:product_created',
-        entity: 'Product',
-        entityId: saved.id,
-        details: {
-          code: saved.code,
-          barcode: saved.barcode,
-          name: saved.name,
-          categoryId: saved.categoryId,
-          requiresLotControl: saved.requiresLotControl,
-          basePrice: saved.basePrice,
-        },
-        ipAddress: auditCtx?.ipAddress || null,
-        correlationId: auditCtx?.correlationId || null,
-      });
-    }
+      if (this.auditService) {
+        await this.auditService.recordEvent(
+          {
+            userId: auditCtx?.userId || null,
+            action: 'catalog:product_created',
+            entity: 'Product',
+            entityId: saved.id,
+            details: {
+              code: saved.code,
+              barcode: saved.barcode,
+              name: saved.name,
+              categoryId: saved.categoryId,
+              requiresLotControl: saved.requiresLotControl,
+              basePrice: saved.basePrice,
+            },
+            ipAddress: auditCtx?.ipAddress || null,
+            correlationId: auditCtx?.correlationId || null,
+          },
+          tx,
+        );
+      }
 
-    return saved;
+      return saved;
+    };
+    return this.auditService ? prisma.$transaction(persist) : persist();
   }
 
   public async getProductById(id: string): Promise<Product> {
@@ -146,48 +152,60 @@ export class ProductService {
       categoryName,
     });
 
-    const updated = await this.productRepository.update(product);
+    const persist = async (tx?: Prisma.TransactionClient) => {
+      const updated = await this.productRepository.update(product, tx);
 
-    if (this.auditService) {
-      await this.auditService.recordEvent({
-        userId: auditCtx?.userId || null,
-        action: 'catalog:product_updated',
-        entity: 'Product',
-        entityId: updated.id,
-        details: {
-          code: updated.code,
-          name: updated.name,
-          categoryId: updated.categoryId,
-          isActive: updated.isActive,
-          basePrice: updated.basePrice,
-        },
-        ipAddress: auditCtx?.ipAddress || null,
-        correlationId: auditCtx?.correlationId || null,
-      });
-    }
+      if (this.auditService) {
+        await this.auditService.recordEvent(
+          {
+            userId: auditCtx?.userId || null,
+            action: 'catalog:product_updated',
+            entity: 'Product',
+            entityId: updated.id,
+            details: {
+              code: updated.code,
+              name: updated.name,
+              categoryId: updated.categoryId,
+              isActive: updated.isActive,
+              basePrice: updated.basePrice,
+            },
+            ipAddress: auditCtx?.ipAddress || null,
+            correlationId: auditCtx?.correlationId || null,
+          },
+          tx,
+        );
+      }
 
-    return updated;
+      return updated;
+    };
+    return this.auditService ? prisma.$transaction(persist) : persist();
   }
 
   public async deactivateProduct(id: string, auditCtx?: AuditContext): Promise<Product> {
     const product = await this.getProductById(id);
 
     product.deactivate();
-    const updated = await this.productRepository.update(product);
+    const persist = async (tx?: Prisma.TransactionClient) => {
+      const updated = await this.productRepository.update(product, tx);
 
-    if (this.auditService) {
-      await this.auditService.recordEvent({
-        userId: auditCtx?.userId || null,
-        action: 'catalog:product_deactivated',
-        entity: 'Product',
-        entityId: updated.id,
-        details: { code: updated.code, name: updated.name },
-        ipAddress: auditCtx?.ipAddress || null,
-        correlationId: auditCtx?.correlationId || null,
-      });
-    }
+      if (this.auditService) {
+        await this.auditService.recordEvent(
+          {
+            userId: auditCtx?.userId || null,
+            action: 'catalog:product_deactivated',
+            entity: 'Product',
+            entityId: updated.id,
+            details: { code: updated.code, name: updated.name },
+            ipAddress: auditCtx?.ipAddress || null,
+            correlationId: auditCtx?.correlationId || null,
+          },
+          tx,
+        );
+      }
 
-    return updated;
+      return updated;
+    };
+    return this.auditService ? prisma.$transaction(persist) : persist();
   }
 
   public async listProducts(
@@ -202,7 +220,9 @@ export class ProductService {
     const stockMap = new Map<string, number>();
 
     if (productIds.length > 0) {
-      const lotStockAggs = await prisma.$queryRaw<Array<{ product_id: string; total_stock: number }>>`
+      const lotStockAggs = await prisma.$queryRaw<
+        Array<{ product_id: string; total_stock: number }>
+      >`
         SELECT product_id, COALESCE(SUM(current_quantity), 0)::int AS total_stock
         FROM inventory_lots
         WHERE product_id IN (${Prisma.join(productIds.map((id) => Prisma.sql`${id}::uuid`))})

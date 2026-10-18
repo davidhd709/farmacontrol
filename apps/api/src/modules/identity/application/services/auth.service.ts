@@ -1,16 +1,8 @@
+import { prisma, Prisma } from '@farmacia/database';
 import { Inject, Injectable } from '@nestjs/common';
-import {
-  USER_REPOSITORY_PORT,
-  UserRepositoryPort,
-} from '../ports/user.repository.port';
-import {
-  PASSWORD_HASHER_PORT,
-  PasswordHasherPort,
-} from '../ports/password-hasher.port';
-import {
-  RBAC_REPOSITORY_PORT,
-  RbacRepositoryPort,
-} from '../ports/rbac.repository.port';
+import { USER_REPOSITORY_PORT, UserRepositoryPort } from '../ports/user.repository.port';
+import { PASSWORD_HASHER_PORT, PasswordHasherPort } from '../ports/password-hasher.port';
+import { RBAC_REPOSITORY_PORT, RbacRepositoryPort } from '../ports/rbac.repository.port';
 import { SessionService } from './session.service';
 import { User } from '../../domain/entities/user.entity';
 import { Username } from '../../domain/value-objects/username.vo';
@@ -44,7 +36,7 @@ export class AuthService {
     private readonly passwordHasher: PasswordHasherPort,
     private readonly sessionService: SessionService,
     @Inject(RBAC_REPOSITORY_PORT)
-    private readonly rbacRepository: RbacRepositoryPort
+    private readonly rbacRepository: RbacRepositoryPort,
   ) {}
 
   /**
@@ -57,7 +49,8 @@ export class AuthService {
    */
   public async login(
     usernameInput: string,
-    passwordInput: string
+    passwordInput: string,
+    afterLogin?: (result: LoginResult, tx: Prisma.TransactionClient) => Promise<void>,
   ): Promise<LoginResult> {
     if (!usernameInput || !passwordInput) {
       throw new InvalidCredentialsException();
@@ -84,27 +77,31 @@ export class AuthService {
     }
 
     // Verificar la contraseña real contra el hash almacenado en PostgreSQL
-    const isPasswordValid = await this.passwordHasher.verify(
-      passwordInput,
-      user.passwordHash
-    );
+    const isPasswordValid = await this.passwordHasher.verify(passwordInput, user.passwordHash);
 
     if (!isPasswordValid) {
       throw new InvalidCredentialsException();
     }
 
-    // Crear la sesión opaca asociada al usuario (genera 256 bits CSPRNG y persiste hash)
-    const { rawToken } = await this.sessionService.createSession(user.id!);
+    const persist = async (tx?: Prisma.TransactionClient): Promise<LoginResult> => {
+      // Crear la sesión opaca asociada al usuario (genera 256 bits CSPRNG y persiste hash)
+      const { rawToken } = tx
+        ? await this.sessionService.createSession(user.id!, undefined, tx)
+        : await this.sessionService.createSession(user.id!);
 
-    // Obtener roles activos y permisos consolidados
-    const rbacContext = await this.rbacRepository.getUserRbacContext(user.id!);
+      // Obtener roles activos y permisos consolidados
+      const rbacContext = await this.rbacRepository.getUserRbacContext(user.id!);
 
-    return {
-      user,
-      rawToken,
-      roles: rbacContext.roles,
-      permissions: rbacContext.permissions,
+      const result = {
+        user,
+        rawToken,
+        roles: rbacContext.roles,
+        permissions: rbacContext.permissions,
+      };
+      if (afterLogin && tx) await afterLogin(result, tx);
+      return result;
     };
+    return afterLogin ? prisma.$transaction(persist) : persist();
   }
 
   /**
@@ -112,7 +109,17 @@ export class AuthService {
    *
    * @param rawToken Token en texto plano extraído de la cookie.
    */
-  public async logout(rawToken?: string): Promise<void> {
+  public async logout(
+    rawToken?: string,
+    afterLogout?: (tx: Prisma.TransactionClient) => Promise<void>,
+  ): Promise<void> {
+    if (afterLogout) {
+      await prisma.$transaction(async (tx) => {
+        if (rawToken) await this.sessionService.revokeSession(rawToken, tx);
+        await afterLogout(tx);
+      });
+      return;
+    }
     if (!rawToken) {
       return;
     }

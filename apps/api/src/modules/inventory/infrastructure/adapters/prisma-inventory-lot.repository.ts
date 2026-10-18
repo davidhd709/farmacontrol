@@ -195,8 +195,9 @@ export class PrismaInventoryLotRepository implements IInventoryLotRepository {
   public async createWithInitialStock(
     lot: InventoryLot,
     userId?: string,
+    externalTx?: unknown,
   ): Promise<InventoryLot> {
-    const raw = await prisma.$transaction(async (tx) => {
+    const persist = async (tx: Prisma.TransactionClient) => {
       const created = await tx.inventoryLot.create({
         data: {
           id: lot.id,
@@ -238,7 +239,10 @@ export class PrismaInventoryLotRepository implements IInventoryLotRepository {
       }
 
       return created;
-    });
+    };
+    const raw = externalTx
+      ? await persist(externalTx as Prisma.TransactionClient)
+      : await prisma.$transaction(persist);
 
     return InventoryLot.reconstitute({
       id: raw.id,
@@ -323,8 +327,9 @@ export class PrismaInventoryLotRepository implements IInventoryLotRepository {
     );
   }
 
-  public async saveLocation(location: Location): Promise<Location> {
-    const raw = await prisma.location.upsert({
+  public async saveLocation(location: Location, tx?: unknown): Promise<Location> {
+    const db = (tx as Prisma.TransactionClient | undefined) ?? prisma;
+    const raw = await db.location.upsert({
       where: { id: location.id },
       create: {
         id: location.id,

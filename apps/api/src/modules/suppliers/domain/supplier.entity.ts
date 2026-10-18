@@ -1,3 +1,4 @@
+import { DomainError } from '../../../common/domain-error';
 import { SupplierDto } from '@farmacia/contracts';
 
 export interface CreateSupplierProps {
@@ -96,7 +97,11 @@ export class Supplier {
       this._name = Supplier.validateName(props.name);
     }
     if (props.contactName !== undefined) {
-      this._contactName = Supplier.validateOptionalText(props.contactName, 100, 'Nombre de contacto');
+      this._contactName = Supplier.validateOptionalText(
+        props.contactName,
+        100,
+        'Nombre de contacto',
+      );
     }
     if (props.phone !== undefined) {
       this._phone = Supplier.validateOptionalText(props.phone, 50, 'Teléfono');
@@ -124,16 +129,36 @@ export class Supplier {
   }
 
   // Getters
-  public get id(): string { return this._id; }
-  public get taxId(): string { return this._taxId; }
-  public get name(): string { return this._name; }
-  public get contactName(): string | null { return this._contactName; }
-  public get phone(): string | null { return this._phone; }
-  public get email(): string | null { return this._email; }
-  public get address(): string | null { return this._address; }
-  public get isActive(): boolean { return this._isActive; }
-  public get createdAt(): Date { return this._createdAt; }
-  public get updatedAt(): Date { return this._updatedAt; }
+  public get id(): string {
+    return this._id;
+  }
+  public get taxId(): string {
+    return this._taxId;
+  }
+  public get name(): string {
+    return this._name;
+  }
+  public get contactName(): string | null {
+    return this._contactName;
+  }
+  public get phone(): string | null {
+    return this._phone;
+  }
+  public get email(): string | null {
+    return this._email;
+  }
+  public get address(): string | null {
+    return this._address;
+  }
+  public get isActive(): boolean {
+    return this._isActive;
+  }
+  public get createdAt(): Date {
+    return this._createdAt;
+  }
+  public get updatedAt(): Date {
+    return this._updatedAt;
+  }
 
   public toDto(): SupplierDto {
     return {
@@ -153,25 +178,31 @@ export class Supplier {
   // Validaciones
   private static validateTaxId(taxId: string): string {
     if (!taxId || typeof taxId !== 'string') {
-      throw new Error('El documento de identificación o NIT del proveedor es obligatorio');
+      throw new DomainError(
+        'El documento de identificación o NIT del proveedor es obligatorio',
+        'validation',
+      );
     }
     const trimmed = taxId.trim();
     if (trimmed.length < 3 || trimmed.length > 50) {
-      throw new Error('El NIT/identificación debe tener entre 3 y 50 caracteres');
+      throw new DomainError(
+        'El NIT/identificación debe tener entre 3 y 50 caracteres',
+        'validation',
+      );
     }
     return trimmed;
   }
 
   private static validateName(name: string): string {
     if (!name || typeof name !== 'string') {
-      throw new Error('La razón social o nombre del proveedor es obligatorio');
+      throw new DomainError('La razón social o nombre del proveedor es obligatorio', 'validation');
     }
     const trimmed = name.trim();
     if (trimmed.length === 0) {
-      throw new Error('La razón social o nombre del proveedor es obligatorio');
+      throw new DomainError('La razón social o nombre del proveedor es obligatorio', 'validation');
     }
     if (trimmed.length < 2 || trimmed.length > 150) {
-      throw new Error('La razón social debe tener entre 2 y 150 caracteres');
+      throw new DomainError('La razón social debe tener entre 2 y 150 caracteres', 'validation');
     }
     return trimmed;
   }
@@ -179,7 +210,7 @@ export class Supplier {
   private static validateOptionalText(
     value: string | null | undefined,
     maxLength: number,
-    fieldName: string
+    fieldName: string,
   ): string | null {
     if (value === undefined || value === null) {
       return null;
@@ -189,7 +220,10 @@ export class Supplier {
       return null;
     }
     if (trimmed.length > maxLength) {
-      throw new Error(`El campo ${fieldName} no puede exceder ${maxLength} caracteres`);
+      throw new DomainError(
+        `El campo ${fieldName} no puede exceder ${maxLength} caracteres`,
+        'validation',
+      );
     }
     return trimmed;
   }
@@ -203,11 +237,14 @@ export class Supplier {
       return null;
     }
     if (trimmed.length > 100) {
-      throw new Error('El correo electrónico no puede exceder 100 caracteres');
+      throw new DomainError('El correo electrónico no puede exceder 100 caracteres', 'validation');
     }
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(trimmed)) {
-      throw new Error('El correo electrónico ingresado no tiene un formato válido');
+      throw new DomainError(
+        'El correo electrónico ingresado no tiene un formato válido',
+        'validation',
+      );
     }
     return trimmed.toLowerCase();
   }

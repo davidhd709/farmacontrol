@@ -65,9 +65,6 @@ export class CategoryController {
       if (err instanceof CategoryAlreadyExistsException) {
         throw new ConflictException(err.message);
       }
-      if (err instanceof Error) {
-        throw new BadRequestException(err.message);
-      }
       throw err;
     }
   }
@@ -148,9 +145,6 @@ export class CategoryController {
       }
       if (err instanceof CategoryAlreadyExistsException) {
         throw new ConflictException(err.message);
-      }
-      if (err instanceof Error) {
-        throw new BadRequestException(err.message);
       }
       throw err;
     }

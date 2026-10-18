@@ -8,10 +8,13 @@ export interface ProductPresentationRepositoryPort {
     productId: string,
     options?: { isActive?: boolean; purchaseEnabled?: boolean; saleEnabled?: boolean },
   ): Promise<ProductPresentation[]>;
-  save(presentation: ProductPresentation): Promise<ProductPresentation>;
-  update(presentation: ProductPresentation): Promise<ProductPresentation>;
-  updateAndPropagateFactors(presentation: ProductPresentation): Promise<ProductPresentation>;
-  unsetDefaultPresentations(productId: string, exceptId?: string): Promise<void>;
+  save(presentation: ProductPresentation, tx?: unknown): Promise<ProductPresentation>;
+  update(presentation: ProductPresentation, tx?: unknown): Promise<ProductPresentation>;
+  updateAndPropagateFactors(
+    presentation: ProductPresentation,
+    tx?: unknown,
+  ): Promise<ProductPresentation>;
+  unsetDefaultPresentations(productId: string, exceptId?: string, tx?: unknown): Promise<void>;
 }
 
 export const PRODUCT_PRESENTATION_REPOSITORY_PORT = Symbol('PRODUCT_PRESENTATION_REPOSITORY_PORT');
