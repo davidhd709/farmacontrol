@@ -563,7 +563,11 @@ export const AuditLogsPage = () => {
                     <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
                       {selectedEvent.id}
                     </Typography>
-                    <IconButton size="small" onClick={() => handleCopyText(selectedEvent.id, 'ID de Evento')}>
+                    <IconButton
+                      size="small"
+                      aria-label="Copiar ID de evento"
+                      onClick={() => handleCopyText(selectedEvent.id, 'ID de Evento')}
+                    >
                       <ContentCopyIcon fontSize="inherit" />
                     </IconButton>
                   </Box>
@@ -603,7 +607,11 @@ export const AuditLogsPage = () => {
                       {selectedEvent.correlationId || 'N/A'}
                     </Typography>
                     {selectedEvent.correlationId && (
-                      <IconButton size="small" onClick={() => handleCopyText(selectedEvent.correlationId!, 'Correlation ID')}>
+                      <IconButton
+                        size="small"
+                        aria-label="Copiar Correlation ID"
+                        onClick={() => handleCopyText(selectedEvent.correlationId!, 'Correlation ID')}
+                      >
                         <ContentCopyIcon fontSize="inherit" />
                       </IconButton>
                     )}

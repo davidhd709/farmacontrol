@@ -150,7 +150,7 @@ export const ExpenseCategoriesModal: React.FC<Props> = ({ open, onClose, onCateg
         <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
           Categorías de Causación de Gastos
         </Typography>
-        <IconButton onClick={onClose} size="small">
+        <IconButton onClick={onClose} size="small" aria-label="Cerrar categorías">
           <CloseIcon />
         </IconButton>
       </DialogTitle>
@@ -223,7 +223,12 @@ export const ExpenseCategoriesModal: React.FC<Props> = ({ open, onClose, onCateg
                       />
                     </TableCell>
                     <TableCell sx={{ textAlign: 'right' }}>
-                      <IconButton size="small" onClick={() => handleOpenEdit(c)} color="primary">
+                      <IconButton
+                        size="small"
+                        onClick={() => handleOpenEdit(c)}
+                        color="primary"
+                        aria-label={`Editar categoría ${c.name}`}
+                      >
                         <EditIcon fontSize="small" />
                       </IconButton>
                     </TableCell>
