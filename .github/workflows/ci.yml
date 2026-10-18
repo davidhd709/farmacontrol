@@ -140,5 +140,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
-          path: .test-runs/e2e-*
+          # Solo reporte y trazas: fixtures.json y *.storage.json llevan credenciales de la base temporal
+          path: |
+            .test-runs/e2e-*/report
+            .test-runs/e2e-*/artifacts
           retention-days: 7
