@@ -33,10 +33,9 @@ interface ClosingPlan {
 }
 
 /**
- * Cierre anual (acuerdo del 4 de octubre): con fecha 31 de diciembre se cancelan los saldos
- * de ingresos, costos, gastos y del resultado del ejercicio (3605/3610 o el propósito
- * CURRENT_YEAR_RESULT, que alimentan los cierres mensuales) y el neto pasa a utilidades
- * acumuladas (3705) o pérdidas acumuladas (3710). Así el año nuevo empieza con las cuentas
+ * Cierre anual: con fecha 31 de diciembre se cancelan los saldos de ingresos, costos, gastos
+ * y los saldos identificados por el propósito CURRENT_YEAR_RESULT, que alimentan los cierres mensuales,
+ * y el neto pasa a utilidades acumuladas o pérdidas acumuladas según su propósito contable. Así el año nuevo empieza con las cuentas
  * de resultado en cero y el histórico queda intacto. Se hace en febrero o cuando la
  * contabilidad esté al día, por eso solo exige que el año haya terminado.
  */
@@ -53,11 +52,17 @@ export class AnnualClosingService {
     return this.toPreview(year, plan);
   }
 
-  async close(year: number, userId: string, idempotencyKey: string | undefined): Promise<AnnualClosingResultDto> {
+  async close(
+    year: number,
+    userId: string,
+    idempotencyKey: string | undefined,
+  ): Promise<AnnualClosingResultDto> {
     this.validateYear(year);
     const key = idempotencyKey?.trim();
     if (!key || key.length > 100) {
-      throw new AccountingValidationError('Idempotency-Key es obligatorio (máximo 100 caracteres).');
+      throw new AccountingValidationError(
+        'Idempotency-Key es obligatorio (máximo 100 caracteres).',
+      );
     }
     const requestHash = this.idempotencyService.computeHash(ENDPOINT, userId, { year });
 
@@ -82,8 +87,8 @@ export class AnnualClosingService {
             if (plan.destinationPurpose && !plan.destinationAccount) {
               throw new AccountingValidationError(
                 plan.destinationPurpose === 'RETAINED_EARNINGS'
-                  ? 'Configure el propósito RETAINED_EARNINGS (utilidades acumuladas, 3705) antes del cierre anual.'
-                  : 'Configure el propósito ACCUMULATED_LOSSES (pérdidas acumuladas, 3710) antes del cierre anual.',
+                  ? 'Configure el propósito RETAINED_EARNINGS (utilidades acumuladas) antes del cierre anual.'
+                  : 'Configure el propósito ACCUMULATED_LOSSES (pérdidas acumuladas) antes del cierre anual.',
               );
             }
 
@@ -94,13 +99,17 @@ export class AnnualClosingService {
               description: `Cancelación ${line.accountCode} ${line.accountName}`.slice(0, 500),
             }));
             if (plan.destinationPurpose && plan.netResultCents !== 0n) {
-              const amount = centsToString(plan.netResultCents > 0n ? plan.netResultCents : -plan.netResultCents);
+              const amount = centsToString(
+                plan.netResultCents > 0n ? plan.netResultCents : -plan.netResultCents,
+              );
               lines.push({
                 purpose: plan.destinationPurpose,
                 debit: plan.netResultCents < 0n ? amount : '0.00',
                 credit: plan.netResultCents > 0n ? amount : '0.00',
                 description:
-                  plan.netResultCents > 0n ? `Utilidad del ejercicio ${year}` : `Pérdida del ejercicio ${year}`,
+                  plan.netResultCents > 0n
+                    ? `Utilidad del ejercicio ${year}`
+                    : `Pérdida del ejercicio ${year}`,
               });
             }
 
@@ -125,7 +134,14 @@ export class AnnualClosingService {
               netResult: centsToString(plan.netResultCents),
             };
             await this.idempotencyService.saveRecord(
-              { key, userId, endpoint: ENDPOINT, requestHash, responseStatus: 201, responseBody: result },
+              {
+                key,
+                userId,
+                endpoint: ENDPOINT,
+                requestHash,
+                responseStatus: 201,
+                responseBody: result,
+              },
               tx,
             );
             await tx.auditEvent.create({
@@ -160,13 +176,16 @@ export class AnnualClosingService {
       throw new AccountingValidationError('Año inválido.');
     }
     if (businessToday() <= `${year}-12-31`) {
-      throw new AccountingValidationError(`El año ${year} aún no ha terminado; el cierre se hace con corte al 31 de diciembre.`);
+      throw new AccountingValidationError(
+        `El año ${year} aún no ha terminado; el cierre se hace con corte al 31 de diciembre.`,
+      );
     }
   }
 
   private async plan(year: number, client: Client): Promise<ClosingPlan> {
     const entryDate = `${year}-12-31`;
     const cutoff = new Date(`${entryDate}T00:00:00.000Z`);
+    const yearStart = new Date(`${year}-01-01T00:00:00.000Z`);
 
     const existing = await client.journalEntry.findFirst({
       where: {
@@ -178,25 +197,36 @@ export class AnnualClosingService {
       select: { id: true },
     });
 
-    const resultMapping = await client.companyAccountingMapping.findFirst({
-      where: { purpose: 'CURRENT_YEAR_RESULT', status: 'ACTIVE', accountId: { not: null } },
+    // Saldos acumulados al 31 de diciembre: los cierres anuales anteriores ya dejaron en cero
+    // estas cuentas, así que lo que queda es el resultado pendiente de trasladar. Las líneas
+    // de cierre mensual conservan CURRENT_YEAR_RESULT como propósito; no se infiere una cuenta
+    // a partir de un mapping arbitrario. También se consideran todas las cuentas que tuvieron
+    // ese mapping durante el año, para cerrar saldos creados antes de un cambio de configuración.
+    const resultMappings = await client.companyAccountingMapping.findMany({
+      where: {
+        purpose: 'CURRENT_YEAR_RESULT',
+        status: 'ACTIVE',
+        accountId: { not: null },
+        effectiveFrom: { lte: cutoff },
+        OR: [{ effectiveTo: null }, { effectiveTo: { gte: yearStart } }],
+      },
       select: { accountId: true },
     });
+    const resultAccountIds = [
+      ...new Set(
+        resultMappings.flatMap((mapping) => (mapping.accountId ? [mapping.accountId] : [])),
+      ),
+    ];
 
-    // Saldos acumulados al 31 de diciembre: los cierres anuales anteriores ya dejaron en cero
-    // estas cuentas, así que lo que queda es el resultado pendiente de trasladar.
     const sums = await client.journalEntryLine.groupBy({
       by: ['accountId'],
       where: {
         journalEntry: { status: 'POSTED', entryDate: { lte: cutoff } },
-        account: {
-          OR: [
-            { type: { in: ['INCOME', 'COST', 'EXPENSE'] } },
-            { code: { startsWith: '3605' } },
-            { code: { startsWith: '3610' } },
-            ...(resultMapping?.accountId ? [{ id: resultMapping.accountId }] : []),
-          ],
-        },
+        OR: [
+          { account: { type: { in: ['INCOME', 'COST', 'EXPENSE'] } } },
+          { purpose: 'CURRENT_YEAR_RESULT' },
+          ...(resultAccountIds.length ? [{ accountId: { in: resultAccountIds } }] : []),
+        ],
       },
       _sum: { debit: true, credit: true },
     });
@@ -210,8 +240,12 @@ export class AnnualClosingService {
     let netResultCents = 0n;
     const lines: AnnualClosingLineDto[] = [];
     for (const sum of sums) {
-      const debit = normalizeJournalAmount((sum._sum.debit ?? new Prisma.Decimal(0)).toFixed(2)).cents;
-      const credit = normalizeJournalAmount((sum._sum.credit ?? new Prisma.Decimal(0)).toFixed(2)).cents;
+      const debit = normalizeJournalAmount(
+        (sum._sum.debit ?? new Prisma.Decimal(0)).toFixed(2),
+      ).cents;
+      const credit = normalizeJournalAmount(
+        (sum._sum.credit ?? new Prisma.Decimal(0)).toFixed(2),
+      ).cents;
       const balance = debit - credit; // positivo = saldo débito
       if (balance === 0n) continue;
       netResultCents -= balance;
@@ -231,7 +265,7 @@ export class AnnualClosingService {
       netResultCents > 0n ? 'RETAINED_EARNINGS' : netResultCents < 0n ? 'ACCUMULATED_LOSSES' : null;
     let destinationAccount: ClosingPlan['destinationAccount'] = null;
     if (destinationPurpose) {
-      const mapping = await client.companyAccountingMapping.findFirst({
+      const mappings = await client.companyAccountingMapping.findMany({
         where: {
           purpose: destinationPurpose,
           status: 'ACTIVE',
@@ -239,8 +273,27 @@ export class AnnualClosingService {
           effectiveFrom: { lte: cutoff },
           OR: [{ effectiveTo: null }, { effectiveTo: { gte: cutoff } }],
         },
-        include: { account: { select: { id: true, code: true, name: true } } },
+        include: {
+          account: {
+            select: { id: true, code: true, name: true, isActive: true, allowsMovement: true },
+          },
+        },
+        take: 2,
       });
+      if (mappings.length > 1) {
+        throw new AccountingValidationError(
+          `Existe más de un mapeo vigente para ${destinationPurpose}; revise la configuración antes del cierre anual.`,
+        );
+      }
+      const mapping = mappings[0];
+      if (
+        mapping &&
+        (!mapping.account || !mapping.account.isActive || !mapping.account.allowsMovement)
+      ) {
+        throw new AccountingValidationError(
+          `El mapeo de ${destinationPurpose} no apunta a una cuenta activa e imputable.`,
+        );
+      }
       destinationAccount = mapping?.account ?? null;
     }
 

@@ -45,6 +45,31 @@ describe('PurchaseController (Integration with PostgreSQL, Inventory & RBAC)', (
     await cleanTestDatabase();
     await seedRbac(prisma);
 
+    const accountingMappings = [
+      { purpose: 'INVENTORY', code: '143501', type: 'ASSET' },
+      { purpose: 'SUPPLIERS', code: '220505', type: 'LIABILITY' },
+    ] as const;
+    for (const mapping of accountingMappings) {
+      const account = await prisma.account.create({
+        data: {
+          code: mapping.code,
+          name: mapping.purpose,
+          type: mapping.type,
+          level: 1,
+          allowsMovement: true,
+          isActive: true,
+        },
+      });
+      await prisma.companyAccountingMapping.create({
+        data: {
+          purpose: mapping.purpose,
+          accountId: account.id,
+          status: 'ACTIVE',
+          effectiveFrom: new Date('2020-01-01T00:00:00Z'),
+        },
+      });
+    }
+
     const admin = await provisioningService.provisionInitialUser({
       username: 'purchase_admin',
       password: 'AdminPassword#2026',
@@ -189,6 +214,59 @@ describe('PurchaseController (Integration with PostgreSQL, Inventory & RBAC)', (
     expect(movement?.balanceAfterBaseUnits).toBe(500);
   });
 
+  it('revierte recepción, inventario y asiento si PostgreSQL rechaza una línea contable', async () => {
+    await prisma.$executeRawUnsafe(`
+      CREATE OR REPLACE FUNCTION f1_raise_purchase_journal_line_error()
+      RETURNS trigger AS $$
+      BEGIN
+        RAISE EXCEPTION 'F1 forced purchase journal line integrity failure';
+      END;
+      $$ LANGUAGE plpgsql
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE TRIGGER f1_raise_purchase_journal_line_error
+      BEFORE INSERT ON journal_entry_lines
+      FOR EACH ROW EXECUTE FUNCTION f1_raise_purchase_journal_line_error()
+    `);
+
+    try {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/purchases/receive')
+        .set('Cookie', [adminCookie])
+        .send({
+          supplierId,
+          invoiceNumber: 'FACT-F1-ROLLBACK',
+          purchaseDate: '2026-09-26',
+          lines: [
+            {
+              productId,
+              presentationId,
+              lotNumber: 'LOTE-F1-ROLLBACK',
+              expirationDate: validFutureDateStr,
+              quantityCommercial: 3,
+              unitCost: 4000,
+              locationId,
+            },
+          ],
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.correlationId).toBeDefined();
+      expect(await prisma.purchase.count({ where: { invoiceNumber: 'FACT-F1-ROLLBACK' } })).toBe(0);
+      expect(await prisma.purchaseLine.count()).toBe(0);
+      expect(await prisma.inventoryLot.count()).toBe(0);
+      expect(await prisma.inventoryMovement.count()).toBe(0);
+      expect(await prisma.journalEntry.count({ where: { sourceType: 'PURCHASE' } })).toBe(0);
+    } finally {
+      await prisma.$executeRawUnsafe(
+        'DROP TRIGGER IF EXISTS f1_raise_purchase_journal_line_error ON journal_entry_lines',
+      );
+      await prisma.$executeRawUnsafe(
+        'DROP FUNCTION IF EXISTS f1_raise_purchase_journal_line_error()',
+      );
+    }
+  });
+
   it('POST /api/v1/purchases/receive — deniega acceso a usuario sin permiso purchases:receive (403)', async () => {
     const res = await request(app.getHttpServer())
       .post('/api/v1/purchases/receive')
@@ -271,7 +349,9 @@ describe('PurchaseController (Integration with PostgreSQL, Inventory & RBAC)', (
     it('suma a un lote existente con el mismo vencimiento', async () => {
       expect((await receive('FAC-A1', {})).status).toBe(201);
       expect((await receive('FAC-A2', {})).status).toBe(201);
-      const lot = await prisma.inventoryLot.findFirstOrThrow({ where: { lotNumber: 'LOTE-AUD008' } });
+      const lot = await prisma.inventoryLot.findFirstOrThrow({
+        where: { lotNumber: 'LOTE-AUD008' },
+      });
       expect(lot.currentQuantity).toBe(100);
     });
 
@@ -280,7 +360,9 @@ describe('PurchaseController (Integration with PostgreSQL, Inventory & RBAC)', (
       const res = await receive('FAC-B2', { expirationDate: otherDateStr });
       expect(res.status).toBe(409);
 
-      const lot = await prisma.inventoryLot.findFirstOrThrow({ where: { lotNumber: 'LOTE-AUD008' } });
+      const lot = await prisma.inventoryLot.findFirstOrThrow({
+        where: { lotNumber: 'LOTE-AUD008' },
+      });
       expect(lot.expirationDate.toISOString().split('T')[0]).toBe(validFutureDateStr);
       expect(lot.currentQuantity).toBe(50);
       expect(await prisma.purchase.count()).toBe(1);
@@ -295,7 +377,9 @@ describe('PurchaseController (Integration with PostgreSQL, Inventory & RBAC)', (
 
       const res = await receive('FAC-C2', {});
       expect(res.status).toBe(409);
-      const lot = await prisma.inventoryLot.findFirstOrThrow({ where: { lotNumber: 'LOTE-AUD008' } });
+      const lot = await prisma.inventoryLot.findFirstOrThrow({
+        where: { lotNumber: 'LOTE-AUD008' },
+      });
       expect(lot.isActive).toBe(false);
       expect(lot.currentQuantity).toBe(50);
     });
@@ -308,14 +392,18 @@ describe('PurchaseController (Integration with PostgreSQL, Inventory & RBAC)', (
       expect([a.status, b.status].sort()).toEqual([201, 409]);
 
       expect(await prisma.purchase.count()).toBe(2);
-      const lot = await prisma.inventoryLot.findFirstOrThrow({ where: { lotNumber: 'LOTE-AUD008' } });
+      const lot = await prisma.inventoryLot.findFirstOrThrow({
+        where: { lotNumber: 'LOTE-AUD008' },
+      });
       expect(lot.currentQuantity).toBe(100);
     });
 
     it('guarda el factor de la presentación y rechaza cantidades que no dan unidades base enteras', async () => {
       const ok = await receive('FAC-E1', { quantityCommercial: 0.3, unitCost: 1000 });
       expect(ok.status).toBe(201);
-      const line = await prisma.purchaseLine.findFirstOrThrow({ where: { purchaseId: ok.body.id } });
+      const line = await prisma.purchaseLine.findFirstOrThrow({
+        where: { purchaseId: ok.body.id },
+      });
       expect(line.presentationFactorHistorical).toBe(50);
       expect(line.quantityBaseUnits).toBe(15);
 

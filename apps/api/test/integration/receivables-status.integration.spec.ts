@@ -41,6 +41,37 @@ describe('Estados de cuentas por cobrar tras anular ventas a crédito (FARM-AUD-
     await cleanTestDatabase();
     await seedRbac(prisma);
 
+    const accountingMappings = [
+      { purpose: 'CASH', code: '110505', type: 'ASSET' },
+      { purpose: 'BANK', code: '111005', type: 'ASSET' },
+      { purpose: 'CUSTOMERS', code: '130505', type: 'ASSET' },
+      { purpose: 'INVENTORY', code: '143501', type: 'ASSET' },
+      { purpose: 'VAT_OUTPUT', code: '240805', type: 'LIABILITY' },
+      { purpose: 'SALES_TAXED', code: '413501', type: 'INCOME' },
+      { purpose: 'SALES_EXCLUDED', code: '413502', type: 'INCOME' },
+      { purpose: 'COST_OF_SALES', code: '613501', type: 'COST' },
+    ] as const;
+    for (const mapping of accountingMappings) {
+      const account = await prisma.account.create({
+        data: {
+          code: mapping.code,
+          name: mapping.purpose,
+          type: mapping.type,
+          level: 1,
+          allowsMovement: true,
+          isActive: true,
+        },
+      });
+      await prisma.companyAccountingMapping.create({
+        data: {
+          purpose: mapping.purpose,
+          accountId: account.id,
+          status: 'ACTIVE',
+          effectiveFrom: new Date('2020-01-01T00:00:00Z'),
+        },
+      });
+    }
+
     await prisma.customer.create({
       data: {
         documentType: 'CC',

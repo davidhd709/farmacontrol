@@ -2,7 +2,13 @@ import { beforeAll, beforeEach, afterAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { Test } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
-import { prisma, cleanTestDatabase, seedRbac, AccountingPurpose as DbPurpose } from '@farmacia/database';
+import {
+  prisma,
+  cleanTestDatabase,
+  seedRbac,
+  AccountingPurpose as DbPurpose,
+  Prisma,
+} from '@farmacia/database';
 import { AppModule } from '../../src/app.module';
 import { UserProvisioningService } from '../../src/modules/identity/application/services/user-provisioning.service';
 import { AuthService } from '../../src/modules/identity/application/services/auth.service';
@@ -71,7 +77,12 @@ describe('Accounting Engine, Double-Entry, Journal & Reports Integration (Postgr
       { code: '240805', name: 'IVA Generado', type: 'LIABILITY', purpose: 'VAT_OUTPUT' },
       { code: '413501', name: 'Ventas Gravadas', type: 'INCOME', purpose: 'SALES_TAXED' },
       { code: '413502', name: 'Ventas Excluidas', type: 'INCOME', purpose: 'SALES_EXCLUDED' },
-      { code: '613501', name: 'Costo de Ventas Medicamentos', type: 'COST', purpose: 'COST_OF_SALES' },
+      {
+        code: '613501',
+        name: 'Costo de Ventas Medicamentos',
+        type: 'COST',
+        purpose: 'COST_OF_SALES',
+      },
     ];
 
     for (const acc of accountsData) {
@@ -95,6 +106,12 @@ describe('Accounting Engine, Double-Entry, Journal & Reports Integration (Postgr
         },
       });
     }
+  }
+
+  function accountingTransaction<T>(operation: (tx: Prisma.TransactionClient) => Promise<T>) {
+    return prisma.$transaction(operation, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    });
   }
 
   beforeEach(async () => {
@@ -214,22 +231,27 @@ describe('Accounting Engine, Double-Entry, Journal & Reports Integration (Postgr
         },
       });
 
-      const posted = await engineService.handleSaleConfirmed({
-        id: '11111111-1111-1111-1111-111111111111',
-        invoiceNumber: 'FAC-00101',
-        total: '17850.00', // Subtotal 15.000 + IVA 19% 2.850
-        subtotal: '15000.00',
-        taxTotal: '2850.00',
-        paymentMethod: 'EFECTIVO',
-        createdById: adminUserId,
-        lines: [
+      const posted = await accountingTransaction((tx) =>
+        engineService.handleSaleConfirmed(
           {
-            productId: product.id,
-            quantityCommercial: 1,
-            quantityBaseUnits: 1,
+            id: '11111111-1111-1111-1111-111111111111',
+            invoiceNumber: 'FAC-00101',
+            total: '17850.00', // Subtotal 15.000 + IVA 19% 2.850
+            subtotal: '15000.00',
+            taxTotal: '2850.00',
+            paymentMethod: 'EFECTIVO',
+            createdById: adminUserId,
+            lines: [
+              {
+                productId: product.id,
+                quantityCommercial: 1,
+                quantityBaseUnits: 1,
+              },
+            ],
           },
-        ],
-      });
+          tx,
+        ),
+      );
 
       expect(posted).not.toBeNull();
       expect(posted!.status).toBe('POSTED');
@@ -246,46 +268,75 @@ describe('Accounting Engine, Double-Entry, Journal & Reports Integration (Postgr
       expect(dto.totalCredit).toBe('25850.00');
 
       // Anulación de venta genera reversión automática
-      const reversal = await engineService.handleSaleCancelled(
-        '11111111-1111-1111-1111-111111111111',
-        'Cliente canceló la orden en mostrador',
-        adminUserId,
+      const reversal = await accountingTransaction((tx) =>
+        engineService.handleSaleCancelled(
+          '11111111-1111-1111-1111-111111111111',
+          'Cliente canceló la orden en mostrador',
+          adminUserId,
+          tx,
+        ),
       );
       expect(reversal).not.toBeNull();
       expect(reversal!.reversalOfId).toBe(posted!.id);
     });
 
     describe('T-31: descuentos de venta en 4175', () => {
-      async function discountedSale(id: string) {
+      async function createDiscountProduct(id: string) {
         const category = await prisma.category.create({ data: { name: `Cat ${id}` } });
-        const product = await prisma.product.create({
-          data: { code: `DESC-${id}`, name: 'Producto con descuento', basePrice: 30000, baseCost: 0, categoryId: category.id },
+        return prisma.product.create({
+          data: {
+            code: `DESC-${id}`,
+            name: 'Producto con descuento',
+            basePrice: 30000,
+            baseCost: 0,
+            categoryId: category.id,
+          },
         });
+      }
+
+      function discountedSale(id: string, productId: string) {
         // Precio 30.000, descuento 2.000: la venta neta es 28.000 (ejemplo del documento contable)
-        return engineService.handleSaleConfirmed({
-          id,
-          invoiceNumber: `FAC-${id.slice(0, 4)}`,
-          total: '28000.00',
-          subtotal: '28000.00',
-          taxTotal: '0.00',
-          discountTotal: '2000.00',
-          paymentMethod: 'EFECTIVO',
-          createdById: adminUserId,
-          createdAt: new Date('2026-10-05T15:00:00Z'),
-          lines: [{ productId: product.id, quantityCommercial: 1, quantityBaseUnits: 1 }],
-        });
+        return accountingTransaction((tx) =>
+          engineService.handleSaleConfirmed(
+            {
+              id,
+              invoiceNumber: `FAC-${id.slice(0, 4)}`,
+              total: '28000.00',
+              subtotal: '28000.00',
+              taxTotal: '0.00',
+              discountTotal: '2000.00',
+              paymentMethod: 'EFECTIVO',
+              createdById: adminUserId,
+              createdAt: new Date('2026-10-05T15:00:00Z'),
+              lines: [{ productId, quantityCommercial: 1, quantityBaseUnits: 1 }],
+            },
+            tx,
+          ),
+        );
       }
 
       it('registra la venta bruta y el descuento en la cuenta de descuentos', async () => {
         await setupStandardPucAndMappings();
         const discounts = await prisma.account.create({
-          data: { code: '417506', name: 'DESCUENTOS CONDICIONADOS (DB)', type: 'INCOME', level: 1, allowsMovement: true },
+          data: {
+            code: '417506',
+            name: 'DESCUENTOS CONDICIONADOS (DB)',
+            type: 'INCOME',
+            level: 1,
+            allowsMovement: true,
+          },
         });
         await prisma.companyAccountingMapping.create({
-          data: { purpose: 'SALES_DISCOUNTS', accountId: discounts.id, status: 'ACTIVE', effectiveFrom: new Date('2020-01-01') },
+          data: {
+            purpose: 'SALES_DISCOUNTS',
+            accountId: discounts.id,
+            status: 'ACTIVE',
+            effectiveFrom: new Date('2020-01-01'),
+          },
         });
 
-        const posted = await discountedSale('22222222-2222-2222-2222-222222222222');
+        const product = await createDiscountProduct('22222222-2222-2222-2222-222222222222');
+        const posted = await discountedSale('22222222-2222-2222-2222-222222222222', product.id);
         const lines = await prisma.journalEntryLine.findMany({
           where: { journalEntryId: posted!.id },
           include: { account: true },
@@ -302,26 +353,59 @@ describe('Accounting Engine, Double-Entry, Journal & Reports Integration (Postgr
         expect(statement.netSales).toBe('28000.00');
       });
 
-      it('sin cuenta de descuentos configurada conserva el registro neto', async () => {
+      it('T-31: sin cuenta de descuentos configurada revierte el asiento; corregir mapping permite reintentar', async () => {
         await setupStandardPucAndMappings();
-        const posted = await discountedSale('33333333-3333-3333-3333-333333333333');
-        const dto = await journalService.findById(posted!.id);
-        expect(dto.totalDebit).toBe('28000.00');
-        expect(dto.lines.some((l) => l.purpose === 'SALES_DISCOUNTS')).toBe(false);
+        const id = '33333333-3333-3333-3333-333333333333';
+        const product = await createDiscountProduct(id);
+        await expect(discountedSale(id, product.id)).rejects.toThrow(
+          /mapeo activo e imputable para SALES_DISCOUNTS/,
+        );
+        expect(
+          await prisma.journalEntry.count({ where: { sourceType: 'SALE', sourceId: id } }),
+        ).toBe(0);
+
+        const discounts = await prisma.account.create({
+          data: {
+            code: '417506',
+            name: 'DESCUENTOS CONDICIONADOS (DB)',
+            type: 'INCOME',
+            level: 1,
+            allowsMovement: true,
+          },
+        });
+        await prisma.companyAccountingMapping.create({
+          data: {
+            purpose: 'SALES_DISCOUNTS',
+            accountId: discounts.id,
+            status: 'ACTIVE',
+            effectiveFrom: new Date('2020-01-01'),
+          },
+        });
+
+        const posted = await discountedSale(id, product.id);
+        const dto = await journalService.findById(posted.id);
+        expect(dto.totalDebit).toBe('30000.00');
+        expect(dto.lines.find((line) => line.purpose === 'SALES_DISCOUNTS')?.debit).toBe('2000.00');
+        expect(dto.lines.some((l) => l.purpose === 'SALES_DISCOUNTS')).toBe(true);
       });
     });
 
     it('contabiliza recepción de compras afectando INVENTORY vs SUPPLIERS', async () => {
       await setupStandardPucAndMappings();
 
-      const posted = await engineService.handlePurchaseReceived({
-        id: '22222222-2222-2222-2222-222222222222',
-        invoiceNumber: 'COM-00500',
-        supplierName: 'Laboratorios Baxter S.A.',
-        totalAmount: '450000.00',
-        purchaseDate: new Date('2026-10-01'),
-        receivedByUserId: adminUserId,
-      });
+      const posted = await accountingTransaction((tx) =>
+        engineService.handlePurchaseReceived(
+          {
+            id: '22222222-2222-2222-2222-222222222222',
+            invoiceNumber: 'COM-00500',
+            supplierName: 'Laboratorios Baxter S.A.',
+            totalAmount: '450000.00',
+            purchaseDate: new Date('2026-10-01'),
+            receivedByUserId: adminUserId,
+          },
+          tx,
+        ),
+      );
 
       expect(posted).not.toBeNull();
       const entry = await journalService.findById(posted!.id);
@@ -335,15 +419,20 @@ describe('Accounting Engine, Double-Entry, Journal & Reports Integration (Postgr
       await setupStandardPucAndMappings();
 
       // 1. Abono de cartera
-      const recPayment = await engineService.handleCustomerPayment({
-        id: '33333333-3333-3333-3333-333333333333',
-        receivableId: 'rec-001',
-        amount: '60000.00',
-        paymentMethod: 'TRANSFERENCIA',
-        createdByUserId: adminUserId,
-        customerName: 'Juan Pérez',
-        invoiceNumber: 'FAC-00088',
-      });
+      const recPayment = await accountingTransaction((tx) =>
+        engineService.handleCustomerPayment(
+          {
+            id: '33333333-3333-3333-3333-333333333333',
+            receivableId: 'rec-001',
+            amount: '60000.00',
+            paymentMethod: 'TRANSFERENCIA',
+            createdByUserId: adminUserId,
+            customerName: 'Juan Pérez',
+            invoiceNumber: 'FAC-00088',
+          },
+          tx,
+        ),
+      );
       expect(recPayment).not.toBeNull();
       const recDto = await journalService.findById(recPayment!.id);
       expect(recDto.lines[0].purpose).toBe('BANK');
@@ -352,15 +441,20 @@ describe('Accounting Engine, Double-Entry, Journal & Reports Integration (Postgr
       expect(recDto.totalCredit).toBe('60000.00');
 
       // 2. Pago a proveedor
-      const payPayment = await engineService.handleSupplierPayment({
-        id: '44444444-4444-4444-4444-444444444444',
-        payableId: 'pay-001',
-        amount: '120000.00',
-        paymentMethod: 'EFECTIVO',
-        createdByUserId: adminUserId,
-        supplierName: 'Distribuidora Médica',
-        invoiceNumber: 'COM-00123',
-      });
+      const payPayment = await accountingTransaction((tx) =>
+        engineService.handleSupplierPayment(
+          {
+            id: '44444444-4444-4444-4444-444444444444',
+            payableId: 'pay-001',
+            amount: '120000.00',
+            paymentMethod: 'EFECTIVO',
+            createdByUserId: adminUserId,
+            supplierName: 'Distribuidora Médica',
+            invoiceNumber: 'COM-00123',
+          },
+          tx,
+        ),
+      );
       expect(payPayment).not.toBeNull();
       const payDto = await journalService.findById(payPayment!.id);
       expect(payDto.lines[0].purpose).toBe('SUPPLIERS');
@@ -479,7 +573,9 @@ describe('Accounting Engine, Double-Entry, Journal & Reports Integration (Postgr
 
       const cashAcc = await prisma.account.findUniqueOrThrow({ where: { code: '110505' } });
       const gl = await request(app.getHttpServer())
-        .get(`/api/v1/accounting/reports/general-ledger?accountId=${cashAcc.id}&fromDate=2026-10-01&toDate=2026-10-31`)
+        .get(
+          `/api/v1/accounting/reports/general-ledger?accountId=${cashAcc.id}&fromDate=2026-10-01&toDate=2026-10-31`,
+        )
         .set('Cookie', cookie);
       expect(gl.status).toBe(200);
       expect(gl.body.accountId).toBe(cashAcc.id);

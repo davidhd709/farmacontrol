@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { Test } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
-import { cleanTestDatabase, prisma, AccountingPurpose } from '@farmacia/database';
+import { cleanTestDatabase, prisma, AccountingPurpose, Prisma } from '@farmacia/database';
 import { AppModule } from '../../src/app.module';
 import { TreasuryService } from '../../src/modules/treasury/application/treasury.service';
 import { AccountingEngineService } from '../../src/modules/accounting/application/accounting-engine.service';
@@ -24,7 +24,8 @@ describe('Cuentas bancarias vinculadas al PUC', () => {
 
   beforeEach(async () => {
     await cleanTestDatabase();
-    userId = (await prisma.user.create({ data: { username: 'tesoreria_puc', passwordHash: 'x' } })).id;
+    userId = (await prisma.user.create({ data: { username: 'tesoreria_puc', passwordHash: 'x' } }))
+      .id;
   });
 
   afterAll(async () => {
@@ -32,12 +33,22 @@ describe('Cuentas bancarias vinculadas al PUC', () => {
     await cleanTestDatabase();
   });
 
-  const account = (code: string, name: string, type: 'ASSET' | 'LIABILITY' = 'ASSET', allowsMovement = true) =>
-    prisma.account.create({ data: { code, name, type, level: 1, allowsMovement } });
+  const account = (
+    code: string,
+    name: string,
+    type: 'ASSET' | 'LIABILITY' = 'ASSET',
+    allowsMovement = true,
+  ) => prisma.account.create({ data: { code, name, type, level: 1, allowsMovement } });
 
   async function map(purpose: AccountingPurpose, accountId: string) {
     await prisma.companyAccountingMapping.create({
       data: { purpose, accountId, status: 'ACTIVE', effectiveFrom: new Date('2020-01-01') },
+    });
+  }
+
+  function accountingTransaction<T>(operation: (tx: Prisma.TransactionClient) => Promise<T>) {
+    return prisma.$transaction(operation, {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
     });
   }
 
@@ -62,18 +73,34 @@ describe('Cuentas bancarias vinculadas al PUC', () => {
     const pasivo = await account('210505', 'BANCOS NACIONALES', 'LIABILITY');
     const ledger = await account('11200501', 'BANCOLOMBIA');
 
-    await expect(treasury.createAccount(bankDto(caja.id), userId)).rejects.toThrow(/subcuenta de bancos/);
-    await expect(treasury.createAccount(bankDto(grupo.id), userId)).rejects.toThrow(/permitir movimientos/);
-    await expect(treasury.createAccount(bankDto(pasivo.id), userId)).rejects.toThrow(/subcuenta de bancos/);
-    await expect(treasury.createAccount(bankDto(undefined), userId)).rejects.toThrow(/Subcuenta del PUC/);
+    await expect(treasury.createAccount(bankDto(caja.id), userId)).rejects.toThrow(
+      /subcuenta de bancos/,
+    );
+    await expect(treasury.createAccount(bankDto(grupo.id), userId)).rejects.toThrow(
+      /permitir movimientos/,
+    );
+    await expect(treasury.createAccount(bankDto(pasivo.id), userId)).rejects.toThrow(
+      /subcuenta de bancos/,
+    );
+    await expect(treasury.createAccount(bankDto(undefined), userId)).rejects.toThrow(
+      /Subcuenta del PUC/,
+    );
 
     await treasury.createAccount(bankDto(ledger.id), userId);
-    await expect(treasury.createAccount(bankDto(ledger.id, '999'), userId)).rejects.toThrow(/ya está asignada/);
+    await expect(treasury.createAccount(bankDto(ledger.id, '999'), userId)).rejects.toThrow(
+      /ya está asignada/,
+    );
   });
 
   it('una cuenta bancaria existente sin vínculo se vincula al editarla', async () => {
     const legacy = await prisma.bankAccount.create({
-      data: { bankName: 'Davivienda', accountType: 'CORRIENTE', accountNumber: '123', name: 'Antigua', createdById: userId },
+      data: {
+        bankName: 'Davivienda',
+        accountType: 'CORRIENTE',
+        accountNumber: '123',
+        name: 'Antigua',
+        createdById: userId,
+      },
     });
     const ledger = await account('11100501', 'DAVIVIENDA CTE');
     const updated = await treasury.updateAccount(legacy.id, { ledgerAccountId: ledger.id }, userId);
@@ -86,14 +113,19 @@ describe('Cuentas bancarias vinculadas al PUC', () => {
     await map('CUSTOMERS', clientes.id);
     const bank = await treasury.createAccount(bankDto(ledger.id), userId);
 
-    const posted = await engine.handleCustomerPayment({
-      id: '44444444-4444-4444-4444-444444444444',
-      receivableId: '55555555-5555-5555-5555-555555555555',
-      amount: '50000.00',
-      paymentMethod: 'TRANSFERENCIA',
-      bankAccountId: bank.id,
-      createdByUserId: userId,
-    });
+    const posted = await accountingTransaction((tx) =>
+      engine.handleCustomerPayment(
+        {
+          id: '44444444-4444-4444-4444-444444444444',
+          receivableId: '55555555-5555-5555-5555-555555555555',
+          amount: '50000.00',
+          paymentMethod: 'TRANSFERENCIA',
+          bankAccountId: bank.id,
+          createdByUserId: userId,
+        },
+        tx,
+      ),
+    );
     expect(posted).not.toBeNull();
     const bankLine = posted!.lines.find((l) => l.purpose === 'BANK');
     expect(bankLine?.accountId).toBe(ledger.id);
@@ -106,17 +138,28 @@ describe('Cuentas bancarias vinculadas al PUC', () => {
     await map('CUSTOMERS', clientes.id);
     await map('BANK', generic.id);
     const legacy = await prisma.bankAccount.create({
-      data: { bankName: 'Nequi', accountType: 'DIGITAL', accountNumber: '300', name: 'Nequi', createdById: userId },
+      data: {
+        bankName: 'Nequi',
+        accountType: 'DIGITAL',
+        accountNumber: '300',
+        name: 'Nequi',
+        createdById: userId,
+      },
     });
 
-    const posted = await engine.handleCustomerPayment({
-      id: '66666666-6666-6666-6666-666666666666',
-      receivableId: '77777777-7777-7777-7777-777777777777',
-      amount: '1000.00',
-      paymentMethod: 'TRANSFERENCIA',
-      bankAccountId: legacy.id,
-      createdByUserId: userId,
-    });
+    const posted = await accountingTransaction((tx) =>
+      engine.handleCustomerPayment(
+        {
+          id: '66666666-6666-6666-6666-666666666666',
+          receivableId: '77777777-7777-7777-7777-777777777777',
+          amount: '1000.00',
+          paymentMethod: 'TRANSFERENCIA',
+          bankAccountId: legacy.id,
+          createdByUserId: userId,
+        },
+        tx,
+      ),
+    );
     expect(posted!.lines.find((l) => l.purpose === 'BANK')?.accountId).toBe(generic.id);
   });
 });

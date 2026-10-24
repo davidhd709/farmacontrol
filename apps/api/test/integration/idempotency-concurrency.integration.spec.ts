@@ -44,6 +44,33 @@ describe('Idempotencia concurrente de pagos (Integration)', () => {
     await cleanTestDatabase();
     await seedRbac(prisma);
 
+    const accountingMappings = [
+      { purpose: 'CASH', code: '110505', type: 'ASSET' },
+      { purpose: 'BANK', code: '111005', type: 'ASSET' },
+      { purpose: 'CUSTOMERS', code: '130505', type: 'ASSET' },
+      { purpose: 'SUPPLIERS', code: '220505', type: 'LIABILITY' },
+    ] as const;
+    for (const mapping of accountingMappings) {
+      const account = await prisma.account.create({
+        data: {
+          code: mapping.code,
+          name: mapping.purpose,
+          type: mapping.type,
+          level: 1,
+          allowsMovement: true,
+          isActive: true,
+        },
+      });
+      await prisma.companyAccountingMapping.create({
+        data: {
+          purpose: mapping.purpose,
+          accountId: account.id,
+          status: 'ACTIVE',
+          effectiveFrom: new Date('2020-01-01T00:00:00Z'),
+        },
+      });
+    }
+
     const adminUser = await provisioningService.provisionInitialUser({
       username: 'admin_test',
       password: 'Admin12345!',
