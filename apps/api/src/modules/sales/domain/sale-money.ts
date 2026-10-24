@@ -3,18 +3,19 @@
  * Los importes de entrada llegan como number con a lo sumo dos decimales;
  * todo cálculo intermedio se hace en centavos y se redondea half-up de forma explícita.
  */
+import { SaleValidationException } from './sale.exceptions';
 
 const EPSILON = 1e-6;
 
 /** Convierte un valor con hasta dos decimales a centésimas exactas. */
 export function toHundredths(value: number, label: string): bigint {
   if (!Number.isFinite(value)) {
-    throw new Error(`${label} no es un número válido.`);
+    throw new SaleValidationException(`${label} no es un número válido.`);
   }
   const scaled = value * 100;
   const rounded = Math.round(scaled);
   if (Math.abs(scaled - rounded) > EPSILON) {
-    throw new Error(`${label} admite como máximo dos decimales (${value}).`);
+    throw new SaleValidationException(`${label} admite como máximo dos decimales (${value}).`);
   }
   return BigInt(rounded);
 }

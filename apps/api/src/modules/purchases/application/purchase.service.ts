@@ -37,8 +37,7 @@ export class PurchaseService {
     @Inject(PURCHASE_REPOSITORY)
     private readonly purchaseRepository: IPurchaseRepository,
     private readonly accountingEngine: AccountingEngineService,
-    @Optional()
-    private readonly auditService?: AuditService,
+    private readonly auditService: AuditService,
     @Optional() customClient?: PrismaClient,
   ) {
     this.client = customClient ?? prisma;
@@ -188,27 +187,26 @@ export class PurchaseService {
           },
           tx,
         );
+        await this.auditService.recordEvent(
+          {
+            action: 'purchases:purchase_received',
+            entity: 'Purchase',
+            entityId: p.id,
+            userId: auditCtx?.userId || null,
+            ipAddress: auditCtx?.ipAddress || null,
+            correlationId: auditCtx?.correlationId || null,
+            details: {
+              supplierId: supplier.id,
+              supplierName: supplier.name,
+              invoiceNumber: p.invoiceNumber,
+              totalAmount: p.totalAmount,
+              linesCount: p.lines.length,
+            },
+          },
+          tx,
+        );
       },
     );
-
-    // 6. Registrar Auditoría
-    if (this.auditService) {
-      await this.auditService.recordEvent({
-        action: 'purchases:purchase_received',
-        entity: 'Purchase',
-        entityId: savedPurchase.id,
-        userId: auditCtx?.userId || null,
-        ipAddress: auditCtx?.ipAddress || null,
-        correlationId: auditCtx?.correlationId || null,
-        details: {
-          supplierId: supplier.id,
-          supplierName: supplier.name,
-          invoiceNumber: savedPurchase.invoiceNumber,
-          totalAmount: savedPurchase.totalAmount,
-          linesCount: savedPurchase.lines.length,
-        },
-      });
-    }
 
     return savedPurchase;
   }

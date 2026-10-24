@@ -233,6 +233,11 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
       expect(journalEntry).toBeDefined();
       expect(journalEntry?.status).toBe('POSTED');
       expect(journalEntry?.lines.length).toBe(2);
+      expect(
+        await prisma.auditEvent.count({
+          where: { action: 'expenses:expense_created', entityId: res.body.id },
+        }),
+      ).toBe(1);
 
       const debitLine = journalEntry?.lines.find((l) => Number(l.debit) > 0);
       const creditLine = journalEntry?.lines.find((l) => Number(l.credit) > 0);
@@ -382,6 +387,11 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
       });
       expect(paymentJournal).toBeDefined();
       expect(paymentJournal?.status).toBe('POSTED');
+      expect(
+        await prisma.auditEvent.count({
+          where: { action: 'expenses:expense_payment_registered', entityId: paymentId },
+        }),
+      ).toBe(1);
 
       const debitLine = paymentJournal?.lines.find((l) => Number(l.debit) > 0);
       const creditLine = paymentJournal?.lines.find((l) => Number(l.credit) > 0);

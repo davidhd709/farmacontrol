@@ -59,7 +59,12 @@ describe('PurchaseService & Purchase Entities (Unit)', () => {
       },
     };
 
-    service = new PurchaseService(repository, {} as any, undefined, mockPrisma);
+    service = new PurchaseService(
+      repository,
+      {} as any,
+      { recordEvent: vi.fn() } as any,
+      mockPrisma,
+    );
   });
 
   describe('Entidades de Dominio Purchase y PurchaseLine', () => {

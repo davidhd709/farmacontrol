@@ -413,6 +413,21 @@ export class CreditNotesService {
             },
             tx,
           );
+          await tx.auditEvent.create({
+            data: {
+              userId,
+              action: 'sales:credit_note_confirmed',
+              entity: 'CreditNote',
+              entityId: creditNote.id,
+              details: {
+                creditNoteNumber: creditNote.creditNoteNumber,
+                saleId: sale.id,
+                total: creditNote.total,
+                refundMethod: creditNote.refundMethod,
+                restock: creditNote.restock,
+              },
+            },
+          });
           return dto;
         },
         {

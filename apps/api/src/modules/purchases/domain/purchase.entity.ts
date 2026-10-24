@@ -1,5 +1,6 @@
 import { businessToday } from '../../../common/utils/business-date';
 import { PurchaseDto, PurchaseLineDto } from '@farmacia/contracts';
+import { PurchaseValidationException } from './purchase.exceptions';
 
 export interface CreatePurchaseLineProps {
   id?: string;
@@ -73,45 +74,53 @@ export class PurchaseLine {
 
   public static create(props: CreatePurchaseLineProps): PurchaseLine {
     if (!props.productId) {
-      throw new Error('El producto es obligatorio en cada línea de compra');
+      throw new PurchaseValidationException(
+        'El producto es obligatorio en cada línea de compra',
+      );
     }
     if (!props.lotNumber || !props.lotNumber.trim()) {
-      throw new Error('El número de lote es obligatorio');
+      throw new PurchaseValidationException('El número de lote es obligatorio');
     }
     if (!props.expirationDate || isNaN(props.expirationDate.getTime())) {
-      throw new Error('La fecha de vencimiento es obligatoria y debe ser una fecha válida');
+      throw new PurchaseValidationException(
+        'La fecha de vencimiento es obligatoria y debe ser una fecha válida',
+      );
     }
 
     const today = businessToday();
     const expDate = props.expirationDate.toISOString().slice(0, 10);
 
     if (expDate <= today) {
-      throw new Error(
+      throw new PurchaseValidationException(
         `La fecha de vencimiento (${props.expirationDate.toISOString().split('T')[0]}) no puede ser anterior ni igual a hoy`
       );
     }
 
     if (props.quantityCommercial <= 0) {
-      throw new Error('La cantidad comercial debe ser estrictamente mayor a 0');
+      throw new PurchaseValidationException(
+        'La cantidad comercial debe ser estrictamente mayor a 0',
+      );
     }
     if (props.conversionFactor <= 0) {
-      throw new Error('El factor de conversión debe ser mayor a 0');
+      throw new PurchaseValidationException('El factor de conversión debe ser mayor a 0');
     }
     if (props.unitCost < 0) {
-      throw new Error('El costo unitario no puede ser negativo');
+      throw new PurchaseValidationException('El costo unitario no puede ser negativo');
     }
 
     const exactBaseUnits = props.quantityCommercial * props.conversionFactor;
     const quantityBaseUnits = props.quantityBaseUnits ?? Math.round(exactBaseUnits);
     // El inventario se lleva en unidades base enteras: no se redondea en silencio
     if (props.quantityBaseUnits === undefined && Math.abs(exactBaseUnits - quantityBaseUnits) > 1e-6) {
-      throw new Error(
+      throw new PurchaseValidationException(
         `La cantidad ${props.quantityCommercial} con factor ${props.conversionFactor} no equivale a unidades base enteras.`,
       );
     }
 
     if (quantityBaseUnits <= 0) {
-      throw new Error('La cantidad en unidades base calculada debe ser mayor a 0');
+      throw new PurchaseValidationException(
+        'La cantidad en unidades base calculada debe ser mayor a 0',
+      );
     }
 
     const subtotal =
@@ -258,16 +267,16 @@ export class Purchase {
 
   public static create(props: CreatePurchaseProps): Purchase {
     if (!props.supplierId) {
-      throw new Error('El proveedor es obligatorio para registrar la compra');
+      throw new PurchaseValidationException('El proveedor es obligatorio para registrar la compra');
     }
     if (!props.invoiceNumber || !props.invoiceNumber.trim()) {
-      throw new Error('El número de factura o comprobante es obligatorio');
+      throw new PurchaseValidationException('El número de factura o comprobante es obligatorio');
     }
     if (!props.purchaseDate || isNaN(props.purchaseDate.getTime())) {
-      throw new Error('La fecha de compra es obligatoria');
+      throw new PurchaseValidationException('La fecha de compra es obligatoria');
     }
     if (!props.lines || props.lines.length === 0) {
-      throw new Error('La compra debe contener al menos una línea de producto');
+      throw new PurchaseValidationException('La compra debe contener al menos una línea de producto');
     }
 
     const totalAmount =

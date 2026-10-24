@@ -212,6 +212,11 @@ describe('PurchaseController (Integration with PostgreSQL, Inventory & RBAC)', (
     expect(movement).not.toBeNull();
     expect(movement?.quantityBaseUnits).toBe(500);
     expect(movement?.balanceAfterBaseUnits).toBe(500);
+    expect(
+      await prisma.auditEvent.count({
+        where: { action: 'purchases:purchase_received', entityId: res.body.id },
+      }),
+    ).toBe(1);
   });
 
   it('revierte recepción, inventario y asiento si PostgreSQL rechaza una línea contable', async () => {
@@ -250,13 +255,19 @@ describe('PurchaseController (Integration with PostgreSQL, Inventory & RBAC)', (
           ],
         });
 
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(500);
       expect(res.body.correlationId).toBeDefined();
+      expect(res.body.message).toBe('Error interno del servidor.');
+      expect(res.body.message).not.toContain('F1 forced');
       expect(await prisma.purchase.count({ where: { invoiceNumber: 'FACT-F1-ROLLBACK' } })).toBe(0);
       expect(await prisma.purchaseLine.count()).toBe(0);
       expect(await prisma.inventoryLot.count()).toBe(0);
       expect(await prisma.inventoryMovement.count()).toBe(0);
       expect(await prisma.journalEntry.count({ where: { sourceType: 'PURCHASE' } })).toBe(0);
+      expect(await prisma.payable.count()).toBe(0);
+      expect(
+        await prisma.auditEvent.count({ where: { action: 'purchases:purchase_received' } }),
+      ).toBe(0);
     } finally {
       await prisma.$executeRawUnsafe(
         'DROP TRIGGER IF EXISTS f1_raise_purchase_journal_line_error ON journal_entry_lines',
@@ -264,6 +275,63 @@ describe('PurchaseController (Integration with PostgreSQL, Inventory & RBAC)', (
       await prisma.$executeRawUnsafe(
         'DROP FUNCTION IF EXISTS f1_raise_purchase_journal_line_error()',
       );
+    }
+  });
+
+  it('revierte la recepción completa si no puede persistir la auditoría obligatoria', async () => {
+    await prisma.$executeRawUnsafe(`
+      CREATE OR REPLACE FUNCTION f1_raise_purchase_audit_error()
+      RETURNS trigger AS $$
+      BEGIN
+        RAISE EXCEPTION 'F1 forced purchase audit persistence failure';
+      END;
+      $$ LANGUAGE plpgsql
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE TRIGGER f1_raise_purchase_audit_error
+      BEFORE INSERT ON audit_events
+      FOR EACH ROW EXECUTE FUNCTION f1_raise_purchase_audit_error()
+    `);
+
+    try {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/purchases/receive')
+        .set('Cookie', [adminCookie])
+        .send({
+          supplierId,
+          invoiceNumber: 'FACT-F1-AUDIT-ROLLBACK',
+          purchaseDate: '2026-09-26',
+          lines: [
+            {
+              productId,
+              presentationId,
+              lotNumber: 'LOTE-F1-AUDIT-ROLLBACK',
+              expirationDate: validFutureDateStr,
+              quantityCommercial: 3,
+              unitCost: 4000,
+              locationId,
+            },
+          ],
+        });
+
+      expect(res.status).toBe(500);
+      expect(res.body.message).toBe('Error interno del servidor.');
+      expect(res.body.correlationId).toBeDefined();
+      expect(res.body.message).not.toContain('F1 forced');
+      expect(
+        await prisma.purchase.count({ where: { invoiceNumber: 'FACT-F1-AUDIT-ROLLBACK' } }),
+      ).toBe(0);
+      expect(await prisma.purchaseLine.count()).toBe(0);
+      expect(await prisma.inventoryLot.count()).toBe(0);
+      expect(await prisma.inventoryMovement.count()).toBe(0);
+      expect(await prisma.payable.count()).toBe(0);
+      expect(await prisma.journalEntry.count()).toBe(0);
+      expect(await prisma.auditEvent.count()).toBe(0);
+    } finally {
+      await prisma.$executeRawUnsafe(
+        'DROP TRIGGER IF EXISTS f1_raise_purchase_audit_error ON audit_events',
+      );
+      await prisma.$executeRawUnsafe('DROP FUNCTION IF EXISTS f1_raise_purchase_audit_error()');
     }
   });
 

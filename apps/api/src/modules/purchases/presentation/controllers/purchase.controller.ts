@@ -19,6 +19,11 @@ import {
 import type { Request } from 'express';
 import { SYSTEM_PERMISSIONS, PurchaseDto, PaginatedResponse } from '@farmacia/contracts';
 import { PurchaseService } from '../../application/purchase.service';
+import {
+  AccountingConflictError,
+  AccountingNotFoundError,
+  AccountingValidationError,
+} from '../../../accounting/domain/accounting-rules';
 import { ReceivePurchaseDto, ReceivePurchaseValidationPipe } from '../dtos/receive-purchase.dto';
 import { PurchaseQueryValidationPipe } from '../dtos/purchase-query.dto';
 import {
@@ -69,7 +74,13 @@ export class PurchaseController {
       ) {
         throw new ConflictException(error.message);
       }
-      if (error instanceof Error) {
+      if (error instanceof AccountingConflictError) {
+        throw new ConflictException(error.message);
+      }
+      if (error instanceof AccountingNotFoundError) {
+        throw new NotFoundException(error.message);
+      }
+      if (error instanceof AccountingValidationError) {
         throw new BadRequestException(error.message);
       }
       throw error;

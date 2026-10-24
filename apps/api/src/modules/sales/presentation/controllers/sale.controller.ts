@@ -18,7 +18,11 @@ import {
   ParseUUIDPipe,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import { Prisma } from '@farmacia/database';
+import {
+  AccountingConflictError,
+  AccountingNotFoundError,
+  AccountingValidationError,
+} from '../../../accounting/domain/accounting-rules';
 import {
   SYSTEM_PERMISSIONS,
   SaleDto,
@@ -42,6 +46,7 @@ import {
   SaleAlreadyCancelledException,
   SaleHasCreditNotesException,
   SaleHasReceivablePaymentsException,
+  ProductWithoutLotControlException,
   IdempotencyConflictException,
 } from '../../domain/sale.exceptions';
 
@@ -74,16 +79,25 @@ export class SaleController {
       if (error instanceof HttpException) {
         throw error;
       }
-      if (error instanceof InsufficientStockException) {
+      if (
+        error instanceof InsufficientStockException ||
+        error instanceof ProductWithoutLotControlException
+      ) {
         throw new BadRequestException(error.message);
       }
       if (error instanceof IdempotencyConflictException) {
         throw new ConflictException(error.message);
       }
-      // Los errores de Prisma siguen al filtro global (409/404 sin mensaje interno).
-      if (error instanceof Error && !(error instanceof Prisma.PrismaClientKnownRequestError)) {
+      if (error instanceof AccountingConflictError) {
+        throw new ConflictException(error.message);
+      }
+      if (error instanceof AccountingNotFoundError) {
+        throw new NotFoundException(error.message);
+      }
+      if (error instanceof AccountingValidationError) {
         throw new BadRequestException(error.message);
       }
+      // Los errores de infraestructura siguen al filtro global y se registran con correlación.
       throw error;
     }
   }
@@ -147,7 +161,13 @@ export class SaleController {
       ) {
         throw new ConflictException(error.message);
       }
-      if (error instanceof Error) {
+      if (error instanceof AccountingConflictError) {
+        throw new ConflictException(error.message);
+      }
+      if (error instanceof AccountingNotFoundError) {
+        throw new NotFoundException(error.message);
+      }
+      if (error instanceof AccountingValidationError) {
         throw new BadRequestException(error.message);
       }
       throw error;

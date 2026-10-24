@@ -340,6 +340,20 @@ export class DebitNotesService {
             },
             tx,
           );
+          await tx.auditEvent.create({
+            data: {
+              userId,
+              action: 'purchases:debit_note_confirmed',
+              entity: 'DebitNote',
+              entityId: debitNote.id,
+              details: {
+                debitNoteNumber: debitNote.debitNoteNumber,
+                purchaseId: purchase.id,
+                total: debitNote.total,
+                reason: debitNote.reason,
+              },
+            },
+          });
           return dto;
         },
         {

@@ -278,6 +278,11 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
 
       expect(entry).not.toBeNull();
       expect(entry!.status).toBe('POSTED');
+      expect(
+        await prisma.auditEvent.count({
+          where: { action: 'sales:credit_note_confirmed', entityId: nc.id },
+        }),
+      ).toBe(1);
 
       let totalDebits = 0;
       let totalCredits = 0;
@@ -1013,6 +1018,11 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
 
       expect(entry).not.toBeNull();
       expect(entry!.status).toBe('POSTED');
+      expect(
+        await prisma.auditEvent.count({
+          where: { action: 'purchases:debit_note_confirmed', entityId: nd.id },
+        }),
+      ).toBe(1);
 
       let totalDebits = 0;
       let totalCredits = 0;

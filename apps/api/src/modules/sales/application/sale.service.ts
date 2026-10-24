@@ -1,9 +1,11 @@
 import { businessToday, addCalendarDays, calendarDate } from '../../../common/utils/business-date';
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Inject,
   Injectable,
+  NotFoundException,
   Optional,
 } from '@nestjs/common';
 import { prisma, PrismaClient, Prisma } from '@farmacia/database';
@@ -115,8 +117,8 @@ export class SaleService {
     private readonly receivablesLedger: ReceivablesLedger,
     private readonly inventoryLedger: InventoryLedger,
     private readonly accountingEngine: AccountingEngineService,
+    private readonly auditService: AuditService,
     @Optional() customClient?: PrismaClient,
-    @Optional() private readonly auditService?: AuditService,
   ) {
     this.client = customClient ?? prisma;
   }
@@ -127,7 +129,7 @@ export class SaleService {
     idempotencyKey?: string,
   ): Promise<SaleDto> {
     if (!payload.items || payload.items.length === 0) {
-      throw new Error('La venta debe incluir al menos un producto.');
+      throw new BadRequestException('La venta debe incluir al menos un producto.');
     }
     const key = idempotencyKey?.trim();
     if (!key) {
@@ -171,7 +173,7 @@ export class SaleService {
     );
 
     // Transacción ACID completa en PostgreSQL con reintentos ante conflictos de serialización
-    const { sale: saleResult, replayed } = await executeWithRetry(async () => {
+    const { sale: saleResult } = await executeWithRetry(async () => {
       return this.client.$transaction(
         async (tx) => {
           // 1. Verificación de Idempotencia dentro de la transacción: un reintento por
@@ -191,7 +193,7 @@ export class SaleService {
               where: { id: customerId },
             });
             if (!customer) {
-              throw new Error(`Cliente con id '${customerId}' no existe.`);
+              throw new NotFoundException(`Cliente con id '${customerId}' no existe.`);
             }
             customerName = customer.name;
             customerDoc = customer.documentNumber;
@@ -204,7 +206,9 @@ export class SaleService {
               customerName = defaultCust.name;
               customerDoc = defaultCust.documentNumber;
             } else {
-              throw new Error('No se encontró el cliente por defecto (Consumidor Final).');
+              throw new ConflictException(
+                'No se encontró el cliente por defecto (Consumidor Final).',
+              );
             }
           }
 
@@ -218,7 +222,7 @@ export class SaleService {
 
           for (const item of payload.items) {
             if (item.quantityCommercial <= 0) {
-              throw new Error('La cantidad de cada producto debe ser mayor a cero.');
+              throw new BadRequestException('La cantidad de cada producto debe ser mayor a cero.');
             }
 
             // Obtener producto
@@ -226,7 +230,9 @@ export class SaleService {
               where: { id: item.productId },
             });
             if (!product || !product.isActive) {
-              throw new Error(`Producto con id '${item.productId}' no existe o está inactivo.`);
+              throw new NotFoundException(
+                `Producto con id '${item.productId}' no existe o está inactivo.`,
+              );
             }
 
             // Obtener presentación si aplica
@@ -243,10 +249,12 @@ export class SaleService {
                 !presentation.isActive ||
                 presentation.productId !== product.id
               ) {
-                throw new Error(`Presentación '${item.presentationId}' inválida para el producto.`);
+                throw new BadRequestException(
+                  `Presentación '${item.presentationId}' inválida para el producto.`,
+                );
               }
               if (!presentation.saleEnabled) {
-                throw new Error(
+                throw new BadRequestException(
                   `La presentación '${presentation.name}' no está habilitada para ventas.`,
                 );
               }
@@ -359,7 +367,7 @@ export class SaleService {
               parseMoneyToCents(String(payload.amountPaid), 'Monto recibido') !==
                 parseMoneyToCents(new Prisma.Decimal(sale.total).toFixed(2), 'Total de venta')
             ) {
-              throw new Error(
+              throw new BadRequestException(
                 'En una transferencia, el monto recibido debe coincidir con el total de la venta.',
               );
             }
@@ -446,6 +454,24 @@ export class SaleService {
             tx,
           );
 
+          await this.auditService.recordEvent(
+            {
+              action: 'sales:sale_confirmed',
+              entity: 'Sale',
+              entityId: sale.id,
+              userId: auditCtx.userId || null,
+              details: {
+                invoiceNumber: sale.invoiceNumber,
+                total: sale.total,
+                paymentMethod: sale.paymentMethod,
+                itemsCount: sale.lines.length,
+              },
+              ipAddress: auditCtx.ipAddress || null,
+              correlationId: auditCtx.correlationId || null,
+            },
+            tx,
+          );
+
           return { sale: dto, replayed: false };
         },
         {
@@ -453,24 +479,6 @@ export class SaleService {
         },
       );
     });
-
-    // 3. Auditoría asíncrona fuera de la transacción (un reintento no es una venta nueva)
-    if (this.auditService && !replayed) {
-      await this.auditService.recordEvent({
-        action: 'sales:sale_confirmed',
-        entity: 'Sale',
-        entityId: saleResult.id,
-        userId: auditCtx.userId || null,
-        details: {
-          invoiceNumber: saleResult.invoiceNumber,
-          total: saleResult.total,
-          paymentMethod: saleResult.paymentMethod,
-          itemsCount: saleResult.lines.length,
-        },
-        ipAddress: auditCtx.ipAddress || null,
-        correlationId: auditCtx.correlationId || null,
-      });
-    }
 
     return saleResult;
   }
@@ -500,7 +508,7 @@ export class SaleService {
   public async cancelSale(id: string, reason: string, auditCtx: AuditContext): Promise<SaleDto> {
     const trimmedReason = reason?.trim();
     if (!trimmedReason) {
-      throw new Error('El motivo de anulación es obligatorio');
+      throw new BadRequestException('El motivo de anulación es obligatorio');
     }
 
     const sale = await this.saleRepository.findById(id);
@@ -581,7 +589,9 @@ export class SaleService {
           }
           if (sale.paymentMethod === 'TRANSFERENCIA') {
             if (!sale.bankAccountId)
-              throw new Error('La venta por transferencia no conserva una cuenta bancaria.');
+              throw new ConflictException(
+                'La venta por transferencia no conserva una cuenta bancaria.',
+              );
             await recordSourceBankMovement(tx, {
               bankAccountId: sale.bankAccountId,
               movementType: 'WITHDRAWAL',
@@ -604,6 +614,23 @@ export class SaleService {
             tx,
           );
 
+          await this.auditService.recordEvent(
+            {
+              action: 'sales:sale_cancelled',
+              entity: 'Sale',
+              entityId: sale.id,
+              userId: auditCtx.userId || null,
+              details: {
+                invoiceNumber: sale.invoiceNumber,
+                reason: trimmedReason,
+                total: sale.total,
+              },
+              ipAddress: auditCtx.ipAddress || null,
+              correlationId: auditCtx.correlationId || null,
+            },
+            tx,
+          );
+
           return sale.toDto();
         },
         {
@@ -611,22 +638,6 @@ export class SaleService {
         },
       );
     });
-
-    if (this.auditService) {
-      await this.auditService.recordEvent({
-        action: 'sales:sale_cancelled',
-        entity: 'Sale',
-        entityId: sale.id,
-        userId: auditCtx.userId || null,
-        details: {
-          invoiceNumber: sale.invoiceNumber,
-          reason: trimmedReason,
-          total: sale.total,
-        },
-        ipAddress: auditCtx.ipAddress || null,
-        correlationId: auditCtx.correlationId || null,
-      });
-    }
 
     return cancelledDto;
   }

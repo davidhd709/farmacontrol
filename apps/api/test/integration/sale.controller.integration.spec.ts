@@ -326,6 +326,11 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
     expect(cashMov?.movementType).toBe('INGRESO_VENTA');
     expect(Number(cashMov?.amount)).toBe(9600);
     expect(Number(cashMov?.balanceAfter)).toBe(9600);
+    expect(
+      await prisma.auditEvent.count({
+        where: { action: 'sales:sale_confirmed', entityId: res.body.id },
+      }),
+    ).toBe(1);
   });
 
   it('POST /api/v1/sales/confirm respeta la cabecera idempotency-key y no duplica transacciones', async () => {
@@ -633,6 +638,11 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
     expect(lastCash?.movementType).toBe('EGRESO_MANUAL');
     expect(lastCash?.reason).toContain('Reversión por anulación');
     expect(Number(lastCash?.amount)).toBe(4800);
+    expect(
+      await prisma.auditEvent.count({
+        where: { action: 'sales:sale_cancelled', entityId: saleId },
+      }),
+    ).toBe(1);
   });
 
   it('anulación de transferencia revierte banco; si no hay fondos conserva venta y lotes', async () => {
@@ -838,6 +848,53 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
         `DROP TRIGGER IF EXISTS f1_raise_journal_line_error ON journal_entry_lines`,
       );
       await prisma.$executeRawUnsafe(`DROP FUNCTION IF EXISTS f1_raise_journal_line_error()`);
+    }
+  });
+
+  it('revierte la venta completa si no puede persistir la auditoría obligatoria', async () => {
+    const key = 'sale-audit-persistence-failure';
+    await prisma.$executeRawUnsafe(`
+      CREATE OR REPLACE FUNCTION f1_raise_sale_audit_error()
+      RETURNS trigger AS $$
+      BEGIN
+        RAISE EXCEPTION 'F1 forced sale audit persistence failure';
+      END;
+      $$ LANGUAGE plpgsql
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE TRIGGER f1_raise_sale_audit_error
+      BEFORE INSERT ON audit_events
+      FOR EACH ROW EXECUTE FUNCTION f1_raise_sale_audit_error()
+    `);
+
+    try {
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/sales/confirm')
+        .set('Idempotency-Key', key)
+        .set('Cookie', cajeroCookie)
+        .send({
+          paymentMethod: 'EFECTIVO',
+          amountPaid: 4800,
+          items: [{ productId, presentationId, quantityCommercial: 1 }],
+        });
+
+      expect(res.status).toBe(500);
+      expect(res.body.message).toBe('Error interno del servidor.');
+      expect(res.body.correlationId).toBeDefined();
+      expect(res.body.message).not.toContain('F1 forced');
+      expect(await prisma.sale.count()).toBe(0);
+      expect(await prisma.cashMovement.count()).toBe(0);
+      expect(await prisma.inventoryMovement.count()).toBe(0);
+      expect(await prisma.journalEntry.count()).toBe(0);
+      expect(await prisma.idempotencyKey.count({ where: { key } })).toBe(0);
+      expect(
+        (await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lot1Id } })).currentQuantity,
+      ).toBe(10);
+    } finally {
+      await prisma.$executeRawUnsafe(
+        'DROP TRIGGER IF EXISTS f1_raise_sale_audit_error ON audit_events',
+      );
+      await prisma.$executeRawUnsafe('DROP FUNCTION IF EXISTS f1_raise_sale_audit_error()');
     }
   });
 

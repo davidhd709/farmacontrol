@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { ArgumentsHost, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import { ArgumentsHost, Logger, UnauthorizedException } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { HttpExceptionFilter } from '../../src/common/filters/http-exception.filter';
 
@@ -45,7 +45,7 @@ describe('HttpExceptionFilter (Unit)', () => {
         message: 'No autenticado.',
         error: 'Unauthorized',
         correlationId: 'req-corr-test-123',
-      })
+      }),
     );
   });
 
@@ -68,6 +68,7 @@ describe('HttpExceptionFilter (Unit)', () => {
 
     const host = createMockHost(req, res);
     const exception = new Error('Unexpected database failure');
+    const logSpy = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
 
     filter.catch(exception, host);
 
@@ -76,9 +77,17 @@ describe('HttpExceptionFilter (Unit)', () => {
     expect(jsonMock).toHaveBeenCalledWith(
       expect.objectContaining({
         statusCode: 500,
-        message: 'Unexpected database failure',
+        message: 'Error interno del servidor.',
+        error: 'InternalServerError',
         correlationId: 'req-corr-err-500',
-      })
+      }),
     );
+    expect(jsonMock.mock.calls[0][0]).not.toHaveProperty('stack');
+    expect(jsonMock.mock.calls[0][0].message).not.toContain('Unexpected database failure');
+    expect(logSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[corr=req-corr-err-500]'),
+      exception.stack,
+    );
+    logSpy.mockRestore();
   });
 });
