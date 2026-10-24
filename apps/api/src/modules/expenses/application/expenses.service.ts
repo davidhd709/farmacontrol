@@ -1,4 +1,5 @@
 import { businessToday } from '../../../common/utils/business-date';
+import { IdempotencyService } from '../../../common/idempotency/idempotency.service';
 import { Injectable, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
 import { prisma, Prisma } from '@farmacia/database';
 import { CashService } from '../../cash/application/cash.service';
@@ -61,6 +62,10 @@ type FullExpense = Prisma.ExpenseGetPayload<{ include: typeof fullExpenseInclude
 
 @Injectable()
 export class ExpensesService {
+  // Registrar un gasto o su pago mueve dinero o causa una cuenta por pagar: un reintento
+  // con la misma clave devuelve el resultado original en lugar de duplicarlo (AGENTS.md §6).
+  private readonly idempotencyService = new IdempotencyService();
+
   constructor(
     private readonly cashService: CashService,
     @Optional() private readonly accountingEngine?: AccountingEngineService,
@@ -118,23 +123,15 @@ export class ExpensesService {
     };
   }
 
-  async createExpense(payload: CreateExpensePayload, userId: string): Promise<ExpenseDto> {
+  async createExpense(
+    payload: CreateExpensePayload,
+    userId: string,
+    idempotencyKey?: string,
+  ): Promise<ExpenseDto> {
+    if (!idempotencyKey?.trim()) {
+      throw new BadRequestException('Idempotency-Key es obligatorio para registrar un gasto.');
+    }
     validateUuid(payload.categoryId, 'ID de categoría de gasto');
-    const category = await prisma.expenseCategory.findUnique({
-      where: { id: payload.categoryId },
-      include: {
-        account: {
-          select: { id: true, code: true, name: true, type: true, isActive: true },
-        },
-      },
-    });
-    if (!category) {
-      throw new NotFoundException('La categoría de gasto especificada no existe.');
-    }
-    if (!category.isActive) {
-      throw new BadRequestException('La categoría de gasto seleccionada está inactiva.');
-    }
-
     const description = payload.description?.trim();
     if (!description) {
       throw new BadRequestException('La descripción del gasto es obligatoria.');
@@ -170,7 +167,29 @@ export class ExpensesService {
     const amountPaidStr = isCredit ? '0.00' : amountStr;
     const balanceStr = isCredit ? amountStr : '0.00';
 
-    const created = await prisma.$transaction(async (tx) => {
+    const endpoint = '/api/v1/expenses';
+    const requestHash = this.idempotencyService.computeHash(endpoint, userId, payload);
+    const key = idempotencyKey!;
+
+    const createIdempotently = () => this.idempotencyService.retryOnSerialization(() => prisma.$transaction(async (tx) => {
+      const cached = await this.idempotencyService.getRecord(key, requestHash, tx, 'http');
+      if (cached) return cached.responseBody as ExpenseDto;
+
+      const category = await tx.expenseCategory.findUnique({
+        where: { id: payload.categoryId },
+        include: {
+          account: {
+            select: { id: true, code: true, name: true, type: true, isActive: true },
+          },
+        },
+      });
+      if (!category) {
+        throw new NotFoundException('La categoría de gasto especificada no existe.');
+      }
+      if (!category.isActive) {
+        throw new BadRequestException('La categoría de gasto seleccionada está inactiva.');
+      }
+
       const expense = await tx.expense.create({
         data: {
           categoryId: payload.categoryId,
@@ -235,16 +254,54 @@ export class ExpensesService {
         );
       }
 
-      return expense;
+      const record = await tx.expense.findUnique({
+        where: { id: expense.id },
+        include: fullExpenseInclude,
+      });
+      if (!record) throw new Error('No fue posible recuperar el gasto recién registrado.');
+      const response = this.toDto(record);
+
+      await this.idempotencyService.saveRecord(
+        { key, endpoint, requestHash, userId, responseStatus: 201, responseBody: response },
+        tx,
+      );
+      return response;
     }, {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-    });
+    }));
 
-    return this.findById(created.id);
+    // Under SERIALIZABLE, a transaction waiting on the advisory lock may retain
+    // a snapshot that predates the winning request. Its final idempotency insert
+    // can therefore lose on the unique key. The failed transaction is rolled
+    // back; retrying the whole operation in a fresh transaction reads and
+    // replays the winner's stored response. Only retry this specific key clash.
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await createIdempotently();
+      } catch (error) {
+        const target =
+          error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002'
+            ? error.meta?.target
+            : undefined;
+        const isIdempotencyKeyCollision =
+          (Array.isArray(target) && target.some((field) => field === 'key')) ||
+          (typeof target === 'string' && /idempotency.*key|key.*idempotency/i.test(target));
+        if (!isIdempotencyKeyCollision || attempt >= 2) throw error;
+      }
+    }
+
   }
 
-  async payExpense(expenseId: string, payload: CreateExpensePaymentPayload, userId: string): Promise<ExpenseDto> {
+  async payExpense(
+    expenseId: string,
+    payload: CreateExpensePaymentPayload,
+    userId: string,
+    idempotencyKey?: string,
+  ): Promise<ExpenseDto> {
     validateUuid(expenseId, 'ID de gasto');
+    if (!idempotencyKey?.trim()) {
+      throw new BadRequestException('Idempotency-Key es obligatorio para registrar un pago.');
+    }
     const payCents = validateExpenseAmount(payload.amount);
     const payStr = centsToMoneyString(payCents);
 
@@ -262,7 +319,14 @@ export class ExpensesService {
 
     const paymentDate = new Date(payload.paymentDate || businessToday());
 
-    await prisma.$transaction(async (tx) => {
+    const endpoint = `/api/v1/expenses/${expenseId}/payments`;
+    const requestHash = this.idempotencyService.computeHash(endpoint, userId, payload);
+    const key = idempotencyKey!;
+
+    return this.idempotencyService.retryOnSerialization(() => prisma.$transaction(async (tx) => {
+      const cached = await this.idempotencyService.getRecord(key, requestHash, tx, 'http');
+      if (cached) return cached.responseBody as ExpenseDto;
+
       const rows = await tx.$queryRaw<Array<{ id: string; balance: Prisma.Decimal; amount_paid: Prisma.Decimal; status: string; description: string; beneficiary: string; document_number: string | null }>>`
         SELECT id, balance, amount_paid, status, description, beneficiary, document_number
         FROM expenses
@@ -354,11 +418,22 @@ export class ExpensesService {
           tx,
         );
       }
+
+      const record = await tx.expense.findUnique({
+        where: { id: expenseId },
+        include: fullExpenseInclude,
+      });
+      if (!record) throw new Error('No fue posible recuperar el gasto después de registrar el pago.');
+      const response = this.toDto(record);
+
+      await this.idempotencyService.saveRecord(
+        { key, endpoint, requestHash, userId, responseStatus: 201, responseBody: response },
+        tx,
+      );
+      return response;
     }, {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-    });
-
-    return this.findById(expenseId);
+    }));
   }
 
   async cancelExpense(expenseId: string, payload: CancelExpensePayload, userId: string): Promise<ExpenseDto> {
