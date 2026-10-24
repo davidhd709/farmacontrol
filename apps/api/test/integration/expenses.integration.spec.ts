@@ -336,9 +336,145 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
       expect(creditLine?.purpose).toBe('SUPPLIERS');
       expect(creditLine?.credit.toFixed(2)).toBe('200000.00');
     });
+
+    it('revierte gasto, caja, asiento, auditoría e idempotencia si falla la generación del asiento', async () => {
+      const { accounts } = await setupPucAndTreasury();
+      const category = await categoriesService.create({
+        name: 'Gasto con fallo contable',
+        accountId: accounts.get('519530')!,
+      });
+      const key = randomUUID();
+      const auditCountBefore = await prisma.auditEvent.count({
+        where: { action: 'expenses:expense_created' },
+      });
+
+      await prisma.$executeRawUnsafe(`
+        CREATE OR REPLACE FUNCTION f1_raise_expense_journal_line_error()
+        RETURNS trigger AS $$
+        BEGIN
+          RAISE EXCEPTION 'F1 forced expense journal line integrity failure';
+        END;
+        $$ LANGUAGE plpgsql
+      `);
+      await prisma.$executeRawUnsafe(`
+        CREATE TRIGGER f1_raise_expense_journal_line_error
+        BEFORE INSERT ON journal_entry_lines
+        FOR EACH ROW EXECUTE FUNCTION f1_raise_expense_journal_line_error()
+      `);
+
+      try {
+        const res = await request(app.getHttpServer())
+          .post('/api/v1/expenses')
+          .set('Cookie', cookie)
+          .set('Idempotency-Key', key)
+          .send({
+            categoryId: category.id,
+            description: 'Gasto para comprobar rollback',
+            beneficiary: 'Proveedor de prueba',
+            documentNumber: 'EXP-F1-ROLLBACK',
+            amount: '40000.00',
+            expenseDate: '2026-10-01',
+            paymentMethod: 'EFECTIVO',
+          });
+
+        expect(res.status).toBe(500);
+        expect(res.body.correlationId).toBeDefined();
+        expect(res.body.message).toBe('Error interno del servidor.');
+        expect(res.body.message).not.toContain('F1 forced');
+        expect(await prisma.expense.count({ where: { documentNumber: 'EXP-F1-ROLLBACK' } })).toBe(0);
+        expect(await prisma.cashMovement.count({ where: { movementType: 'EGRESO_MANUAL' } })).toBe(0);
+        expect(await prisma.journalEntry.count({ where: { sourceType: 'EXPENSE' } })).toBe(0);
+        expect(
+          await prisma.auditEvent.count({ where: { action: 'expenses:expense_created' } }),
+        ).toBe(auditCountBefore);
+        expect(await prisma.idempotencyKey.count({ where: { key } })).toBe(0);
+      } finally {
+        await prisma.$executeRawUnsafe(
+          'DROP TRIGGER IF EXISTS f1_raise_expense_journal_line_error ON journal_entry_lines',
+        );
+        await prisma.$executeRawUnsafe('DROP FUNCTION IF EXISTS f1_raise_expense_journal_line_error()');
+      }
+    });
   });
 
   describe('Pago Posterior de Gasto y Reversión', () => {
+    it('revierte pago, saldos, caja, asiento, auditoría e idempotencia si falla su contabilización', async () => {
+      const { accounts } = await setupPucAndTreasury();
+      const category = await categoriesService.create({
+        name: 'Pago con fallo contable',
+        accountId: accounts.get('513525')!,
+      });
+      const expense = await expensesService.createExpense(
+        {
+          categoryId: category.id,
+          description: 'Gasto pendiente para rollback de pago',
+          beneficiary: 'Proveedor de prueba',
+          documentNumber: 'EXP-F1-PAY-ROLLBACK',
+          amount: '80000.00',
+          expenseDate: '2026-10-01',
+          dueDate: '2026-10-30',
+          paymentMethod: 'CREDITO',
+        },
+        adminUserId,
+        randomUUID(),
+      );
+      const key = randomUUID();
+      const auditCountBefore = await prisma.auditEvent.count({
+        where: { action: 'expenses:expense_payment_registered' },
+      });
+
+      await prisma.$executeRawUnsafe(`
+        CREATE OR REPLACE FUNCTION f1_raise_expense_payment_journal_line_error()
+        RETURNS trigger AS $$
+        BEGIN
+          RAISE EXCEPTION 'F1 forced expense payment journal line integrity failure';
+        END;
+        $$ LANGUAGE plpgsql
+      `);
+      await prisma.$executeRawUnsafe(`
+        CREATE TRIGGER f1_raise_expense_payment_journal_line_error
+        BEFORE INSERT ON journal_entry_lines
+        FOR EACH ROW EXECUTE FUNCTION f1_raise_expense_payment_journal_line_error()
+      `);
+
+      try {
+        const res = await request(app.getHttpServer())
+          .post(`/api/v1/expenses/${expense.id}/payments`)
+          .set('Cookie', cookie)
+          .set('Idempotency-Key', key)
+          .send({
+            amount: '30000.00',
+            paymentDate: '2026-10-05',
+            paymentMethod: 'EFECTIVO',
+          });
+
+        expect(res.status).toBe(500);
+        expect(res.body.correlationId).toBeDefined();
+        expect(res.body.message).toBe('Error interno del servidor.');
+        expect(res.body.message).not.toContain('F1 forced');
+        const persistedExpense = await prisma.expense.findUniqueOrThrow({
+          where: { id: expense.id },
+        });
+        expect(persistedExpense.balance.toFixed(2)).toBe('80000.00');
+        expect(persistedExpense.amountPaid.toFixed(2)).toBe('0.00');
+        expect(persistedExpense.status).toBe('PENDIENTE');
+        expect(await prisma.expensePayment.count({ where: { expenseId: expense.id } })).toBe(0);
+        expect(await prisma.cashMovement.count({ where: { referenceDocumentType: 'EXPENSE_PAYMENT' } })).toBe(0);
+        expect(await prisma.journalEntry.count({ where: { sourceType: 'EXPENSE_PAYMENT' } })).toBe(0);
+        expect(
+          await prisma.auditEvent.count({ where: { action: 'expenses:expense_payment_registered' } }),
+        ).toBe(auditCountBefore);
+        expect(await prisma.idempotencyKey.count({ where: { key } })).toBe(0);
+      } finally {
+        await prisma.$executeRawUnsafe(
+          'DROP TRIGGER IF EXISTS f1_raise_expense_payment_journal_line_error ON journal_entry_lines',
+        );
+        await prisma.$executeRawUnsafe(
+          'DROP FUNCTION IF EXISTS f1_raise_expense_payment_journal_line_error()',
+        );
+      }
+    });
+
     it('abona a gasto pendiente: debita SUPPLIERS, acredita CASH y NO duplica el gasto', async () => {
       const { accounts } = await setupPucAndTreasury();
       const category = await categoriesService.create({
