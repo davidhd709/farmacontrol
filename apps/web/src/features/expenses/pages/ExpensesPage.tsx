@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -67,6 +67,8 @@ function formatCurrency(val: string | number | undefined): string {
 }
 
 export const ExpensesPage: React.FC = () => {
+  const createRetry = useRef<{ fingerprint: string; key: string } | null>(null);
+  const paymentRetry = useRef<{ fingerprint: string; key: string } | null>(null);
   // Filtros
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -245,7 +247,7 @@ export const ExpensesPage: React.FC = () => {
     setSubmitting(true);
     setError(null);
     try {
-      await createExpense({
+      const payload = {
         categoryId: newCatId,
         beneficiary: newBeneficiary.trim(),
         description: newDescription.trim(),
@@ -256,7 +258,13 @@ export const ExpensesPage: React.FC = () => {
         paymentMethod: newPaymentMethod,
         bankAccountId: newPaymentMethod === 'TRANSFERENCIA' ? newBankAccountId : undefined,
         notes: newNotes.trim() || undefined,
-      });
+      };
+      const fingerprint = JSON.stringify(payload);
+      if (createRetry.current?.fingerprint !== fingerprint) {
+        createRetry.current = { fingerprint, key: crypto.randomUUID() };
+      }
+      await createExpense(payload, createRetry.current.key);
+      createRetry.current = null;
       setSuccess('Gasto registrado exitosamente con partida doble y tesorería.');
       setCreateModalOpen(false);
       await loadExpenses();
@@ -298,13 +306,19 @@ export const ExpensesPage: React.FC = () => {
     setSubmitting(true);
     setError(null);
     try {
-      await payExpense(selectedExpense.id, {
+      const payload = {
         amount: payAmount,
         paymentDate: payDate,
         paymentMethod: payMethod,
         bankAccountId: payMethod === 'TRANSFERENCIA' ? payBankAccountId : undefined,
         notes: payNotes.trim() || undefined,
-      });
+      };
+      const fingerprint = JSON.stringify({ expenseId: selectedExpense.id, payload });
+      if (paymentRetry.current?.fingerprint !== fingerprint) {
+        paymentRetry.current = { fingerprint, key: crypto.randomUUID() };
+      }
+      await payExpense(selectedExpense.id, payload, paymentRetry.current.key);
+      paymentRetry.current = null;
       setSuccess('Pago de gasto registrado exitosamente.');
       setPayModalOpen(false);
       await loadExpenses();

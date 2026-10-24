@@ -45,15 +45,21 @@ export const fetchExpensesSummary = (filters: ExpenseQueryFilters = {}) => {
 export const fetchExpenseById = (id: string) =>
   apiRequest<ExpenseDto>(`expenses/${encodeURIComponent(id)}`);
 
-export const createExpense = (payload: CreateExpensePayload) =>
+export const createExpense = (payload: CreateExpensePayload, idempotencyKey: string) =>
   apiRequest<ExpenseDto>('expenses', {
     method: 'POST',
+    headers: { 'Idempotency-Key': idempotencyKey },
     body: JSON.stringify(payload),
   });
 
-export const payExpense = (id: string, payload: CreateExpensePaymentPayload) =>
+export const payExpense = (
+  id: string,
+  payload: CreateExpensePaymentPayload,
+  idempotencyKey: string,
+) =>
   apiRequest<ExpenseDto>(`expenses/${encodeURIComponent(id)}/payments`, {
     method: 'POST',
+    headers: { 'Idempotency-Key': idempotencyKey },
     body: JSON.stringify(payload),
   });
 
