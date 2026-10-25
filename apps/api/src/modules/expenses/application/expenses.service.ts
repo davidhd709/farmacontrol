@@ -1,6 +1,6 @@
 import { businessToday } from '../../../common/utils/business-date';
 import { IdempotencyService } from '../../../common/idempotency/idempotency.service';
-import { Injectable, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { prisma, Prisma } from '@farmacia/database';
 import { CashService } from '../../cash/application/cash.service';
 import { recordSourceBankMovement } from '../../treasury/application/record-source-bank-movement';
@@ -68,7 +68,7 @@ export class ExpensesService {
 
   constructor(
     private readonly cashService: CashService,
-    @Optional() private readonly accountingEngine?: AccountingEngineService,
+    private readonly accountingEngine: AccountingEngineService,
   ) {}
 
   private toPaymentDto(p: any): ExpensePaymentDto {
@@ -234,25 +234,38 @@ export class ExpensesService {
       }
 
       // Causación contable automática de partida doble
-      if (this.accountingEngine) {
-        await this.accountingEngine.handleExpenseCreated(
-          {
-            id: expense.id,
-            categoryId: category.id,
-            categoryAccountId: category.accountId,
-            description,
-            beneficiary,
-            documentNumber: payload.documentNumber,
+      await this.accountingEngine.handleExpenseCreated(
+        {
+          id: expense.id,
+          categoryId: category.id,
+          categoryAccountId: category.accountId,
+          description,
+          beneficiary,
+          documentNumber: payload.documentNumber,
+          amount: amountStr,
+          paymentMethod: method,
+          bankAccountId: method === 'TRANSFERENCIA' ? payload.bankAccountId : null,
+          status,
+          expenseDate,
+          createdById: userId,
+        },
+        tx,
+      );
+
+      await tx.auditEvent.create({
+        data: {
+          userId,
+          action: 'expenses:expense_created',
+          entity: 'Expense',
+          entityId: expense.id,
+          details: {
             amount: amountStr,
             paymentMethod: method,
-            bankAccountId: method === 'TRANSFERENCIA' ? payload.bankAccountId : null,
-            status,
-            expenseDate,
-            createdById: userId,
+            categoryId: category.id,
+            beneficiary,
           },
-          tx,
-        );
-      }
+        },
+      });
 
       const record = await tx.expense.findUnique({
         where: { id: expense.id },
@@ -401,23 +414,37 @@ export class ExpensesService {
       }
 
       // Causación contable del pago: debita SUPPLIERS y acredita CASH o BANK
-      if (this.accountingEngine) {
-        await this.accountingEngine.handleExpensePayment(
-          {
-            id: payment.id,
+      await this.accountingEngine.handleExpensePayment(
+        {
+          id: payment.id,
+          expenseId,
+          amount: payStr,
+          paymentMethod: method,
+          bankAccountId: method === 'TRANSFERENCIA' ? payload.bankAccountId : null,
+          beneficiary: exp.beneficiary,
+          description: exp.description,
+          documentNumber: exp.document_number,
+          createdById: userId,
+          paymentDate,
+        },
+        tx,
+      );
+
+      await tx.auditEvent.create({
+        data: {
+          userId,
+          action: 'expenses:expense_payment_registered',
+          entity: 'ExpensePayment',
+          entityId: payment.id,
+          details: {
             expenseId,
             amount: payStr,
             paymentMethod: method,
-            bankAccountId: method === 'TRANSFERENCIA' ? payload.bankAccountId : null,
-            beneficiary: exp.beneficiary,
-            description: exp.description,
-            documentNumber: exp.document_number,
-            createdById: userId,
-            paymentDate,
+            balanceBefore: exp.balance.toFixed(2),
+            balanceAfter: centsToMoneyString(newBalanceCents),
           },
-          tx,
-        );
-      }
+        },
+      });
 
       const record = await tx.expense.findUnique({
         where: { id: expenseId },
@@ -498,9 +525,16 @@ export class ExpensesService {
       }
 
       // Reversar asiento contable
-      if (this.accountingEngine) {
-        await this.accountingEngine.handleExpenseCancelled(expenseId, reason, userId, tx);
-      }
+      await this.accountingEngine.handleExpenseCancelled(expenseId, reason, userId, tx);
+      await tx.auditEvent.create({
+        data: {
+          userId,
+          action: 'expenses:expense_cancelled',
+          entity: 'Expense',
+          entityId: expenseId,
+          details: { reason, amount: exp.amount.toFixed(2) },
+        },
+      });
     }, {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
     });
@@ -575,9 +609,21 @@ export class ExpensesService {
       }
 
       // Reversar asiento contable del pago
-      if (this.accountingEngine) {
-        await this.accountingEngine.handleExpensePaymentReversed(paymentId, reason, userId, tx);
-      }
+      await this.accountingEngine.handleExpensePaymentReversed(paymentId, reason, userId, tx);
+      await tx.auditEvent.create({
+        data: {
+          userId,
+          action: 'expenses:expense_payment_reversed',
+          entity: 'ExpensePayment',
+          entityId: paymentId,
+          details: {
+            expenseId,
+            amount: payment.amount.toFixed(2),
+            paymentMethod: payment.paymentMethod,
+            reason,
+          },
+        },
+      });
     }, {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
     });

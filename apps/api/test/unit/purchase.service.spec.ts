@@ -59,7 +59,12 @@ describe('PurchaseService & Purchase Entities (Unit)', () => {
       },
     };
 
-    service = new PurchaseService(repository, undefined, mockPrisma);
+    service = new PurchaseService(
+      repository,
+      {} as any,
+      { recordEvent: vi.fn() } as any,
+      mockPrisma,
+    );
   });
 
   describe('Entidades de Dominio Purchase y PurchaseLine', () => {
@@ -94,7 +99,7 @@ describe('PurchaseService & Purchase Entities (Unit)', () => {
           quantityCommercial: 1,
           conversionFactor: 1,
           unitCost: 1000,
-        })
+        }),
       ).toThrow('no puede ser anterior ni igual a hoy');
     });
 
@@ -173,7 +178,7 @@ describe('PurchaseService & Purchase Entities (Unit)', () => {
               unitCost: 500,
             },
           ],
-        })
+        }),
       ).rejects.toThrow(SupplierNotActiveException);
     });
 
@@ -192,7 +197,7 @@ describe('PurchaseService & Purchase Entities (Unit)', () => {
               unitCost: 1000,
             },
           ],
-        })
+        }),
       ).rejects.toThrow(ExpiredLotDateException);
     });
   });

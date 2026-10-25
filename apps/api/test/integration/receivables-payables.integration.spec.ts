@@ -52,6 +52,33 @@ describe('ReceivablesController & PayablesController (Integration)', () => {
     await cleanTestDatabase();
     await seedRbac(prisma);
 
+    const accountingMappings = [
+      { purpose: 'CASH', code: '110505', type: 'ASSET' },
+      { purpose: 'BANK', code: '111005', type: 'ASSET' },
+      { purpose: 'CUSTOMERS', code: '130505', type: 'ASSET' },
+      { purpose: 'SUPPLIERS', code: '220505', type: 'LIABILITY' },
+    ] as const;
+    for (const mapping of accountingMappings) {
+      const account = await prisma.account.create({
+        data: {
+          code: mapping.code,
+          name: mapping.purpose,
+          type: mapping.type,
+          level: 1,
+          allowsMovement: true,
+          isActive: true,
+        },
+      });
+      await prisma.companyAccountingMapping.create({
+        data: {
+          purpose: mapping.purpose,
+          accountId: account.id,
+          status: 'ACTIVE',
+          effectiveFrom: new Date('2020-01-01T00:00:00Z'),
+        },
+      });
+    }
+
     // Crear usuarios de prueba
     const adminUser = await provisioningService.provisionInitialUser({
       username: 'admin_test',
@@ -239,29 +266,43 @@ describe('ReceivablesController & PayablesController (Integration)', () => {
       const adminUser = await prisma.user.findFirstOrThrow({ where: { username: 'admin_test' } });
       const sale = await prisma.sale.create({
         data: {
-          invoiceNumber: 'INV-CONCURRENT-PAYMENT', customerId,
-          paymentMethod: 'CREDITO', subtotal: '50000', total: '50000',
+          invoiceNumber: 'INV-CONCURRENT-PAYMENT',
+          customerId,
+          paymentMethod: 'CREDITO',
+          subtotal: '50000',
+          total: '50000',
           createdById: adminUser.id,
         },
       });
       const receivable = await prisma.receivable.create({
         data: {
-          saleId: sale.id, customerId, totalAmount: '50000', balance: '50000',
-          status: 'PENDIENTE', dueDate: new Date('2027-06-30'),
+          saleId: sale.id,
+          customerId,
+          totalAmount: '50000',
+          balance: '50000',
+          status: 'PENDIENTE',
+          dueDate: new Date('2027-06-30'),
         },
       });
-      const send = () => request(app.getHttpServer())
-        .post(`/api/v1/receivables/${receivable.id}/payments`)
-        .set('Cookie', carteraCookie)
-        .set('Idempotency-Key', 'concurrent-receivable-payment')
-        .send({ amount: '10000.00', paymentMethod: 'EFECTIVO' });
+      const send = () =>
+        request(app.getHttpServer())
+          .post(`/api/v1/receivables/${receivable.id}/payments`)
+          .set('Cookie', carteraCookie)
+          .set('Idempotency-Key', 'concurrent-receivable-payment')
+          .send({ amount: '10000.00', paymentMethod: 'EFECTIVO' });
 
       const [first, second] = await Promise.all([send(), send()]);
       expect(first.status).toBe(201);
       expect(second.status).toBe(201);
       expect(second.body).toEqual(first.body);
-      expect(await prisma.receivablePayment.count({ where: { receivableId: receivable.id } })).toBe(1);
-      expect((await prisma.receivable.findUniqueOrThrow({ where: { id: receivable.id } })).balance.toString()).toBe('40000');
+      expect(await prisma.receivablePayment.count({ where: { receivableId: receivable.id } })).toBe(
+        1,
+      );
+      expect(
+        (
+          await prisma.receivable.findUniqueOrThrow({ where: { id: receivable.id } })
+        ).balance.toString(),
+      ).toBe('40000');
     });
 
     it('aplica un abono parcial correctamente', async () => {

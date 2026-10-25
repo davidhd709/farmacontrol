@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ArgumentsHost } from '@nestjs/common';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, Logger } from '@nestjs/common';
 import { Prisma } from '@farmacia/database';
 import { DomainError, type DomainErrorKind } from '../domain-error';
 import { HttpExceptionFilter } from './http-exception.filter';
@@ -100,5 +100,21 @@ describe('HttpExceptionFilter domain and Prisma mappings', () => {
       if (previous === undefined) delete process.env.NODE_ENV;
       else process.env.NODE_ENV = previous;
     }
+  });
+
+  it('sanitizes and logs unexpected errors with the correlation identifier', () => {
+    const loggerSpy = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    const response = capture(new Error('private accounting database detail'));
+    expect(response.code).toBe(500);
+    expect(response.body).toMatchObject({
+      message: 'Error interno del servidor.',
+      correlationId: 'test-id',
+    });
+    expect(response.body.message).not.toContain('private accounting database detail');
+    expect(loggerSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[corr=test-id]'),
+      expect.stringContaining('private accounting database detail'),
+    );
+    loggerSpy.mockRestore();
   });
 });

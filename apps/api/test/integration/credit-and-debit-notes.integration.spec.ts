@@ -3,7 +3,13 @@ import { beforeAll, beforeEach, afterAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { Test } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
-import { prisma, cleanTestDatabase, seedRbac, AccountingPurpose as DbPurpose, Prisma } from '@farmacia/database';
+import {
+  prisma,
+  cleanTestDatabase,
+  seedRbac,
+  AccountingPurpose as DbPurpose,
+  Prisma,
+} from '@farmacia/database';
 import { AppModule } from '../../src/app.module';
 import { UserProvisioningService } from '../../src/modules/identity/application/services/user-provisioning.service';
 import { AuthService } from '../../src/modules/identity/application/services/auth.service';
@@ -84,8 +90,14 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
       { code: '240810', name: 'IVA Descontable', type: 'ASSET', purpose: 'VAT_INPUT' },
       { code: '413501', name: 'Ventas Gravadas', type: 'INCOME', purpose: 'SALES_TAXED' },
       { code: '413502', name: 'Ventas Excluidas', type: 'INCOME', purpose: 'SALES_EXCLUDED' },
+      { code: '417506', name: 'Descuentos en Ventas', type: 'INCOME', purpose: 'SALES_DISCOUNTS' },
       { code: '417505', name: 'Devoluciones en Ventas', type: 'INCOME', purpose: 'SALES_RETURNS' },
-      { code: '613501', name: 'Costo de Ventas Medicamentos', type: 'COST', purpose: 'COST_OF_SALES' },
+      {
+        code: '613501',
+        name: 'Costo de Ventas Medicamentos',
+        type: 'COST',
+        purpose: 'COST_OF_SALES',
+      },
     ];
 
     for (const acc of accountsData) {
@@ -266,6 +278,11 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
 
       expect(entry).not.toBeNull();
       expect(entry!.status).toBe('POSTED');
+      expect(
+        await prisma.auditEvent.count({
+          where: { action: 'sales:credit_note_confirmed', entityId: nc.id },
+        }),
+      ).toBe(1);
 
       let totalDebits = 0;
       let totalCredits = 0;
@@ -292,7 +309,13 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
       });
       const category = await prisma.category.create({ data: { name: 'Genéricos' } });
       const product = await prisma.product.create({
-        data: { code: 'PROD-ERR-01', name: 'Ibuprofeno 400mg', basePrice: 5000, baseCost: 2000, categoryId: category.id },
+        data: {
+          code: 'PROD-ERR-01',
+          name: 'Ibuprofeno 400mg',
+          basePrice: 5000,
+          baseCost: 2000,
+          categoryId: category.id,
+        },
       });
       const sale = await prisma.sale.create({
         data: {
@@ -399,11 +422,15 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
         .set('Cookie', cookie)
         .send({
           paymentMethod: 'EFECTIVO',
-          items: [{ productId: product.id, presentationId: presentation.id, quantityCommercial: 2 }],
+          items: [
+            { productId: product.id, presentationId: presentation.id, quantityCommercial: 2 },
+          ],
         });
       expect(saleRes.status, JSON.stringify(saleRes.body)).toBe(201);
 
-      const saleLine = await prisma.saleLine.findFirstOrThrow({ where: { saleId: saleRes.body.id } });
+      const saleLine = await prisma.saleLine.findFirstOrThrow({
+        where: { saleId: saleRes.body.id },
+      });
       return { saleId: saleRes.body.id as string, saleLineId: saleLine.id, lotId: lot.id };
     }
 
@@ -438,8 +465,12 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
 
       expect(cancelRes.status).toBe(409);
       expect(cancelRes.body.message).toMatch(/nota\(s\) crédito/);
-      expect((await prisma.sale.findUniqueOrThrow({ where: { id: saleId } })).status).toBe(statusBefore);
-      expect((await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lotId } })).currentQuantity).toBe(9);
+      expect((await prisma.sale.findUniqueOrThrow({ where: { id: saleId } })).status).toBe(
+        statusBefore,
+      );
+      expect(
+        (await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lotId } })).currentQuantity,
+      ).toBe(9);
       expect(await prisma.cashMovement.count()).toBe(cashMovementsBefore);
       expect(await prisma.journalEntry.count()).toBe(journalEntriesBefore);
     });
@@ -602,8 +633,12 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
         paymentMethod: 'EFECTIVO',
         items: [{ productId, presentationId, quantityCommercial: 3 }],
       });
-      expect((await prisma.inventoryLot.findUniqueOrThrow({ where: { id: soonLotId } })).currentQuantity).toBe(0);
-      expect((await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lateLotId } })).currentQuantity).toBe(8);
+      expect(
+        (await prisma.inventoryLot.findUniqueOrThrow({ where: { id: soonLotId } })).currentQuantity,
+      ).toBe(0);
+      expect(
+        (await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lateLotId } })).currentQuantity,
+      ).toBe(8);
 
       const res = await postCreditNote(saleId, {
         refundMethod: 'EFECTIVO',
@@ -612,8 +647,12 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
       });
       expect(res.status, JSON.stringify(res.body)).toBe(201);
 
-      expect((await prisma.inventoryLot.findUniqueOrThrow({ where: { id: soonLotId } })).currentQuantity).toBe(1);
-      expect((await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lateLotId } })).currentQuantity).toBe(10);
+      expect(
+        (await prisma.inventoryLot.findUniqueOrThrow({ where: { id: soonLotId } })).currentQuantity,
+      ).toBe(1);
+      expect(
+        (await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lateLotId } })).currentQuantity,
+      ).toBe(10);
 
       const movements = await prisma.inventoryMovement.findMany({
         where: { referenceDocumentType: 'CREDIT_NOTE' },
@@ -651,7 +690,10 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
 
       expect(await prisma.cashMovement.count()).toBe(cashBefore);
       const withdrawal = await prisma.bankMovement.findFirstOrThrow({
-        where: { referenceDocumentType: 'CREDIT_NOTE', referenceDocumentId: res.body.creditNoteNumber },
+        where: {
+          referenceDocumentType: 'CREDIT_NOTE',
+          referenceDocumentId: res.body.creditNoteNumber,
+        },
       });
       expect(withdrawal.movementType).toBe('WITHDRAWAL');
       expect(Number(withdrawal.amount)).toBe(10000);
@@ -797,7 +839,11 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
       it('la misma clave con otro contenido es un conflicto', async () => {
         const { saleId, saleLineId } = await cashSaleOfTwo();
         const key = randomUUID();
-        const body = { saleId, reason: 'Devolución', items: [{ saleLineId, quantityCommercial: 1 }] };
+        const body = {
+          saleId,
+          reason: 'Devolución',
+          items: [{ saleLineId, quantityCommercial: 1 }],
+        };
         await request(app.getHttpServer())
           .post(`/api/v1/sales/${saleId}/credit-notes`)
           .set('Idempotency-Key', key)
@@ -972,6 +1018,11 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
 
       expect(entry).not.toBeNull();
       expect(entry!.status).toBe('POSTED');
+      expect(
+        await prisma.auditEvent.count({
+          where: { action: 'purchases:debit_note_confirmed', entityId: nd.id },
+        }),
+      ).toBe(1);
 
       let totalDebits = 0;
       let totalCredits = 0;
@@ -996,7 +1047,13 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
         });
         const category = await prisma.category.create({ data: { name: 'Categoría AUD-009' } });
         const product = await prisma.product.create({
-          data: { code: 'AUD009', name: 'Producto AUD-009', basePrice: 2000, baseCost: 1000, categoryId: category.id },
+          data: {
+            code: 'AUD009',
+            name: 'Producto AUD-009',
+            basePrice: 2000,
+            baseCost: 1000,
+            categoryId: category.id,
+          },
         });
         const lot = await prisma.inventoryLot.create({
           data: {
@@ -1101,7 +1158,13 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
       });
       const category = await prisma.category.create({ data: { name: 'Pastas' } });
       const product = await prisma.product.create({
-        data: { code: 'PROD-NO-STOCK', name: 'Omeprazol 20mg', basePrice: 10000, baseCost: 3000, categoryId: category.id },
+        data: {
+          code: 'PROD-NO-STOCK',
+          name: 'Omeprazol 20mg',
+          basePrice: 10000,
+          baseCost: 3000,
+          categoryId: category.id,
+        },
       });
       const lot = await prisma.inventoryLot.create({
         data: {
@@ -1163,7 +1226,13 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
         });
         const category = await prisma.category.create({ data: { name: 'Categoría ND' } });
         const product = await prisma.product.create({
-          data: { code: 'ND-001', name: 'Producto ND', basePrice: 2000, baseCost: 1000, categoryId: category.id },
+          data: {
+            code: 'ND-001',
+            name: 'Producto ND',
+            basePrice: 2000,
+            baseCost: 1000,
+            categoryId: category.id,
+          },
         });
         const lot = await prisma.inventoryLot.create({
           data: {
@@ -1212,7 +1281,12 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
         return { purchaseId: purchase.id, purchaseLineId: purchaseLine.id, lotId: lot.id };
       }
 
-      function postDebitNote(purchaseId: string, body: object, key: string | null, sessionCookie = cookie) {
+      function postDebitNote(
+        purchaseId: string,
+        body: object,
+        key: string | null,
+        sessionCookie = cookie,
+      ) {
         const req = request(app.getHttpServer())
           .post(`/api/v1/purchases/${purchaseId}/debit-notes`)
           .set('Cookie', sessionCookie);
@@ -1256,7 +1330,10 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
         for (const body of [
           { reason: 'Devolución', items: [{ purchaseLineId, quantityCommercial: 'uno' }] },
           { reason: '   ', items: [{ purchaseLineId, quantityCommercial: 1 }] },
-          { reason: 'Devolución', items: [{ purchaseLineId: 'no-es-uuid', quantityCommercial: 1 }] },
+          {
+            reason: 'Devolución',
+            items: [{ purchaseLineId: 'no-es-uuid', quantityCommercial: 1 }],
+          },
           { reason: 'Devolución', items: [] },
           {
             reason: 'Devolución',
@@ -1281,7 +1358,11 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
         const { purchaseId, purchaseLineId, lotId } = await receivedPurchase({ factor: 1 });
         const res = await postDebitNote(
           purchaseId,
-          { purchaseId, reason: 'Devolución', items: [{ purchaseLineId, quantityCommercial: 1.5 }] },
+          {
+            purchaseId,
+            reason: 'Devolución',
+            items: [{ purchaseLineId, quantityCommercial: 1.5 }],
+          },
           randomUUID(),
         );
         expect(res.status).toBe(400);
@@ -1291,10 +1372,17 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
       });
 
       it('convierte con el factor histórico de la compra', async () => {
-        const { purchaseId, purchaseLineId, lotId } = await receivedPurchase({ lineQuantity: 2, factor: 10 });
+        const { purchaseId, purchaseLineId, lotId } = await receivedPurchase({
+          lineQuantity: 2,
+          factor: 10,
+        });
         const res = await postDebitNote(
           purchaseId,
-          { purchaseId, reason: 'Cajas averiadas', items: [{ purchaseLineId, quantityCommercial: 0.7 }] },
+          {
+            purchaseId,
+            reason: 'Cajas averiadas',
+            items: [{ purchaseLineId, quantityCommercial: 0.7 }],
+          },
           randomUUID(),
         );
         // 0.7 × 10 = 7.000000000000001 en coma flotante: sigue siendo 7 unidades base exactas
@@ -1307,7 +1395,11 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
       it('un reintento con la misma clave devuelve la misma nota sin duplicar salida ni ajuste de cartera', async () => {
         const { purchaseId, purchaseLineId, lotId } = await receivedPurchase();
         const key = randomUUID();
-        const body = { purchaseId, reason: 'Devolución', items: [{ purchaseLineId, quantityCommercial: 2 }] };
+        const body = {
+          purchaseId,
+          reason: 'Devolución',
+          items: [{ purchaseLineId, quantityCommercial: 2 }],
+        };
 
         const [first, second] = await Promise.all([
           postDebitNote(purchaseId, body, key),
@@ -1348,7 +1440,11 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
 
       it('notas concurrentes de la misma compra no devuelven más de lo comprado', async () => {
         const { purchaseId, purchaseLineId, lotId } = await receivedPurchase({ lineQuantity: 10 });
-        const body = { purchaseId, reason: 'Devolución', items: [{ purchaseLineId, quantityCommercial: 6 }] };
+        const body = {
+          purchaseId,
+          reason: 'Devolución',
+          items: [{ purchaseLineId, quantityCommercial: 6 }],
+        };
 
         const results = await Promise.all([
           postDebitNote(purchaseId, body, randomUUID()),

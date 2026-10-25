@@ -120,7 +120,7 @@ describe('Sale Domain Entities & Business Rules (Unit)', () => {
       sale.cancel();
       expect(sale.status).toBe('CANCELLED');
 
-      expect(() => sale.cancel()).toThrow('La venta ya se encuentra anulada');
+      expect(() => sale.cancel()).toThrow(/ya se encuentra anulada/);
     });
   });
 });

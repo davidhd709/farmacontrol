@@ -1,15 +1,6 @@
-import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-  Optional,
-} from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
 import { prisma, PrismaClient, Prisma } from '@farmacia/database';
-import {
-  DebitNoteDto,
-  DebitNoteLineDto,
-  CreateDebitNotePayload,
-} from '@farmacia/contracts';
+import { DebitNoteDto, DebitNoteLineDto, CreateDebitNotePayload } from '@farmacia/contracts';
 import { AccountingEngineService } from '../../accounting/application/accounting-engine.service';
 import { IdempotencyService } from '../../../common/idempotency/idempotency.service';
 import { PayablesLedger } from '../../payables/application/payables-ledger';
@@ -73,8 +64,8 @@ export class DebitNotesService {
   private readonly client: PrismaClient;
 
   constructor(
+    private readonly accountingEngine: AccountingEngineService,
     @Optional() customClient?: PrismaClient,
-    @Optional() private readonly accountingEngine?: AccountingEngineService,
     @Optional() private readonly idempotencyService: IdempotencyService = new IdempotencyService(),
     @Optional() private readonly payablesLedger: PayablesLedger = new PayablesLedger(),
     @Optional() private readonly inventoryLedger: InventoryLedger = new InventoryLedger(),
@@ -103,7 +94,9 @@ export class DebitNotesService {
     }
     const lineIds = payload.items.map((item) => item.purchaseLineId);
     if (new Set(lineIds).size !== lineIds.length) {
-      throw new BadRequestException('Cada línea de compra debe aparecer una sola vez en la nota débito.');
+      throw new BadRequestException(
+        'Cada línea de compra debe aparecer una sola vez en la nota débito.',
+      );
     }
 
     return executeWithRetry(async () => {
@@ -210,7 +203,9 @@ export class DebitNotesService {
             // Bloquear el lote: una venta o ajuste concurrente no puede dejarlo en negativo
             const lockedLot = await this.inventoryLedger.lockLot(tx, line.lotId);
             if (!lockedLot) {
-              throw new BadRequestException(`Lote de inventario para ${line.product.name} no encontrado.`);
+              throw new BadRequestException(
+                `Lote de inventario para ${line.product.name} no encontrado.`,
+              );
             }
             const lot = {
               id: lockedLot.id,
@@ -315,25 +310,23 @@ export class DebitNotesService {
           });
 
           // 6. Generar Asiento Contable Automático (Partida Doble)
-          if (this.accountingEngine) {
-            await this.accountingEngine.handleDebitNoteConfirmed(
-              {
-                id: debitNote.id,
-                debitNoteNumber: debitNote.debitNoteNumber,
-                purchaseId: purchase.id,
-                purchaseInvoiceNumber: purchase.invoiceNumber,
-                supplierId: purchase.supplierId,
-                supplierName: purchase.supplier.name,
-                reason: debitNote.reason,
-                subtotal: debitNote.subtotal,
-                taxTotal: debitNote.taxTotal,
-                total: debitNote.total,
-                createdById: userId,
-                createdAt: debitNote.createdAt,
-              },
-              tx,
-            );
-          }
+          await this.accountingEngine.handleDebitNoteConfirmed(
+            {
+              id: debitNote.id,
+              debitNoteNumber: debitNote.debitNoteNumber,
+              purchaseId: purchase.id,
+              purchaseInvoiceNumber: purchase.invoiceNumber,
+              supplierId: purchase.supplierId,
+              supplierName: purchase.supplier.name,
+              reason: debitNote.reason,
+              subtotal: debitNote.subtotal,
+              taxTotal: debitNote.taxTotal,
+              total: debitNote.total,
+              createdById: userId,
+              createdAt: debitNote.createdAt,
+            },
+            tx,
+          );
 
           const dto = this.mapToDto(debitNote);
           await this.idempotencyService.saveRecord(
@@ -347,6 +340,20 @@ export class DebitNotesService {
             },
             tx,
           );
+          await tx.auditEvent.create({
+            data: {
+              userId,
+              action: 'purchases:debit_note_confirmed',
+              entity: 'DebitNote',
+              entityId: debitNote.id,
+              details: {
+                debitNoteNumber: debitNote.debitNoteNumber,
+                purchaseId: purchase.id,
+                total: debitNote.total,
+                reason: debitNote.reason,
+              },
+            },
+          });
           return dto;
         },
         {

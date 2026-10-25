@@ -1,5 +1,12 @@
 import { DomainError } from '../../../common/domain-error';
 
+export class PurchaseValidationException extends DomainError {
+  constructor(message: string) {
+    super(message, 'validation');
+    this.name = 'PurchaseValidationException';
+  }
+}
+
 export class PurchaseNotFoundException extends DomainError {
   constructor(id: string) {
     super(`Compra con identificador "${id}" no encontrada`, 'not_found');

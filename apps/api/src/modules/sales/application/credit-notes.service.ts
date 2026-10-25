@@ -1,15 +1,6 @@
-import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-  Optional,
-} from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
 import { prisma, PrismaClient, Prisma } from '@farmacia/database';
-import {
-  CreditNoteDto,
-  CreditNoteLineDto,
-  CreateCreditNotePayload,
-} from '@farmacia/contracts';
+import { CreditNoteDto, CreditNoteLineDto, CreateCreditNotePayload } from '@farmacia/contracts';
 import { AccountingEngineService } from '../../accounting/application/accounting-engine.service';
 import { AuditService } from '../../audit/application/services/audit.service';
 import { IdempotencyService } from '../../../common/idempotency/idempotency.service';
@@ -28,8 +19,6 @@ import {
 function toCents(value: Prisma.Decimal | string | number, label: string): bigint {
   return parseMoneyToCents(new Prisma.Decimal(value).toFixed(2), label);
 }
-
-type Tx = Parameters<Parameters<PrismaClient['$transaction']>[0]>[0];
 
 function isRetryableConcurrencyError(error: unknown): boolean {
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
@@ -89,8 +78,8 @@ export class CreditNotesService {
     private readonly cashService: CashService,
     private readonly receivablesLedger: ReceivablesLedger,
     private readonly inventoryLedger: InventoryLedger,
+    private readonly accountingEngine: AccountingEngineService,
     @Optional() customClient?: PrismaClient,
-    @Optional() private readonly accountingEngine?: AccountingEngineService,
     @Optional() private readonly auditService?: AuditService,
     @Optional() private readonly idempotencyService: IdempotencyService = new IdempotencyService(),
   ) {
@@ -118,7 +107,9 @@ export class CreditNotesService {
     }
     const lineIds = payload.items.map((item) => item.saleLineId);
     if (new Set(lineIds).size !== lineIds.length) {
-      throw new BadRequestException('Cada línea de venta debe aparecer una sola vez en la nota crédito.');
+      throw new BadRequestException(
+        'Cada línea de venta debe aparecer una sola vez en la nota crédito.',
+      );
     }
 
     return executeWithRetry(async () => {
@@ -387,29 +378,28 @@ export class CreditNotesService {
           });
 
           // 7. Generar Asiento Contable Automático (Partida Doble)
-          if (this.accountingEngine) {
-            await this.accountingEngine.handleCreditNoteConfirmed(
-              {
-                id: creditNote.id,
-                creditNoteNumber: creditNote.creditNoteNumber,
-                saleId: sale.id,
-                saleInvoiceNumber: sale.invoiceNumber,
-                customerId: sale.customerId,
-                customerName: sale.customer.name,
-                reason: creditNote.reason,
-                subtotal: creditNote.subtotal,
-                taxTotal: creditNote.taxTotal,
-                total: creditNote.total,
-                refundMethod: creditNote.refundMethod,
-                bankAccountId: creditNote.refundMethod === 'TRANSFERENCIA' ? sale.bankAccountId : null,
-                restock: creditNote.restock,
-                costTotal: centsToMoneyString(totalCostCents),
-                createdById: userId,
-                createdAt: creditNote.createdAt,
-              },
-              tx,
-            );
-          }
+          await this.accountingEngine.handleCreditNoteConfirmed(
+            {
+              id: creditNote.id,
+              creditNoteNumber: creditNote.creditNoteNumber,
+              saleId: sale.id,
+              saleInvoiceNumber: sale.invoiceNumber,
+              customerId: sale.customerId,
+              customerName: sale.customer.name,
+              reason: creditNote.reason,
+              subtotal: creditNote.subtotal,
+              taxTotal: creditNote.taxTotal,
+              total: creditNote.total,
+              refundMethod: creditNote.refundMethod,
+              bankAccountId:
+                creditNote.refundMethod === 'TRANSFERENCIA' ? sale.bankAccountId : null,
+              restock: creditNote.restock,
+              costTotal: centsToMoneyString(totalCostCents),
+              createdById: userId,
+              createdAt: creditNote.createdAt,
+            },
+            tx,
+          );
 
           const dto = this.mapToDto(creditNote);
           await this.idempotencyService.saveRecord(
@@ -423,6 +413,21 @@ export class CreditNotesService {
             },
             tx,
           );
+          await tx.auditEvent.create({
+            data: {
+              userId,
+              action: 'sales:credit_note_confirmed',
+              entity: 'CreditNote',
+              entityId: creditNote.id,
+              details: {
+                creditNoteNumber: creditNote.creditNoteNumber,
+                saleId: sale.id,
+                total: creditNote.total,
+                refundMethod: creditNote.refundMethod,
+                restock: creditNote.restock,
+              },
+            },
+          });
           return dto;
         },
         {

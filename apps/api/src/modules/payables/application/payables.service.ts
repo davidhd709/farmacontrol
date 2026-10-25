@@ -1,4 +1,9 @@
-import { businessDayStart, businessDayEnd, businessToday, calendarDate } from '../../../common/utils/business-date';
+import {
+  businessDayStart,
+  businessDayEnd,
+  businessToday,
+  calendarDate,
+} from '../../../common/utils/business-date';
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { prisma, Prisma } from '@farmacia/database';
 import { CashService } from '../../cash/application/cash.service';
@@ -11,16 +16,18 @@ import {
 } from '@farmacia/contracts';
 import { centsToMoneyString, parseMoneyToCents } from '../../treasury/domain/treasury-rules';
 import { recordSourceBankMovement } from '../../treasury/application/record-source-bank-movement';
-import { parsePaymentAmount, requirePaymentBankAccountId } from '../../treasury/application/payment-validation';
+import {
+  parsePaymentAmount,
+  requirePaymentBankAccountId,
+} from '../../treasury/application/payment-validation';
 import { IdempotencyService } from '../../../common/idempotency/idempotency.service';
-import { Optional } from '@nestjs/common';
 import { AccountingEngineService } from '../../accounting/application/accounting-engine.service';
 
 @Injectable()
 export class PayablesService {
   constructor(
     private readonly cashService: CashService,
-    @Optional() private readonly accountingEngine?: AccountingEngineService,
+    private readonly accountingEngine: AccountingEngineService,
     private readonly idempotencyService: IdempotencyService = new IdempotencyService(),
   ) {}
 
@@ -75,7 +82,8 @@ export class PayablesService {
         createdByUserId: p.createdByUserId,
         createdAt: p.createdAt instanceof Date ? p.createdAt.toISOString() : p.createdAt,
         isReversed: Boolean(p.isReversed),
-        reversedAt: p.reversedAt instanceof Date ? p.reversedAt.toISOString() : p.reversedAt ?? null,
+        reversedAt:
+          p.reversedAt instanceof Date ? p.reversedAt.toISOString() : (p.reversedAt ?? null),
         reversalReason: p.reversalReason ?? null,
       })),
     };
@@ -181,13 +189,15 @@ export class PayablesService {
     const endpoint = `/api/v1/payables/${payableId}/payments`;
     const requestHash = this.idempotencyService.computeHash(endpoint, userId, payload);
 
-    return this.idempotencyService.retryOnSerialization(() => prisma.$transaction(async (tx: any) => {
-      const cached = idempotencyKey
-        ? await this.idempotencyService.getRecord(idempotencyKey, requestHash, tx, 'http')
-        : null;
-      if (cached) return cached.responseBody as PayableDto;
-      // 1. Bloqueo pesimista
-      const rows = await tx.$queryRaw<any[]>`
+    return this.idempotencyService.retryOnSerialization(() =>
+      prisma.$transaction(
+        async (tx: any) => {
+          const cached = idempotencyKey
+            ? await this.idempotencyService.getRecord(idempotencyKey, requestHash, tx, 'http')
+            : null;
+          if (cached) return cached.responseBody as PayableDto;
+          // 1. Bloqueo pesimista
+          const rows = await tx.$queryRaw<any[]>`
         SELECT
           id,
           purchase_id  AS "purchaseId",
@@ -205,106 +215,114 @@ export class PayablesService {
         FOR UPDATE
       `;
 
-      if (!rows.length) {
-        throw new NotFoundException(`Cuenta por pagar "${payableId}" no encontrada`);
-      }
+          if (!rows.length) {
+            throw new NotFoundException(`Cuenta por pagar "${payableId}" no encontrada`);
+          }
 
-      const raw = rows[0];
-      if (raw.status !== 'PENDIENTE') {
-        throw new BadRequestException(`No se puede pagar una cuenta en estado "${raw.status}"`);
-      }
-      const balanceCents = parseMoneyToCents(raw.balance.toString(), 'Saldo pendiente');
-      if (amountCents > balanceCents) {
-        throw new BadRequestException('El monto del pago supera el saldo pendiente.');
-      }
-      const amountPaidCents = parseMoneyToCents(raw.amountPaid.toString(), 'Total pagado');
-      const newBalanceCents = balanceCents - amountCents;
-      const amount = centsToMoneyString(amountCents);
+          const raw = rows[0];
+          if (raw.status !== 'PENDIENTE') {
+            throw new BadRequestException(`No se puede pagar una cuenta en estado "${raw.status}"`);
+          }
+          const balanceCents = parseMoneyToCents(raw.balance.toString(), 'Saldo pendiente');
+          if (amountCents > balanceCents) {
+            throw new BadRequestException('El monto del pago supera el saldo pendiente.');
+          }
+          const amountPaidCents = parseMoneyToCents(raw.amountPaid.toString(), 'Total pagado');
+          const newBalanceCents = balanceCents - amountCents;
+          const amount = centsToMoneyString(amountCents);
 
-      // 3. Persistir cambios en payable
-      const updated = await (tx as any).payable.update({
-        where: { id: payableId },
-        data: {
-          amountPaid: new Prisma.Decimal(centsToMoneyString(amountPaidCents + amountCents)),
-          balance: new Prisma.Decimal(centsToMoneyString(newBalanceCents)),
-          status: newBalanceCents === 0n ? 'PAGADA' : 'PENDIENTE',
+          // 3. Persistir cambios en payable
+          const updated = await (tx as any).payable.update({
+            where: { id: payableId },
+            data: {
+              amountPaid: new Prisma.Decimal(centsToMoneyString(amountPaidCents + amountCents)),
+              balance: new Prisma.Decimal(centsToMoneyString(newBalanceCents)),
+              status: newBalanceCents === 0n ? 'PAGADA' : 'PENDIENTE',
+            },
+            include: {
+              supplier: { select: { name: true } },
+              purchase: { select: { invoiceNumber: true } },
+              payments: { orderBy: { createdAt: 'asc' } },
+            },
+          });
+
+          // 4. Registrar pago
+          const payment = await (tx as any).payablePayment.create({
+            data: {
+              payableId,
+              amount: new Prisma.Decimal(amount),
+              paymentMethod: method,
+              bankAccountId: method === 'TRANSFERENCIA' ? payload.bankAccountId : null,
+              notes: payload.notes ?? null,
+              createdByUserId: userId,
+            },
+          });
+
+          // 5. Egreso de caja (dentro de la misma transacción)
+          if (method === 'TRANSFERENCIA') {
+            await recordSourceBankMovement(tx, {
+              bankAccountId: payload.bankAccountId!,
+              movementType: 'WITHDRAWAL',
+              amount,
+              concept: `Pago proveedor - Factura ${updated.purchase?.invoiceNumber ?? payableId}`,
+              referenceDocumentType: 'PAYABLE_PAYMENT',
+              referenceDocumentId: payment.id,
+              createdById: userId,
+            });
+          } else {
+            await this.cashService.recordMovementInTransaction(tx, {
+              movementType: 'EGRESO_PAGO_PROVEEDOR',
+              amount,
+              paymentMethod: 'EFECTIVO',
+              reason: `Pago proveedor - Factura ${updated.purchase?.invoiceNumber ?? payableId}`,
+              referenceDocumentType: 'PAYABLE',
+              referenceDocumentId: payableId,
+              createdByUserId: userId,
+            });
+          }
+
+          // 5.1. Asiento contable automático
+          await this.accountingEngine.handleSupplierPayment(
+            {
+              id: payment.id,
+              payableId,
+              amount: payment.amount,
+              paymentMethod: method,
+              bankAccountId: method === 'TRANSFERENCIA' ? payload.bankAccountId : null,
+              createdByUserId: userId,
+              supplierName: updated.supplier?.name,
+              invoiceNumber: updated.purchase?.invoiceNumber,
+            },
+            tx,
+          );
+
+          // Leer pagos actualizados para retornar
+          const payments = await (tx as any).payablePayment.findMany({
+            where: { payableId },
+            orderBy: { createdAt: 'asc' },
+          });
+
+          const result = this.toDto(updated, payments);
+          if (idempotencyKey) {
+            await this.idempotencyService.saveRecord(
+              {
+                key: idempotencyKey,
+                endpoint,
+                requestHash,
+                userId,
+                responseStatus: 201,
+                responseBody: result,
+              },
+              tx,
+            );
+          }
+          return result;
         },
-        include: {
-          supplier: { select: { name: true } },
-          purchase: { select: { invoiceNumber: true } },
-          payments: { orderBy: { createdAt: 'asc' } },
+        {
+          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
         },
-      });
-
-      // 4. Registrar pago
-      const payment = await (tx as any).payablePayment.create({
-        data: {
-          payableId,
-          amount: new Prisma.Decimal(amount),
-          paymentMethod: method,
-          bankAccountId: method === 'TRANSFERENCIA' ? payload.bankAccountId : null,
-          notes: payload.notes ?? null,
-          createdByUserId: userId,
-        },
-      });
-
-      // 5. Egreso de caja (dentro de la misma transacción)
-      if (method === 'TRANSFERENCIA') {
-        await recordSourceBankMovement(tx, {
-          bankAccountId: payload.bankAccountId!,
-          movementType: 'WITHDRAWAL',
-          amount,
-          concept: `Pago proveedor - Factura ${updated.purchase?.invoiceNumber ?? payableId}`,
-          referenceDocumentType: 'PAYABLE_PAYMENT',
-          referenceDocumentId: payment.id,
-          createdById: userId,
-        });
-      } else {
-        await this.cashService.recordMovementInTransaction(tx, {
-          movementType: 'EGRESO_PAGO_PROVEEDOR',
-          amount,
-          paymentMethod: 'EFECTIVO',
-          reason: `Pago proveedor - Factura ${updated.purchase?.invoiceNumber ?? payableId}`,
-          referenceDocumentType: 'PAYABLE',
-          referenceDocumentId: payableId,
-          createdByUserId: userId,
-        });
-      }
-
-      // 5.1. Asiento contable automático
-      if (this.accountingEngine) {
-        await this.accountingEngine.handleSupplierPayment(
-          {
-            id: payment.id,
-            payableId,
-            amount: payment.amount,
-            paymentMethod: method,
-            bankAccountId: method === 'TRANSFERENCIA' ? payload.bankAccountId : null,
-            createdByUserId: userId,
-            supplierName: updated.supplier?.name,
-            invoiceNumber: updated.purchase?.invoiceNumber,
-          },
-          tx,
-        );
-      }
-
-      // Leer pagos actualizados para retornar
-      const payments = await (tx as any).payablePayment.findMany({
-        where: { payableId },
-        orderBy: { createdAt: 'asc' },
-      });
-
-      const result = this.toDto(updated, payments);
-      if (idempotencyKey) {
-        await this.idempotencyService.saveRecord({
-          key: idempotencyKey, endpoint, requestHash, userId,
-          responseStatus: 201, responseBody: result,
-        }, tx);
-      }
-      return result;
-    }, {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-    }));
+      ),
+    );
   }
 
   /**
@@ -391,9 +409,10 @@ export class PayablesService {
       throw new BadRequestException('El motivo de la reversión es obligatorio.');
     }
 
-    return prisma.$transaction(async (tx: any) => {
-      // 1. Bloqueo pesimista del payable
-      const rows = await tx.$queryRaw<any[]>`
+    return prisma.$transaction(
+      async (tx: any) => {
+        // 1. Bloqueo pesimista del payable
+        const rows = await tx.$queryRaw<any[]>`
         SELECT
           id,
           purchase_id  AS "purchaseId",
@@ -409,126 +428,131 @@ export class PayablesService {
         FOR UPDATE
       `;
 
-      if (!rows.length) {
-        throw new NotFoundException(`Cuenta por pagar "${payableId}" no encontrada`);
-      }
-
-      const raw = rows[0];
-
-      // 2. Buscar el pago a revertir
-      const payment = await tx.payablePayment.findUnique({
-        where: { id: paymentId },
-      });
-
-      if (!payment || payment.payableId !== payableId) {
-        throw new NotFoundException(`Pago "${paymentId}" no encontrado en esta cuenta por pagar`);
-      }
-
-      if (payment.isReversed) {
-        throw new BadRequestException('Este pago ya fue revertido previamente.');
-      }
-
-      const paymentAmountCents = parseMoneyToCents(payment.amount.toString(), 'Monto del pago a revertir');
-      const balanceCents = parseMoneyToCents(raw.balance.toString(), 'Saldo pendiente');
-      const amountPaidCents = parseMoneyToCents(raw.amountPaid.toString(), 'Total pagado');
-
-      const newBalanceCents = balanceCents + paymentAmountCents;
-      const newAmountPaidCents = amountPaidCents - paymentAmountCents;
-
-      if (newAmountPaidCents < 0n) {
-        throw new BadRequestException('El monto del reverso excede el total pagado registrado.');
-      }
-
-      // 3. Marcar pago como revertido
-      await tx.payablePayment.update({
-        where: { id: paymentId },
-        data: {
-          isReversed: true,
-          reversedAt: new Date(),
-          reversalReason: trimmedReason,
-          reversedByUserId: userId,
-        },
-      });
-
-      // 4. Actualizar estado y saldos del payable
-      const updated = await tx.payable.update({
-        where: { id: payableId },
-        data: {
-          balance: new Prisma.Decimal(centsToMoneyString(newBalanceCents)),
-          amountPaid: new Prisma.Decimal(centsToMoneyString(newAmountPaidCents)),
-          status: 'PENDIENTE',
-        },
-        include: {
-          supplier: { select: { name: true } },
-          purchase: { select: { invoiceNumber: true, notes: true, purchaseDate: true } },
-        },
-      });
-
-      // 5. Compensación financiera
-      const amountStr = centsToMoneyString(paymentAmountCents);
-      if (payment.paymentMethod === 'TRANSFERENCIA') {
-        if (!payment.bankAccountId) {
-          throw new BadRequestException('El pago por transferencia no tiene cuenta bancaria asociada.');
+        if (!rows.length) {
+          throw new NotFoundException(`Cuenta por pagar "${payableId}" no encontrada`);
         }
-        await recordSourceBankMovement(tx, {
-          bankAccountId: payment.bankAccountId,
-          movementType: 'DEPOSIT',
-          amount: amountStr,
-          concept: `Reversión pago proveedor - Factura ${updated.purchase?.invoiceNumber ?? payableId}: ${trimmedReason}`,
-          referenceDocumentType: 'PAYABLE_PAYMENT_REVERSAL',
-          referenceDocumentId: payment.id,
-          createdById: userId,
-        });
-      } else {
-        await this.cashService.recordMovementInTransaction(tx, {
-          movementType: 'INGRESO_MANUAL',
-          amount: amountStr,
-          paymentMethod: 'EFECTIVO',
-          reason: `Reversión pago proveedor - Factura ${updated.purchase?.invoiceNumber ?? payableId}: ${trimmedReason}`,
-          referenceDocumentType: 'PAYABLE_PAYMENT_REVERSAL',
-          referenceDocumentId: payment.id,
-          createdByUserId: userId,
-        });
-      }
 
-      // Reversión contable automática
-      if (this.accountingEngine) {
+        const raw = rows[0];
+
+        // 2. Buscar el pago a revertir
+        const payment = await tx.payablePayment.findUnique({
+          where: { id: paymentId },
+        });
+
+        if (!payment || payment.payableId !== payableId) {
+          throw new NotFoundException(`Pago "${paymentId}" no encontrado en esta cuenta por pagar`);
+        }
+
+        if (payment.isReversed) {
+          throw new BadRequestException('Este pago ya fue revertido previamente.');
+        }
+
+        const paymentAmountCents = parseMoneyToCents(
+          payment.amount.toString(),
+          'Monto del pago a revertir',
+        );
+        const balanceCents = parseMoneyToCents(raw.balance.toString(), 'Saldo pendiente');
+        const amountPaidCents = parseMoneyToCents(raw.amountPaid.toString(), 'Total pagado');
+
+        const newBalanceCents = balanceCents + paymentAmountCents;
+        const newAmountPaidCents = amountPaidCents - paymentAmountCents;
+
+        if (newAmountPaidCents < 0n) {
+          throw new BadRequestException('El monto del reverso excede el total pagado registrado.');
+        }
+
+        // 3. Marcar pago como revertido
+        await tx.payablePayment.update({
+          where: { id: paymentId },
+          data: {
+            isReversed: true,
+            reversedAt: new Date(),
+            reversalReason: trimmedReason,
+            reversedByUserId: userId,
+          },
+        });
+
+        // 4. Actualizar estado y saldos del payable
+        const updated = await tx.payable.update({
+          where: { id: payableId },
+          data: {
+            balance: new Prisma.Decimal(centsToMoneyString(newBalanceCents)),
+            amountPaid: new Prisma.Decimal(centsToMoneyString(newAmountPaidCents)),
+            status: 'PENDIENTE',
+          },
+          include: {
+            supplier: { select: { name: true } },
+            purchase: { select: { invoiceNumber: true, notes: true, purchaseDate: true } },
+          },
+        });
+
+        // 5. Compensación financiera
+        const amountStr = centsToMoneyString(paymentAmountCents);
+        if (payment.paymentMethod === 'TRANSFERENCIA') {
+          if (!payment.bankAccountId) {
+            throw new BadRequestException(
+              'El pago por transferencia no tiene cuenta bancaria asociada.',
+            );
+          }
+          await recordSourceBankMovement(tx, {
+            bankAccountId: payment.bankAccountId,
+            movementType: 'DEPOSIT',
+            amount: amountStr,
+            concept: `Reversión pago proveedor - Factura ${updated.purchase?.invoiceNumber ?? payableId}: ${trimmedReason}`,
+            referenceDocumentType: 'PAYABLE_PAYMENT_REVERSAL',
+            referenceDocumentId: payment.id,
+            createdById: userId,
+          });
+        } else {
+          await this.cashService.recordMovementInTransaction(tx, {
+            movementType: 'INGRESO_MANUAL',
+            amount: amountStr,
+            paymentMethod: 'EFECTIVO',
+            reason: `Reversión pago proveedor - Factura ${updated.purchase?.invoiceNumber ?? payableId}: ${trimmedReason}`,
+            referenceDocumentType: 'PAYABLE_PAYMENT_REVERSAL',
+            referenceDocumentId: payment.id,
+            createdByUserId: userId,
+          });
+        }
+
+        // Reversión contable automática
         await this.accountingEngine.handleSupplierPaymentReversed(
           payment.id,
           trimmedReason,
           userId,
           tx,
         );
-      }
 
-      // 6. Auditoría
-      await tx.auditEvent.create({
-        data: {
-          userId,
-          action: 'REVERSE_PAYABLE_PAYMENT',
-          entity: 'payable_payments',
-          entityId: paymentId,
-          details: {
-            payableId,
-            paymentId,
-            amount: amountStr,
-            paymentMethod: payment.paymentMethod,
-            bankAccountId: payment.bankAccountId,
-            reason: trimmedReason,
-            balanceBefore: centsToMoneyString(balanceCents),
-            balanceAfter: centsToMoneyString(newBalanceCents),
-          } as unknown as Prisma.InputJsonValue,
-        },
-      });
+        // 6. Auditoría
+        await tx.auditEvent.create({
+          data: {
+            userId,
+            action: 'REVERSE_PAYABLE_PAYMENT',
+            entity: 'payable_payments',
+            entityId: paymentId,
+            details: {
+              payableId,
+              paymentId,
+              amount: amountStr,
+              paymentMethod: payment.paymentMethod,
+              bankAccountId: payment.bankAccountId,
+              reason: trimmedReason,
+              balanceBefore: centsToMoneyString(balanceCents),
+              balanceAfter: centsToMoneyString(newBalanceCents),
+            } as unknown as Prisma.InputJsonValue,
+          },
+        });
 
-      const payments = await tx.payablePayment.findMany({
-        where: { payableId },
-        orderBy: { createdAt: 'asc' },
-      });
+        const payments = await tx.payablePayment.findMany({
+          where: { payableId },
+          orderBy: { createdAt: 'asc' },
+        });
 
-      return this.toDto(updated, payments);
-    }, {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-    });
+        return this.toDto(updated, payments);
+      },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      },
+    );
   }
 }

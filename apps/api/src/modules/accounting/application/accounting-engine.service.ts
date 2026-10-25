@@ -1,8 +1,9 @@
 import { businessDateOf, businessToday } from '../../../common/utils/business-date';
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { prisma, Prisma, AccountingPurpose as DbPurpose } from '@farmacia/database';
 import { JournalService } from './journal.service';
 import { JournalLineInput } from '../domain/journal-rules';
+import { AccountingValidationError } from '../domain/accounting-rules';
 import { centsToMoneyString, parseMoneyToCents } from '../../treasury/domain/treasury-rules';
 
 type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
@@ -13,7 +14,7 @@ export interface SaleEventInput {
   total: number | string | Prisma.Decimal;
   subtotal?: number | string | Prisma.Decimal;
   taxTotal?: number | string | Prisma.Decimal;
-  /** Descuento comercial otorgado; se contabiliza aparte en SALES_DISCOUNTS (4175) */
+  /** Descuento comercial otorgado; se contabiliza aparte en SALES_DISCOUNTS. */
   discountTotal?: number | string | Prisma.Decimal;
   paymentMethod: string;
   createdById?: string | null;
@@ -132,26 +133,16 @@ export interface DebitNoteEventInput {
 
 @Injectable()
 export class AccountingEngineService {
-  private readonly logger = new Logger(AccountingEngineService.name);
-
   constructor(private readonly journalService: JournalService) {}
 
-  /**
-   * Subcuenta del PUC de la cuenta bancaria (acuerdo del 4 de octubre). Sin vínculo se usa el
-   * propósito genérico BANK, como antes.
-   */
-  private async bankLedger(bankAccountId: string | null | undefined, client: Tx | typeof prisma) {
+  /** Resuelve la subcuenta PUC vinculada a una cuenta bancaria, si existe. */
+  private async bankLedger(bankAccountId: string | null | undefined, client: Tx) {
     if (!bankAccountId) return null;
     const bank = await client.bankAccount.findUnique({
       where: { id: bankAccountId },
       select: { ledgerAccountId: true },
     });
     return bank?.ledgerAccountId ?? null;
-  }
-
-  /** Con subcuenta propia, el asiento no depende del mapeo genérico BANK. */
-  private withoutBank(purposes: DbPurpose[], ledger: string | null): DbPurpose[] {
-    return ledger ? purposes.filter((purpose) => purpose !== 'BANK') : purposes;
   }
 
   private bindBank(lines: JournalLineInput[], ledger: string | null): JournalLineInput[] {
@@ -170,13 +161,17 @@ export class AccountingEngineService {
    * Débito: COSTO DE VENTAS (si costo > 0)
    * Crédito: INVENTARIOS (si costo > 0)
    */
-  async handleSaleConfirmed(sale: SaleEventInput, tx?: Tx) {
-    const client = tx ?? prisma;
+  async handleSaleConfirmed(sale: SaleEventInput, tx: Tx) {
+    const client = tx;
     const totalCents = parseMoneyToCents(
       new Prisma.Decimal(sale.total).toFixed(2),
       'Total de venta',
     );
-    if (totalCents <= 0n) return null;
+    if (totalCents <= 0n) {
+      throw new AccountingValidationError(
+        'El total de la venta debe ser mayor a cero para contabilizarla.',
+      );
+    }
 
     const taxCents = sale.taxTotal
       ? parseMoneyToCents(new Prisma.Decimal(sale.taxTotal).toFixed(2), 'IVA de venta')
@@ -228,43 +223,10 @@ export class AccountingEngineService {
       }
     }
 
-    const requiredPurposes: DbPurpose[] = [paymentPurpose];
-    if (taxCents > 0n) {
-      requiredPurposes.push('VAT_OUTPUT', 'SALES_TAXED');
-    } else {
-      requiredPurposes.push('SALES_EXCLUDED');
-    }
-    if (cogsCents > 0n) {
-      requiredPurposes.push('COST_OF_SALES', 'INVENTORY');
-    }
-
     const entryDate = sale.createdAt ? new Date(sale.createdAt) : new Date();
-
-    // Acuerdo del 4 de octubre: la venta se registra por su valor bruto y el descuento en
-    // 4175, para que el estado de resultados muestre ventas brutas, descuentos y netas.
-    // Sin cuenta de descuentos configurada se conserva el registro neto anterior.
-    const separateDiscount =
-      discountCents > 0n &&
-      (await this.journalService.canPostForPurposes(['SALES_DISCOUNTS'], entryDate, client));
-    if (discountCents > 0n && !separateDiscount) {
-      this.logger.warn(
-        `Venta ${sale.invoiceNumber}: propósito SALES_DISCOUNTS sin mapeo; la venta se registra neta del descuento.`,
-      );
-    }
-    const salesCreditCents = separateDiscount ? subtotalCents + discountCents : subtotalCents;
+    const salesCreditCents = subtotalCents + discountCents;
 
     const bankLedger = await this.bankLedger(sale.bankAccountId, client);
-    const canPost = await this.journalService.canPostForPurposes(
-      this.withoutBank(requiredPurposes, bankLedger),
-      entryDate,
-      client,
-    );
-    if (!canPost) {
-      this.logger.warn(
-        `Venta ${sale.invoiceNumber}: propósitos contables pendientes de mapeo. Se omite asiento automático.`,
-      );
-      return null;
-    }
 
     const lines: JournalLineInput[] = [];
 
@@ -299,7 +261,7 @@ export class AccountingEngineService {
       });
     }
 
-    if (separateDiscount) {
+    if (discountCents > 0n) {
       lines.push({
         purpose: 'SALES_DISCOUNTS',
         debit: centsToMoneyString(discountCents),
@@ -341,12 +303,16 @@ export class AccountingEngineService {
   /**
    * Reversa el asiento contable al anular una venta.
    */
-  async handleSaleCancelled(saleId: string, reason: string, userId?: string, tx?: Tx) {
-    const client = tx ?? prisma;
+  async handleSaleCancelled(saleId: string, reason: string, userId: string | undefined, tx: Tx) {
+    const client = tx;
     const existing = await client.journalEntry.findUnique({
       where: { sourceType_sourceId: { sourceType: 'SALE', sourceId: saleId } },
     });
-    if (!existing || existing.status !== 'POSTED') return null;
+    if (!existing || existing.status !== 'POSTED') {
+      throw new AccountingValidationError(
+        `La venta ${saleId} no tiene un asiento publicado para reversar; la anulación fue detenida.`,
+      );
+    }
 
     const alreadyReversed = await client.journalEntry.findFirst({
       where: { reversalOfId: existing.id },
@@ -369,28 +335,18 @@ export class AccountingEngineService {
    * Débito: INVENTARIOS
    * Crédito: PROVEEDORES
    */
-  async handlePurchaseReceived(purchase: PurchaseEventInput, tx?: Tx) {
-    const client = tx ?? prisma;
+  async handlePurchaseReceived(purchase: PurchaseEventInput, tx: Tx) {
     const totalCents = parseMoneyToCents(
       new Prisma.Decimal(purchase.totalAmount).toFixed(2),
       'Total de compra',
     );
-    if (totalCents <= 0n) return null;
-
-    const purchaseDate = new Date(purchase.purchaseDate);
-    const canPost = await this.journalService.canPostForPurposes(
-      ['INVENTORY', 'SUPPLIERS'],
-      purchaseDate,
-      client,
-      true,
-    );
-    if (!canPost) {
-      this.logger.warn(
-        `Compra ${purchase.invoiceNumber}: propósitos INVENTORY/SUPPLIERS pendientes de mapeo. Se omite asiento.`,
+    if (totalCents <= 0n) {
+      throw new AccountingValidationError(
+        'El total de la compra debe ser mayor a cero para contabilizarla.',
       );
-      return null;
     }
 
+    const purchaseDate = new Date(purchase.purchaseDate);
     const totalStr = centsToMoneyString(totalCents);
     const lines: JournalLineInput[] = [
       {
@@ -425,31 +381,20 @@ export class AccountingEngineService {
    * Débito: CAJA o BANCOS
    * Crédito: CLIENTES
    */
-  async handleCustomerPayment(payment: ReceivablePaymentEventInput, tx?: Tx) {
-    const client = tx ?? prisma;
+  async handleCustomerPayment(payment: ReceivablePaymentEventInput, tx: Tx) {
+    const client = tx;
     const amountCents = parseMoneyToCents(
       new Prisma.Decimal(payment.amount).toFixed(2),
       'Monto del abono',
     );
-    if (amountCents <= 0n) return null;
+    if (amountCents <= 0n) {
+      throw new AccountingValidationError('El abono debe ser mayor a cero para contabilizarlo.');
+    }
 
-    const paymentPurpose: DbPurpose =
-      payment.paymentMethod === 'EFECTIVO' ? 'CASH' : 'BANK';
+    const paymentPurpose: DbPurpose = payment.paymentMethod === 'EFECTIVO' ? 'CASH' : 'BANK';
 
     const now = new Date();
     const bankLedger = await this.bankLedger(payment.bankAccountId, client);
-    const canPost = await this.journalService.canPostForPurposes(
-      this.withoutBank([paymentPurpose, 'CUSTOMERS'], bankLedger),
-      now,
-      client,
-    );
-    if (!canPost) {
-      this.logger.warn(
-        `Abono de cartera ${payment.id}: propósitos pendientes de mapeo. Se omite asiento.`,
-      );
-      return null;
-    }
-
     const amountStr = centsToMoneyString(amountCents);
     const lines: JournalLineInput[] = [
       {
@@ -482,12 +427,21 @@ export class AccountingEngineService {
   /**
    * Reversa el asiento contable al anular un abono de cliente.
    */
-  async handleCustomerPaymentReversed(paymentId: string, reason: string, userId?: string, tx?: Tx) {
-    const client = tx ?? prisma;
+  async handleCustomerPaymentReversed(
+    paymentId: string,
+    reason: string,
+    userId: string | undefined,
+    tx: Tx,
+  ) {
+    const client = tx;
     const existing = await client.journalEntry.findUnique({
       where: { sourceType_sourceId: { sourceType: 'RECEIVABLE_PAYMENT', sourceId: paymentId } },
     });
-    if (!existing || existing.status !== 'POSTED') return null;
+    if (!existing || existing.status !== 'POSTED') {
+      throw new AccountingValidationError(
+        `El abono ${paymentId} no tiene un asiento publicado para reversar; la reversión fue detenida.`,
+      );
+    }
 
     const alreadyReversed = await client.journalEntry.findFirst({
       where: { reversalOfId: existing.id },
@@ -510,31 +464,20 @@ export class AccountingEngineService {
    * Débito: PROVEEDORES
    * Crédito: CAJA o BANCOS
    */
-  async handleSupplierPayment(payment: PayablePaymentEventInput, tx?: Tx) {
-    const client = tx ?? prisma;
+  async handleSupplierPayment(payment: PayablePaymentEventInput, tx: Tx) {
+    const client = tx;
     const amountCents = parseMoneyToCents(
       new Prisma.Decimal(payment.amount).toFixed(2),
       'Monto del pago a proveedor',
     );
-    if (amountCents <= 0n) return null;
+    if (amountCents <= 0n) {
+      throw new AccountingValidationError('El pago debe ser mayor a cero para contabilizarlo.');
+    }
 
-    const paymentPurpose: DbPurpose =
-      payment.paymentMethod === 'EFECTIVO' ? 'CASH' : 'BANK';
+    const paymentPurpose: DbPurpose = payment.paymentMethod === 'EFECTIVO' ? 'CASH' : 'BANK';
 
     const now = new Date();
     const bankLedger = await this.bankLedger(payment.bankAccountId, client);
-    const canPost = await this.journalService.canPostForPurposes(
-      this.withoutBank(['SUPPLIERS', paymentPurpose], bankLedger),
-      now,
-      client,
-    );
-    if (!canPost) {
-      this.logger.warn(
-        `Pago a proveedor ${payment.id}: propósitos pendientes de mapeo. Se omite asiento.`,
-      );
-      return null;
-    }
-
     const amountStr = centsToMoneyString(amountCents);
     const lines: JournalLineInput[] = [
       {
@@ -567,12 +510,21 @@ export class AccountingEngineService {
   /**
    * Reversa el asiento contable al revertir un pago a proveedor.
    */
-  async handleSupplierPaymentReversed(paymentId: string, reason: string, userId?: string, tx?: Tx) {
-    const client = tx ?? prisma;
+  async handleSupplierPaymentReversed(
+    paymentId: string,
+    reason: string,
+    userId: string | undefined,
+    tx: Tx,
+  ) {
+    const client = tx;
     const existing = await client.journalEntry.findUnique({
       where: { sourceType_sourceId: { sourceType: 'PAYABLE_PAYMENT', sourceId: paymentId } },
     });
-    if (!existing || existing.status !== 'POSTED') return null;
+    if (!existing || existing.status !== 'POSTED') {
+      throw new AccountingValidationError(
+        `El pago a proveedor ${paymentId} no tiene un asiento publicado para reversar; la reversión fue detenida.`,
+      );
+    }
 
     const alreadyReversed = await client.journalEntry.findFirst({
       where: { reversalOfId: existing.id },
@@ -597,34 +549,20 @@ export class AccountingEngineService {
   /**
    * Contabiliza el registro de un gasto operativo (de contado o a crédito).
    */
-  async handleExpenseCreated(expense: ExpenseEventInput, tx?: Tx) {
+  async handleExpenseCreated(expense: ExpenseEventInput, tx: Tx) {
     const date = new Date(expense.expenseDate);
     const amountCents = parseMoneyToCents(expense.amount.toString(), 'Monto de gasto');
-    if (amountCents <= 0n) return null;
+    if (amountCents <= 0n) {
+      throw new AccountingValidationError('El gasto debe ser mayor a cero para contabilizarlo.');
+    }
     const amountStr = centsToMoneyString(amountCents);
 
     const isPaid = expense.status === 'PAGADO';
     const isBank = expense.paymentMethod === 'TRANSFERENCIA';
-    const contraPurpose = isPaid
-      ? isBank
-        ? DbPurpose.BANK
-        : DbPurpose.CASH
-      : DbPurpose.SUPPLIERS;
+    const contraPurpose = isPaid ? (isBank ? DbPurpose.BANK : DbPurpose.CASH) : DbPurpose.SUPPLIERS;
 
     // Verificar si se puede postear con la contrapartida requerida
-    const bankLedger = isPaid ? await this.bankLedger(expense.bankAccountId, tx ?? prisma) : null;
-    const canPost = await this.journalService.canPostForPurposes(
-      this.withoutBank([contraPurpose], bankLedger),
-      date,
-      tx,
-      true,
-    );
-    if (!canPost) {
-      this.logger.warn(
-        `[Contabilidad Automática] Asiento de gasto omitido por falta de mapeo contable activo para ${contraPurpose}.`,
-      );
-      return null;
-    }
+    const bankLedger = isPaid ? await this.bankLedger(expense.bankAccountId, tx) : null;
 
     const lines: JournalLineInput[] = [
       {
@@ -659,12 +597,21 @@ export class AccountingEngineService {
   /**
    * Reversa el asiento contable de un gasto cancelado / anulado.
    */
-  async handleExpenseCancelled(expenseId: string, reason: string, userId?: string, tx?: Tx) {
-    const client = tx ?? prisma;
+  async handleExpenseCancelled(
+    expenseId: string,
+    reason: string,
+    userId: string | undefined,
+    tx: Tx,
+  ) {
+    const client = tx;
     const existing = await client.journalEntry.findUnique({
       where: { sourceType_sourceId: { sourceType: 'EXPENSE', sourceId: expenseId } },
     });
-    if (!existing || existing.status !== 'POSTED') return null;
+    if (!existing || existing.status !== 'POSTED') {
+      throw new AccountingValidationError(
+        `El gasto ${expenseId} no tiene un asiento publicado para reversar; la anulación fue detenida.`,
+      );
+    }
 
     const alreadyReversed = await client.journalEntry.findFirst({
       where: { reversalOfId: existing.id },
@@ -687,28 +634,20 @@ export class AccountingEngineService {
    * Regla contable: cancela el pasivo (SUPPLIERS) contra tesorería (CASH/BANK).
    * ¡No duplica el gasto!
    */
-  async handleExpensePayment(payment: ExpensePaymentEventInput, tx?: Tx) {
+  async handleExpensePayment(payment: ExpensePaymentEventInput, tx: Tx) {
     const date = new Date(payment.paymentDate);
     const amountCents = parseMoneyToCents(payment.amount.toString(), 'Monto de pago de gasto');
-    if (amountCents <= 0n) return null;
+    if (amountCents <= 0n) {
+      throw new AccountingValidationError(
+        'El pago del gasto debe ser mayor a cero para contabilizarlo.',
+      );
+    }
     const amountStr = centsToMoneyString(amountCents);
 
     const isBank = payment.paymentMethod === 'TRANSFERENCIA';
     const paymentPurpose = isBank ? DbPurpose.BANK : DbPurpose.CASH;
 
-    const bankLedger = await this.bankLedger(payment.bankAccountId, tx ?? prisma);
-    const canPost = await this.journalService.canPostForPurposes(
-      this.withoutBank([DbPurpose.SUPPLIERS, paymentPurpose], bankLedger),
-      date,
-      tx,
-      true,
-    );
-    if (!canPost) {
-      this.logger.warn(
-        `[Contabilidad Automática] Asiento de pago de gasto omitido por falta de mapeo contable activo para SUPPLIERS o ${paymentPurpose}.`,
-      );
-      return null;
-    }
+    const bankLedger = await this.bankLedger(payment.bankAccountId, tx);
 
     const lines: JournalLineInput[] = [
       {
@@ -741,12 +680,21 @@ export class AccountingEngineService {
   /**
    * Reversa el asiento contable al revertir un pago de gasto.
    */
-  async handleExpensePaymentReversed(paymentId: string, reason: string, userId?: string, tx?: Tx) {
-    const client = tx ?? prisma;
+  async handleExpensePaymentReversed(
+    paymentId: string,
+    reason: string,
+    userId: string | undefined,
+    tx: Tx,
+  ) {
+    const client = tx;
     const existing = await client.journalEntry.findUnique({
       where: { sourceType_sourceId: { sourceType: 'EXPENSE_PAYMENT', sourceId: paymentId } },
     });
-    if (!existing || existing.status !== 'POSTED') return null;
+    if (!existing || existing.status !== 'POSTED') {
+      throw new AccountingValidationError(
+        `El pago de gasto ${paymentId} no tiene un asiento publicado para reversar; la reversión fue detenida.`,
+      );
+    }
 
     const alreadyReversed = await client.journalEntry.findFirst({
       where: { reversalOfId: existing.id },
@@ -774,13 +722,17 @@ export class AccountingEngineService {
    * Débito: INVENTARIO (1435) por el costo de reposición
    * Crédito: COSTO DE VENTAS (6135) por el costo revertido
    */
-  async handleCreditNoteConfirmed(note: CreditNoteEventInput, tx?: Tx) {
-    const client = tx ?? prisma;
+  async handleCreditNoteConfirmed(note: CreditNoteEventInput, tx: Tx) {
+    const client = tx;
     const totalCents = parseMoneyToCents(
       new Prisma.Decimal(note.total).toFixed(2),
       'Total de nota crédito',
     );
-    if (totalCents <= 0n) return null;
+    if (totalCents <= 0n) {
+      throw new AccountingValidationError(
+        'El total de la nota crédito debe ser mayor a cero para contabilizarla.',
+      );
+    }
 
     const taxCents = note.taxTotal
       ? parseMoneyToCents(new Prisma.Decimal(note.taxTotal).toFixed(2), 'IVA de nota crédito')
@@ -798,29 +750,9 @@ export class AccountingEngineService {
           ? 'CASH'
           : 'BANK';
 
-    const requiredPurposes: DbPurpose[] = ['SALES_RETURNS', paymentPurpose];
-    if (taxCents > 0n) {
-      requiredPurposes.push('VAT_OUTPUT');
-    }
-    if (note.restock && cogsCents > 0n) {
-      requiredPurposes.push('INVENTORY', 'COST_OF_SALES');
-    }
-
     const entryDate = note.createdAt ? new Date(note.createdAt) : new Date();
 
     const bankLedger = await this.bankLedger(note.bankAccountId, client);
-    const canPost = await this.journalService.canPostForPurposes(
-      this.withoutBank(requiredPurposes, bankLedger),
-      entryDate,
-      client,
-    );
-    if (!canPost) {
-      this.logger.warn(
-        `Nota Crédito ${note.creditNoteNumber}: propósitos contables pendientes de mapeo. Se omite asiento automático.`,
-      );
-      return null;
-    }
-
     const lines: JournalLineInput[] = [];
 
     // Débito a Devoluciones en Ventas (4175)
@@ -885,37 +817,23 @@ export class AccountingEngineService {
    * Crédito: INVENTARIO (1435) por el costo de la mercancía devuelta
    * Crédito: IVA DESCONTABLE (2408) por el IVA descontable devuelto al proveedor
    */
-  async handleDebitNoteConfirmed(note: DebitNoteEventInput, tx?: Tx) {
-    const client = tx ?? prisma;
+  async handleDebitNoteConfirmed(note: DebitNoteEventInput, tx: Tx) {
     const totalCents = parseMoneyToCents(
       new Prisma.Decimal(note.total).toFixed(2),
       'Total de nota débito',
     );
-    if (totalCents <= 0n) return null;
+    if (totalCents <= 0n) {
+      throw new AccountingValidationError(
+        'El total de la nota débito debe ser mayor a cero para contabilizarla.',
+      );
+    }
 
     const taxCents = note.taxTotal
       ? parseMoneyToCents(new Prisma.Decimal(note.taxTotal).toFixed(2), 'IVA de nota débito')
       : 0n;
     const subtotalCents = totalCents - taxCents;
 
-    const requiredPurposes: DbPurpose[] = ['SUPPLIERS', 'INVENTORY'];
-    if (taxCents > 0n) {
-      requiredPurposes.push('VAT_INPUT');
-    }
-
     const entryDate = note.createdAt ? new Date(note.createdAt) : new Date();
-
-    const canPost = await this.journalService.canPostForPurposes(
-      requiredPurposes,
-      entryDate,
-      client,
-    );
-    if (!canPost) {
-      this.logger.warn(
-        `Nota Débito ${note.debitNoteNumber}: propósitos contables pendientes de mapeo. Se omite asiento automático.`,
-      );
-      return null;
-    }
 
     const lines: JournalLineInput[] = [];
 

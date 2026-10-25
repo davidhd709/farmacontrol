@@ -6,6 +6,7 @@ import {
   SaleLotAllocationDto,
 } from '@farmacia/contracts';
 import { centsToNumber, divideHalfUp, toHundredths } from './sale-money';
+import { SaleAlreadyCancelledException, SaleValidationException } from './sale.exceptions';
 
 export interface SaleLotAllocationProps {
   id: string;
@@ -32,7 +33,9 @@ export class SaleLotAllocation {
     createdAt?: Date;
   }): SaleLotAllocation {
     if (props.quantityBaseUnits <= 0) {
-      throw new Error('La cantidad de unidades base asignadas del lote debe ser mayor a cero');
+      throw new SaleValidationException(
+        'La cantidad de unidades base asignadas del lote debe ser mayor a cero',
+      );
     }
     return new SaleLotAllocation({
       id: props.id ?? crypto.randomUUID(),
@@ -123,10 +126,10 @@ export class SaleLine {
     createdAt?: Date;
   }): SaleLine {
     if (payload.quantityCommercial <= 0) {
-      throw new Error('La cantidad vendida debe ser mayor a cero');
+      throw new SaleValidationException('La cantidad vendida debe ser mayor a cero');
     }
     if (payload.unitPrice < 0) {
-      throw new Error('El precio unitario no puede ser negativo');
+      throw new SaleValidationException('El precio unitario no puede ser negativo');
     }
 
     const factor = payload.presentationFactorHistorical ?? 1;
@@ -134,7 +137,7 @@ export class SaleLine {
     const quantityBaseUnits = Math.round(exactBaseUnits);
     // El inventario se lleva en unidades base enteras: no se redondea en silencio
     if (Math.abs(exactBaseUnits - quantityBaseUnits) > 1e-6) {
-      throw new Error(
+      throw new SaleValidationException(
         `La cantidad ${payload.quantityCommercial} con factor ${factor} no equivale a unidades base enteras.`,
       );
     }
@@ -147,10 +150,10 @@ export class SaleLine {
 
     const grossCents = divideHalfUp(quantityHundredths * unitPriceCents, 100n);
     if (discountCents < 0n) {
-      throw new Error('El descuento no puede ser negativo.');
+      throw new SaleValidationException('El descuento no puede ser negativo.');
     }
     if (discountCents > grossCents) {
-      throw new Error(
+      throw new SaleValidationException(
         `El descuento (${centsToNumber(discountCents)}) supera el valor de la línea (${centsToNumber(grossCents)}).`,
       );
     }
@@ -313,7 +316,7 @@ export class Sale {
     createdByUsername?: string;
   }): Sale {
     if (!payload.lines || payload.lines.length === 0) {
-      throw new Error('Una venta debe contener al menos un producto');
+      throw new SaleValidationException('Una venta debe contener al menos un producto');
     }
 
     const sumCents = (pick: (l: SaleLine) => number, label: string) =>
@@ -328,7 +331,7 @@ export class Sale {
         ? toHundredths(payload.amountPaid, 'El monto recibido')
         : totalCents;
     if (payload.paymentMethod === 'EFECTIVO' && amountPaidCents < totalCents) {
-      throw new Error(
+      throw new SaleValidationException(
         `El monto recibido ($${centsToNumber(amountPaidCents)}) no cubre el valor total de la venta ($${centsToNumber(totalCents)})`,
       );
     }
@@ -436,7 +439,7 @@ export class Sale {
 
   public cancel(): void {
     if (this.props.status === 'CANCELLED') {
-      throw new Error('La venta ya se encuentra anulada');
+      throw new SaleAlreadyCancelledException(this.props.invoiceNumber);
     }
     this.props.status = 'CANCELLED';
     this.props.updatedAt = new Date();

@@ -1,5 +1,12 @@
 import { DomainError } from '../../../common/domain-error';
 
+export class SaleValidationException extends DomainError {
+  constructor(message: string) {
+    super(message, 'validation');
+    this.name = 'SaleValidationException';
+  }
+}
+
 export class SaleNotFoundException extends DomainError {
   constructor(identifier: string) {
     super(`Venta con identificador '${identifier}' no fue encontrada.`, 'not_found');

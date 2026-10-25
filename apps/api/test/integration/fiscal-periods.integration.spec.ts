@@ -1,8 +1,13 @@
-import { beforeAll, afterAll, describe, expect, it } from 'vitest';
+import { beforeAll, afterAll, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import { Test } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
-import { prisma, cleanTestDatabase, seedRbac, AccountingPurpose as DbPurpose } from '@farmacia/database';
+import {
+  prisma,
+  cleanTestDatabase,
+  seedRbac,
+  AccountingPurpose as DbPurpose,
+} from '@farmacia/database';
 import { AppModule } from '../../src/app.module';
 import { UserProvisioningService } from '../../src/modules/identity/application/services/user-provisioning.service';
 import { AuthService } from '../../src/modules/identity/application/services/auth.service';
@@ -390,6 +395,76 @@ describe('Fiscal Periods & Historical Locking Integration (PostgreSQL)', () => {
     expect(newEntry.status).toBe('POSTED');
   });
 
+  it('reabrir revierte atómicamente y permite un nuevo cierre con asiento distinto', async () => {
+    const january = await prisma.fiscalPeriod.findUniqueOrThrow({
+      where: { year_month: { year: 2026, month: 1 } },
+    });
+    expect(january.status).toBe('OPEN');
+
+    const close = () =>
+      request(app.getHttpServer())
+        .post(`/api/v1/accounting/periods/${january.id}/close`)
+        .set('Cookie', adminCookie)
+        .send({ generateClosingEntry: true });
+    const firstReclosed = await close().expect(201);
+    const firstEntryId = firstReclosed.body.closingEntryId as string;
+    expect(firstEntryId).toBeTruthy();
+
+    const reverseSpy = vi
+      .spyOn(journalService, 'reverse')
+      .mockRejectedValue(new Error('Fallo de reversión inducido'));
+    try {
+      await request(app.getHttpServer())
+        .post(`/api/v1/accounting/periods/${january.id}/reopen`)
+        .set('Cookie', adminCookie)
+        .send({ reason: 'Prueba de reversión transaccional' })
+        .expect(500);
+    } finally {
+      reverseSpy.mockRestore();
+    }
+
+    const afterFailedReopen = await prisma.fiscalPeriod.findUniqueOrThrow({
+      where: { id: january.id },
+    });
+    expect(afterFailedReopen.status).toBe('CLOSED');
+    expect(afterFailedReopen.closingEntryId).toBe(firstEntryId);
+    expect(
+      await prisma.journalEntry.findUnique({ where: { reversalOfId: firstEntryId } }),
+    ).toBeNull();
+
+    const reopened = await request(app.getHttpServer())
+      .post(`/api/v1/accounting/periods/${january.id}/reopen`)
+      .set('Cookie', adminCookie)
+      .send({ reason: 'Reapertura autorizada para ajustar' })
+      .expect(201);
+    expect(reopened.body.status).toBe('OPEN');
+    expect(reopened.body.closingEntryId).toBeNull();
+    expect(
+      await prisma.journalEntry.findUnique({ where: { reversalOfId: firstEntryId } }),
+    ).not.toBeNull();
+
+    await journalService.post({
+      entryDate: '2026-01-27',
+      description: 'Ajuste adicional tras reapertura',
+      sourceType: 'TEST_ADJUSTMENT',
+      sourceId: 'adj-after-reopen',
+      createdById: adminUserId,
+      lines: [
+        { accountId: accountCash.id, debit: '1000.00', credit: '0.00' },
+        { accountId: accountSales.id, debit: '0.00', credit: '1000.00' },
+      ],
+    });
+
+    const secondReclosed = await close().expect(201);
+    expect(secondReclosed.body.status).toBe('CLOSED');
+    expect(secondReclosed.body.closingEntryId).not.toBe(firstEntryId);
+    const secondEntry = await prisma.journalEntry.findUniqueOrThrow({
+      where: { id: secondReclosed.body.closingEntryId },
+    });
+    expect(secondEntry.sourceId).toBe(`${january.id}:3`);
+    expect(secondEntry.status).toBe('POSTED');
+  });
+
   it('8. RBAC: Deniega operaciones de gestión a usuarios sin permiso accounting:manage', async () => {
     // Cajero intenta generar períodos -> 403
     await request(app.getHttpServer())
@@ -418,5 +493,66 @@ describe('Fiscal Periods & Historical Locking Integration (PostgreSQL)', () => {
       .set('Cookie', cashierCookie)
       .send({ reason: 'Intento de reapertura no autorizada' })
       .expect(403);
+  });
+
+  it('9. Sin CURRENT_YEAR_RESULT aborta el cierre y no selecciona 3605 ni otra cuenta patrimonial', async () => {
+    await journalService.post({
+      entryDate: '2026-03-10',
+      description: 'Venta de prueba para cierre sin mapping',
+      sourceType: 'TEST_CLOSE_WITHOUT_RESULT_MAPPING',
+      sourceId: 'missing-current-year-result',
+      createdById: adminUserId,
+      lines: [
+        { accountId: accountCash.id, debit: '1000.00', credit: '0.00' },
+        { accountId: accountSales.id, debit: '0.00', credit: '1000.00' },
+      ],
+    });
+    const period = await prisma.fiscalPeriod.findUniqueOrThrow({
+      where: { year_month: { year: 2026, month: 3 } },
+    });
+    await prisma.companyAccountingMapping.deleteMany({ where: { purpose: 'CURRENT_YEAR_RESULT' } });
+
+    const close = () =>
+      request(app.getHttpServer())
+        .post(`/api/v1/accounting/periods/${period.id}/close`)
+        .set('Cookie', adminCookie)
+        .send({ generateClosingEntry: true });
+
+    // La cuenta 3605 existe y está activa, pero su sola existencia no sustituye el mapping.
+    const missingMapping = await close();
+    expect(missingMapping.status).toBe(400);
+    expect(missingMapping.body.message).toMatch(/CURRENT_YEAR_RESULT/);
+    expect((await prisma.fiscalPeriod.findUniqueOrThrow({ where: { id: period.id } })).status).toBe(
+      'OPEN',
+    );
+    expect(
+      await prisma.journalEntry.count({
+        where: { sourceType: 'FISCAL_CLOSING', sourceId: period.id },
+      }),
+    ).toBe(0);
+
+    // Tampoco se toma una cuenta patrimonial arbitraria cuando no hay cuenta 3605 utilizable.
+    await prisma.account.update({ where: { id: accountResult.id }, data: { isActive: false } });
+    await prisma.account.create({
+      data: {
+        code: '399999',
+        name: 'Patrimonio de prueba sin mapping',
+        type: 'EQUITY',
+        level: 1,
+        allowsMovement: true,
+        isActive: true,
+      },
+    });
+    const arbitraryEquity = await close();
+    expect(arbitraryEquity.status).toBe(400);
+    expect(arbitraryEquity.body.message).toMatch(/CURRENT_YEAR_RESULT/);
+    expect((await prisma.fiscalPeriod.findUniqueOrThrow({ where: { id: period.id } })).status).toBe(
+      'OPEN',
+    );
+    expect(
+      await prisma.journalEntry.count({
+        where: { sourceType: 'FISCAL_CLOSING', sourceId: period.id },
+      }),
+    ).toBe(0);
   });
 });

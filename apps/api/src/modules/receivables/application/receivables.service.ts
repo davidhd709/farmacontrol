@@ -1,4 +1,9 @@
-import { businessDayStart, businessDayEnd, businessToday, calendarDate } from '../../../common/utils/business-date';
+import {
+  businessDayStart,
+  businessDayEnd,
+  businessToday,
+  calendarDate,
+} from '../../../common/utils/business-date';
 import {
   Injectable,
   NotFoundException,
@@ -17,16 +22,18 @@ import {
 } from '@farmacia/contracts';
 import { centsToMoneyString, parseMoneyToCents } from '../../treasury/domain/treasury-rules';
 import { recordSourceBankMovement } from '../../treasury/application/record-source-bank-movement';
-import { parsePaymentAmount, requirePaymentBankAccountId } from '../../treasury/application/payment-validation';
+import {
+  parsePaymentAmount,
+  requirePaymentBankAccountId,
+} from '../../treasury/application/payment-validation';
 import { IdempotencyService } from '../../../common/idempotency/idempotency.service';
-import { Optional } from '@nestjs/common';
 import { AccountingEngineService } from '../../accounting/application/accounting-engine.service';
 
 @Injectable()
 export class ReceivablesService {
   constructor(
     private readonly cashService: CashService,
-    @Optional() private readonly accountingEngine?: AccountingEngineService,
+    private readonly accountingEngine: AccountingEngineService,
     private readonly idempotencyService: IdempotencyService = new IdempotencyService(),
   ) {}
 
@@ -62,7 +69,8 @@ export class ReceivablesService {
         createdByUserId: p.createdByUserId,
         createdAt: p.createdAt instanceof Date ? p.createdAt.toISOString() : p.createdAt,
         isReversed: Boolean(p.isReversed),
-        reversedAt: p.reversedAt instanceof Date ? p.reversedAt.toISOString() : p.reversedAt ?? null,
+        reversedAt:
+          p.reversedAt instanceof Date ? p.reversedAt.toISOString() : (p.reversedAt ?? null),
         reversalReason: p.reversalReason ?? null,
       })),
     };
@@ -168,13 +176,15 @@ export class ReceivablesService {
     const endpoint = `/api/v1/receivables/${receivableId}/payments`;
     const requestHash = this.idempotencyService.computeHash(endpoint, userId, payload);
 
-    return this.idempotencyService.retryOnSerialization(() => prisma.$transaction(async (tx: any) => {
-      const cached = idempotencyKey
-        ? await this.idempotencyService.getRecord(idempotencyKey, requestHash, tx, 'http')
-        : null;
-      if (cached) return cached.responseBody as ReceivableDto;
-      // 1. Bloqueo pesimista para evitar doble abono concurrente
-      const rows = await tx.$queryRaw<any[]>`
+    return this.idempotencyService.retryOnSerialization(() =>
+      prisma.$transaction(
+        async (tx: any) => {
+          const cached = idempotencyKey
+            ? await this.idempotencyService.getRecord(idempotencyKey, requestHash, tx, 'http')
+            : null;
+          if (cached) return cached.responseBody as ReceivableDto;
+          // 1. Bloqueo pesimista para evitar doble abono concurrente
+          const rows = await tx.$queryRaw<any[]>`
         SELECT
           id,
           sale_id    AS "saleId",
@@ -192,106 +202,116 @@ export class ReceivablesService {
         FOR UPDATE
       `;
 
-      if (!rows.length) {
-        throw new NotFoundException(`Cuenta por cobrar "${receivableId}" no encontrada`);
-      }
+          if (!rows.length) {
+            throw new NotFoundException(`Cuenta por cobrar "${receivableId}" no encontrada`);
+          }
 
-      const raw = rows[0];
-      if (raw.status !== 'PENDIENTE') {
-        throw new BadRequestException(`No se puede abonar a una cuenta en estado "${raw.status}"`);
-      }
-      const balanceCents = parseMoneyToCents(raw.balance.toString(), 'Saldo pendiente');
-      if (amountCents > balanceCents) {
-        throw new BadRequestException('El monto del abono supera el saldo pendiente.');
-      }
-      const amountPaidCents = parseMoneyToCents(raw.amountPaid.toString(), 'Total abonado');
-      const newBalanceCents = balanceCents - amountCents;
-      const amount = centsToMoneyString(amountCents);
+          const raw = rows[0];
+          if (raw.status !== 'PENDIENTE') {
+            throw new BadRequestException(
+              `No se puede abonar a una cuenta en estado "${raw.status}"`,
+            );
+          }
+          const balanceCents = parseMoneyToCents(raw.balance.toString(), 'Saldo pendiente');
+          if (amountCents > balanceCents) {
+            throw new BadRequestException('El monto del abono supera el saldo pendiente.');
+          }
+          const amountPaidCents = parseMoneyToCents(raw.amountPaid.toString(), 'Total abonado');
+          const newBalanceCents = balanceCents - amountCents;
+          const amount = centsToMoneyString(amountCents);
 
-      // 3. Persistir cambios en receivable
-      const updated = await (tx as any).receivable.update({
-        where: { id: receivableId },
-        data: {
-          amountPaid: new Prisma.Decimal(centsToMoneyString(amountPaidCents + amountCents)),
-          balance: new Prisma.Decimal(centsToMoneyString(newBalanceCents)),
-          status: (newBalanceCents === 0n ? 'PAGADA' : 'PENDIENTE') satisfies ReceivableStatus,
+          // 3. Persistir cambios en receivable
+          const updated = await (tx as any).receivable.update({
+            where: { id: receivableId },
+            data: {
+              amountPaid: new Prisma.Decimal(centsToMoneyString(amountPaidCents + amountCents)),
+              balance: new Prisma.Decimal(centsToMoneyString(newBalanceCents)),
+              status: (newBalanceCents === 0n ? 'PAGADA' : 'PENDIENTE') satisfies ReceivableStatus,
+            },
+            include: {
+              customer: { select: { name: true } },
+              sale: { select: { invoiceNumber: true } },
+              payments: { orderBy: { createdAt: 'asc' } },
+            },
+          });
+
+          // 4. Registrar pago
+          const payment = await (tx as any).receivablePayment.create({
+            data: {
+              receivableId,
+              amount: new Prisma.Decimal(amount),
+              paymentMethod: method,
+              bankAccountId: method === 'TRANSFERENCIA' ? payload.bankAccountId : null,
+              notes: payload.notes ?? null,
+              createdByUserId: userId,
+            },
+          });
+
+          // 5. Ingreso a caja (dentro de la misma transacción)
+          if (method === 'TRANSFERENCIA') {
+            await recordSourceBankMovement(tx, {
+              bankAccountId: payload.bankAccountId!,
+              movementType: 'DEPOSIT',
+              amount,
+              concept: `Abono cartera - Factura ${updated.sale?.invoiceNumber ?? receivableId}`,
+              referenceDocumentType: 'RECEIVABLE_PAYMENT',
+              referenceDocumentId: payment.id,
+              createdById: userId,
+            });
+          } else {
+            await this.cashService.recordMovementInTransaction(tx, {
+              movementType: 'INGRESO_MANUAL',
+              amount,
+              paymentMethod: 'EFECTIVO',
+              reason: `Abono cartera - Factura ${updated.sale?.invoiceNumber ?? receivableId}`,
+              referenceDocumentType: 'RECEIVABLE',
+              referenceDocumentId: receivableId,
+              createdByUserId: userId,
+            });
+          }
+
+          // 5.1. Asiento contable automático
+          await this.accountingEngine.handleCustomerPayment(
+            {
+              id: payment.id,
+              receivableId,
+              amount: payment.amount,
+              paymentMethod: method,
+              bankAccountId: method === 'TRANSFERENCIA' ? payload.bankAccountId : null,
+              createdByUserId: userId,
+              customerName: updated.customer?.name,
+              invoiceNumber: updated.sale?.invoiceNumber,
+            },
+            tx,
+          );
+
+          // Leer los pagos actualizados para devolver
+          const payments = await (tx as any).receivablePayment.findMany({
+            where: { receivableId },
+            orderBy: { createdAt: 'asc' },
+          });
+
+          const result = this.toDto(updated, payments);
+          if (idempotencyKey) {
+            await this.idempotencyService.saveRecord(
+              {
+                key: idempotencyKey,
+                endpoint,
+                requestHash,
+                userId,
+                responseStatus: 201,
+                responseBody: result,
+              },
+              tx,
+            );
+          }
+          return result;
         },
-        include: {
-          customer: { select: { name: true } },
-          sale: { select: { invoiceNumber: true } },
-          payments: { orderBy: { createdAt: 'asc' } },
+        {
+          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
         },
-      });
-
-      // 4. Registrar pago
-      const payment = await (tx as any).receivablePayment.create({
-        data: {
-          receivableId,
-          amount: new Prisma.Decimal(amount),
-          paymentMethod: method,
-          bankAccountId: method === 'TRANSFERENCIA' ? payload.bankAccountId : null,
-          notes: payload.notes ?? null,
-          createdByUserId: userId,
-        },
-      });
-
-      // 5. Ingreso a caja (dentro de la misma transacción)
-      if (method === 'TRANSFERENCIA') {
-        await recordSourceBankMovement(tx, {
-          bankAccountId: payload.bankAccountId!,
-          movementType: 'DEPOSIT',
-          amount,
-          concept: `Abono cartera - Factura ${updated.sale?.invoiceNumber ?? receivableId}`,
-          referenceDocumentType: 'RECEIVABLE_PAYMENT',
-          referenceDocumentId: payment.id,
-          createdById: userId,
-        });
-      } else {
-        await this.cashService.recordMovementInTransaction(tx, {
-          movementType: 'INGRESO_MANUAL',
-          amount,
-          paymentMethod: 'EFECTIVO',
-          reason: `Abono cartera - Factura ${updated.sale?.invoiceNumber ?? receivableId}`,
-          referenceDocumentType: 'RECEIVABLE',
-          referenceDocumentId: receivableId,
-          createdByUserId: userId,
-        });
-      }
-
-      // 5.1. Asiento contable automático
-      if (this.accountingEngine) {
-        await this.accountingEngine.handleCustomerPayment(
-          {
-            id: payment.id,
-            receivableId,
-            amount: payment.amount,
-            paymentMethod: method,
-            bankAccountId: method === 'TRANSFERENCIA' ? payload.bankAccountId : null,
-            createdByUserId: userId,
-            customerName: updated.customer?.name,
-            invoiceNumber: updated.sale?.invoiceNumber,
-          },
-          tx,
-        );
-      }
-
-      // Leer los pagos actualizados para devolver
-      const payments = await (tx as any).receivablePayment.findMany({
-        where: { receivableId },
-        orderBy: { createdAt: 'asc' },
-      });
-
-      const result = this.toDto(updated, payments);
-      if (idempotencyKey) {
-        await this.idempotencyService.saveRecord({
-          key: idempotencyKey, endpoint, requestHash, userId,
-          responseStatus: 201, responseBody: result,
-        }, tx);
-      }
-      return result;
-    }, {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-    }));
+      ),
+    );
   }
 
   /**
@@ -378,9 +398,10 @@ export class ReceivablesService {
       throw new BadRequestException('El motivo de la reversión es obligatorio.');
     }
 
-    return prisma.$transaction(async (tx: any) => {
-      // 1. Bloqueo pesimista del receivable
-      const rows = await tx.$queryRaw<any[]>`
+    return prisma.$transaction(
+      async (tx: any) => {
+        // 1. Bloqueo pesimista del receivable
+        const rows = await tx.$queryRaw<any[]>`
         SELECT
           id,
           sale_id    AS "saleId",
@@ -396,133 +417,140 @@ export class ReceivablesService {
         FOR UPDATE
       `;
 
-      if (!rows.length) {
-        throw new NotFoundException(`Cuenta por cobrar "${receivableId}" no encontrada`);
-      }
-
-      const raw = rows[0];
-
-      // Una cuenta de una venta anulada no debe volver a quedar pendiente de cobro
-      if (raw.status === ('ANULADA' satisfies ReceivableStatus)) {
-        throw new ConflictException(
-          'No se puede revertir un abono de una cuenta por cobrar ANULADA.',
-        );
-      }
-
-      // 2. Buscar el abono a revertir
-      const payment = await tx.receivablePayment.findUnique({
-        where: { id: paymentId },
-      });
-
-      if (!payment || payment.receivableId !== receivableId) {
-        throw new NotFoundException(`Abono "${paymentId}" no encontrado en esta cuenta por cobrar`);
-      }
-
-      if (payment.isReversed) {
-        throw new BadRequestException('Este abono ya fue revertido previamente.');
-      }
-
-      const paymentAmountCents = parseMoneyToCents(payment.amount.toString(), 'Monto del abono a revertir');
-      const balanceCents = parseMoneyToCents(raw.balance.toString(), 'Saldo pendiente');
-      const amountPaidCents = parseMoneyToCents(raw.amountPaid.toString(), 'Total abonado');
-
-      const newBalanceCents = balanceCents + paymentAmountCents;
-      const newAmountPaidCents = amountPaidCents - paymentAmountCents;
-
-      if (newAmountPaidCents < 0n) {
-        throw new BadRequestException('El monto del reverso excede el total abonado registrado.');
-      }
-
-      // 3. Marcar abono como revertido
-      await tx.receivablePayment.update({
-        where: { id: paymentId },
-        data: {
-          isReversed: true,
-          reversedAt: new Date(),
-          reversalReason: trimmedReason,
-          reversedByUserId: userId,
-        },
-      });
-
-      // 4. Actualizar estado y saldos del receivable
-      const updated = await tx.receivable.update({
-        where: { id: receivableId },
-        data: {
-          balance: new Prisma.Decimal(centsToMoneyString(newBalanceCents)),
-          amountPaid: new Prisma.Decimal(centsToMoneyString(newAmountPaidCents)),
-          status: 'PENDIENTE' satisfies ReceivableStatus,
-        },
-        include: {
-          customer: { select: { name: true } },
-          sale: { select: { invoiceNumber: true } },
-        },
-      });
-
-      // 5. Compensación financiera
-      const amountStr = centsToMoneyString(paymentAmountCents);
-      if (payment.paymentMethod === 'TRANSFERENCIA') {
-        if (!payment.bankAccountId) {
-          throw new BadRequestException('El abono por transferencia no tiene cuenta bancaria asociada.');
+        if (!rows.length) {
+          throw new NotFoundException(`Cuenta por cobrar "${receivableId}" no encontrada`);
         }
-        await recordSourceBankMovement(tx, {
-          bankAccountId: payment.bankAccountId,
-          movementType: 'WITHDRAWAL',
-          amount: amountStr,
-          concept: `Reversión abono cartera - Factura ${updated.sale?.invoiceNumber ?? receivableId}: ${trimmedReason}`,
-          referenceDocumentType: 'RECEIVABLE_PAYMENT_REVERSAL',
-          referenceDocumentId: payment.id,
-          createdById: userId,
-        });
-      } else {
-        await this.cashService.recordMovementInTransaction(tx, {
-          movementType: 'EGRESO_MANUAL',
-          amount: amountStr,
-          paymentMethod: 'EFECTIVO',
-          reason: `Reversión abono cartera - Factura ${updated.sale?.invoiceNumber ?? receivableId}: ${trimmedReason}`,
-          referenceDocumentType: 'RECEIVABLE_PAYMENT_REVERSAL',
-          referenceDocumentId: payment.id,
-          createdByUserId: userId,
-        });
-      }
 
-      // Reversión contable automática
-      if (this.accountingEngine) {
+        const raw = rows[0];
+
+        // Una cuenta de una venta anulada no debe volver a quedar pendiente de cobro
+        if (raw.status === ('ANULADA' satisfies ReceivableStatus)) {
+          throw new ConflictException(
+            'No se puede revertir un abono de una cuenta por cobrar ANULADA.',
+          );
+        }
+
+        // 2. Buscar el abono a revertir
+        const payment = await tx.receivablePayment.findUnique({
+          where: { id: paymentId },
+        });
+
+        if (!payment || payment.receivableId !== receivableId) {
+          throw new NotFoundException(
+            `Abono "${paymentId}" no encontrado en esta cuenta por cobrar`,
+          );
+        }
+
+        if (payment.isReversed) {
+          throw new BadRequestException('Este abono ya fue revertido previamente.');
+        }
+
+        const paymentAmountCents = parseMoneyToCents(
+          payment.amount.toString(),
+          'Monto del abono a revertir',
+        );
+        const balanceCents = parseMoneyToCents(raw.balance.toString(), 'Saldo pendiente');
+        const amountPaidCents = parseMoneyToCents(raw.amountPaid.toString(), 'Total abonado');
+
+        const newBalanceCents = balanceCents + paymentAmountCents;
+        const newAmountPaidCents = amountPaidCents - paymentAmountCents;
+
+        if (newAmountPaidCents < 0n) {
+          throw new BadRequestException('El monto del reverso excede el total abonado registrado.');
+        }
+
+        // 3. Marcar abono como revertido
+        await tx.receivablePayment.update({
+          where: { id: paymentId },
+          data: {
+            isReversed: true,
+            reversedAt: new Date(),
+            reversalReason: trimmedReason,
+            reversedByUserId: userId,
+          },
+        });
+
+        // 4. Actualizar estado y saldos del receivable
+        const updated = await tx.receivable.update({
+          where: { id: receivableId },
+          data: {
+            balance: new Prisma.Decimal(centsToMoneyString(newBalanceCents)),
+            amountPaid: new Prisma.Decimal(centsToMoneyString(newAmountPaidCents)),
+            status: 'PENDIENTE' satisfies ReceivableStatus,
+          },
+          include: {
+            customer: { select: { name: true } },
+            sale: { select: { invoiceNumber: true } },
+          },
+        });
+
+        // 5. Compensación financiera
+        const amountStr = centsToMoneyString(paymentAmountCents);
+        if (payment.paymentMethod === 'TRANSFERENCIA') {
+          if (!payment.bankAccountId) {
+            throw new BadRequestException(
+              'El abono por transferencia no tiene cuenta bancaria asociada.',
+            );
+          }
+          await recordSourceBankMovement(tx, {
+            bankAccountId: payment.bankAccountId,
+            movementType: 'WITHDRAWAL',
+            amount: amountStr,
+            concept: `Reversión abono cartera - Factura ${updated.sale?.invoiceNumber ?? receivableId}: ${trimmedReason}`,
+            referenceDocumentType: 'RECEIVABLE_PAYMENT_REVERSAL',
+            referenceDocumentId: payment.id,
+            createdById: userId,
+          });
+        } else {
+          await this.cashService.recordMovementInTransaction(tx, {
+            movementType: 'EGRESO_MANUAL',
+            amount: amountStr,
+            paymentMethod: 'EFECTIVO',
+            reason: `Reversión abono cartera - Factura ${updated.sale?.invoiceNumber ?? receivableId}: ${trimmedReason}`,
+            referenceDocumentType: 'RECEIVABLE_PAYMENT_REVERSAL',
+            referenceDocumentId: payment.id,
+            createdByUserId: userId,
+          });
+        }
+
+        // Reversión contable automática
         await this.accountingEngine.handleCustomerPaymentReversed(
           payment.id,
           trimmedReason,
           userId,
           tx,
         );
-      }
 
-      // 6. Auditoría
-      await tx.auditEvent.create({
-        data: {
-          userId,
-          action: 'REVERSE_RECEIVABLE_PAYMENT',
-          entity: 'receivable_payments',
-          entityId: paymentId,
-          details: {
-            receivableId,
-            paymentId,
-            amount: amountStr,
-            paymentMethod: payment.paymentMethod,
-            bankAccountId: payment.bankAccountId,
-            reason: trimmedReason,
-            balanceBefore: centsToMoneyString(balanceCents),
-            balanceAfter: centsToMoneyString(newBalanceCents),
-          } as unknown as Prisma.InputJsonValue,
-        },
-      });
+        // 6. Auditoría
+        await tx.auditEvent.create({
+          data: {
+            userId,
+            action: 'REVERSE_RECEIVABLE_PAYMENT',
+            entity: 'receivable_payments',
+            entityId: paymentId,
+            details: {
+              receivableId,
+              paymentId,
+              amount: amountStr,
+              paymentMethod: payment.paymentMethod,
+              bankAccountId: payment.bankAccountId,
+              reason: trimmedReason,
+              balanceBefore: centsToMoneyString(balanceCents),
+              balanceAfter: centsToMoneyString(newBalanceCents),
+            } as unknown as Prisma.InputJsonValue,
+          },
+        });
 
-      const payments = await tx.receivablePayment.findMany({
-        where: { receivableId },
-        orderBy: { createdAt: 'asc' },
-      });
+        const payments = await tx.receivablePayment.findMany({
+          where: { receivableId },
+          orderBy: { createdAt: 'asc' },
+        });
 
-      return this.toDto(updated, payments);
-    }, {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-    });
+        return this.toDto(updated, payments);
+      },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      },
+    );
   }
 }
