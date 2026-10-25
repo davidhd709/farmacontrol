@@ -57,7 +57,7 @@ Debe revisarse esta arquitectura si se confirma cualquiera de estas condiciones:
 
 - La farmacia debe vender cuando no exista conexión a internet.
 - Cada sede debe funcionar autónomamente y sincronizarse posteriormente.
-- El producto será una plataforma SaaS para muchas farmacias independientes.
+- El producto será una plataforma SaaS para muchas farmacias independientes. **Confirmado el 2026-10-24:** el propietario aprobó un modelo híbrido, con despliegue dedicado o compartido sobre el mismo código. La revisión de arquitectura que exige este supuesto está en [ADR-003](adr/ADR-003-despliegue-hibrido-y-frontera-empresarial.md) y en el [plan híbrido](FarmaControl_Arquitectura_Hibrida_Plan_Implementacion.md).
 - Se esperan cientos de usuarios concurrentes o un volumen transaccional muy superior al de una farmacia convencional.
 - Se exige alta disponibilidad sin ventanas de mantenimiento.
 
