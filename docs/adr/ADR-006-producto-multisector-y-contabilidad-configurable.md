@@ -30,10 +30,26 @@ El propietario decidió que el producto debe servir a negocios pequeños, median
 
    FEFO, o el orden físico que corresponda, sigue siendo independiente del método contable. El método se elige al configurar la empresa. Cambiarlo después exige un procedimiento controlado al cierre de un período, con revaluación documentada; nunca un recálculo silencioso del pasado.
 
-5. **El sistema valida integridad, no cumplimiento.**
-   - Sí garantiza: partida doble, inmutabilidad, atomicidad (ADR-004), períodos y conciliaciones.
-   - No certifica que la configuración elegida por un negocio cumpla la norma fiscal.
-   - Las plantillas y los valores por defecto se presentan como punto de partida, con advertencias, y la empresa asume la responsabilidad de su configuración.
+5. **El sistema asegura integridad contable y cumplimiento fiscal colombiano** (corregido el 2026-10-25 a pedido del propietario).
+   - **Integridad:** partida doble, inmutabilidad, atomicidad (ADR-004), períodos y conciliaciones.
+   - **Catálogo normativo colombiano versionado por vigencia, mantenido por el producto y no por cada negocio:**
+     - las tarifas de IVA (19 %, 5 %) y los tratamientos excluido y exento;
+     - el INC;
+     - los conceptos de retención en la fuente, con sus bases mínimas en UVT;
+     - ReteIVA y ReteICA;
+     - el valor anual de la UVT;
+     - las responsabilidades del RUT: responsable de IVA, régimen simple, gran contribuyente, autorretenedor.
+   - **Configuración acotada a la norma:** cada negocio declara sus responsabilidades fiscales y clasifica productos y terceros eligiendo solo tratamientos que el catálogo permite. Las tarifas municipales de ICA las registra la empresa dentro de los rangos del catálogo.
+   - **Bloqueo de lo que no cumple:** el sistema calcula IVA, INC y retenciones según las responsabilidades de las dos partes y las bases mínimas, y rechaza las operaciones que contradicen el catálogo. Por ejemplo, no deja cobrar IVA a quien no es responsable, ni confirmar ventas sin numeración autorizada.
+   - **Revisión del catálogo:** su contenido lo revisa un asesor tributario una vez a nivel de producto, y se actualiza con cada cambio normativo: UVT anual, reformas. No se revisa por cliente.
+6. **Documentos electrónicos DIAN.**
+   - La **facturación electrónica** (factura, notas crédito y débito, documento soporte) y la **nómina electrónica** quedan para una actualización futura.
+   - La arquitectura queda preparada desde ahora:
+     - datos fiscales de la empresa y de los terceros;
+     - resoluciones de numeración;
+     - estado fiscal del documento, separado del asiento;
+     - un puerto de envío con dos adaptadores configurables por empresa: proveedor tecnológico autorizado o transmisión directa como software propio.
+   - Según ADR-004, el envío ocurre fuera de la transacción contable, con estado persistente y reintentos.
 
 ## Consecuencias
 
@@ -60,28 +76,32 @@ El propietario decidió que el producto debe servir a negocios pequeños, median
 
 F0, F1 y F2 están cerradas. Las fases siguientes reemplazan F3–F8 del plan híbrido:
 
-| Fase                                                  | Contenido                                                                                                                                                                                            | Por qué en este orden                                   |
-| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| **F3 — Empresa y configuración contable base**        | `Company` y `Branch` en modo de una sola empresa; `CompanyAccountingSettings` con políticas versionadas (método de costeo, cuentas de diferencias, bonificaciones, fecha de corte); perfil sectorial | Toda la configuración posterior cuelga de la empresa    |
-| **F4 — Catálogo e inventario multisector**            | Tipos de producto y modos de control; lote y vencimiento opcionales; salida FEFO solo con vencimiento, si no por orden de entrada; POS adaptado; reglas de farmacia como perfil                      | Desacopla el producto del sector farmacéutico           |
-| **F5 — Costeo configurable**                          | PEPS por capas y costo identificado por lote junto al promedio; estrategia por empresa; procedimiento de cambio de método                                                                            | Usa la configuración de F3 y los modos de F4            |
-| **F6 — Motor tributario configurable**                | Tipos de impuesto, tarifas con vigencia, clasificación de productos y terceros, retenciones; instantánea por línea y por asiento; sin 0 % implícito                                                  | El antiguo F3, ahora sin depender de una matriz externa |
-| **F7 — Plan de cuentas y asistente de configuración** | Plantillas PUC por sector, propósitos y mapeos versionados por empresa, saldos de apertura, estado READY                                                                                             | El antiguo F5                                           |
-| **F8 — Cobertura contable completa y reportes**       | Asientos de ajustes, vencimientos, caja y bancos manuales; libros y estados conciliados                                                                                                              | El antiguo F6                                           |
-| **F9 — Multiempresa compartida y hardening**          | `companyId` en todo el modelo operativo, aislamiento, pruebas ofensivas, respaldos por empresa, RLS                                                                                                  | El antiguo F4 junto con el F7                           |
-| **F10 — UAT y salida controlada**                     | Pruebas con negocios de varios sectores y tamaños                                                                                                                                                    | El antiguo F8                                           |
+| Fase                                                  | Contenido                                                                                                                                                                                                                                       | Por qué en este orden                                  |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| **F3 — Empresa y configuración contable base**        | `Company` y `Branch` en modo de una sola empresa; `CompanyAccountingSettings` con políticas versionadas (método de costeo, cuentas de diferencias, bonificaciones, fecha de corte); perfil sectorial                                            | Toda la configuración posterior cuelga de la empresa   |
+| **F4 — Catálogo e inventario multisector**            | Tipos de producto y modos de control; lote y vencimiento opcionales; salida FEFO solo con vencimiento, si no por orden de entrada; POS adaptado; reglas de farmacia como perfil                                                                 | Desacopla el producto del sector farmacéutico          |
+| **F5 — Costeo configurable**                          | PEPS por capas y costo identificado por lote junto al promedio; estrategia por empresa; procedimiento de cambio de método                                                                                                                       | Usa la configuración de F3 y los modos de F4           |
+| **F6 — Catálogo normativo y motor tributario**        | Catálogo colombiano versionado (IVA, INC, retención en la fuente, ReteIVA, ReteICA, UVT, responsabilidades del RUT); clasificación de productos y terceros; cálculo y bloqueo por norma; instantánea por línea y por asiento; sin 0 % implícito | El antiguo F3, con las reglas en el catálogo normativo |
+| **F7 — Plan de cuentas y asistente de configuración** | Plantillas PUC por sector, propósitos y mapeos versionados por empresa, saldos de apertura, estado READY                                                                                                                                        | El antiguo F5                                          |
+| **F8 — Cobertura contable completa y reportes**       | Asientos de ajustes, vencimientos, caja y bancos manuales; libros oficiales y estados conciliados; borradores de los formularios 300 (IVA) y 350 (retención), ICA e información exógena                                                         | El antiguo F6, con los reportes fiscales               |
+| **F9 — Multiempresa compartida y hardening**          | `companyId` en todo el modelo operativo, aislamiento, pruebas ofensivas, respaldos por empresa, RLS                                                                                                                                             | El antiguo F4 junto con el F7                          |
+| **F10 — UAT y salida controlada**                     | Pruebas con negocios de varios sectores y tamaños                                                                                                                                                                                               | El antiguo F8                                          |
+| **Futuro — Facturación electrónica DIAN**             | Factura, notas y documento soporte; puerto con adaptador de proveedor tecnológico y adaptador directo como software propio                                                                                                                      | Actualización posterior; la base se prepara en F3 y F6 |
+| **Futuro — Nómina y nómina electrónica**              | Módulo de nómina (empleados, liquidación, seguridad social) y su transmisión electrónica                                                                                                                                                        | Actualización posterior; requiere un módulo nuevo      |
 
 ## Alternativas consideradas
 
-| Alternativa                                           | Resultado                                                     |
-| ----------------------------------------------------- | ------------------------------------------------------------- |
-| Mantener farmacia y solo parametrizar la contabilidad | No seleccionada: el propietario eligió multisector completo.  |
-| Multipaís                                             | Descartada por ahora: solo Colombia.                          |
-| Esperar la validación de la contadora para cada regla | Descartada: las reglas pasan a ser configuración por empresa. |
-| Un solo método de costeo                              | Descartada: cada empresa elige entre tres.                    |
+| Alternativa                                                     | Resultado                                                                                                |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Mantener farmacia y solo parametrizar la contabilidad           | No seleccionada: el propietario eligió multisector completo.                                             |
+| Multipaís                                                       | Descartada por ahora: solo Colombia.                                                                     |
+| Esperar la validación de la contadora para cada regla           | Descartada: las reglas pasan a ser configuración por empresa, dentro del catálogo normativo.             |
+| Dejar el cumplimiento fiscal a la configuración de cada negocio | Descartada a pedido del propietario: el sistema debe asegurar el cumplimiento con un catálogo normativo. |
+| Un solo método de costeo                                        | Descartada: cada empresa elige entre tres.                                                               |
 
 ## Pendientes
 
 - Aprobar el orden de fases propuesto.
 - Definir qué perfiles sectoriales trae el sistema de entrada (por ejemplo: farmacia, comercio general, servicios, restaurante) y qué activa cada uno.
 - Revisar los requerimientos multisector (POS, inventario y catálogo), que hoy solo están descritos para farmacia.
+- Definir quién hace la revisión tributaria del catálogo normativo a nivel de producto, y con qué frecuencia.
