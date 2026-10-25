@@ -105,6 +105,24 @@ F0, F1 y F2 están cerradas. Las fases siguientes reemplazan F3–F8 del plan h�
 - **Perfiles sectoriales:** de entrada, el sistema trae solo el perfil **farmacia**. La arquitectura sigue siendo multisector, con tipos de producto y modos de control configurables, para poder agregar otros perfiles después sin rediseño. F4 construye los modos genéricos con los valores por defecto y la aceptación de farmacia.
 - **Revisión del catálogo normativo:** la hace un asesor tributario externo, a nivel de producto y con cada cambio normativo. Esa revisión es condición para usar en producción el motor tributario (F6), no para desarrollarlo.
 
+## Implementación de F3 (empresa y configuración contable base)
+
+- **Modelo:** `companies`, `branches` y `company_accounting_policies`. En modo dedicado la base de datos admite **una sola empresa activa** (índice único parcial que F9 retirará) y **una sola sucursal principal** por empresa.
+- **Validaciones de la empresa:**
+  - el NIT se valida con el dígito de verificación de la DIAN (módulo 11);
+  - el municipio, con su código DANE de 5 dígitos;
+  - el perfil sectorial disponible es farmacia.
+- **Políticas contables versionadas por vigencia**, de solo inserción con trigger. Cubren:
+  - el método de costeo;
+  - el costo de apertura de existencias (último costo de compra o costo del catálogo);
+  - el propósito de la diferencia en notas débito: `COST_OF_SALES` o el nuevo `INVENTORY_COST_VARIANCE`;
+  - el tratamiento de bonificaciones.
+- **Reglas de las versiones:** una versión nueva rige desde hoy o después, nunca hacia atrás. Cambiar el método de costeo se rechaza hasta que F5 traiga el procedimiento de revaluación; por ahora solo está disponible el promedio ponderado.
+- **Sin empresa configurada** rigen los valores por defecto, así que una instalación existente se comporta igual que antes de F3.
+- **Contrato de lectura:** `accountingPolicyAt(cliente, día)` entrega la política vigente. El submayor de costos la usa en cada movimiento (método y costo de apertura) y la nota débito la usa para el propósito de la diferencia.
+- **API:** `GET /company`, `POST /company/setup`, `PATCH /company`, `POST /company/branches` y `POST /company/accounting-policies`, con los permisos `company:read` (administrador y supervisor) y `company:manage` (administrador). Cada cambio queda en la auditoría.
+- **Web:** pantalla "Empresa y Política Contable", con la configuración inicial, las sucursales, la política vigente, su historial y el formulario de versiones.
+
 ## Pendientes
 
 - Revisar los requerimientos multisector (POS, inventario y catálogo), que hoy solo están descritos para farmacia.

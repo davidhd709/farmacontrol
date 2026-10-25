@@ -1,6 +1,7 @@
 import type React from 'react';
 import { SYSTEM_PERMISSIONS } from '@farmacia/contracts';
 import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
+import BusinessIcon from '@mui/icons-material/Business';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import PeopleAltIcon from '@mui/icons-material/PeopleAlt';
 import Inventory2Icon from '@mui/icons-material/Inventory2';
@@ -239,6 +240,12 @@ export const menuGroups: MenuGroupConfig[] = [
   {
     category: 'CONFIGURACIÓN CONTABLE',
     items: [
+      {
+        title: 'Empresa y Política Contable',
+        path: '/company',
+        icon: <BusinessIcon fontSize="small" />,
+        permission: SYSTEM_PERMISSIONS.COMPANY_READ,
+      },
       {
         title: 'Plan de Cuentas',
         path: '/accounting/accounts',

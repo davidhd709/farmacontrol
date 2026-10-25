@@ -1,4 +1,6 @@
 import { Prisma } from '@farmacia/database';
+import { accountingPolicyAt } from '../../company/application/accounting-policy.reader';
+import { businessToday } from '../../../common/utils/business-date';
 import {
   applyEntry,
   applyExit,
@@ -8,9 +10,11 @@ import {
   type CostBalance,
 } from '../domain/services/weighted-average';
 import {
+  CostingMethodNotAvailableException,
   InventoryCostUnavailableException,
   InventoryValuationMismatchException,
 } from '../domain/exceptions/inventory.exceptions';
+import type { OpeningCostSource } from '@farmacia/contracts';
 
 type Tx = Prisma.TransactionClient;
 
@@ -36,6 +40,7 @@ interface LockedBalance {
   productName: string;
   balance: CostBalance;
   lastUnitCost: string | null;
+  openingCostSource: OpeningCostSource;
 }
 
 function toCents(value: Prisma.Decimal | string | number): bigint {
@@ -81,7 +86,9 @@ export class InventoryValuation {
         BigInt(balance.quantityBaseUnits),
       );
     } else {
-      const cost = lastUnitCost ?? (await this.openingUnitCost(tx, input.productId, null));
+      const cost =
+        lastUnitCost ??
+        (await this.openingUnitCost(tx, input.productId, null, locked.openingCostSource));
       if (!cost) throw new InventoryCostUnavailableException(locked.productName);
       valueCents = valueAtUnitCost(cost, input.quantityBaseUnits);
     }
@@ -114,6 +121,11 @@ export class InventoryValuation {
     if (!product) {
       throw new InventoryValuationMismatchException(input.productId, 0, 0);
     }
+    // ADR-006: la empresa elige el método; aquí solo se aplica el que está implementado
+    const policy = await accountingPolicyAt(tx, businessToday());
+    if (policy.costingMethod !== 'WEIGHTED_AVERAGE') {
+      throw new CostingMethodNotAvailableException(policy.costingMethod);
+    }
 
     let row = await this.selectForUpdate(tx, input.productId);
     if (!row) {
@@ -124,7 +136,7 @@ export class InventoryValuation {
       `;
       row = await this.selectForUpdate(tx, input.productId);
       if (!row) {
-        await this.open(tx, input, product.name, signedQuantity);
+        await this.open(tx, input, product.name, signedQuantity, policy.openingCostSource);
         row = await this.selectForUpdate(tx, input.productId);
       }
     }
@@ -144,6 +156,7 @@ export class InventoryValuation {
       productName: product.name,
       balance,
       lastUnitCost: row!.last_unit_cost === null ? null : String(row!.last_unit_cost),
+      openingCostSource: policy.openingCostSource,
     };
   }
 
@@ -178,16 +191,22 @@ export class InventoryValuation {
     input: ValuationMovementInput,
     productName: string,
     signedQuantity: number,
+    openingCostSource: OpeningCostSource,
   ): Promise<void> {
     const openingQuantity = (await this.physicalQuantity(tx, input.productId)) - signedQuantity;
     if (openingQuantity < 0) {
       throw new InventoryValuationMismatchException(productName, openingQuantity, 0);
     }
     const excludePurchaseId = input.sourceType === 'PURCHASE' ? input.sourceId : null;
-    let cost = await this.openingUnitCost(tx, input.productId, excludePurchaseId);
+    let cost = await this.openingUnitCost(
+      tx,
+      input.productId,
+      excludePurchaseId,
+      openingCostSource,
+    );
     // Sin otra referencia, la propia compra que entra es el último costo de compra conocido
     if (!cost && excludePurchaseId) {
-      cost = await this.openingUnitCost(tx, input.productId, null);
+      cost = await this.openingUnitCost(tx, input.productId, null, openingCostSource);
     }
     if (openingQuantity > 0 && !cost) {
       throw new InventoryCostUnavailableException(productName);
@@ -224,16 +243,21 @@ export class InventoryValuation {
     tx: Tx,
     productId: string,
     excludePurchaseId: string | null,
+    openingCostSource: OpeningCostSource,
   ): Promise<string | null> {
-    const lastPurchase = await tx.purchaseLine.findFirst({
-      where: {
-        productId,
-        quantityBaseUnits: { gt: 0 },
-        ...(excludePurchaseId ? { purchaseId: { not: excludePurchaseId } } : {}),
-      },
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      select: { subtotal: true, quantityBaseUnits: true },
-    });
+    // La empresa decide si la apertura toma el último costo de compra o el del catálogo
+    const lastPurchase =
+      openingCostSource === 'CATALOG'
+        ? null
+        : await tx.purchaseLine.findFirst({
+            where: {
+              productId,
+              quantityBaseUnits: { gt: 0 },
+              ...(excludePurchaseId ? { purchaseId: { not: excludePurchaseId } } : {}),
+            },
+            orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+            select: { subtotal: true, quantityBaseUnits: true },
+          });
     if (lastPurchase && toCents(lastPurchase.subtotal) > 0n) {
       return unitCost(toCents(lastPurchase.subtotal), lastPurchase.quantityBaseUnits);
     }

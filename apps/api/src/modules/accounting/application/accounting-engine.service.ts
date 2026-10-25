@@ -131,6 +131,8 @@ export interface DebitNoteEventInput {
   total: number | string | Prisma.Decimal;
   /** Valor que la devolución retiró del submayor al costo promedio (ADR-005). */
   inventoryCost: number | string | Prisma.Decimal;
+  /** Propósito de la diferencia frente al costo de compra, según la política de la empresa. */
+  variancePurpose: 'COST_OF_SALES' | 'INVENTORY_COST_VARIANCE';
   createdById?: string | null;
   createdAt?: Date | string;
 }
@@ -833,11 +835,12 @@ export class AccountingEngineService {
         description: `Salida de mercancía devuelta a proveedor ND ${note.debitNoteNumber}`,
       });
     }
-    // La diferencia entre el costo de compra devuelto y el promedio ajusta el costo de ventas
+    // La diferencia entre el costo de compra devuelto y el promedio va al propósito que
+    // eligió la empresa (ADR-006): costo de ventas o una cuenta propia de diferencias
     const varianceCents = subtotalCents - inventoryCents;
     if (varianceCents !== 0n) {
       lines.push({
-        purpose: 'COST_OF_SALES',
+        purpose: note.variancePurpose,
         debit: varianceCents < 0n ? centsToMoneyString(-varianceCents) : '0.00',
         credit: varianceCents > 0n ? centsToMoneyString(varianceCents) : '0.00',
         description: `Diferencia entre costo de compra y costo promedio ND ${note.debitNoteNumber}`,

@@ -82,6 +82,8 @@ export const BASE_PERMISSIONS: PermissionDefinition[] = [
   { name: SYSTEM_PERMISSIONS.BACKUPS_MANAGE, description: 'Gestionar y ejecutar copias de seguridad' },
   { name: SYSTEM_PERMISSIONS.ACCOUNTING_READ, description: 'Consultar plan de cuentas y propósitos contables' },
   { name: SYSTEM_PERMISSIONS.ACCOUNTING_MANAGE, description: 'Administrar cuentas, mapeos e importaciones contables' },
+  { name: SYSTEM_PERMISSIONS.COMPANY_READ, description: 'Consultar los datos de la empresa y sus políticas contables' },
+  { name: SYSTEM_PERMISSIONS.COMPANY_MANAGE, description: 'Configurar la empresa, sus sucursales y sus políticas contables' },
 
   // Tesorería y bancos
   { name: SYSTEM_PERMISSIONS.TREASURY_ACCOUNTS_SELECT, description: 'Seleccionar cuenta activa en cobros y pagos sin consultar saldos' },
@@ -105,6 +107,7 @@ export const BASE_ROLES: RoleDefinition[] = [
     permissions: [
       SYSTEM_PERMISSIONS.USERS_READ,
       SYSTEM_PERMISSIONS.ROLES_READ,
+      SYSTEM_PERMISSIONS.COMPANY_READ,
       SYSTEM_PERMISSIONS.CATEGORIES_READ,
       SYSTEM_PERMISSIONS.CATEGORIES_MANAGE,
       SYSTEM_PERMISSIONS.PRODUCTS_READ,

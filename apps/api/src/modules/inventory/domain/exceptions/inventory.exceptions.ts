@@ -69,3 +69,14 @@ export class InventoryValuationMismatchException extends InventoryDomainExceptio
     this.name = 'InventoryValuationMismatchException';
   }
 }
+
+/** ADR-006: la empresa eligió un método de costeo que todavía no está implementado (F5). */
+export class CostingMethodNotAvailableException extends InventoryDomainException {
+  constructor(method: string) {
+    super(
+      `La política contable vigente usa el método de costeo ${method}, que todavía no está disponible. Registre una política con promedio ponderado.`,
+      'conflict',
+    );
+    this.name = 'CostingMethodNotAvailableException';
+  }
+}

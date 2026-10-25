@@ -19,6 +19,7 @@ model User {
   auditEvents           AuditEvent[]
   inventoryMovements    InventoryMovement[]
   valuationMovements    InventoryValuationMovement[]
+  accountingPolicies    CompanyAccountingPolicy[]
   purchasesReceived     Purchase[]
   cashMovements         CashMovement[]
   salesCreated          Sale[]              @relation("SalesCreated")
@@ -759,6 +760,8 @@ enum AccountingPurpose {
   CURRENT_YEAR_RESULT
   RETAINED_EARNINGS
   ACCUMULATED_LOSSES
+  /// Diferencias entre el costo de compra devuelto y el costo promedio (ADR-006)
+  INVENTORY_COST_VARIANCE
 }
 
 enum AccountingMappingStatus {
@@ -811,6 +814,71 @@ model CompanyAccountingMapping {
   @@index([updatedById])
   @@index([purpose, status, effectiveFrom])
   @@map("company_accounting_mappings")
+}
+
+/// Empresa: frontera jurídica y dueña de la configuración (ADR-003, ADR-006). En modo
+/// dedicado solo puede haber una empresa activa.
+model Company {
+  id               String   @id @default(uuid()) @db.Uuid
+  legalName        String   @map("legal_name") @db.VarChar(200)
+  tradeName        String?  @map("trade_name") @db.VarChar(200)
+  /// NIT sin dígito de verificación
+  taxId            String   @unique @map("tax_id") @db.VarChar(15)
+  taxIdCheckDigit  String   @map("tax_id_check_digit") @db.Char(1)
+  sectorProfile    String   @map("sector_profile") @db.VarChar(32)
+  address          String?  @db.VarChar(250)
+  /// Código DANE del municipio
+  municipalityCode String?  @map("municipality_code") @db.Char(5)
+  email            String?  @db.VarChar(150)
+  phone            String?  @db.VarChar(30)
+  status           String   @default("ACTIVE") @db.VarChar(16)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  branches           Branch[]
+  accountingPolicies CompanyAccountingPolicy[]
+
+  @@map("companies")
+}
+
+/// Sucursal de una empresa; no es otra frontera de datos (ADR-003).
+model Branch {
+  id               String   @id @default(uuid()) @db.Uuid
+  companyId        String   @map("company_id") @db.Uuid
+  code             String   @db.VarChar(20)
+  name             String   @db.VarChar(150)
+  address          String?  @db.VarChar(250)
+  municipalityCode String?  @map("municipality_code") @db.Char(5)
+  isDefault        Boolean  @default(false) @map("is_default")
+  isActive         Boolean  @default(true) @map("is_active")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  company          Company  @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([companyId, code])
+  @@map("branches")
+}
+
+/// Políticas contables de la empresa (ADR-006): cada cambio es una versión nueva con
+/// vigencia; las versiones no se editan ni se borran.
+model CompanyAccountingPolicy {
+  id                            String   @id @default(uuid()) @db.Uuid
+  companyId                     String   @map("company_id") @db.Uuid
+  effectiveFrom                 DateTime @map("effective_from") @db.Date
+  costingMethod                 String   @map("costing_method") @db.VarChar(32)
+  openingCostSource             String   @map("opening_cost_source") @db.VarChar(32)
+  purchaseReturnVariancePurpose String   @map("purchase_return_variance_purpose") @db.VarChar(32)
+  bonusUnitsTreatment           String   @map("bonus_units_treatment") @db.VarChar(32)
+  reason                        String   @db.VarChar(500)
+  createdById                   String?  @map("created_by_id") @db.Uuid
+  createdAt                     DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  company                       Company  @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdBy                     User?    @relation(fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([companyId, effectiveFrom])
+  @@map("company_accounting_policies")
 }
 
 

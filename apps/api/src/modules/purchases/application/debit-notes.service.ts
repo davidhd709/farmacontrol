@@ -6,6 +6,8 @@ import { IdempotencyService } from '../../../common/idempotency/idempotency.serv
 import { PayablesLedger } from '../../payables/application/payables-ledger';
 import { InventoryLedger } from '../../inventory/application/inventory-ledger';
 import { parseMoneyToCents, centsToMoneyString } from '../../treasury/domain/treasury-rules';
+import { accountingPolicyAt } from '../../company/application/accounting-policy.reader';
+import { businessToday } from '../../../common/utils/business-date';
 
 type Tx = Parameters<Parameters<PrismaClient['$transaction']>[0]>[0];
 
@@ -333,6 +335,8 @@ export class DebitNotesService {
               taxTotal: debitNote.taxTotal,
               total: debitNote.total,
               inventoryCost: centsToMoneyString(inventoryCostCents),
+              variancePurpose: (await accountingPolicyAt(tx, businessToday()))
+                .purchaseReturnVariancePurpose,
               createdById: userId,
               createdAt: debitNote.createdAt,
             },

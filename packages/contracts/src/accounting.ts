@@ -34,6 +34,8 @@ export const ACCOUNTING_PURPOSES = [
   'CURRENT_YEAR_RESULT',
   'RETAINED_EARNINGS',
   'ACCUMULATED_LOSSES',
+  // Diferencias de costo en devoluciones a proveedor (ADR-006, F3)
+  'INVENTORY_COST_VARIANCE',
 ] as const;
 export type AccountingPurpose = (typeof ACCOUNTING_PURPOSES)[number];
 

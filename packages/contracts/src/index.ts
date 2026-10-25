@@ -113,6 +113,9 @@ export const SYSTEM_PERMISSIONS = {
   // Configuración contable
   ACCOUNTING_READ: 'accounting:read',
   ACCOUNTING_MANAGE: 'accounting:manage',
+  // Empresa y configuración contable (ADR-006)
+  COMPANY_READ: 'company:read',
+  COMPANY_MANAGE: 'company:manage',
 
   // Tesorería y bancos
   TREASURY_ACCOUNTS_SELECT: 'treasury:accounts:select',
@@ -130,6 +133,7 @@ export * from './accounting';
 export * from './product-tax-profile';
 export * from './treasury';
 export * from './expenses';
+export * from './company';
 
 export interface RoleDto {
   id: string;
