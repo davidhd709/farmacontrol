@@ -239,6 +239,8 @@ describe('Accounting Engine, Double-Entry, Journal & Reports Integration (Postgr
             total: '17850.00', // Subtotal 15.000 + IVA 19% 2.850
             subtotal: '15000.00',
             taxTotal: '2850.00',
+            // El costo lo entrega el submayor de valoración (ADR-005)
+            costOfSales: '8000.00',
             paymentMethod: 'EFECTIVO',
             createdById: adminUserId,
             lines: [
@@ -305,6 +307,7 @@ describe('Accounting Engine, Double-Entry, Journal & Reports Integration (Postgr
               subtotal: '28000.00',
               taxTotal: '0.00',
               discountTotal: '2000.00',
+              costOfSales: '0.00',
               paymentMethod: 'EFECTIVO',
               createdById: adminUserId,
               createdAt: new Date('2026-10-05T15:00:00Z'),

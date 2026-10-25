@@ -16,6 +16,8 @@ export interface SaleEventInput {
   taxTotal?: number | string | Prisma.Decimal;
   /** Descuento comercial otorgado; se contabiliza aparte en SALES_DISCOUNTS. */
   discountTotal?: number | string | Prisma.Decimal;
+  /** Costo retirado del submayor de valoración (ADR-005), no el costo del catálogo. */
+  costOfSales: number | string | Prisma.Decimal;
   paymentMethod: string;
   createdById?: string | null;
   createdAt?: Date | string;
@@ -127,6 +129,8 @@ export interface DebitNoteEventInput {
   subtotal: number | string | Prisma.Decimal;
   taxTotal: number | string | Prisma.Decimal;
   total: number | string | Prisma.Decimal;
+  /** Valor que la devolución retiró del submayor al costo promedio (ADR-005). */
+  inventoryCost: number | string | Prisma.Decimal;
   createdById?: string | null;
   createdAt?: Date | string;
 }
@@ -188,40 +192,11 @@ export class AccountingEngineService {
           ? 'CUSTOMERS'
           : 'BANK';
 
-    // Calcular costo de mercancía vendida (COGS) a partir de los lotes y costo base de productos
-    let cogsCents = 0n;
-    const productIds = Array.from(new Set(sale.lines.map((l) => l.productId)));
-    if (productIds.length > 0) {
-      const products = await client.product.findMany({
-        where: { id: { in: productIds } },
-        select: { id: true, baseCost: true },
-      });
-      const costMap = new Map<string, bigint>();
-      for (const p of products) {
-        costMap.set(
-          p.id,
-          parseMoneyToCents(new Prisma.Decimal(p.baseCost).toFixed(2), 'Costo base'),
-        );
-      }
-
-      for (const line of sale.lines) {
-        const unitCost = costMap.get(line.productId) ?? 0n;
-        if (unitCost <= 0n) continue;
-
-        if (line.lotAllocations && line.lotAllocations.length > 0) {
-          for (const alloc of line.lotAllocations) {
-            cogsCents += BigInt(alloc.quantityBaseUnits) * unitCost;
-          }
-        } else {
-          const units =
-            line.quantityBaseUnits ??
-            Math.round(
-              Number(line.quantityCommercial || 1) * (line.presentationFactorHistorical || 1),
-            );
-          cogsCents += BigInt(units) * unitCost;
-        }
-      }
-    }
+    // Costo de ventas: el valor que la venta retiró del submayor, al promedio vigente
+    const cogsCents = parseMoneyToCents(
+      new Prisma.Decimal(sale.costOfSales).toFixed(2),
+      'Costo de ventas',
+    );
 
     const entryDate = sale.createdAt ? new Date(sale.createdAt) : new Date();
     const salesCreditCents = subtotalCents + discountCents;
@@ -845,13 +820,29 @@ export class AccountingEngineService {
       description: `Nota Débito ND ${note.debitNoteNumber} a proveedor ${note.supplierName || ''}`,
     });
 
-    // Crédito a Inventario (1435)
-    lines.push({
-      purpose: 'INVENTORY',
-      debit: '0.00',
-      credit: centsToMoneyString(subtotalCents),
-      description: `Salida de mercancía devuelta a proveedor ND ${note.debitNoteNumber}`,
-    });
+    // Crédito a Inventario (1435) por el valor que salió del submayor al costo promedio
+    const inventoryCents = parseMoneyToCents(
+      new Prisma.Decimal(note.inventoryCost).toFixed(2),
+      'Costo de inventario devuelto',
+    );
+    if (inventoryCents > 0n) {
+      lines.push({
+        purpose: 'INVENTORY',
+        debit: '0.00',
+        credit: centsToMoneyString(inventoryCents),
+        description: `Salida de mercancía devuelta a proveedor ND ${note.debitNoteNumber}`,
+      });
+    }
+    // La diferencia entre el costo de compra devuelto y el promedio ajusta el costo de ventas
+    const varianceCents = subtotalCents - inventoryCents;
+    if (varianceCents !== 0n) {
+      lines.push({
+        purpose: 'COST_OF_SALES',
+        debit: varianceCents < 0n ? centsToMoneyString(-varianceCents) : '0.00',
+        credit: varianceCents > 0n ? centsToMoneyString(varianceCents) : '0.00',
+        description: `Diferencia entre costo de compra y costo promedio ND ${note.debitNoteNumber}`,
+      });
+    }
 
     // Crédito a IVA Descontable (2408)
     if (taxCents > 0n) {

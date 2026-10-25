@@ -18,6 +18,12 @@ const OWNED_TABLES: Array<{ delegate: string; table: string; owner: string }> = 
   { delegate: 'inventoryLot', table: 'inventory_lots', owner: 'inventory' },
   { delegate: 'inventoryMovement', table: 'inventory_movements', owner: 'inventory' },
   { delegate: 'location', table: 'locations', owner: 'inventory' },
+  { delegate: 'inventoryCostBalance', table: 'inventory_cost_balances', owner: 'inventory' },
+  {
+    delegate: 'inventoryValuationMovement',
+    table: 'inventory_valuation_movements',
+    owner: 'inventory',
+  },
   { delegate: 'cashMovement', table: 'cash_movements', owner: 'cash' },
   { delegate: 'receivable', table: 'receivables', owner: 'receivables' },
   { delegate: 'receivablePayment', table: 'receivable_payments', owner: 'receivables' },

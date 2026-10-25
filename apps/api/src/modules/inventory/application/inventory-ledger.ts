@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@farmacia/database';
+import { InventoryValuation } from './inventory-valuation';
 
 type Tx = Prisma.TransactionClient;
 
@@ -42,9 +43,14 @@ function fefoCandidatesQuery(productId: string, businessDay: string): Prisma.Sql
  * Contrato transaccional de inventario para otros módulos (ventas, notas, compras).
  * Es la única vía para tocar lotes y kardex desde fuera del módulo: siempre dentro de
  * la transacción del llamador y dejando el movimiento con el saldo resultante.
+ *
+ * `valuation` es el submayor de costos (ADR-005): todo cambio de existencias de un producto
+ * se valoriza en la misma transacción, después de cambiar sus lotes.
  */
 @Injectable()
 export class InventoryLedger {
+  readonly valuation = new InventoryValuation();
+
   /**
    * Lotes vendibles de un producto bloqueados en orden FEFO: activos, con existencias y
    * con vencimiento igual o posterior al día de negocio indicado.

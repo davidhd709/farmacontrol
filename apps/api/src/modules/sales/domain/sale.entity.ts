@@ -102,6 +102,8 @@ export interface SaleLineProps {
   total: number;
   /** Costo por unidad base al confirmar la venta (decimal en texto); null en ventas antiguas */
   unitCostBase?: string | null;
+  /** Costo exacto retirado del inventario valorizado (ADR-005); null en ventas anteriores a F2 */
+  costValue?: string | null;
   lotAllocations?: SaleLotAllocation[];
   createdAt?: Date;
 }
@@ -123,6 +125,7 @@ export class SaleLine {
     discount?: number;
     taxRate?: number;
     unitCostBase?: string | null;
+    costValue?: string | null;
     lotAllocations?: SaleLotAllocation[];
     createdAt?: Date;
   }): SaleLine {
@@ -178,6 +181,7 @@ export class SaleLine {
       taxAmount,
       total,
       unitCostBase: payload.unitCostBase ?? null,
+      costValue: payload.costValue ?? null,
       lotAllocations: payload.lotAllocations ?? [],
       createdAt: payload.createdAt ?? new Date(),
     });
@@ -226,6 +230,10 @@ export class SaleLine {
 
   public get unitCostBase(): string | null {
     return this.props.unitCostBase ?? null;
+  }
+
+  public get costValue(): string | null {
+    return this.props.costValue ?? null;
   }
   public get subtotal(): number {
     return this.props.subtotal;

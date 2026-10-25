@@ -46,7 +46,31 @@ FEFO decide qué lote sale físicamente y debe seguir así por razones sanitaria
 - Los ajustes de inventario usan el promedio vigente; su asiento contable corresponde a F6.
 - Las devoluciones a proveedor (notas débito) salen al promedio vigente. Si eso genera una diferencia frente al costo de compra, su tratamiento se define en F2 con evidencia de pruebas, antes de implementarlo.
 
+## Implementación en F2
+
+Decisiones tomadas al implementar, dentro del margen que este ADR dejó a F2:
+
+1. **Modelo.**
+   - `inventory_cost_balances` guarda el saldo valorizado por producto: unidades base y valor en centavos exactos.
+   - `inventory_valuation_movements` es el submayor, de solo inserción con trigger, como el kardex.
+   - `sale_lines.cost_value` guarda el costo exacto retirado por cada línea de venta.
+   - El costo promedio se deriva siempre del valor y la cantidad; nunca se guarda redondeado. Por eso la última salida se lleva el saldo exacto y el valor nunca queda descuadrado.
+2. **Un solo contrato.** Las compras, ventas, anulaciones, notas crédito y débito, ajustes y existencias iniciales de lote valorizan a través de `InventoryLedger.valuation`, en la misma transacción que el cambio físico.
+   - Después de cada movimiento, la cantidad valorizada debe coincidir con la suma de los lotes del producto. Si no coincide, la operación se rechaza (409) y no deja efectos.
+3. **Apertura automática por producto.** No hay una carga de apertura con fecha de corte. La primera vez que un producto se mueve después de desplegar F2, su saldo se abre con las existencias que ya tenía, al último costo de compra o, si no tiene compras, al costo del catálogo.
+   - El movimiento `OPENING` (origen `AUTO_OPENING`) registra qué operación lo abrió.
+   - En la práctica, la fecha de corte de cada producto es la de su primer movimiento.
+   - Si la contadora entrega un costo de apertura distinto, se aplica como ajuste aprobado sobre ese saldo; no se recalcula hacia atrás.
+4. **Sin costo conocido no se mueve.** Si un producto con existencias no tiene compras y su costo de catálogo es cero, su venta, ajuste o existencia inicial se rechaza (409) con un mensaje que indica registrar el costo.
+5. **Ventas anteriores a F2.** No tienen `cost_value`. Su anulación y sus notas crédito usan el costo con que se contabilizaron: `unit_cost_base` por unidad o, si falta, el costo del catálogo. Así el reingreso coincide con la reversión de su asiento.
+6. **Notas crédito.** El costo de la línea se reparte por unidades de forma acumulada, y la última devolución se lleva el resto exacto. Solo se valoriza lo que vuelve físicamente a un lote.
+7. **Notas débito.** La mercancía devuelta sale al promedio vigente, que es el valor con que el asiento acredita `INVENTORY`. La diferencia frente al costo de compra que acredita el proveedor ajusta `COST_OF_SALES`: crédito si el proveedor devuelve más que el promedio y débito si devuelve menos. **Esta regla debe validarla la contadora.**
+8. **Ajustes de inventario.** Se valorizan al promedio vigente, pero todavía no generan asiento (F6). Hasta F6, la cuenta de inventario del mayor difiere del submayor en el valor neto de los ajustes.
+9. **Bonificaciones (pregunta 3 a la contadora).** Con promedio ponderado móvil, una unidad recibida a costo cero entra con valor cero y baja el promedio de todas las unidades. El efecto es el mismo que prorratear su costo. Si la contadora prefiere otro tratamiento, se cambia en la recepción de compras.
+10. **Reporte de inventario valorizado.** Usa el promedio del submayor e indica el origen de la cifra (`costSource`: `VALUATION` o `CATALOG`). Los productos que todavía no se han movido desde F2 siguen mostrando el costo del catálogo.
+
 ## Pendientes
 
-- **Fecha de corte de la apertura:** la definen el cliente y la contadora antes de la carga real. F2 la recibe como parámetro.
+- **Fecha de corte de la apertura:** con la apertura automática del punto 3, la fecha de corte formal queda para F5 (configuración inicial y saldos de apertura). Allí se puede ofrecer una carga de apertura explícita para todos los productos con una fecha elegida.
+- **Tratamiento de la diferencia en notas débito** (punto 7): pendiente de validar con la contadora.
 - **Validación de la contadora:** si cambia el método, se requiere una nueva ADR y una migración controlada. No se recalculan en silencio los costos ya aplicados.

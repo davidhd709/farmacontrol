@@ -4,6 +4,7 @@ import { IPurchaseRepository } from '../domain/purchase.repository';
 import { IdempotencyService } from '../../../common/idempotency/idempotency.service';
 import { PayablesLedger } from '../../payables/application/payables-ledger';
 import { InventoryLedger } from '../../inventory/application/inventory-ledger';
+import { parseMoneyToCents } from '../../treasury/domain/treasury-rules';
 import { Purchase, PurchaseLine } from '../domain/purchase.entity';
 import {
   DuplicatePurchaseInvoiceException,
@@ -157,6 +158,17 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
         } else {
           await this.inventoryLedger.recordMovement(tx, lotId, line.quantityBaseUnits, entry);
         }
+
+        // Submayor de costos (ADR-005): entra al costo de la factura, sin IVA
+        await this.inventoryLedger.valuation.receive(tx, {
+          productId: line.productId,
+          quantityBaseUnits: line.quantityBaseUnits,
+          valueCents: parseMoneyToCents(new Prisma.Decimal(line.subtotal).toFixed(2), 'Subtotal'),
+          movementType: 'PURCHASE',
+          sourceType: 'PURCHASE',
+          sourceId: purchase.id,
+          userId: actorUserId,
+        });
       }
 
       const result = await this.findByIdWithTx(purchase.id, tx);

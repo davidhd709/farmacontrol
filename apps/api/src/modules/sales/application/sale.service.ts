@@ -128,6 +128,28 @@ export class SaleService {
     this.client = customClient ?? prisma;
   }
 
+  /**
+   * Costo con que salió una línea. Las ventas anteriores al submayor (ADR-005) no tienen
+   * cost_value: su asiento usó el costo por unidad base guardado en la línea o, si tampoco
+   * existe, el costo del catálogo.
+   */
+  private async recordedLineCost(
+    tx: Prisma.TransactionClient,
+    line: SaleLine,
+    quantityBaseUnits: number,
+  ): Promise<bigint> {
+    if (line.costValue !== null) return parseMoneyToCents(line.costValue, 'Costo de la línea');
+    const unitCost =
+      line.unitCostBase ??
+      (
+        await tx.product.findUniqueOrThrow({
+          where: { id: line.productId },
+          select: { baseCost: true },
+        })
+      ).baseCost.toFixed(2);
+    return parseMoneyToCents(unitCost, 'Costo base') * BigInt(quantityBaseUnits);
+  }
+
   /** La vista previa no bloquea ni reserva: confirmar vuelve a resolver FEFO con FOR UPDATE. */
   public async previewFefo(payload: FefoPreviewPayload): Promise<FefoPreviewDto> {
     const businessDay = businessToday();
@@ -301,6 +323,7 @@ export class SaleService {
           const saleId = crypto.randomUUID();
           const saleLines: SaleLine[] = [];
           const allLotAllocations: SaleLotAllocation[] = [];
+          let costOfSalesCents = 0n;
 
           for (const item of payload.items) {
             const { product, factor, presentationName, requiredBaseUnits, ...resolved } =
@@ -359,6 +382,17 @@ export class SaleService {
               remainingUnits -= take;
             }
 
+            // Submayor de costos (ADR-005): FEFO eligió los lotes; el costo es el promedio vigente
+            const lineCostCents = await this.inventoryLedger.valuation.issue(tx, {
+              productId: product.id,
+              quantityBaseUnits: requiredBaseUnits,
+              movementType: 'SALE',
+              sourceType: 'SALE',
+              sourceId: saleId,
+              userId: auditCtx.userId || null,
+            });
+            costOfSalesCents += lineCostCents;
+
             const saleLine = SaleLine.create({
               id: lineId,
               saleId,
@@ -371,7 +405,10 @@ export class SaleService {
               quantityCommercial: item.quantityCommercial,
               unitPrice,
               discount: item.discount ?? 0,
-              unitCostBase: new Prisma.Decimal(product.baseCost).toFixed(2),
+              unitCostBase: centsToMoneyString(
+                (lineCostCents * 2n + BigInt(requiredBaseUnits)) / (BigInt(requiredBaseUnits) * 2n),
+              ),
+              costValue: centsToMoneyString(lineCostCents),
               lotAllocations: lineAllocations,
             });
 
@@ -455,6 +492,7 @@ export class SaleService {
               subtotal: sale.subtotal,
               taxTotal: sale.taxTotal,
               discountTotal: sale.discountTotal,
+              costOfSales: centsToMoneyString(costOfSalesCents),
               paymentMethod: sale.paymentMethod,
               bankAccountId: sale.bankAccountId ?? null,
               createdById: sale.createdById,
@@ -586,6 +624,10 @@ export class SaleService {
 
           // Reintegrar unidades a los lotes originales exactos
           for (const line of sale.lines) {
+            const restoredBaseUnits = line.lotAllocations.reduce(
+              (sum, alloc) => sum + alloc.quantityBaseUnits,
+              0,
+            );
             for (const alloc of line.lotAllocations) {
               await this.inventoryLedger.changeLotQuantity(
                 tx,
@@ -603,6 +645,18 @@ export class SaleService {
                   createdByUserId: auditCtx.userId || null,
                 },
               );
+            }
+            // Vuelve al costo exacto con que salió: el asiento de la venta se reversa completo
+            if (restoredBaseUnits > 0) {
+              await this.inventoryLedger.valuation.receive(tx, {
+                productId: line.productId,
+                quantityBaseUnits: restoredBaseUnits,
+                valueCents: await this.recordedLineCost(tx, line, restoredBaseUnits),
+                movementType: 'SALE_CANCELLATION',
+                sourceType: 'SALE_CANCEL',
+                sourceId: sale.id,
+                userId: auditCtx.userId || null,
+              });
             }
           }
 

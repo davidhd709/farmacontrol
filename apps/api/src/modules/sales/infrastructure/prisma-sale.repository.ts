@@ -67,6 +67,7 @@ export class PrismaSaleRepository implements ISaleRepository {
             taxAmount: new Prisma.Decimal(l.taxAmount),
             total: new Prisma.Decimal(l.total),
             unitCostBase: l.unitCostBase !== null ? new Prisma.Decimal(l.unitCostBase) : null,
+            costValue: l.costValue !== null ? new Prisma.Decimal(l.costValue) : null,
             createdAt: l.lotAllocations[0]?.lotNumber ? new Date() : undefined,
           })),
         },
@@ -238,6 +239,7 @@ export class PrismaSaleRepository implements ISaleRepository {
         taxAmount: Number(l.taxAmount),
         total: Number(l.total),
         unitCostBase: l.unitCostBase !== null ? l.unitCostBase.toFixed(2) : null,
+        costValue: l.costValue !== null ? l.costValue.toFixed(2) : null,
         lotAllocations,
         createdAt: l.createdAt,
       });

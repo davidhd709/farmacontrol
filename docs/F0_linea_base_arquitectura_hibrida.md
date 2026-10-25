@@ -191,16 +191,16 @@ Las decisiones aprobadas durante y después de la inspección quedan en [ADR-004
 
 ### Hallazgos AUD-CT después de F1
 
-| ID                                                 | Estado en `main`                                                                                                                                                                        | Fase |
-| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- |
-| AUD-CT-001 — Asientos omitidos                     | Corregido para las operaciones con handler contable: la operación y el asiento van en una sola transacción y no hay retorno silencioso (#13).                                           | F1   |
-| AUD-CT-002 — Costos históricos incorrectos         | Pendiente. El método ya está aprobado en ADR-005.                                                                                                                                       | F2   |
-| AUD-CT-003 — Perfil tributario sin aplicación      | Pendiente. Requiere la matriz fiscal validada por la contadora.                                                                                                                         | F3   |
-| AUD-CT-004 — Falta de ámbito empresarial           | Pendiente.                                                                                                                                                                              | F4   |
-| AUD-CT-005 — Cuentas fijas y fallbacks PUC         | Parcial. F1 eliminó la venta neta sin `SALES_DISCOUNTS` y la elección de 3605 o de patrimonio arbitrario en los cierres (#13, #14). Siguen pendientes la plantilla y el importador PUC. | F5   |
-| AUD-CT-006 — Operaciones sin contabilización       | Parcial. Los handlers existentes revierten la operación si no pueden contabilizar; los movimientos sin handler, como los ajustes manuales de inventario, siguen pendientes.             | F6   |
-| AUD-CT-007 — Configuración y apertura incompletas  | Pendiente.                                                                                                                                                                              | F5   |
-| AUD-CT-008 — Política de valoración contradictoria | Decisión resuelta en ADR-005. La implementación queda en F2.                                                                                                                            | F2   |
+| ID                                                 | Estado en `main`                                                                                                                                                                                         | Fase |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- |
+| AUD-CT-001 — Asientos omitidos                     | Corregido para las operaciones con handler contable: la operación y el asiento van en una sola transacción y no hay retorno silencioso (#13).                                                            | F1   |
+| AUD-CT-002 — Costos históricos incorrectos         | Corregido en F2: el costo de ventas sale del submayor de valoración con promedio ponderado, no de `Product.baseCost` ([ADR-005](adr/ADR-005-politica-de-costeo-del-inventario.md#implementación-en-f2)). | F2   |
+| AUD-CT-003 — Perfil tributario sin aplicación      | Pendiente. Requiere la matriz fiscal validada por la contadora.                                                                                                                                          | F3   |
+| AUD-CT-004 — Falta de ámbito empresarial           | Pendiente.                                                                                                                                                                                               | F4   |
+| AUD-CT-005 — Cuentas fijas y fallbacks PUC         | Parcial. F1 eliminó la venta neta sin `SALES_DISCOUNTS` y la elección de 3605 o de patrimonio arbitrario en los cierres (#13, #14). Siguen pendientes la plantilla y el importador PUC.                  | F5   |
+| AUD-CT-006 — Operaciones sin contabilización       | Parcial. Los handlers existentes revierten la operación si no pueden contabilizar; los movimientos sin handler, como los ajustes manuales de inventario, siguen pendientes.                              | F6   |
+| AUD-CT-007 — Configuración y apertura incompletas  | Pendiente.                                                                                                                                                                                               | F5   |
+| AUD-CT-008 — Política de valoración contradictoria | Resuelto: ADR-005 fija el método y F2 lo implementa; el reporte de inventario valorizado usa el mismo promedio.                                                                                          | F2   |
 
 El detalle de F1 está en [F1.2_trazabilidad_contable.md](F1.2_trazabilidad_contable.md).
 

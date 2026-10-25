@@ -42,7 +42,14 @@ describe('Auditoría atómica con PostgreSQL real', () => {
     categoryId = (await prisma.category.create({ data: { name: 'Atomicidad' } })).id;
     productId = (
       await prisma.product.create({
-        data: { categoryId, code: 'ATOMIC', name: 'Producto atómico', basePrice: '10.00' },
+        data: {
+          categoryId,
+          code: 'ATOMIC',
+          name: 'Producto atómico',
+          basePrice: '10.00',
+          // La existencia inicial de un lote se valoriza (ADR-005): sin costo se rechaza
+          baseCost: '6.00',
+        },
       })
     ).id;
     locationId = (

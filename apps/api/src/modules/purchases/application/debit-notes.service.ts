@@ -159,6 +159,7 @@ export class DebitNotesService {
           let totalSubtotalCents = 0n;
           let totalTaxCents = 0n;
           let totalDebitCents = 0n;
+          let inventoryCostCents = 0n;
 
           for (const item of payload.items) {
             const line = purchase.lines.find((l) => l.id === item.purchaseLineId);
@@ -230,6 +231,15 @@ export class DebitNotesService {
               referenceDocumentId: debitNoteNumber,
               notes: `Devolución a proveedor ${purchase.supplier.name} s/factura ${purchase.invoiceNumber} (${payload.reason})`,
               createdByUserId: userId,
+            });
+            // Submayor de costos (ADR-005): la devolución sale al costo promedio vigente
+            inventoryCostCents += await this.inventoryLedger.valuation.issue(tx, {
+              productId: line.productId,
+              quantityBaseUnits,
+              movementType: 'PURCHASE_RETURN',
+              sourceType: 'DEBIT_NOTE',
+              sourceId: debitNoteNumber,
+              userId,
             });
 
             const unitCost = new Prisma.Decimal(line.unitCost);
@@ -322,6 +332,7 @@ export class DebitNotesService {
               subtotal: debitNote.subtotal,
               taxTotal: debitNote.taxTotal,
               total: debitNote.total,
+              inventoryCost: centsToMoneyString(inventoryCostCents),
               createdById: userId,
               createdAt: debitNote.createdAt,
             },

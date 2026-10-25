@@ -6,6 +6,7 @@ import {
   WithinMovementTransaction,
 } from '../../application/ports/inventory-movement.repository.port';
 import { LotProductMismatchException } from '../../domain/exceptions/inventory.exceptions';
+import { InventoryValuation } from '../../application/inventory-valuation';
 import type {
   InventoryMovementDto,
   InventoryMovementQueryFilters,
@@ -17,6 +18,8 @@ import type {
 export class PrismaInventoryMovementRepository
   implements IInventoryMovementRepository
 {
+  private readonly valuation = new InventoryValuation();
+
   public async recordMovement(
     payload: RecordInventoryMovementPayload,
     userId?: string,
@@ -96,6 +99,23 @@ export class PrismaInventoryMovementRepository
           },
         },
       });
+
+      // Submayor de costos (ADR-005): un ajuste no tiene documento de costo y usa el promedio
+      const valuationInput = {
+        productId: lot.productId,
+        quantityBaseUnits: Math.abs(payload.quantityBaseUnits),
+        sourceType: 'INVENTORY_ADJUSTMENT',
+        sourceId: movement.id,
+        userId: userId || null,
+      };
+      if (payload.quantityBaseUnits > 0) {
+        await this.valuation.receiveAtAverage(tx, {
+          ...valuationInput,
+          movementType: 'ADJUSTMENT_IN',
+        });
+      } else if (payload.quantityBaseUnits < 0) {
+        await this.valuation.issue(tx, { ...valuationInput, movementType: 'ADJUSTMENT_OUT' });
+      }
 
       const result: InventoryMovementDto = {
         id: movement.id,

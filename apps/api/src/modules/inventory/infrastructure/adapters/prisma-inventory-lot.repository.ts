@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { prisma, Prisma } from '@farmacia/database';
 import { IInventoryLotRepository } from '../../application/ports/inventory-lot.repository.port';
 import { InventoryLot } from '../../domain/entities/inventory-lot.entity';
+import { InventoryValuation } from '../../application/inventory-valuation';
 import { Location } from '../../domain/entities/location.entity';
 import type {
   InventoryLotQueryFilters,
@@ -11,6 +12,8 @@ import type {
 
 @Injectable()
 export class PrismaInventoryLotRepository implements IInventoryLotRepository {
+  private readonly valuation = new InventoryValuation();
+
   public async findById(id: string): Promise<InventoryLot | null> {
     const raw = await prisma.inventoryLot.findUnique({
       where: { id },
@@ -235,6 +238,15 @@ export class PrismaInventoryLotRepository implements IInventoryLotRepository {
             notes: 'Saldo inicial registrado al crear el lote',
             createdByUserId: userId || null,
           },
+        });
+        // Submayor de costos (ADR-005): sin documento de costo, entra al promedio vigente
+        await this.valuation.receiveAtAverage(tx, {
+          productId: created.productId,
+          quantityBaseUnits: created.currentQuantity,
+          movementType: 'ADJUSTMENT_IN',
+          sourceType: 'LOT_INITIAL',
+          sourceId: created.id,
+          userId: userId || null,
         });
       }
 

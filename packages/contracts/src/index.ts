@@ -966,7 +966,10 @@ export interface InventoryValuationItemDto {
   categoryName: string;
   baseUnit: string;
   currentStock: number;
+  /** Costo por unidad base: promedio del submayor (ADR-005) o, si aún no tiene saldo, el del catálogo */
   baseCost: number;
+  /** Origen de `baseCost` y `totalCostValue` */
+  costSource: InventoryCostSource;
   basePrice: number;
   totalCostValue: number;
   totalPriceValue: number;
@@ -981,6 +984,9 @@ export interface InventoryValuationItemDto {
 }
 
 export type InventoryValuationIssue = 'MISSING_COST' | 'MISSING_PRICE' | 'MISSING_COST_AND_PRICE';
+
+/** `VALUATION`: submayor de costos con promedio ponderado; `CATALOG`: producto aún sin saldo valorizado */
+export type InventoryCostSource = 'VALUATION' | 'CATALOG';
 
 export interface InventoryValuationReportDto {
   generatedAt: string;

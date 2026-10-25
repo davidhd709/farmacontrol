@@ -61,6 +61,14 @@ export class ReportsService {
       },
       orderBy: { name: 'asc' },
     });
+    // Submayor de costos (ADR-005): promedio ponderado real de los productos ya valorizados
+    const balances = new Map(
+      (
+        await this.prisma.inventoryCostBalance.findMany({
+          where: { productId: { in: products.map((p) => p.id) } },
+        })
+      ).map((b) => [b.productId, b]),
+    );
 
     let totalUnits = 0;
     let totalCostValuation = 0n;
@@ -70,9 +78,20 @@ export class ReportsService {
 
     const items: InventoryValuationItemDto[] = products.map((prod) => {
       const currentStock = prod.lots.reduce((sum, lot) => sum + lot.currentQuantity, 0);
-      const baseCost = moneyToCents(prod.baseCost);
+      const balance = balances.get(prod.id);
+      const valued = balance !== undefined && balance.quantityBaseUnits > 0;
+      const valuedCents = valued ? moneyToCents(balance!.totalValue) : 0n;
+      const valuedQuantity = BigInt(valued ? balance!.quantityBaseUnits : 1);
+      // Los lotes inactivos quedan fuera de la existencia reportada: se prorratea el saldo
+      const baseCost = valued
+        ? (valuedCents * 2n + valuedQuantity) / (valuedQuantity * 2n)
+        : moneyToCents(prod.baseCost);
       const basePrice = moneyToCents(prod.basePrice);
-      const totalCostValue = BigInt(currentStock) * baseCost;
+      const totalCostValue = !valued
+        ? BigInt(currentStock) * baseCost
+        : BigInt(currentStock) === valuedQuantity
+          ? valuedCents
+          : (valuedCents * BigInt(currentStock) * 2n + valuedQuantity) / (valuedQuantity * 2n);
       const totalPriceValue = BigInt(currentStock) * basePrice;
       const valuationIssue: InventoryValuationIssue | null =
         baseCost <= 0n
@@ -98,6 +117,7 @@ export class ReportsService {
         baseUnit: prod.baseUnit,
         currentStock,
         baseCost: centsToNumber(baseCost),
+        costSource: valued ? 'VALUATION' : 'CATALOG',
         basePrice: centsToNumber(basePrice),
         totalCostValue: centsToNumber(totalCostValue),
         totalPriceValue: centsToNumber(totalPriceValue),

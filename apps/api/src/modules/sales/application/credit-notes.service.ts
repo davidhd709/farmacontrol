@@ -250,9 +250,27 @@ export class CreditNotesService {
             totalSubtotalCents += returnSubtotalCents;
             totalTaxCents += returnTaxCents;
 
-            // Costo con que se vendió; las ventas anteriores a su registro usan el costo vigente
-            const unitCostCents = toCents(line.unitCostBase ?? line.product.baseCost, 'Costo base');
-            totalCostCents += BigInt(quantityBaseUnits) * unitCostCents;
+            // Costo con que salió la línea (ADR-005), repartido por unidades de forma acumulada:
+            // la última devolución se lleva el resto exacto. Las ventas anteriores al submayor
+            // usan el costo por unidad guardado en la línea o el del catálogo, como su asiento.
+            const lineCostCents =
+              line.costValue !== null
+                ? toCents(line.costValue, 'Costo de la línea')
+                : toCents(line.unitCostBase ?? line.product.baseCost, 'Costo base') *
+                  BigInt(line.quantityBaseUnits);
+            const costBeforeCents = prorateCents(
+              lineCostCents,
+              creditedBaseUnits,
+              line.quantityBaseUnits,
+            );
+            const returnCostCents =
+              (isLastReturn
+                ? lineCostCents
+                : prorateCents(
+                    lineCostCents,
+                    creditedBaseUnits + quantityBaseUnits,
+                    line.quantityBaseUnits,
+                  )) - costBeforeCents;
 
             const portions = splitReturnAcrossLots(
               sortAllocationsFefo(line.lotAllocations),
@@ -291,6 +309,7 @@ export class CreditNotesService {
 
             // 4. Reintegro a cada lote de origen si restock === true
             if (shouldRestock) {
+              let restockedBaseUnits = 0;
               for (const portion of portions) {
                 if (!portion.lotId) continue;
                 await this.inventoryLedger.changeLotQuantity(
@@ -309,6 +328,23 @@ export class CreditNotesService {
                     createdByUserId: userId,
                   },
                 );
+                restockedBaseUnits += portion.quantityBaseUnits;
+              }
+              if (restockedBaseUnits > 0) {
+                const restockCostCents =
+                  restockedBaseUnits === quantityBaseUnits
+                    ? returnCostCents
+                    : prorateCents(returnCostCents, restockedBaseUnits, quantityBaseUnits);
+                await this.inventoryLedger.valuation.receive(tx, {
+                  productId: line.productId,
+                  quantityBaseUnits: restockedBaseUnits,
+                  valueCents: restockCostCents,
+                  movementType: 'SALE_RETURN',
+                  sourceType: 'CREDIT_NOTE',
+                  sourceId: creditNoteNumber,
+                  userId,
+                });
+                totalCostCents += restockCostCents;
               }
             }
           }
