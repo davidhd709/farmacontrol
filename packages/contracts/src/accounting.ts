@@ -437,3 +437,69 @@ export interface AnnualClosingResultDto {
   journalEntryId: string;
   netResult: string;
 }
+
+/** Asistente de configuración contable (ADR-006, F7). */
+export type AccountingSetupCheckKey =
+  | 'COMPANY'
+  | 'CHART_OF_ACCOUNTS'
+  | 'OPERATING_PURPOSES'
+  | 'EQUITY_PURPOSES'
+  | 'TAX_PURPOSES'
+  | 'OPENING_BALANCES'
+  | 'INVENTORY_RECONCILIATION';
+
+export interface AccountingSetupCheckDto {
+  key: AccountingSetupCheckKey;
+  label: string;
+  ok: boolean;
+  /** Si es false, el requisito es recomendado o informativo y no impide READY */
+  required: boolean;
+  detail: string;
+  missingPurposes?: AccountingPurpose[];
+}
+
+export interface PucTemplateSummaryDto {
+  code: string;
+  name: string;
+  legalBasis: string;
+  accounts: number;
+  mappedPurposes: number;
+}
+
+export interface AccountingSetupDto {
+  status: 'READY' | 'INCOMPLETE';
+  checks: AccountingSetupCheckDto[];
+  template: PucTemplateSummaryDto;
+  inventory: { ledgerBalance: string; valuationBalance: string; difference: string } | null;
+}
+
+export interface ApplyPucTemplateResultDto {
+  template: string;
+  accountsCreated: string[];
+  accountsExisting: string[];
+  /** Cuenta con el mismo código y otro tipo: se deja como está */
+  conflicts: Array<{ code: string; reason: string }>;
+  purposesMapped: AccountingPurpose[];
+  purposesKept: AccountingPurpose[];
+}
+
+export interface OpeningBalanceLinePayload {
+  accountId: string;
+  debit: string;
+  credit: string;
+  description?: string | null;
+}
+
+export interface CreateOpeningBalancePayload {
+  entryDate: string;
+  reason: string;
+  lines: OpeningBalanceLinePayload[];
+}
+
+export interface OpeningBalanceDto {
+  journalEntryId: string;
+  entryDate: string;
+  totalDebit: string;
+  totalCredit: string;
+  lines: Array<{ accountId: string; accountCode: string; accountName: string; debit: string; credit: string }>;
+}

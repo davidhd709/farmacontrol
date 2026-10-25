@@ -131,6 +131,11 @@ const CompanySettingsPage = lazy(() =>
     default: m.CompanySettingsPage,
   })),
 );
+const AccountingSetupPage = lazy(() =>
+  import('./features/accounting/pages/AccountingSetupPage').then((m) => ({
+    default: m.AccountingSetupPage,
+  })),
+);
 const TaxCatalogPage = lazy(() =>
   import('./features/taxes/pages/TaxCatalogPage').then((m) => ({
     default: m.TaxCatalogPage,
@@ -192,6 +197,7 @@ export const App = () => {
               <Route path="/receivables" element={<ReceivablesPage />} />
               <Route path="/payables" element={<PayablesPage />} />
               <Route path="/expenses" element={<ExpensesPage />} />
+              <Route path="/accounting/setup" element={<AccountingSetupPage />} />
               <Route path="/accounting/accounts" element={<AccountsPage />} />
               <Route path="/accounting/purposes" element={<PurposesPage />} />
               <Route path="/accounting/import" element={<ImportAccountsPage />} />

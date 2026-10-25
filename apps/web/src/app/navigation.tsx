@@ -27,6 +27,7 @@ import BalanceIcon from '@mui/icons-material/Balance';
 import DateRangeIcon from '@mui/icons-material/DateRange';
 import HistoryIcon from '@mui/icons-material/History';
 import GavelIcon from '@mui/icons-material/Gavel';
+import ChecklistIcon from '@mui/icons-material/Checklist';
 interface MenuItemConfig {
   title: string;
   path: string;
@@ -252,6 +253,12 @@ export const menuGroups: MenuGroupConfig[] = [
         path: '/tax-catalog',
         icon: <GavelIcon fontSize="small" />,
         permission: SYSTEM_PERMISSIONS.PRODUCTS_READ,
+      },
+      {
+        title: 'Asistente de Configuración Contable',
+        path: '/accounting/setup',
+        icon: <ChecklistIcon fontSize="small" />,
+        permission: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
       },
       {
         title: 'Plan de Cuentas',

@@ -22,6 +22,8 @@ import { ManualNotesController } from './presentation/manual-notes.controller';
 import { AnnualClosingService } from './application/annual-closing.service';
 import { AnnualClosingController } from './presentation/annual-closing.controller';
 import { IdempotencyModule } from '../../common/idempotency/idempotency.module';
+import { AccountingSetupService } from './application/accounting-setup.service';
+import { AccountingSetupController } from './presentation/accounting-setup.controller';
 
 @Module({
   imports: [IdempotencyModule, IdentityModule],
@@ -35,9 +37,11 @@ import { IdempotencyModule } from '../../common/idempotency/idempotency.module';
     DocumentLockController,
     ManualNotesController,
     AnnualClosingController,
+    AccountingSetupController,
   ],
   providers: [
     AccountingService,
+    AccountingSetupService,
     AccountingRepository,
     JournalService,
     ProductTaxProfileService,

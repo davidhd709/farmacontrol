@@ -291,6 +291,35 @@ El motor es dominio puro. Se activa cuando la empresa tiene un perfil tributario
 - Numeración autorizada y facturación electrónica (futuro).
 - Formularios 300, 350 y exógena (F8).
 
+## Implementación de F7 (plan de cuentas y asistente de configuración)
+
+Decisión de arquitectura del orquestador (2026-10-25), implementada el mismo día. La contabilidad ya es estricta desde F1 (ADR-004): si falta el mapeo de un propósito, la operación entera se rechaza. F7 lleva a cada negocio a un estado **READY** sin fricción.
+
+- **Plantilla PUC por perfil sectorial**, mantenida por el producto (`apps/api/.../accounting/domain/puc-templates`):
+  - contiene las clases, grupos, cuentas y subcuentas del PUC (Decreto 2650 de 1993) que usan los propósitos contables, con su mapeo por defecto;
+  - por ahora la del perfil farmacia; las subcuentas de seis dígitos son propuestas del producto y la contadora puede reemplazarlas.
+  - Aplicarla (`POST /accounting/setup/apply-template`):
+    - crea las cuentas que faltan con su jerarquía;
+    - mapea solo los propósitos sin cuenta;
+    - nunca sobrescribe una cuenta o un mapeo existente, e informa los conflictos (mismo código con otro tipo);
+    - repetirla da el mismo resultado.
+- **Mapeos versionados:** se conservan los de F1, con vigencia por propósito. Hasta F9 hay una sola empresa por base.
+- **Saldos de apertura** (`GET/POST /accounting/opening-balances`):
+  - un asiento cuadrado con origen `OPENING_BALANCE`, en una fecha de un período abierto, sobre cuentas imputables;
+  - hay uno solo vigente: para registrar otro hay que reversar el anterior con el flujo de reversión existente;
+  - el asistente compara el saldo de la cuenta de inventarios con el submayor de valoración y muestra la diferencia, sin bloquear.
+- **Asistente** (`GET /accounting/setup`): una lista de verificación.
+
+| Requisito | Exigido para READY |
+| --- | --- |
+| Empresa configurada | Sí |
+| Plan con cuentas imputables | Sí |
+| Propósitos operativos mapeados: caja, bancos, clientes, proveedores, inventario, ventas, costo, devoluciones y descuentos, y el de diferencias de notas débito si la política lo usa | Sí |
+| Propósitos tributarios mapeados | Solo si hay perfil tributario vigente (F6) |
+| Propósitos de patrimonio y cierre | Sí |
+| Saldos de apertura | No, recomendado |
+| Conciliación del inventario | No, informativa |
+
 ## Pendientes
 
 - Revisar los requerimientos multisector (POS, inventario y catálogo), que hoy solo están descritos para farmacia.
