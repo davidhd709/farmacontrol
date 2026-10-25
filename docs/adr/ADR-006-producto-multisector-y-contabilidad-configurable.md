@@ -1,6 +1,6 @@
 # ADR-006: Producto multisector con contabilidad configurable por empresa
 
-- **Estado:** Aprobado (decisión de producto); el orden de fases que se propone aquí está pendiente de aprobación
+- **Estado:** Aprobado, incluido el orden de fases (aprobado el 2026-10-25)
 - **Fecha:** 2026-10-25
 - **Origen:** decisión explícita del propietario
 - **Reemplaza en parte:** la nota de alcance farmacéutico del [plan híbrido](../FarmaControl_Arquitectura_Hibrida_Plan_Implementacion.md#1-decisión-de-producto) y la regla de [ADR-005](ADR-005-politica-de-costeo-del-inventario.md) de que el promedio ponderado es el único método
@@ -72,7 +72,7 @@ El propietario decidió que el producto debe servir a negocios pequeños, median
 - **Los requerimientos rectores están escritos para farmacia.** Se conservan como especificación del perfil farmacia y se complementan con requerimientos multisector. Este ADR prevalece donde haya conflicto.
 - **El alcance crece de forma considerable.** El plan de fases se reorganiza abajo.
 
-## Orden de fases propuesto (pendiente de aprobación)
+## Orden de fases (aprobado)
 
 F0, F1 y F2 están cerradas. Las fases siguientes reemplazan F3–F8 del plan híbrido:
 
@@ -99,9 +99,12 @@ F0, F1 y F2 están cerradas. Las fases siguientes reemplazan F3–F8 del plan h�
 | Dejar el cumplimiento fiscal a la configuración de cada negocio | Descartada a pedido del propietario: el sistema debe asegurar el cumplimiento con un catálogo normativo. |
 | Un solo método de costeo                                        | Descartada: cada empresa elige entre tres.                                                               |
 
+## Definiciones del propietario (2026-10-25)
+
+- **Orden de fases:** aprobado.
+- **Perfiles sectoriales:** de entrada, el sistema trae solo el perfil **farmacia**. La arquitectura sigue siendo multisector, con tipos de producto y modos de control configurables, para poder agregar otros perfiles después sin rediseño. F4 construye los modos genéricos con los valores por defecto y la aceptación de farmacia.
+- **Revisión del catálogo normativo:** la hace un asesor tributario externo, a nivel de producto y con cada cambio normativo. Esa revisión es condición para usar en producción el motor tributario (F6), no para desarrollarlo.
+
 ## Pendientes
 
-- Aprobar el orden de fases propuesto.
-- Definir qué perfiles sectoriales trae el sistema de entrada (por ejemplo: farmacia, comercio general, servicios, restaurante) y qué activa cada uno.
 - Revisar los requerimientos multisector (POS, inventario y catálogo), que hoy solo están descritos para farmacia.
-- Definir quién hace la revisión tributaria del catálogo normativo a nivel de producto, y con qué frecuencia.
