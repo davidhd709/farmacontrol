@@ -15,6 +15,7 @@ export function PurchaseFormField({ name, control, helperText, onChange, ...prop
     presentationId: 'Presentación',
     lotNumber: 'Número de lote',
     expirationDate: 'Fecha de vencimiento',
+    serialNumbers: 'Series',
     quantityCommercial: 'Cantidad',
     unitCost: 'Costo',
   };

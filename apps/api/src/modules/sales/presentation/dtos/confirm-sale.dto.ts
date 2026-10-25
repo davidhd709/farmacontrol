@@ -100,10 +100,26 @@ export class ConfirmSaleValidationPipe implements PipeTransform {
         presentationId = item.presentationId.trim();
       }
 
+      let serialNumbers: string[] | undefined;
+      if (item.serialNumbers !== undefined) {
+        if (
+          !Array.isArray(item.serialNumbers) ||
+          item.serialNumbers.some((serial) => typeof serial !== 'string' || !serial.trim())
+        ) {
+          throw new BadRequestException(
+            `"serialNumbers" del ítem ${index} debe ser un arreglo de strings no vacíos.`,
+          );
+        }
+        serialNumbers = (item.serialNumbers as string[]).map((serial) =>
+          serial.trim().toUpperCase(),
+        );
+      }
+
       return {
         productId: item.productId.trim(),
         presentationId,
         quantityCommercial: qty,
+        serialNumbers,
         unitPriceOverride:
           item.unitPriceOverride !== undefined ? Number(item.unitPriceOverride) : undefined,
         discount: item.discount !== undefined ? Number(item.discount) : undefined,

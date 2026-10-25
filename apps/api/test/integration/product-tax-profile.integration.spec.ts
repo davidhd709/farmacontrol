@@ -33,7 +33,14 @@ describe('Product tax profiles 11.3a PostgreSQL', () => {
     await seedRbac(prisma);
     const category = await prisma.category.create({ data: { name: 'Prueba fiscal' } });
     const product = await prisma.product.create({
-      data: { categoryId: category.id, code: 'SKU-FISCAL', name: 'Producto de prueba', basePrice: '119.00' },
+      data: {
+        inventoryControlMode: 'LOT_EXPIRY',
+        inventoryControlMode: 'LOT_EXPIRY',
+        categoryId: category.id,
+        code: 'SKU-FISCAL',
+        name: 'Producto de prueba',
+        basePrice: '119.00',
+      },
     });
     productId = product.id;
     const provisioning = app.get(UserProvisioningService);
@@ -125,13 +132,17 @@ describe('Product tax profiles 11.3a PostgreSQL', () => {
       .set('Cookie', adminCookie);
     expect(effective.status).toBe(200);
     expect(effective.body.id).toBe(first.body.id);
-    const second = await create(draft({ effectiveFrom: dayFromNow(20), effectiveTo: dayFromNow(30) }));
+    const second = await create(
+      draft({ effectiveFrom: dayFromNow(20), effectiveTo: dayFromNow(30) }),
+    );
     expect(second.status).toBe(201);
     const conflict = await request(app.getHttpServer())
       .post(`${root}/${second.body.id}/activate`)
       .set('Cookie', adminCookie)
       .send({});
     expect(conflict.status).toBe(409);
-    expect((await prisma.productTaxProfile.count({ where: { status: 'ACTIVE' } })).toString()).toBe('1');
+    expect((await prisma.productTaxProfile.count({ where: { status: 'ACTIVE' } })).toString()).toBe(
+      '1',
+    );
   });
 });

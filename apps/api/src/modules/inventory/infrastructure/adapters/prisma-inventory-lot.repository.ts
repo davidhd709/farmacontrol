@@ -35,6 +35,7 @@ export class PrismaInventoryLotRepository implements IInventoryLotRepository {
       locationId: raw.locationId,
       lotNumber: raw.lotNumber,
       expirationDate: raw.expirationDate,
+      controlMode: raw.controlMode as InventoryLot['controlMode'],
       currentQuantity: raw.currentQuantity,
       isActive: raw.isActive,
       createdAt: raw.createdAt,
@@ -75,6 +76,35 @@ export class PrismaInventoryLotRepository implements IInventoryLotRepository {
       locationId: raw.locationId,
       lotNumber: raw.lotNumber,
       expirationDate: raw.expirationDate,
+      controlMode: raw.controlMode as InventoryLot['controlMode'],
+      currentQuantity: raw.currentQuantity,
+      isActive: raw.isActive,
+      createdAt: raw.createdAt,
+      updatedAt: raw.updatedAt,
+      product: raw.product,
+      location: raw.location,
+    });
+  }
+
+  public async findSimpleBalance(
+    productId: string,
+    locationId: string,
+  ): Promise<InventoryLot | null> {
+    const raw = await prisma.inventoryLot.findFirst({
+      where: { productId, locationId, controlMode: 'SIMPLE' },
+      include: {
+        product: { select: { id: true, code: true, name: true, baseUnit: true } },
+        location: { select: { id: true, code: true, name: true } },
+      },
+    });
+    if (!raw) return null;
+    return InventoryLot.reconstitute({
+      id: raw.id,
+      productId: raw.productId,
+      locationId: raw.locationId,
+      lotNumber: raw.lotNumber,
+      expirationDate: raw.expirationDate,
+      controlMode: raw.controlMode as InventoryLot['controlMode'],
       currentQuantity: raw.currentQuantity,
       isActive: raw.isActive,
       createdAt: raw.createdAt,
@@ -97,7 +127,7 @@ export class PrismaInventoryLotRepository implements IInventoryLotRepository {
 
     const rawLots = await prisma.inventoryLot.findMany({
       where,
-      orderBy: [{ expirationDate: 'asc' }, { createdAt: 'asc' }],
+      orderBy: [{ expirationDate: { sort: 'asc', nulls: 'last' } }, { createdAt: 'asc' }],
       include: {
         product: {
           select: { id: true, code: true, name: true, baseUnit: true },
@@ -115,6 +145,7 @@ export class PrismaInventoryLotRepository implements IInventoryLotRepository {
         locationId: raw.locationId,
         lotNumber: raw.lotNumber,
         expirationDate: raw.expirationDate,
+        controlMode: raw.controlMode as InventoryLot['controlMode'],
         currentQuantity: raw.currentQuantity,
         isActive: raw.isActive,
         createdAt: raw.createdAt,
@@ -162,7 +193,7 @@ export class PrismaInventoryLotRepository implements IInventoryLotRepository {
         where,
         skip,
         take: pageSize,
-        orderBy: [{ expirationDate: 'asc' }, { createdAt: 'desc' }],
+        orderBy: [{ expirationDate: { sort: 'asc', nulls: 'last' } }, { createdAt: 'desc' }],
         include: {
           product: {
             select: { id: true, code: true, name: true, baseUnit: true },
@@ -180,7 +211,7 @@ export class PrismaInventoryLotRepository implements IInventoryLotRepository {
         productId: raw.productId,
         locationId: raw.locationId,
         lotNumber: raw.lotNumber,
-        expirationDate: raw.expirationDate.toISOString().split('T')[0],
+        expirationDate: raw.expirationDate?.toISOString().split('T')[0] ?? null,
         currentQuantity: raw.currentQuantity,
         isActive: raw.isActive,
         createdAt: raw.createdAt.toISOString(),
@@ -208,6 +239,7 @@ export class PrismaInventoryLotRepository implements IInventoryLotRepository {
           locationId: lot.locationId,
           lotNumber: lot.lotNumber,
           expirationDate: lot.expirationDate,
+          controlMode: lot.controlMode,
           currentQuantity: lot.currentQuantity,
           isActive: lot.isActive,
           createdAt: lot.createdAt,
@@ -262,6 +294,7 @@ export class PrismaInventoryLotRepository implements IInventoryLotRepository {
       locationId: raw.locationId,
       lotNumber: raw.lotNumber,
       expirationDate: raw.expirationDate,
+      controlMode: raw.controlMode as InventoryLot['controlMode'],
       currentQuantity: raw.currentQuantity,
       isActive: raw.isActive,
       createdAt: raw.createdAt,

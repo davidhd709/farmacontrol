@@ -39,7 +39,7 @@ describe('ProductPresentationService (Application Unit)', () => {
     sanitaryRegistry: 'INVIMA',
     manufacturer: 'Laboratorios Farmacia',
     description: null,
-    requiresLotControl: true,
+    inventoryControlMode: 'LOT_EXPIRY',
     prescriptionRequired: false,
     baseUnit: 'TABLETA',
     basePrice: '500.00',

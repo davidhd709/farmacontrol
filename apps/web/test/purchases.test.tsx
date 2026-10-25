@@ -45,7 +45,7 @@ const mockProducts: ProductDto[] = [
     basePrice: '1200.00',
     baseCost: '800.00',
     baseUnit: 'UNIDAD',
-    requiresLotControl: true,
+    inventoryControlMode: 'LOT_EXPIRY',
     prescriptionRequired: true,
     isActive: true,
     presentationsCount: 0,
@@ -261,15 +261,14 @@ describe('Purchases Frontend (UX-15 & UX-16)', () => {
       </MemoryRouter>,
     );
     await screen.findByRole('button', { name: 'Confirmar Recepción de Compra' });
-    fireEvent.change(screen.getByLabelText(/Número de Lote/), { target: { value: 'LOTE-1' } });
+    // Lote y vencimiento solo aparecen con un producto que los requiere; el costo siempre está
+    fireEvent.change(screen.getByLabelText(/Costo por/), { target: { value: '111' } });
     fireEvent.click(screen.getByRole('button', { name: 'Agregar Producto' }));
-    fireEvent.change(screen.getAllByLabelText(/Número de Lote/)[1], {
-      target: { value: 'LOTE-2' },
-    });
+    fireEvent.change(screen.getAllByLabelText(/Costo por/)[1], { target: { value: '222' } });
     fireEvent.click(screen.getByRole('button', { name: 'Eliminar línea 1' }));
-    expect(screen.getByLabelText(/Número de Lote/)).toHaveValue('LOTE-2');
+    expect(screen.getByLabelText(/Costo por/)).toHaveValue(222);
     fireEvent.click(screen.getByRole('button', { name: 'Tabla', exact: true }));
-    expect(screen.getByRole('textbox', { name: 'Número de lote línea 1' })).toHaveValue('LOTE-2');
+    expect(screen.getByRole('spinbutton', { name: 'Costo línea 1' })).toHaveValue(222);
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar Recepción de Compra' }));
     expect(await screen.findByText('Selecciona un producto.')).toBeInTheDocument();
     expect(purchasesApi.receivePurchase).not.toHaveBeenCalled();

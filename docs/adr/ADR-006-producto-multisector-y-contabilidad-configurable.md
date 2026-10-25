@@ -123,6 +123,81 @@ F0, F1 y F2 están cerradas. Las fases siguientes reemplazan F3–F8 del plan h�
 - **API:** `GET /company`, `POST /company/setup`, `PATCH /company`, `POST /company/branches` y `POST /company/accounting-policies`, con los permisos `company:read` (administrador y supervisor) y `company:manage` (administrador). Cada cambio queda en la auditoría.
 - **Web:** pantalla "Empresa y Política Contable", con la configuración inicial, las sucursales, la política vigente, su historial y el formulario de versiones.
 
+## Implementación de F4 (catálogo e inventario multisector)
+
+Decisión de arquitectura del orquestador (2026-10-25), implementada el mismo día. Resuelve la estructura del saldo sin lote que pedían RF-034 y T-09 (decisión 2 de `docs/ESTADO_AVANCE.md`). Las cantidades fraccionarias siguen pendientes; la unidad base sigue siendo entera.
+
+### Modos de control de inventario
+
+Cada producto tiene un `inventoryControlMode`; reemplaza a `requiresLotControl`.
+
+| Modo         | Existencia                                    | Lote        | Vencimiento | Salida                                                          |
+| ------------ | --------------------------------------------- | ----------- | ----------- | --------------------------------------------------------------- |
+| `SERVICE`    | Ninguna: no hay kardex, costo ni recepción    | —           | —           | La venta no toca inventario; costo 0                            |
+| `SIMPLE`     | Un saldo por producto y ubicación             | Prohibido   | Prohibido   | Orden de entrada                                                |
+| `LOT`        | Una existencia por lote                       | Obligatorio | Prohibido   | Orden de entrada                                                |
+| `LOT_EXPIRY` | Una existencia por lote                       | Obligatorio | Obligatorio | FEFO; los vencidos no se venden                                 |
+| `SERIAL`     | Una existencia por serie, con 0 o 1 unidad    | La serie    | Prohibido   | La venta indica las series; no hay asignación automática        |
+
+### Modelo de datos
+
+- **`inventory_lots` sigue siendo la unidad de existencia** de todos los modos físicos. Ningún movimiento queda sin existencia (`inventory_movements.lot_id` sigue obligatorio).
+  - `lot_number` y `expiration_date` pasan a ser opcionales. No se inventan lotes ni fechas: el saldo `SIMPLE` es una fila con los dos en NULL.
+  - Cada existencia guarda `control_mode`, el modo del producto al crearla. Con él, unos CHECK en la base de datos imponen la forma de cada modo (lote, vencimiento y cantidad máxima de 1 en `SERIAL`).
+  - Índices únicos parciales: un solo saldo `SIMPLE` por producto y ubicación, y una serie no se repite dentro del mismo producto en ninguna ubicación.
+- **Un trigger** exige que el `control_mode` de una existencia nueva coincida con el modo vigente del producto. Lee el producto con `FOR SHARE` para serializarse frente a un cambio de modo concurrente.
+- **Cambio de modo:** solo se permite mientras el producto no tenga existencias registradas. Lo impone otro trigger sobre `products`; cambiar el modo de un producto con historia exige un procedimiento futuro.
+- **Documentos:** `purchase_lines.lot_number` y `expiration_date` pasan a ser opcionales. La línea conserva lo que se recibió, según el modo.
+- **Migración de datos:**
+  - los productos con `requires_lot_control = true` pasan a `LOT_EXPIRY`;
+  - los antiguos con `false` pasan a `SIMPLE` si nunca tuvieron existencias, o a `LOT_EXPIRY` si las tienen, porque sus lotes ya tienen número y vencimiento.
+
+  Después se elimina `requires_lot_control`.
+
+### Reglas de salida
+
+- Una única consulta de candidatos para todos los modos: existencias activas, con saldo y sin vencer (`expiration_date IS NULL OR expiration_date >= día`), ordenadas por `expiration_date ASC NULLS LAST, created_at ASC`.
+  - Si hay vencimiento, la salida es FEFO; si no, va por orden de entrada.
+  - Se mantiene `FOR UPDATE` al confirmar.
+- **`SERIAL`:**
+  - la confirmación y la vista previa reciben `serialNumbers` por línea, y su cantidad debe ser igual a las unidades base de la línea;
+  - el sistema bloquea esas existencias y rechaza series inexistentes, repetidas o sin saldo;
+  - la vista previa devuelve las series disponibles para elegir.
+- **`SERVICE`:** la línea de venta no tiene asignaciones, kardex ni salida del submayor; su costo es 0. Una nota crédito sobre esa línea devuelve dinero sin reingresar inventario.
+- **Valoración:** el submayor de costos (F2) no cambia; sigue siendo por producto.
+
+### Entradas
+
+- **Recepción de compra:** valida lote y vencimiento contra el modo real del producto, sin confiar en el formulario.
+  - `SIMPLE` acumula en el saldo de la ubicación.
+  - `SERIAL` recibe `serialNumbers`, solo con presentaciones de factor 1, y crea una línea de compra por serie.
+  - `SERVICE` se rechaza: las compras de servicios van por egresos.
+- **Lote manual y ajustes:** siguen el mismo esquema. Un ajuste que deje una serie en más de 1 unidad se rechaza.
+
+### Perfil sectorial
+
+- El perfil vive en `packages/contracts` como regla del producto, no del negocio: modo por defecto, modos permitidos y modo exigido a los productos con fórmula médica.
+- Perfil **farmacia**:
+  - modo por defecto `LOT_EXPIRY`;
+  - permite todos los modos;
+  - un producto con `prescriptionRequired` debe ser `LOT_EXPIRY`, porque FEFO es obligatorio para medicamentos según `AGENTS.md`.
+- Sin empresa configurada rige el perfil farmacia.
+- `GET /products/settings` entrega el perfil vigente al formulario de producto, con el permiso de lectura del catálogo.
+
+### Web
+
+- **Catálogo:** selector de "Control de inventario", con el modo por defecto del perfil y la explicación de cada modo; filtro y columna por modo en el listado.
+- **Recepción de compra:** lote, vencimiento o series según el modo del producto; los servicios no se ofrecen.
+- **Existencias:** alta manual según el modo; las pantallas muestran "Sin lote" y "No vence".
+- **POS:**
+  - los servicios se venden sin existencia;
+  - una línea por serie no se cobra hasta elegir una serie por unidad, de las que devuelve la vista previa;
+  - el carrito indica si la salida es FEFO, por orden de entrada o por serie.
+
+### Alertas y reportes
+
+Las alertas de vencimiento, el reporte de vencimientos y el de devolución a proveedor por vencimiento solo consideran existencias con vencimiento. Las pantallas muestran "Sin lote" y "No vence" cuando corresponde.
+
 ## Pendientes
 
 - Revisar los requerimientos multisector (POS, inventario y catálogo), que hoy solo están descritos para farmacia.

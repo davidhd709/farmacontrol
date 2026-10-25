@@ -16,6 +16,7 @@ import {
   Chip,
 } from '@mui/material';
 import type { SaleDto } from '@farmacia/contracts';
+import { expirationDateLabel, lotNumberLabel } from '../../catalog/utils/inventory-control';
 
 interface SaleReceiptDialogProps {
   open: boolean;
@@ -148,8 +149,9 @@ export const SaleReceiptDialog: React.FC<SaleReceiptDialogProps> = ({
                           variant="caption"
                           sx={{ display: 'block', color: 'text.secondary', fontSize: '0.75rem' }}
                         >
-                          • Lote: <strong>{alloc.lotNumber || 'N/A'}</strong> (Vence:{' '}
-                          {alloc.expirationDate || 'N/A'}) → {alloc.quantityBaseUnits} un. base
+                          • Lote: <strong>{lotNumberLabel(alloc.lotNumber)}</strong> (Vence:{' '}
+                          {expirationDateLabel(alloc.expirationDate)}) → {alloc.quantityBaseUnits}{' '}
+                          un. base
                         </Typography>
                       ))}
                     </Box>
@@ -255,11 +257,7 @@ export const SaleReceiptDialog: React.FC<SaleReceiptDialogProps> = ({
           Imprimir Comprobante
         </Button>
         <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button
-            onClick={onClose}
-            color="inherit"
-            sx={{ textTransform: 'none', fontWeight: 600 }}
-          >
+          <Button onClick={onClose} color="inherit" sx={{ textTransform: 'none', fontWeight: 600 }}>
             Cerrar
           </Button>
           {onNewSale && (

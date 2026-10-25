@@ -1,5 +1,6 @@
 import { businessDateOf, calendarDate } from '../../../../common/utils/business-date';
-import type { InventoryLotDto } from '@farmacia/contracts';
+import type { InventoryControlMode, InventoryLotDto } from '@farmacia/contracts';
+import { INVENTORY_CONTROL_MODES } from '@farmacia/contracts';
 import {
   InvalidLotDataException,
   NegativeQuantityException,
@@ -9,8 +10,9 @@ export interface CreateInventoryLotProps {
   id?: string;
   productId: string;
   locationId: string;
-  lotNumber: string;
-  expirationDate: Date | string;
+  lotNumber: string | null;
+  expirationDate: Date | string | null;
+  controlMode: InventoryControlMode;
   currentQuantity?: number;
   isActive?: boolean;
   createdAt?: Date;
@@ -21,8 +23,9 @@ export interface ReconstituteInventoryLotProps {
   id: string;
   productId: string;
   locationId: string;
-  lotNumber: string;
-  expirationDate: Date;
+  lotNumber: string | null;
+  expirationDate: Date | null;
+  controlMode: InventoryControlMode;
   currentQuantity: number;
   isActive: boolean;
   createdAt: Date;
@@ -44,8 +47,9 @@ export class InventoryLot {
   private readonly _id: string;
   private readonly _productId: string;
   private readonly _locationId: string;
-  private _lotNumber: string;
-  private _expirationDate: Date;
+  private _lotNumber: string | null;
+  private _expirationDate: Date | null;
+  private readonly _controlMode: InventoryControlMode;
   private _currentQuantity: number; // En unidades base enteras
   private _isActive: boolean;
   private readonly _createdAt: Date;
@@ -68,6 +72,7 @@ export class InventoryLot {
     this._locationId = props.locationId;
     this._lotNumber = props.lotNumber;
     this._expirationDate = props.expirationDate;
+    this._controlMode = props.controlMode;
     this._currentQuantity = props.currentQuantity;
     this._isActive = props.isActive;
     this._createdAt = props.createdAt;
@@ -84,24 +89,49 @@ export class InventoryLot {
       throw new InvalidLotDataException('El ID de la ubicación es obligatorio.');
     }
 
-    const lotNumber = props.lotNumber?.trim().toUpperCase();
-    if (!lotNumber || lotNumber.length < 2) {
+    if (!INVENTORY_CONTROL_MODES.includes(props.controlMode)) {
+      throw new InvalidLotDataException('El modo de control de inventario no es válido.');
+    }
+    const lotNumber = props.lotNumber?.trim().toUpperCase() || null;
+    if (lotNumber !== null && lotNumber.length < 2) {
+      throw new InvalidLotDataException('El código de lote debe tener al menos 2 caracteres.');
+    }
+    if (
+      (props.controlMode === 'LOT' ||
+        props.controlMode === 'LOT_EXPIRY' ||
+        props.controlMode === 'SERIAL') &&
+      lotNumber === null
+    ) {
       throw new InvalidLotDataException(
-        'El código de lote debe tener al menos 2 caracteres.',
+        `El código de lote o serie es obligatorio para el modo ${props.controlMode}.`,
       );
     }
-
     const expirationDate =
-      typeof props.expirationDate === 'string'
-        ? new Date(props.expirationDate)
-        : props.expirationDate;
-
-    if (!expirationDate || isNaN(expirationDate.getTime())) {
+      props.expirationDate == null
+        ? null
+        : typeof props.expirationDate === 'string'
+          ? new Date(props.expirationDate)
+          : props.expirationDate;
+    if (expirationDate && isNaN(expirationDate.getTime())) {
       throw new InvalidLotDataException('La fecha de vencimiento es inválida.');
     }
 
+    const validShape =
+      (props.controlMode === 'SIMPLE' && lotNumber === null && expirationDate === null) ||
+      (props.controlMode === 'LOT' && lotNumber !== null && expirationDate === null) ||
+      (props.controlMode === 'LOT_EXPIRY' && lotNumber !== null && expirationDate !== null) ||
+      (props.controlMode === 'SERIAL' && lotNumber !== null && expirationDate === null);
+    if (!validShape)
+      throw new InvalidLotDataException(
+        `Lote y vencimiento no corresponden al modo ${props.controlMode}.`,
+      );
+
     const currentQuantity = props.currentQuantity ?? 0;
-    if (!Number.isInteger(currentQuantity) || currentQuantity < 0) {
+    if (
+      !Number.isInteger(currentQuantity) ||
+      currentQuantity < 0 ||
+      (props.controlMode === 'SERIAL' && currentQuantity > 1)
+    ) {
       throw new NegativeQuantityException(
         'La cantidad del lote debe ser un entero positivo o cero en unidades base.',
       );
@@ -114,6 +144,7 @@ export class InventoryLot {
       locationId: props.locationId,
       lotNumber,
       expirationDate,
+      controlMode: props.controlMode,
       currentQuantity,
       isActive: props.isActive ?? true,
       createdAt: props.createdAt ?? now,
@@ -135,14 +166,17 @@ export class InventoryLot {
   public get locationId(): string {
     return this._locationId;
   }
-  public get lotNumber(): string {
+  public get lotNumber(): string | null {
     return this._lotNumber;
   }
-  public get expirationDate(): Date {
+  public get expirationDate(): Date | null {
     return this._expirationDate;
   }
   public get currentQuantity(): number {
     return this._currentQuantity;
+  }
+  public get controlMode(): InventoryControlMode {
+    return this._controlMode;
   }
   public get isActive(): boolean {
     return this._isActive;
@@ -161,10 +195,14 @@ export class InventoryLot {
   }
 
   public isExpired(referenceDate: Date = new Date()): boolean {
-    return this._expirationDate.toISOString().slice(0, 10) < businessDateOf(referenceDate);
+    return (
+      this._expirationDate !== null &&
+      this._expirationDate.toISOString().slice(0, 10) < businessDateOf(referenceDate)
+    );
   }
 
   public daysUntilExpiration(referenceDate: Date = new Date()): number {
+    if (!this._expirationDate) return Number.POSITIVE_INFINITY;
     const ref = calendarDate(businessDateOf(referenceDate));
     const diffTime = this._expirationDate.getTime() - ref.getTime();
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -176,7 +214,7 @@ export class InventoryLot {
       productId: this._productId,
       locationId: this._locationId,
       lotNumber: this._lotNumber,
-      expirationDate: this._expirationDate.toISOString().split('T')[0],
+      expirationDate: this._expirationDate?.toISOString().split('T')[0] ?? null,
       currentQuantity: this._currentQuantity,
       isActive: this._isActive,
       createdAt: this._createdAt.toISOString(),

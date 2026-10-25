@@ -16,6 +16,7 @@ describe('Worker concurrency (PostgreSQL real)', () => {
     const category = await prisma.category.create({ data: { name: 'Worker concurrency' } });
     const product = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'WORKER-CONC',
         name: 'Producto worker',
@@ -27,6 +28,7 @@ describe('Worker concurrency (PostgreSQL real)', () => {
     });
     const lot = await prisma.inventoryLot.create({
       data: {
+        controlMode: 'LOT_EXPIRY',
         productId: product.id,
         locationId: location.id,
         lotNumber: 'CONC-1',

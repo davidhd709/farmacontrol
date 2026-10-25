@@ -92,6 +92,7 @@ describe('Concurrencia de cierre: compras, notas crédito y consecutivos (Postgr
     productId = (
       await prisma.product.create({
         data: {
+          inventoryControlMode: 'LOT_EXPIRY',
           categoryId: category.id,
           code: 'CONC-01',
           name: 'Producto Carrera',

@@ -93,6 +93,7 @@ describe('ReportsController (Integration with PostgreSQL & CSV Exports — HU-02
 
     const p1 = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: cat.id,
         code: 'PROD-A',
         name: 'Paracetamol 500mg',
@@ -104,6 +105,7 @@ describe('ReportsController (Integration with PostgreSQL & CSV Exports — HU-02
 
     const p2 = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: cat.id,
         code: 'PROD-B',
         name: 'Dipirona 1g',
@@ -122,6 +124,7 @@ describe('ReportsController (Integration with PostgreSQL & CSV Exports — HU-02
     const in20Days = new Date(Date.now() + 20 * 24 * 60 * 60 * 1000);
     await prisma.inventoryLot.create({
       data: {
+        controlMode: 'LOT_EXPIRY',
         productId: p1.id,
         locationId: loc.id,
         lotNumber: 'LOT-A1',
@@ -134,6 +137,7 @@ describe('ReportsController (Integration with PostgreSQL & CSV Exports — HU-02
     const in200Days = new Date(Date.now() + 200 * 24 * 60 * 60 * 1000);
     await prisma.inventoryLot.create({
       data: {
+        controlMode: 'LOT_EXPIRY',
         productId: p2.id,
         locationId: loc.id,
         lotNumber: 'LOT-B1',

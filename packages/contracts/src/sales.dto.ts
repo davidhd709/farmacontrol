@@ -1,17 +1,13 @@
 export type SaleStatus = 'COMPLETED' | 'CANCELLED';
 
 export type SalePaymentMethod =
-  | 'EFECTIVO'
-  | 'TRANSFERENCIA'
-  | 'TARJETA_DEBITO'
-  | 'TARJETA_CREDITO'
-  | 'CREDITO';
+  'EFECTIVO' | 'TRANSFERENCIA' | 'TARJETA_DEBITO' | 'TARJETA_CREDITO' | 'CREDITO';
 
 export interface SaleLotAllocationDto {
   id: string;
   lotId: string;
-  lotNumber?: string;
-  expirationDate?: string;
+  lotNumber?: string | null;
+  expirationDate?: string | null;
   quantityBaseUnits: number;
 }
 
@@ -60,6 +56,7 @@ export interface ConfirmSaleLineItemPayload {
   productId: string;
   presentationId?: string | null;
   quantityCommercial: number;
+  serialNumbers?: string[];
   unitPriceOverride?: number;
   discount?: number;
 }
@@ -81,6 +78,7 @@ export interface FefoPreviewLinePayload {
   productId: string;
   presentationId?: string | null;
   quantityCommercial: number;
+  serialNumbers?: string[];
 }
 
 export interface FefoPreviewPayload {
@@ -89,9 +87,9 @@ export interface FefoPreviewPayload {
 
 export interface FefoPreviewAllocationDto {
   lotId: string;
-  lotNumber: string;
+  lotNumber: string | null;
   /** Día de vencimiento (YYYY-MM-DD) */
-  expirationDate: string;
+  expirationDate: string | null;
   quantityBaseUnits: number;
 }
 
@@ -104,6 +102,8 @@ export interface FefoPreviewLineDto {
   /** Unidades que faltan; 0 cuando la línea se cubre completa */
   shortfallBaseUnits: number;
   allocations: FefoPreviewAllocationDto[];
+  /** Series seleccionables, conservadas en el orden de entrada para SERIAL. */
+  availableSerials?: string[];
 }
 
 export interface FefoPreviewDto {
@@ -145,7 +145,8 @@ export interface CreditNoteLineDto {
   productCode?: string;
   productName?: string;
   lotId?: string | null;
-  lotNumber?: string | null;
+  lotNumber: string | null;
+  expirationDate: string | null;
   quantityCommercial: number;
   quantityBaseUnits: number;
   unitPrice: number;
@@ -175,4 +176,3 @@ export interface CreditNoteDto {
   createdAt: string;
   lines: CreditNoteLineDto[];
 }
-

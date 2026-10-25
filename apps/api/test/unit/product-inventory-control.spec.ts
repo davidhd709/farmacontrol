@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest';
+import { SECTOR_PROFILE_RULES } from '@farmacia/contracts';
 import { Product } from '../../src/modules/catalog/domain/entities/product.entity';
-import { ProductLotControlRequiredException } from '../../src/modules/catalog/domain/exceptions/product.exceptions';
+import { ProductInventoryControlModeException } from '../../src/modules/catalog/domain/exceptions/product.exceptions';
 
-/** FARM-AUD-002: el catálogo no admite productos sin control de inventario por lote. */
-describe('Product: control de lote obligatorio (FARM-AUD-002)', () => {
+describe('Product: modos de control por perfil sectorial', () => {
+  const profile = SECTOR_PROFILE_RULES.PHARMACY;
   const base = {
     categoryId: 'cat-1',
     code: 'MED-001',
@@ -11,52 +12,69 @@ describe('Product: control de lote obligatorio (FARM-AUD-002)', () => {
     basePrice: 200,
   };
 
-  it('crea el producto con control de lote por defecto', () => {
-    expect(Product.create(base).requiresLotControl).toBe(true);
+  it('usa LOT_EXPIRY por defecto en PHARMACY', () => {
+    expect(Product.create(base, profile).inventoryControlMode).toBe('LOT_EXPIRY');
   });
 
-  it('rechaza crear un producto con requiresLotControl=false', () => {
-    expect(() => Product.create({ ...base, requiresLotControl: false })).toThrow(
-      ProductLotControlRequiredException,
-    );
+  it.each(['SERVICE', 'SIMPLE', 'LOT', 'LOT_EXPIRY', 'SERIAL'] as const)(
+    'acepta el modo explícito %s permitido por el perfil',
+    (inventoryControlMode) => {
+      expect(Product.create({ ...base, inventoryControlMode }, profile).inventoryControlMode).toBe(
+        inventoryControlMode,
+      );
+    },
+  );
+
+  it('rechaza un modo que el perfil no permite', () => {
+    expect(() =>
+      Product.create(
+        { ...base, inventoryControlMode: 'SIMPLE' },
+        {
+          ...profile,
+          allowedControlModes: ['LOT_EXPIRY'],
+        },
+      ),
+    ).toThrow(ProductInventoryControlModeException);
   });
 
-  it('rechaza desactivar el control de lote y no aplica ningún otro cambio de la misma edición', () => {
-    const product = Product.create(base);
+  it('exige LOT_EXPIRY para productos con fórmula al crear y editar', () => {
+    expect(() =>
+      Product.create(
+        { ...base, inventoryControlMode: 'SIMPLE', prescriptionRequired: true },
+        profile,
+      ),
+    ).toThrow(/fórmula médica.*LOT_EXPIRY/i);
 
-    expect(() => product.update({ name: 'Otro nombre', requiresLotControl: false })).toThrow(
-      ProductLotControlRequiredException,
-    );
-    expect(product.name).toBe('Acetaminofén 500 mg');
-    expect(product.requiresLotControl).toBe(true);
+    const product = Product.create(base, profile);
+    expect(() =>
+      product.update({ inventoryControlMode: 'LOT', prescriptionRequired: true }, profile),
+    ).toThrow(/fórmula médica.*LOT_EXPIRY/i);
+    expect(product.inventoryControlMode).toBe('LOT_EXPIRY');
+    expect(product.prescriptionRequired).toBe(false);
   });
 
-  it('un producto antiguo sin control puede editarse y regularizarse explícitamente', () => {
-    const legacy = Product.reconstitute({
-      id: 'p-legacy',
-      categoryId: 'cat-1',
-      code: 'LEG-001',
-      barcode: null,
-      name: 'Caldero 20 cm',
-      genericName: null,
-      concentration: null,
-      sanitaryRegistry: null,
-      manufacturer: null,
-      description: null,
-      requiresLotControl: false,
-      prescriptionRequired: false,
-      baseUnit: 'UNIDAD',
-      basePrice: '45000.00',
-      baseCost: '0.00',
-      isActive: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-
-    legacy.update({ name: 'Caldero 20 cm acero' });
-    expect(legacy.requiresLotControl).toBe(false);
-
-    legacy.update({ requiresLotControl: true });
-    expect(legacy.requiresLotControl).toBe(true);
+  it('rechaza modos desconocidos durante la reconstitución', () => {
+    expect(() =>
+      Product.reconstitute({
+        id: 'p',
+        categoryId: 'cat-1',
+        code: 'MED-1',
+        barcode: null,
+        name: 'Producto',
+        genericName: null,
+        concentration: null,
+        sanitaryRegistry: null,
+        manufacturer: null,
+        description: null,
+        inventoryControlMode: 'UNKNOWN' as never,
+        prescriptionRequired: false,
+        baseUnit: 'UNIDAD',
+        basePrice: '1.00',
+        baseCost: '0.00',
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+    ).toThrow(ProductInventoryControlModeException);
   });
 });

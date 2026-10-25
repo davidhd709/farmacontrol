@@ -108,13 +108,13 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
 
     const product = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'MED-IBU-400',
         name: 'Ibuprofeno 400mg',
         baseUnit: 'TABLETA',
         basePrice: new Prisma.Decimal('500.00'),
         baseCost: new Prisma.Decimal('300.00'),
-        requiresLotControl: true,
       },
     });
     productId = product.id;
@@ -146,6 +146,7 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
 
     const lot1 = await prisma.inventoryLot.create({
       data: {
+        controlMode: 'LOT_EXPIRY',
         productId,
         locationId: location.id,
         lotNumber: 'LOTE-FEFO-01',
@@ -158,6 +159,7 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
 
     const lot2 = await prisma.inventoryLot.create({
       data: {
+        controlMode: 'LOT_EXPIRY',
         productId,
         locationId: location.id,
         lotNumber: 'LOTE-FEFO-02',

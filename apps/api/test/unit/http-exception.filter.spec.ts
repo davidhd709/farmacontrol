@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ArgumentsHost, Logger, UnauthorizedException } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import { Prisma } from '@farmacia/database';
 import { HttpExceptionFilter } from '../../src/common/filters/http-exception.filter';
 
 describe('HttpExceptionFilter (Unit)', () => {
@@ -89,5 +90,46 @@ describe('HttpExceptionFilter (Unit)', () => {
       exception.stack,
     );
     logSpy.mockRestore();
+  });
+
+  describe('triggers de modo de control de inventario (F4)', () => {
+    const run = (exception: unknown) => {
+      const jsonMock = vi.fn();
+      const statusMock = vi.fn().mockReturnValue({ json: jsonMock });
+      const host = createMockHost(
+        { method: 'POST', url: '/api/v1/purchases', correlationId: 'c', headers: {} },
+        { status: statusMock, setHeader: vi.fn() },
+      );
+      vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+      filter.catch(exception, host);
+      return { status: statusMock.mock.calls[0][0], body: jsonMock.mock.calls[0][0] };
+    };
+    const rawError = (code: string, message: string) =>
+      new Prisma.PrismaClientKnownRequestError(message, {
+        code: 'P2010',
+        clientVersion: 'test',
+        meta: { code, message },
+      });
+
+    it('traduce a 409 el trigger disparado desde SQL directo (P2010 / 23514)', () => {
+      const { status, body } = run(
+        rawError('23514', 'INVENTORY_CONTROL_MODE_MISMATCH: producto x, modo vigente SERVICE'),
+      );
+      expect(status).toBe(409);
+      expect(body.message).toMatch(/modo de control de inventario del producto cambió/);
+    });
+
+    it('traduce a 409 el bloqueo del cambio de modo con existencias', () => {
+      const { status, body } = run(
+        rawError('23514', 'INVENTORY_CONTROL_MODE_LOCKED: el producto x tiene existencias'),
+      );
+      expect(status).toBe(409);
+      expect(body.message).toMatch(/tiene existencias registradas/);
+    });
+
+    it('deja en 500 cualquier otro error de SQL directo', () => {
+      const { status } = run(rawError('23514', 'otra restricción'));
+      expect(status).toBe(500);
+    });
   });
 });

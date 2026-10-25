@@ -3,7 +3,12 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { prisma, cleanTestDatabase, seedRbac, AccountingPurpose as DbPurpose } from '@farmacia/database';
+import {
+  prisma,
+  cleanTestDatabase,
+  seedRbac,
+  AccountingPurpose as DbPurpose,
+} from '@farmacia/database';
 import { AppModule } from '../../src/app.module';
 import { UserProvisioningService } from '../../src/modules/identity/application/services/user-provisioning.service';
 import { AuthService } from '../../src/modules/identity/application/services/auth.service';
@@ -127,10 +132,20 @@ describe('Full System Multi-day Lifecycle Simulation (PostgreSQL Real)', () => {
       { code: '220505', name: 'Proveedores Nacionales', type: 'LIABILITY', purpose: 'SUPPLIERS' },
       { code: '240805', name: 'IVA Generado', type: 'LIABILITY', purpose: 'VAT_OUTPUT' },
       { code: '310505', name: 'Capital Suscrito y Pagado', type: 'EQUITY', purpose: 'CAPITAL' },
-      { code: '360505', name: 'Utilidad del Ejercicio', type: 'EQUITY', purpose: 'CURRENT_YEAR_RESULT' },
+      {
+        code: '360505',
+        name: 'Utilidad del Ejercicio',
+        type: 'EQUITY',
+        purpose: 'CURRENT_YEAR_RESULT',
+      },
       { code: '413501', name: 'Ventas Gravadas 19%', type: 'INCOME', purpose: 'SALES_TAXED' },
       { code: '413502', name: 'Ventas Excluidas', type: 'INCOME', purpose: 'SALES_EXCLUDED' },
-      { code: '613501', name: 'Costo de Ventas Medicamentos', type: 'COST', purpose: 'COST_OF_SALES' },
+      {
+        code: '613501',
+        name: 'Costo de Ventas Medicamentos',
+        type: 'COST',
+        purpose: 'COST_OF_SALES',
+      },
       { code: '513530', name: 'Gasto Energía Eléctrica', type: 'EXPENSE' },
       { code: '512005', name: 'Gasto Arrendamientos', type: 'EXPENSE' },
     ];
@@ -239,13 +254,13 @@ describe('Full System Multi-day Lifecycle Simulation (PostgreSQL Real)', () => {
 
     const amox = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'MED-AMX-500',
         name: 'Amoxicilina 500mg',
         baseUnit: 'CAPSULA',
         basePrice: '800.00',
         baseCost: '400.00',
-        requiresLotControl: true,
       },
     });
     amoxProductId = amox.id;
@@ -264,13 +279,13 @@ describe('Full System Multi-day Lifecycle Simulation (PostgreSQL Real)', () => {
 
     const acet = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'MED-ACT-500',
         name: 'Acetaminofén 500mg',
         baseUnit: 'TABLETA',
         basePrice: '300.00',
         baseCost: '150.00',
-        requiresLotControl: true,
       },
     });
     acetProductId = acet.id;
@@ -523,7 +538,9 @@ describe('Full System Multi-day Lifecycle Simulation (PostgreSQL Real)', () => {
       expect(alloc[0].quantityBaseUnits).toBe(600);
 
       // Saldos de lotes en DB
-      const lotClose = await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lotAmoxCloseId } });
+      const lotClose = await prisma.inventoryLot.findUniqueOrThrow({
+        where: { id: lotAmoxCloseId },
+      });
       expect(lotClose.currentQuantity).toBe(900); // 1500 - 600 = 900
 
       const lotFar = await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lotAmoxFarId } });
@@ -574,7 +591,9 @@ describe('Full System Multi-day Lifecycle Simulation (PostgreSQL Real)', () => {
       expect(alloc[1].quantityBaseUnits).toBe(300);
 
       // Saldos de lotes en DB
-      const lotClose = await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lotAmoxCloseId } });
+      const lotClose = await prisma.inventoryLot.findUniqueOrThrow({
+        where: { id: lotAmoxCloseId },
+      });
       expect(lotClose.currentQuantity).toBe(0); // Agotado
 
       const lotFar = await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lotAmoxFarId } });
@@ -741,7 +760,9 @@ describe('Full System Multi-day Lifecycle Simulation (PostgreSQL Real)', () => {
       expect(res.body.status).toBe('CANCELLED');
 
       // Comprobar que LOT-AMX-CLOSE recuperó sus 600 cápsulas (de 0 pasa a 600)
-      const lotClose = await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lotAmoxCloseId } });
+      const lotClose = await prisma.inventoryLot.findUniqueOrThrow({
+        where: { id: lotAmoxCloseId },
+      });
       expect(lotClose.currentQuantity).toBe(600);
 
       // Asiento de reversión creado

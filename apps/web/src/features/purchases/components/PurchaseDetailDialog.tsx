@@ -18,6 +18,7 @@ import {
   Divider,
 } from '@mui/material';
 import type { PurchaseDto } from '@farmacia/contracts';
+import { expirationDateLabel, lotNumberLabel } from '../../catalog/utils/inventory-control';
 
 interface PurchaseDetailDialogProps {
   open: boolean;
@@ -62,7 +63,14 @@ export const PurchaseDetailDialog: React.FC<PurchaseDetailDialogProps> = ({
         },
       }}
     >
-      <DialogTitle sx={{ fontWeight: 800, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <DialogTitle
+        sx={{
+          fontWeight: 800,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}
+      >
         <span>Detalle de Factura de Compra: {purchase.invoiceNumber}</span>
         <Chip
           label={purchase.status}
@@ -79,9 +87,18 @@ export const PurchaseDetailDialog: React.FC<PurchaseDetailDialogProps> = ({
 
       <DialogContent dividers>
         {/* Cabecera Informativa de Factura */}
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' }, gap: 2, mb: 3 }}>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' },
+            gap: 2,
+            mb: 3,
+          }}
+        >
           <Box>
-            <Typography variant="caption" color="text.secondary">Proveedor</Typography>
+            <Typography variant="caption" color="text.secondary">
+              Proveedor
+            </Typography>
             <Typography variant="body1" sx={{ fontWeight: 600 }}>
               {purchase.supplierName || '—'}
             </Typography>
@@ -93,35 +110,48 @@ export const PurchaseDetailDialog: React.FC<PurchaseDetailDialogProps> = ({
           </Box>
 
           <Box>
-            <Typography variant="caption" color="text.secondary">Fecha de Emisión Factura</Typography>
+            <Typography variant="caption" color="text.secondary">
+              Fecha de Emisión Factura
+            </Typography>
             <Typography variant="body1" sx={{ fontWeight: 600 }}>
               {purchase.purchaseDate}
             </Typography>
           </Box>
 
           <Box>
-            <Typography variant="caption" color="text.secondary">Fecha de Vencimiento Factura</Typography>
-            <Typography variant="body1" sx={{ fontWeight: 600, color: dueDate ? 'primary.main' : 'text.primary' }}>
+            <Typography variant="caption" color="text.secondary">
+              Fecha de Vencimiento Factura
+            </Typography>
+            <Typography
+              variant="body1"
+              sx={{ fontWeight: 600, color: dueDate ? 'primary.main' : 'text.primary' }}
+            >
               {dueDate || 'Inmediato (Contado)'}
             </Typography>
           </Box>
 
           <Box>
-            <Typography variant="caption" color="text.secondary">Condición de Pago</Typography>
+            <Typography variant="caption" color="text.secondary">
+              Condición de Pago
+            </Typography>
             <Typography variant="body2" sx={{ fontWeight: 600 }}>
               {paymentCondition || 'Contado'}
             </Typography>
           </Box>
 
           <Box>
-            <Typography variant="caption" color="text.secondary">Recepcionado por</Typography>
+            <Typography variant="caption" color="text.secondary">
+              Recepcionado por
+            </Typography>
             <Typography variant="body2">
               {purchase.receivedByUsername ? `@${purchase.receivedByUsername}` : 'Sistema'}
             </Typography>
           </Box>
 
           <Box>
-            <Typography variant="caption" color="text.secondary">Fecha de Registro en Kardex</Typography>
+            <Typography variant="caption" color="text.secondary">
+              Fecha de Registro en Kardex
+            </Typography>
             <Typography variant="body2">
               {new Date(purchase.createdAt).toLocaleString('es-CO')}
             </Typography>
@@ -129,7 +159,9 @@ export const PurchaseDetailDialog: React.FC<PurchaseDetailDialogProps> = ({
 
           {cleanNotes && (
             <Box sx={{ gridColumn: '1 / -1' }}>
-              <Typography variant="caption" color="text.secondary">Observaciones / Notas de Factura</Typography>
+              <Typography variant="caption" color="text.secondary">
+                Observaciones / Notas de Factura
+              </Typography>
               <Typography variant="body2">{cleanNotes}</Typography>
             </Box>
           )}
@@ -149,7 +181,9 @@ export const PurchaseDetailDialog: React.FC<PurchaseDetailDialogProps> = ({
                 <TableCell sx={{ fontWeight: 'bold' }}>Producto</TableCell>
                 <TableCell sx={{ fontWeight: 'bold' }}>Lote</TableCell>
                 <TableCell sx={{ fontWeight: 'bold' }}>Vence</TableCell>
-                <TableCell sx={{ fontWeight: 'bold', textAlign: 'right' }}>Cant. Comercial</TableCell>
+                <TableCell sx={{ fontWeight: 'bold', textAlign: 'right' }}>
+                  Cant. Comercial
+                </TableCell>
                 <TableCell sx={{ fontWeight: 'bold', textAlign: 'right' }}>Unidades Base</TableCell>
                 <TableCell sx={{ fontWeight: 'bold', textAlign: 'right' }}>Costo Unit.</TableCell>
                 <TableCell sx={{ fontWeight: 'bold', textAlign: 'right' }}>Subtotal</TableCell>
@@ -169,12 +203,16 @@ export const PurchaseDetailDialog: React.FC<PurchaseDetailDialogProps> = ({
                     )}
                   </TableCell>
                   <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
-                    {line.lotNumber}
+                    {lotNumberLabel(line.lotNumber)}
                   </TableCell>
-                  <TableCell>{line.expirationDate}</TableCell>
+                  <TableCell>{expirationDateLabel(line.expirationDate)}</TableCell>
                   <TableCell sx={{ textAlign: 'right' }}>{line.quantityCommercial}</TableCell>
-                  <TableCell sx={{ textAlign: 'right', fontWeight: 600 }}>{line.quantityBaseUnits}</TableCell>
-                  <TableCell sx={{ textAlign: 'right' }}>${Number(line.unitCost).toLocaleString()}</TableCell>
+                  <TableCell sx={{ textAlign: 'right', fontWeight: 600 }}>
+                    {line.quantityBaseUnits}
+                  </TableCell>
+                  <TableCell sx={{ textAlign: 'right' }}>
+                    ${Number(line.unitCost).toLocaleString()}
+                  </TableCell>
                   <TableCell sx={{ textAlign: 'right', fontWeight: 'bold' }}>
                     ${Number(line.subtotal).toLocaleString()}
                   </TableCell>
@@ -185,7 +223,16 @@ export const PurchaseDetailDialog: React.FC<PurchaseDetailDialogProps> = ({
         </TableContainer>
 
         {/* Total General */}
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3, p: 1.5, bgcolor: 'action.hover', borderRadius: 1 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            mt: 3,
+            p: 1.5,
+            bgcolor: 'action.hover',
+            borderRadius: 1,
+          }}
+        >
           <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
             Total Factura: ${Number(purchase.totalAmount).toLocaleString()}
           </Typography>

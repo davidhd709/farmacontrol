@@ -91,7 +91,7 @@ export class PrismaProductRepository implements ProductRepositoryPort {
         sanitaryRegistry: product.sanitaryRegistry,
         manufacturer: product.manufacturer,
         description: product.description,
-        requiresLotControl: product.requiresLotControl,
+        inventoryControlMode: product.inventoryControlMode,
         prescriptionRequired: product.prescriptionRequired,
         baseUnit: product.baseUnit,
         basePrice: new Prisma.Decimal(product.basePrice),
@@ -124,7 +124,7 @@ export class PrismaProductRepository implements ProductRepositoryPort {
         sanitaryRegistry: product.sanitaryRegistry,
         manufacturer: product.manufacturer,
         description: product.description,
-        requiresLotControl: product.requiresLotControl,
+        inventoryControlMode: product.inventoryControlMode,
         prescriptionRequired: product.prescriptionRequired,
         baseUnit: product.baseUnit,
         basePrice: new Prisma.Decimal(product.basePrice),
@@ -142,6 +142,11 @@ export class PrismaProductRepository implements ProductRepositoryPort {
     return this.toDomain(record);
   }
 
+  public async hasInventoryHistory(productId: string): Promise<boolean> {
+    const count = await this.client.inventoryLot.count({ where: { productId } });
+    return count > 0;
+  }
+
   public async findAll(
     filters: ProductQueryFilters = {},
   ): Promise<{ items: Product[]; total: number }> {
@@ -155,8 +160,8 @@ export class PrismaProductRepository implements ProductRepositoryPort {
       where.categoryId = filters.categoryId;
     }
 
-    if (filters.requiresLotControl !== undefined) {
-      where.requiresLotControl = filters.requiresLotControl;
+    if (filters.inventoryControlMode !== undefined) {
+      where.inventoryControlMode = filters.inventoryControlMode;
     }
 
     if (filters.isActive !== undefined) {
@@ -203,7 +208,7 @@ export class PrismaProductRepository implements ProductRepositoryPort {
     sanitaryRegistry: string | null;
     manufacturer: string | null;
     description: string | null;
-    requiresLotControl: boolean;
+    inventoryControlMode: string;
     prescriptionRequired: boolean;
     baseUnit: string;
     basePrice: Prisma.Decimal;
@@ -247,7 +252,7 @@ export class PrismaProductRepository implements ProductRepositoryPort {
       sanitaryRegistry: record.sanitaryRegistry,
       manufacturer: record.manufacturer,
       description: record.description,
-      requiresLotControl: record.requiresLotControl,
+      inventoryControlMode: record.inventoryControlMode as Product['inventoryControlMode'],
       prescriptionRequired: record.prescriptionRequired,
       baseUnit: record.baseUnit,
       basePrice: record.basePrice.toFixed(2),

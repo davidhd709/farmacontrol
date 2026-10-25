@@ -37,6 +37,19 @@ describe('credit-note-rules', () => {
     });
   });
 
+  describe('sortAllocationsFefo', () => {
+    it('deja al final las existencias sin vencimiento y las ordena por lote de forma estable', () => {
+      const input = [
+        { lotId: 'b', quantityBaseUnits: 1, lot: { expirationDate: null } },
+        { lotId: 'a', quantityBaseUnits: 1, lot: { expirationDate: null } },
+        { lotId: 'c', quantityBaseUnits: 1, lot: { expirationDate: new Date('2027-01-01') } },
+      ];
+      const order = (list: typeof input) => sortAllocationsFefo(list).map((a) => a.lotId);
+      expect(order(input)).toEqual(['c', 'a', 'b']);
+      expect(order([...input].reverse())).toEqual(['c', 'a', 'b']);
+    });
+  });
+
   describe('splitReturnAcrossLots', () => {
     const allocations = sortAllocationsFefo([
       { lotId: 'late', quantityBaseUnits: 2, lot: { expirationDate: new Date('2028-12-31') } },

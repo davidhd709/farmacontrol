@@ -22,6 +22,7 @@ import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { createDebitNoteSchema, type DebitNoteFormValues } from '../validation/debit-note.schema';
 import { fromCents, toCents } from '../../../utils/money';
+import { lotNumberLabel } from '../../catalog/utils/inventory-control';
 
 interface Props {
   open: boolean;
@@ -124,7 +125,9 @@ export const DebitNoteDialog: React.FC<Props> = ({ open, purchase, onClose, onCr
                   return (
                     <TableRow key={line.id}>
                       <TableCell>{line.productName || line.productId}</TableCell>
-                      <TableCell sx={{ fontFamily: 'monospace' }}>{line.lotNumber}</TableCell>
+                      <TableCell sx={{ fontFamily: 'monospace' }}>
+                        {lotNumberLabel(line.lotNumber)}
+                      </TableCell>
                       <TableCell align="right">{Number(line.quantityCommercial)}</TableCell>
                       <TableCell align="right">{money(Number(line.unitCost))}</TableCell>
                       <TableCell align="right">

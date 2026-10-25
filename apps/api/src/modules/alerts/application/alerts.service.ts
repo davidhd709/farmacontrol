@@ -38,6 +38,7 @@ export class AlertsService {
     const where: any = {
       alertType: 'EXPIRATION',
       isResolved: filters.isResolved !== undefined ? filters.isResolved : false,
+      lot: { expirationDate: { not: null } },
     };
 
     if (filters.severity) {
@@ -45,7 +46,7 @@ export class AlertsService {
     }
 
     if (filters.locationId) {
-      where.lot = { locationId: filters.locationId };
+      where.lot = { ...where.lot, locationId: filters.locationId };
     }
 
     if (filters.search && filters.search.trim()) {
@@ -73,10 +74,7 @@ export class AlertsService {
             },
           },
         },
-        orderBy: [
-          { daysRemaining: 'asc' },
-          { currentQuantity: 'desc' },
-        ],
+        orderBy: [{ daysRemaining: 'asc' }, { currentQuantity: 'desc' }],
         skip,
         take: pageSize,
       }),
@@ -92,7 +90,7 @@ export class AlertsService {
       categoryName: record.product.category?.name,
       locationId: record.lot.locationId,
       locationName: record.lot.location.name,
-      expirationDate: record.lot.expirationDate.toISOString().split('T')[0],
+      expirationDate: record.lot.expirationDate?.toISOString().split('T')[0] ?? null,
       daysRemaining: record.daysRemaining,
       severity: record.severity as ExpirationSeverity,
       currentQuantity: record.currentQuantity,
@@ -121,6 +119,7 @@ export class AlertsService {
         alertType: 'EXPIRATION',
         isResolved: false,
         currentQuantity: { gt: 0 },
+        lot: { expirationDate: { not: null } },
       },
       select: {
         severity: true,
@@ -160,117 +159,123 @@ export class AlertsService {
    * Identifica y clasifica vencimientos en tiempo real de forma no bloqueante (RN-001, RN-002, RF-008).
    */
   async evaluateLotsExpirations(referenceDate: Date = new Date()): Promise<EvaluationResultDto> {
-    this.logger.log(`Iniciando evaluación de vencimientos de lotes con fecha de referencia ${referenceDate.toISOString()}`);
-
-    return this.prisma.$transaction(async (tx) => {
-      const [lock] = await tx.$queryRaw<Array<{ acquired: boolean }>>`
-        SELECT pg_try_advisory_xact_lock(41704, 1) AS acquired
-      `;
-      if (!lock?.acquired) throw new EvaluationInProgressError();
-
-    const lots = await tx.inventoryLot.findMany({
-      where: { isActive: true },
-      select: {
-        id: true,
-        productId: true,
-        lotNumber: true,
-        expirationDate: true,
-        currentQuantity: true,
-      },
-    });
-
-    let evaluatedLots = 0;
-    let createdAlerts = 0;
-    let updatedAlerts = 0;
-    let resolvedAlerts = 0;
-
-    for (const lot of lots) {
-      evaluatedLots++;
-      const { daysRemaining, severity } = calculateExpirationSeverity(
-        lot.expirationDate,
-        referenceDate,
-      );
-
-      // Si el lote tiene existencias y está en riesgo (<= 90 días o vencido)
-      if (lot.currentQuantity > 0 && severity !== 'NORMAL') {
-        const existing = await tx.inventoryAlert.findUnique({
-          where: {
-            lotId_alertType: {
-              lotId: lot.id,
-              alertType: 'EXPIRATION',
-            },
-          },
-        });
-
-        if (!existing) {
-          await tx.inventoryAlert.create({
-            data: {
-              id: randomUUID(),
-              lotId: lot.id,
-              productId: lot.productId,
-              alertType: 'EXPIRATION',
-              severity,
-              daysRemaining,
-              currentQuantity: lot.currentQuantity,
-              isResolved: false,
-              lastEvaluatedAt: referenceDate,
-            },
-          });
-          createdAlerts++;
-        } else {
-          await tx.inventoryAlert.update({
-            where: { id: existing.id },
-            data: {
-              severity,
-              daysRemaining,
-              currentQuantity: lot.currentQuantity,
-              isResolved: false,
-              resolvedAt: null,
-              lastEvaluatedAt: referenceDate,
-            },
-          });
-          updatedAlerts++;
-        }
-      } else {
-        // Si el lote se agotó o su vencimiento ya es mayor a 90 días, resolvemos cualquier alerta previa
-        const existing = await tx.inventoryAlert.findUnique({
-          where: {
-            lotId_alertType: {
-              lotId: lot.id,
-              alertType: 'EXPIRATION',
-            },
-          },
-        });
-
-        if (existing && !existing.isResolved) {
-          await tx.inventoryAlert.update({
-            where: { id: existing.id },
-            data: {
-              severity,
-              daysRemaining,
-              currentQuantity: lot.currentQuantity,
-              isResolved: true,
-              resolvedAt: referenceDate,
-              lastEvaluatedAt: referenceDate,
-            },
-          });
-          resolvedAlerts++;
-        }
-      }
-    }
-
     this.logger.log(
-      `Evaluación finalizada: ${evaluatedLots} lotes evaluados, ${createdAlerts} creadas, ${updatedAlerts} actualizadas, ${resolvedAlerts} resueltas.`,
+      `Iniciando evaluación de vencimientos de lotes con fecha de referencia ${referenceDate.toISOString()}`,
     );
 
-    return {
-      evaluatedLots,
-      createdAlerts,
-      updatedAlerts,
-      resolvedAlerts,
-      timestamp: referenceDate.toISOString(),
-    };
-    }, { timeout: 60000 });
+    return this.prisma.$transaction(
+      async (tx) => {
+        const [lock] = await tx.$queryRaw<Array<{ acquired: boolean }>>`
+        SELECT pg_try_advisory_xact_lock(41704, 1) AS acquired
+      `;
+        if (!lock?.acquired) throw new EvaluationInProgressError();
+
+        const lots = await tx.inventoryLot.findMany({
+          where: { isActive: true, expirationDate: { not: null } },
+          select: {
+            id: true,
+            productId: true,
+            lotNumber: true,
+            expirationDate: true,
+            currentQuantity: true,
+          },
+        });
+
+        let evaluatedLots = 0;
+        let createdAlerts = 0;
+        let updatedAlerts = 0;
+        let resolvedAlerts = 0;
+
+        for (const lot of lots) {
+          if (lot.expirationDate === null) continue;
+          evaluatedLots++;
+          const { daysRemaining, severity } = calculateExpirationSeverity(
+            lot.expirationDate,
+            referenceDate,
+          );
+
+          // Si el lote tiene existencias y está en riesgo (<= 90 días o vencido)
+          if (lot.currentQuantity > 0 && severity !== 'NORMAL') {
+            const existing = await tx.inventoryAlert.findUnique({
+              where: {
+                lotId_alertType: {
+                  lotId: lot.id,
+                  alertType: 'EXPIRATION',
+                },
+              },
+            });
+
+            if (!existing) {
+              await tx.inventoryAlert.create({
+                data: {
+                  id: randomUUID(),
+                  lotId: lot.id,
+                  productId: lot.productId,
+                  alertType: 'EXPIRATION',
+                  severity,
+                  daysRemaining,
+                  currentQuantity: lot.currentQuantity,
+                  isResolved: false,
+                  lastEvaluatedAt: referenceDate,
+                },
+              });
+              createdAlerts++;
+            } else {
+              await tx.inventoryAlert.update({
+                where: { id: existing.id },
+                data: {
+                  severity,
+                  daysRemaining,
+                  currentQuantity: lot.currentQuantity,
+                  isResolved: false,
+                  resolvedAt: null,
+                  lastEvaluatedAt: referenceDate,
+                },
+              });
+              updatedAlerts++;
+            }
+          } else {
+            // Si el lote se agotó o su vencimiento ya es mayor a 90 días, resolvemos cualquier alerta previa
+            const existing = await tx.inventoryAlert.findUnique({
+              where: {
+                lotId_alertType: {
+                  lotId: lot.id,
+                  alertType: 'EXPIRATION',
+                },
+              },
+            });
+
+            if (existing && !existing.isResolved) {
+              await tx.inventoryAlert.update({
+                where: { id: existing.id },
+                data: {
+                  severity,
+                  daysRemaining,
+                  currentQuantity: lot.currentQuantity,
+                  isResolved: true,
+                  resolvedAt: referenceDate,
+                  lastEvaluatedAt: referenceDate,
+                },
+              });
+              resolvedAlerts++;
+            }
+          }
+        }
+
+        this.logger.log(
+          `Evaluación finalizada: ${evaluatedLots} lotes evaluados, ${createdAlerts} creadas, ${updatedAlerts} actualizadas, ${resolvedAlerts} resueltas.`,
+        );
+
+        return {
+          evaluatedLots,
+          createdAlerts,
+          updatedAlerts,
+          resolvedAlerts,
+          timestamp: referenceDate.toISOString(),
+        };
+      },
+      { timeout: 60000 },
+    );
   }
 
   /**

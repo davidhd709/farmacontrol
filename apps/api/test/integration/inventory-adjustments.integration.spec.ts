@@ -62,13 +62,13 @@ describe('Ajustes manuales de inventario (FARM-AUD-004 / FARM-AUD-012)', () => {
     const createProduct = (code: string, name: string) =>
       prisma.product.create({
         data: {
+          inventoryControlMode: 'LOT_EXPIRY',
           categoryId: category.id,
           code,
           name,
           baseUnit: 'TABLETA',
           basePrice: new Prisma.Decimal('500.00'),
           baseCost: new Prisma.Decimal('200.00'),
-          requiresLotControl: true,
         },
       });
     productAId = (await createProduct('ACE-500', 'Acetaminofén 500mg')).id;
@@ -79,6 +79,7 @@ describe('Ajustes manuales de inventario (FARM-AUD-004 / FARM-AUD-012)', () => {
     const createLot = (productId: string, lotNumber: string, currentQuantity: number) =>
       prisma.inventoryLot.create({
         data: {
+          controlMode: 'LOT_EXPIRY',
           productId,
           locationId: location.id,
           lotNumber,
@@ -229,7 +230,7 @@ describe('Ajustes manuales de inventario (FARM-AUD-004 / FARM-AUD-012)', () => {
         quantityBaseUnits: 51,
         reason: 'Faltante en conteo',
       });
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(409);
       expect(res.body.message).toMatch(/Inventario insuficiente/);
       expect(await footprint()).toEqual(before);
     });
@@ -330,7 +331,7 @@ describe('Ajustes manuales de inventario (FARM-AUD-004 / FARM-AUD-012)', () => {
 
     const statuses = results.map((r) => r.status);
     expect(statuses.filter((s) => s === 201)).toHaveLength(7);
-    expect(statuses.filter((s) => s === 400)).toHaveLength(3);
+    expect(statuses.filter((s) => s === 409)).toHaveLength(3);
     expect(await lotQuantity(lotAId)).toBe(1);
 
     const movements = await prisma.inventoryMovement.findMany({

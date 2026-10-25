@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import {
   createReceivePurchaseSchema,
   emptyPurchaseLine,
+  parseSerialNumbers,
   type ReceivePurchaseFormValues,
   type PurchaseFormLine,
 } from '../validation/receive-purchase.schema';
@@ -45,6 +46,7 @@ import type { SupplierDto, ProductDto, ReceivePurchasePayload } from '@farmacia/
 import { fetchSuppliers } from '../../suppliers/api/suppliers.api';
 import { fetchProducts } from '../../catalog/api/products.api';
 import { receivePurchase } from '../api/purchases.api';
+import { inventoryControlModeLabel } from '../../catalog/utils/inventory-control';
 import { addDaysToDate, businessToday } from '../../../utils/business-date';
 
 export const ReceivePurchasePage: React.FC = () => {
@@ -94,7 +96,8 @@ export const ReceivePurchasePage: React.FC = () => {
           fetchProducts({ isActive: true, pageSize: 100 }),
         ]);
         setSuppliers(suppliersRes.items);
-        setProducts(productsRes.items);
+        // Los servicios no se reciben como inventario (ADR-006): sus compras van por egresos
+        setProducts(productsRes.items.filter((p) => p.inventoryControlMode !== 'SERVICE'));
       } catch {
         setErrorMsg('Error al cargar proveedores o productos.');
       } finally {
@@ -122,7 +125,13 @@ export const ReceivePurchasePage: React.FC = () => {
               (pr) => pr.isActive && (pr.purchaseEnabled ?? true) && pr.isDefault,
             )
           : product?.presentations?.find((pr) => pr.id === value);
-      if (field === 'productId') updated.presentationId = presentation?.id ?? '';
+      if (field === 'productId') {
+        updated.presentationId = presentation?.id ?? '';
+        // Lo capturado para otro modo de control no aplica al producto nuevo
+        updated.lotNumber = '';
+        updated.expirationDate = '';
+        updated.serialNumbers = '';
+      }
       if (presentation && parseFloat(presentation.cost) > 0) {
         updated.unitCost = String(presentation.cost);
       } else if ((field === 'productId' || !value) && product && parseFloat(product.baseCost) > 0) {
@@ -181,14 +190,21 @@ export const ReceivePurchasePage: React.FC = () => {
         dueDate,
         paymentCondition,
         notes: fullNotes,
-        lines: lines.map((l) => ({
-          productId: l.productId,
-          presentationId: l.presentationId || null,
-          lotNumber: l.lotNumber.trim().toUpperCase(),
-          expirationDate: l.expirationDate,
-          quantityCommercial: parseFloat(l.quantityCommercial),
-          unitCost: parseFloat(l.unitCost),
-        })),
+        lines: lines.map((l) => {
+          const mode = products.find((p) => p.id === l.productId)?.inventoryControlMode;
+          return {
+            productId: l.productId,
+            presentationId: l.presentationId || null,
+            // Solo se envía lo que el modo del producto admite; el backend lo vuelve a validar
+            ...(mode === 'LOT' || mode === 'LOT_EXPIRY'
+              ? { lotNumber: l.lotNumber.trim().toUpperCase() }
+              : {}),
+            ...(mode === 'LOT_EXPIRY' ? { expirationDate: l.expirationDate } : {}),
+            ...(mode === 'SERIAL' ? { serialNumbers: parseSerialNumbers(l.serialNumbers) } : {}),
+            quantityCommercial: parseFloat(l.quantityCommercial),
+            unitCost: parseFloat(l.unitCost),
+          };
+        }),
       };
 
       await receivePurchase(payload);
@@ -619,30 +635,71 @@ export const ReceivePurchasePage: React.FC = () => {
                         gap: 2.5,
                       }}
                     >
-                      <PurchaseFormField
-                        name={`lines.${idx}.lotNumber`}
-                        control={control}
-                        size="small"
-                        label="Número de Lote *"
-                        fullWidth
-                        placeholder="Ej. LOT-2026-X"
-                        onChange={(e) => handleLineChange(idx, 'lotNumber', e.target.value)}
-                        helperText="Identificador del lote del fabricante"
-                        required
-                      />
-
-                      <PurchaseFormField
-                        name={`lines.${idx}.expirationDate`}
-                        control={control}
-                        size="small"
-                        type="date"
-                        label="Fecha de Vencimiento *"
-                        fullWidth
-                        onChange={(e) => handleLineChange(idx, 'expirationDate', e.target.value)}
-                        slotProps={{ inputLabel: { shrink: true } }}
-                        helperText="Vencimiento sanitario (FEFO)"
-                        required
-                      />
+                      {p?.inventoryControlMode === 'SERIAL' ? (
+                        <PurchaseFormField
+                          name={`lines.${idx}.serialNumbers`}
+                          control={control}
+                          size="small"
+                          label="Series *"
+                          fullWidth
+                          multiline
+                          minRows={1}
+                          placeholder="Una por línea o separadas por coma"
+                          onChange={(e) => handleLineChange(idx, 'serialNumbers', e.target.value)}
+                          helperText="Una serie por cada unidad recibida"
+                          required
+                          sx={{ gridColumn: { md: 'span 2' } }}
+                        />
+                      ) : p?.inventoryControlMode === 'LOT' ||
+                        p?.inventoryControlMode === 'LOT_EXPIRY' ? (
+                        <>
+                          <PurchaseFormField
+                            name={`lines.${idx}.lotNumber`}
+                            control={control}
+                            size="small"
+                            label="Número de Lote *"
+                            fullWidth
+                            placeholder="Ej. LOT-2026-X"
+                            onChange={(e) => handleLineChange(idx, 'lotNumber', e.target.value)}
+                            helperText="Identificador del lote del fabricante"
+                            required
+                          />
+                          {p.inventoryControlMode === 'LOT_EXPIRY' ? (
+                            <PurchaseFormField
+                              name={`lines.${idx}.expirationDate`}
+                              control={control}
+                              size="small"
+                              type="date"
+                              label="Fecha de Vencimiento *"
+                              fullWidth
+                              onChange={(e) =>
+                                handleLineChange(idx, 'expirationDate', e.target.value)
+                              }
+                              slotProps={{ inputLabel: { shrink: true } }}
+                              helperText="Vencimiento sanitario (FEFO)"
+                              required
+                            />
+                          ) : (
+                            <Typography
+                              variant="body2"
+                              color="text.secondary"
+                              sx={{ alignSelf: 'center' }}
+                            >
+                              Sin vencimiento: sale por orden de entrada
+                            </Typography>
+                          )}
+                        </>
+                      ) : (
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{ alignSelf: 'center', gridColumn: { md: 'span 2' } }}
+                        >
+                          {p
+                            ? `${inventoryControlModeLabel(p.inventoryControlMode)}: no requiere lote ni vencimiento`
+                            : 'Seleccione un producto para ver si requiere lote'}
+                        </Typography>
+                      )}
 
                       <PurchaseFormField
                         name={`lines.${idx}.quantityCommercial`}
@@ -778,8 +835,8 @@ export const ReceivePurchasePage: React.FC = () => {
                     <TableCell sx={{ fontWeight: 'bold', minWidth: 220 }}>
                       Presentación / Unidad *
                     </TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', minWidth: 140 }}>Lote *</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', minWidth: 165 }}>Vence *</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', minWidth: 140 }}>Lote / Series</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', minWidth: 165 }}>Vence</TableCell>
                     <TableCell sx={{ fontWeight: 'bold', minWidth: 140, textAlign: 'right' }}>
                       Cantidad *
                     </TableCell>
@@ -879,32 +936,65 @@ export const ReceivePurchasePage: React.FC = () => {
                           )}
                         </TableCell>
 
-                        <TableCell sx={{ minWidth: 140 }}>
-                          <PurchaseFormField
-                            name={`lines.${idx}.lotNumber`}
-                            control={control}
-                            size="small"
-                            fullWidth
-                            placeholder="LOTE-001"
-                            onChange={(e) => handleLineChange(idx, 'lotNumber', e.target.value)}
-                            required
-                          />
-                        </TableCell>
-
-                        <TableCell sx={{ minWidth: 165 }}>
-                          <PurchaseFormField
-                            name={`lines.${idx}.expirationDate`}
-                            control={control}
-                            size="small"
-                            type="date"
-                            fullWidth
-                            onChange={(e) =>
-                              handleLineChange(idx, 'expirationDate', e.target.value)
-                            }
-                            slotProps={{ inputLabel: { shrink: true } }}
-                            required
-                          />
-                        </TableCell>
+                        {p?.inventoryControlMode === 'SERIAL' ? (
+                          <TableCell colSpan={2} sx={{ minWidth: 305 }}>
+                            <PurchaseFormField
+                              name={`lines.${idx}.serialNumbers`}
+                              control={control}
+                              size="small"
+                              fullWidth
+                              multiline
+                              placeholder="Series: una por línea o separadas por coma"
+                              onChange={(e) =>
+                                handleLineChange(idx, 'serialNumbers', e.target.value)
+                              }
+                              required
+                            />
+                          </TableCell>
+                        ) : (
+                          <>
+                            <TableCell sx={{ minWidth: 140 }}>
+                              {p?.inventoryControlMode === 'LOT' ||
+                              p?.inventoryControlMode === 'LOT_EXPIRY' ? (
+                                <PurchaseFormField
+                                  name={`lines.${idx}.lotNumber`}
+                                  control={control}
+                                  size="small"
+                                  fullWidth
+                                  placeholder="LOTE-001"
+                                  onChange={(e) =>
+                                    handleLineChange(idx, 'lotNumber', e.target.value)
+                                  }
+                                  required
+                                />
+                              ) : (
+                                <Typography variant="body2" color="text.secondary">
+                                  {p ? 'Sin lote' : '—'}
+                                </Typography>
+                              )}
+                            </TableCell>
+                            <TableCell sx={{ minWidth: 165 }}>
+                              {p?.inventoryControlMode === 'LOT_EXPIRY' ? (
+                                <PurchaseFormField
+                                  name={`lines.${idx}.expirationDate`}
+                                  control={control}
+                                  size="small"
+                                  type="date"
+                                  fullWidth
+                                  onChange={(e) =>
+                                    handleLineChange(idx, 'expirationDate', e.target.value)
+                                  }
+                                  slotProps={{ inputLabel: { shrink: true } }}
+                                  required
+                                />
+                              ) : (
+                                <Typography variant="body2" color="text.secondary">
+                                  {p ? 'No vence' : '—'}
+                                </Typography>
+                              )}
+                            </TableCell>
+                          </>
+                        )}
 
                         <TableCell sx={{ minWidth: 140, textAlign: 'right' }}>
                           <PurchaseFormField
@@ -1110,7 +1200,7 @@ export const ReceivePurchasePage: React.FC = () => {
                 <strong>Fecha de Vencimiento Factura:</strong> {dueDate}
               </div>
               <div>
-                <strong>Líneas a Ingresar:</strong> {lines.length} productos / lotes (
+                <strong>Líneas a Ingresar:</strong> {lines.length} líneas (
                 {lines.reduce((acc, l) => {
                   const prod = products.find((p) => p.id === l.productId);
                   const pr = prod?.presentations?.find((pres) => pres.id === l.presentationId);
@@ -1125,7 +1215,7 @@ export const ReceivePurchasePage: React.FC = () => {
             <br />
             • La factura con sus datos comerciales y vencimiento.
             <br />
-            • El incremento de existencias en los lotes correspondientes.
+            • El incremento de existencias en los lotes, saldos o series de cada producto.
             <br />• Las entradas inmutables en el Kardex de inventario.
           </DialogContentText>
         </DialogContent>

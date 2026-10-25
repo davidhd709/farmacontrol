@@ -1,10 +1,11 @@
 import { businessToday } from '../../../../common/utils/business-date';
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { ConflictException, Inject, Injectable, Optional } from '@nestjs/common';
 import type {
   CreateProductPayload,
   PaginatedResponse,
   ProductDto,
   ProductQueryFilters,
+  ProductSettingsDto,
   UpdateProductPayload,
 } from '@farmacia/contracts';
 import {
@@ -25,6 +26,7 @@ import {
 import { prisma, Prisma } from '@farmacia/database';
 import { AuditService } from '../../../audit/application/services/audit.service';
 import type { AuditContext } from './category.service';
+import { sectorProfileRules } from '../../../company/application/sector-profile.reader';
 
 @Injectable()
 export class ProductService {
@@ -58,10 +60,14 @@ export class ProductService {
       }
     }
 
-    const product = Product.create({
-      ...input,
-      categoryName: category.name,
-    });
+    const { rules } = await sectorProfileRules();
+    const product = Product.create(
+      {
+        ...input,
+        categoryName: category.name,
+      },
+      rules,
+    );
 
     const persist = async (tx?: Prisma.TransactionClient) => {
       const saved = await this.productRepository.save(product, tx);
@@ -78,7 +84,7 @@ export class ProductService {
               barcode: saved.barcode,
               name: saved.name,
               categoryId: saved.categoryId,
-              requiresLotControl: saved.requiresLotControl,
+              inventoryControlMode: saved.inventoryControlMode,
               basePrice: saved.basePrice,
             },
             ipAddress: auditCtx?.ipAddress || null,
@@ -109,8 +115,10 @@ export class ProductService {
       WHERE product_id = ${id}::uuid
         AND is_active = true
         AND current_quantity > 0
-        AND expiration_date >= ${businessToday()}::date
+        AND (expiration_date IS NULL OR expiration_date >= ${businessToday()}::date)
     `;
+    // Un servicio no maneja existencias: no informa saldo para que el POS no lo trate como agotado
+    if (product.inventoryControlMode === 'SERVICE') return product.toDto();
     return product.toDto(stockAgg[0]?.total_stock ?? 0);
   }
 
@@ -120,6 +128,17 @@ export class ProductService {
     auditCtx?: AuditContext,
   ): Promise<Product> {
     const product = await this.getProductById(id);
+
+    const { rules } = await sectorProfileRules();
+    if (
+      input.inventoryControlMode !== undefined &&
+      input.inventoryControlMode !== product.inventoryControlMode &&
+      (await this.productRepository.hasInventoryHistory(id))
+    ) {
+      throw new ConflictException(
+        'No se puede cambiar el modo de control porque el producto ya tiene existencias registradas.',
+      );
+    }
 
     let categoryName = product.categoryName;
     if (input.categoryId && input.categoryId !== product.categoryId) {
@@ -147,10 +166,7 @@ export class ProductService {
       }
     }
 
-    product.update({
-      ...input,
-      categoryName,
-    });
+    product.update({ ...input, categoryName }, rules);
 
     const persist = async (tx?: Prisma.TransactionClient) => {
       const updated = await this.productRepository.update(product, tx);
@@ -178,7 +194,16 @@ export class ProductService {
 
       return updated;
     };
-    return this.auditService ? prisma.$transaction(persist) : persist();
+    try {
+      return this.auditService ? await prisma.$transaction(persist) : await persist();
+    } catch (error) {
+      if (isInventoryControlModeLockedError(error)) {
+        throw new ConflictException(
+          'No se puede cambiar el modo de control porque el producto ya tiene existencias registradas.',
+        );
+      }
+      throw error;
+    }
   }
 
   public async deactivateProduct(id: string, auditCtx?: AuditContext): Promise<Product> {
@@ -228,7 +253,7 @@ export class ProductService {
         WHERE product_id IN (${Prisma.join(productIds.map((id) => Prisma.sql`${id}::uuid`))})
           AND is_active = true
           AND current_quantity > 0
-          AND expiration_date >= ${businessToday()}::date
+          AND (expiration_date IS NULL OR expiration_date >= ${businessToday()}::date)
         GROUP BY product_id
       `;
 
@@ -238,11 +263,33 @@ export class ProductService {
     }
 
     return {
-      items: items.map((p) => p.toDto(stockMap.get(p.id) ?? 0)),
+      items: items.map((p) =>
+        p.inventoryControlMode === 'SERVICE' ? p.toDto() : p.toDto(stockMap.get(p.id) ?? 0),
+      ),
       total,
       page,
       pageSize,
       totalPages: Math.ceil(total / pageSize),
     };
   }
+
+  public async getProductSettings(): Promise<ProductSettingsDto> {
+    const { sectorProfile, rules } = await sectorProfileRules();
+    return {
+      sectorProfile,
+      defaultControlMode: rules.defaultControlMode,
+      allowedControlModes: [...rules.allowedControlModes],
+      prescriptionRequiredControlMode: rules.prescriptionRequiredControlMode,
+    };
+  }
+}
+
+function isInventoryControlModeLockedError(error: unknown): boolean {
+  if (
+    !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+    (error.code !== 'P2004' && error.code !== 'P2010')
+  )
+    return false;
+  const detail = `${error.message} ${JSON.stringify(error.meta ?? {})}`;
+  return detail.includes('INVENTORY_CONTROL_MODE_LOCKED:');
 }

@@ -24,20 +24,6 @@ export class InsufficientStockException extends DomainError {
   }
 }
 
-/**
- * FARM-AUD-002: un producto antiguo sin control de lote no puede venderse, porque la venta no
- * descontaría existencias ni dejaría kardex. Debe regularizarse en el catálogo.
- */
-export class ProductWithoutLotControlException extends DomainError {
-  constructor(productName: string) {
-    super(
-      `El producto '${productName}' tiene desactivado el control por lote y no puede venderse sin descontar inventario. Regularice su configuración en el catálogo (activar control por lote y vencimiento) antes de venderlo.`,
-      'conflict',
-    );
-    this.name = 'ProductWithoutLotControlException';
-  }
-}
-
 export class SaleAlreadyCancelledException extends DomainError {
   constructor(invoiceNumber: string) {
     super(`La venta con comprobante '${invoiceNumber}' ya se encuentra anulada.`, 'conflict');

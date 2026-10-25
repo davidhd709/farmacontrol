@@ -56,7 +56,12 @@ export class HttpExceptionFilter implements ExceptionFilter {
       message = exception.message;
       errorName = exception.name;
     } else if (exception instanceof Prisma.PrismaClientKnownRequestError) {
-      if (['P2002', 'P2003', 'P2004', 'P2034', 'P2028'].includes(exception.code)) {
+      const controlModeConflict = inventoryControlModeConflictMessage(exception);
+      if (controlModeConflict) {
+        status = HttpStatus.CONFLICT;
+        message = controlModeConflict;
+        errorName = 'Conflict';
+      } else if (['P2002', 'P2003', 'P2004', 'P2034', 'P2028'].includes(exception.code)) {
         status = HttpStatus.CONFLICT;
         message = 'Conflicto de datos. La operación no pudo completarse.';
         errorName = 'Conflict';
@@ -86,4 +91,29 @@ export class HttpExceptionFilter implements ExceptionFilter {
       timestamp: new Date().toISOString(),
     });
   }
+}
+
+/**
+ * Triggers de modo de control de inventario (F4, ADR-006): llegan como P2004 desde Prisma o
+ * como P2010 (SQLSTATE 23514) desde SQL directo, p. ej. si el modo cambia durante una recepción.
+ */
+function inventoryControlModeConflictMessage(
+  exception: Prisma.PrismaClientKnownRequestError,
+): string | null {
+  const isCheckViolation =
+    exception.code === 'P2004' ||
+    (exception.code === 'P2010' &&
+      (exception.meta as { code?: string } | undefined)?.code === '23514');
+  if (!isCheckViolation) return null;
+  const detail = `${exception.message} ${JSON.stringify(exception.meta ?? {})}`;
+  if (detail.includes('INVENTORY_CONTROL_MODE_LOCKED:')) {
+    return 'El producto tiene existencias registradas: su modo de control de inventario no puede cambiar.';
+  }
+  if (
+    detail.includes('INVENTORY_CONTROL_MODE_MISMATCH:') ||
+    detail.includes('INVENTORY_LOT_IDENTITY_IMMUTABLE:')
+  ) {
+    return 'El modo de control de inventario del producto cambió durante la operación. Revise el producto y vuelva a intentarlo.';
+  }
+  return null;
 }

@@ -7,6 +7,38 @@
 export const SECTOR_PROFILES = ['PHARMACY'] as const;
 export type SectorProfile = (typeof SECTOR_PROFILES)[number];
 
+/** Modos con los que se controla la salida de las existencias. */
+export const INVENTORY_CONTROL_MODES = [
+  'SERVICE',
+  'SIMPLE',
+  'LOT',
+  'LOT_EXPIRY',
+  'SERIAL',
+] as const;
+export type InventoryControlMode = (typeof INVENTORY_CONTROL_MODES)[number];
+
+export interface SectorProfileRules {
+  defaultControlMode: InventoryControlMode;
+  allowedControlModes: readonly InventoryControlMode[];
+  prescriptionRequiredControlMode: InventoryControlMode;
+}
+
+/** Reglas de catálogo estáticas por sector (ADR-006, F4). */
+export const SECTOR_PROFILE_RULES: Record<SectorProfile, SectorProfileRules> = {
+  PHARMACY: {
+    defaultControlMode: 'LOT_EXPIRY',
+    allowedControlModes: INVENTORY_CONTROL_MODES,
+    prescriptionRequiredControlMode: 'LOT_EXPIRY',
+  },
+};
+
+export interface ProductSettingsDto {
+  sectorProfile: SectorProfile;
+  defaultControlMode: InventoryControlMode;
+  allowedControlModes: InventoryControlMode[];
+  prescriptionRequiredControlMode: InventoryControlMode;
+}
+
 /** Métodos de costeo (ADR-006). PEPS y costo identificado se habilitan en F5. */
 export const COSTING_METHODS = ['WEIGHTED_AVERAGE', 'FIFO', 'SPECIFIC_LOT'] as const;
 export type CostingMethod = (typeof COSTING_METHODS)[number];

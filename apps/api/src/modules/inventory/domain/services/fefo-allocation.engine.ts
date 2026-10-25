@@ -7,8 +7,8 @@ import type { FefoAllocationItem, FefoAllocationResult } from '@farmacia/contrac
 
 export interface LotCandidate {
   id: string;
-  lotNumber: string;
-  expirationDate: Date;
+  lotNumber: string | null;
+  expirationDate: Date | null;
   availableQuantity: number;
 }
 
@@ -39,15 +39,16 @@ export class FefoAllocationEngine {
     // Filtrar lotes vencidos y ordenar por vencimiento ascendente
     const sortedLots = candidates
       .filter((lot) => {
-        const exp = lot.expirationDate.toISOString().slice(0, 10);
-        return exp >= ref && lot.availableQuantity > 0;
+        const exp = lot.expirationDate?.toISOString().slice(0, 10);
+        return (exp === undefined || exp >= ref) && lot.availableQuantity > 0;
       })
-      .sort((a, b) => a.expirationDate.getTime() - b.expirationDate.getTime());
+      .sort((a, b) => {
+        if (a.expirationDate === null && b.expirationDate !== null) return 1;
+        if (a.expirationDate !== null && b.expirationDate === null) return -1;
+        return (a.expirationDate?.getTime() ?? 0) - (b.expirationDate?.getTime() ?? 0);
+      });
 
-    const totalAvailable = sortedLots.reduce(
-      (sum, lot) => sum + lot.availableQuantity,
-      0,
-    );
+    const totalAvailable = sortedLots.reduce((sum, lot) => sum + lot.availableQuantity, 0);
 
     if (totalAvailable < requestedQuantity) {
       throw new InsufficientInventoryException(
@@ -65,7 +66,7 @@ export class FefoAllocationEngine {
       allocations.push({
         lotId: lot.id,
         lotNumber: lot.lotNumber,
-        expirationDate: lot.expirationDate.toISOString().split('T')[0],
+        expirationDate: lot.expirationDate?.toISOString().split('T')[0] ?? null,
         quantityBaseUnits: takeFromLot,
       });
 

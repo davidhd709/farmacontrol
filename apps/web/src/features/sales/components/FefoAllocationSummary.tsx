@@ -49,11 +49,13 @@ export function FefoAllocationSummary({
               <Stack spacing={1}>
                 {line.allocations.map((allocation) => (
                   <Typography key={allocation.lotId} variant="body2">
-                    Lote {allocation.lotNumber} · Vencimiento:{' '}
-                    {new Intl.DateTimeFormat('es-CO', {
-                      dateStyle: 'long',
-                      timeZone: 'UTC',
-                    }).format(new Date(`${allocation.expirationDate}T00:00:00Z`))}{' '}
+                    {allocation.lotNumber ? `Lote ${allocation.lotNumber}` : 'Sin lote'} ·{' '}
+                    {allocation.expirationDate
+                      ? `Vencimiento: ${new Intl.DateTimeFormat('es-CO', {
+                          dateStyle: 'long',
+                          timeZone: 'UTC',
+                        }).format(new Date(`${allocation.expirationDate}T00:00:00Z`))}`
+                      : 'No vence'}{' '}
                     · {allocation.quantityBaseUnits} unidades base
                   </Typography>
                 ))}

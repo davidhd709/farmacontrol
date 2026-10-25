@@ -1,6 +1,12 @@
 import { DomainError } from '../../../../common/domain-error';
-import type { ProductDto, ProductPresentationDto } from '@farmacia/contracts';
-import { ProductLotControlRequiredException } from '../exceptions/product.exceptions';
+import type {
+  InventoryControlMode,
+  ProductDto,
+  ProductPresentationDto,
+  SectorProfileRules,
+} from '@farmacia/contracts';
+import { INVENTORY_CONTROL_MODES } from '@farmacia/contracts';
+import { ProductInventoryControlModeException } from '../exceptions/product.exceptions';
 
 export interface CreateProductProps {
   id?: string;
@@ -14,7 +20,7 @@ export interface CreateProductProps {
   sanitaryRegistry?: string | null;
   manufacturer?: string | null;
   description?: string | null;
-  requiresLotControl?: boolean;
+  inventoryControlMode?: InventoryControlMode;
   prescriptionRequired?: boolean;
   baseUnit?: string;
   basePrice: number | string;
@@ -37,7 +43,7 @@ export interface ReconstituteProductProps {
   sanitaryRegistry: string | null;
   manufacturer: string | null;
   description: string | null;
-  requiresLotControl: boolean;
+  inventoryControlMode: InventoryControlMode;
   prescriptionRequired: boolean;
   baseUnit: string;
   basePrice: string;
@@ -60,7 +66,7 @@ export class Product {
   private _sanitaryRegistry: string | null;
   private _manufacturer: string | null;
   private _description: string | null;
-  private _requiresLotControl: boolean;
+  private _inventoryControlMode: InventoryControlMode;
   private _prescriptionRequired: boolean;
   private _baseUnit: string;
   private _basePrice: string;
@@ -82,7 +88,7 @@ export class Product {
     this._sanitaryRegistry = props.sanitaryRegistry;
     this._manufacturer = props.manufacturer;
     this._description = props.description;
-    this._requiresLotControl = props.requiresLotControl;
+    this._inventoryControlMode = Product.validateMode(props.inventoryControlMode);
     this._prescriptionRequired = props.prescriptionRequired;
     this._baseUnit = props.baseUnit;
     this._basePrice = props.basePrice;
@@ -93,10 +99,13 @@ export class Product {
     this._updatedAt = props.updatedAt;
   }
 
-  public static create(props: CreateProductProps): Product {
-    if (props.requiresLotControl === false) {
-      throw new ProductLotControlRequiredException();
-    }
+  public static create(props: CreateProductProps, profile: SectorProfileRules): Product {
+    const inventoryControlMode = Product.resolveMode(props.inventoryControlMode, profile);
+    Product.validateProfileRules(
+      inventoryControlMode,
+      props.prescriptionRequired ?? false,
+      profile,
+    );
     const code = Product.validateCode(props.code);
     const name = Product.validateName(props.name);
     const barcode = Product.validateBarcode(props.barcode);
@@ -117,7 +126,7 @@ export class Product {
       sanitaryRegistry: props.sanitaryRegistry?.trim() || null,
       manufacturer: props.manufacturer?.trim() || null,
       description: props.description?.trim() || null,
-      requiresLotControl: props.requiresLotControl ?? true,
+      inventoryControlMode,
       prescriptionRequired: props.prescriptionRequired ?? false,
       baseUnit,
       basePrice,
@@ -177,8 +186,8 @@ export class Product {
     return this._description;
   }
 
-  public get requiresLotControl(): boolean {
-    return this._requiresLotControl;
+  public get inventoryControlMode(): InventoryControlMode {
+    return this._inventoryControlMode;
   }
 
   public get prescriptionRequired(): boolean {
@@ -213,29 +222,33 @@ export class Product {
     return this._updatedAt;
   }
 
-  public update(props: {
-    categoryId?: string;
-    categoryName?: string | null;
-    code?: string;
-    barcode?: string | null;
-    name?: string;
-    genericName?: string | null;
-    concentration?: string | null;
-    sanitaryRegistry?: string | null;
-    manufacturer?: string | null;
-    description?: string | null;
-    requiresLotControl?: boolean;
-    prescriptionRequired?: boolean;
-    baseUnit?: string;
-    basePrice?: number | string;
-    baseCost?: number | string;
-    isActive?: boolean;
-  }): void {
-    // Antes de aplicar cualquier cambio: la edición se rechaza completa, sin cambios parciales.
-    // Un producto antiguo sin control puede editarse y regularizarse, pero nadie lo desactiva.
-    if (props.requiresLotControl === false) {
-      throw new ProductLotControlRequiredException();
-    }
+  public update(
+    props: {
+      categoryId?: string;
+      categoryName?: string | null;
+      code?: string;
+      barcode?: string | null;
+      name?: string;
+      genericName?: string | null;
+      concentration?: string | null;
+      sanitaryRegistry?: string | null;
+      manufacturer?: string | null;
+      description?: string | null;
+      inventoryControlMode?: InventoryControlMode;
+      prescriptionRequired?: boolean;
+      baseUnit?: string;
+      basePrice?: number | string;
+      baseCost?: number | string;
+      isActive?: boolean;
+    },
+    profile: SectorProfileRules,
+  ): void {
+    const inventoryControlMode =
+      props.inventoryControlMode === undefined
+        ? this._inventoryControlMode
+        : Product.resolveMode(props.inventoryControlMode, profile);
+    const prescriptionRequired = props.prescriptionRequired ?? this._prescriptionRequired;
+    Product.validateProfileRules(inventoryControlMode, prescriptionRequired, profile);
     if (props.categoryId !== undefined) {
       if (!props.categoryId.trim()) {
         throw new DomainError('La categoría del producto es requerida.', 'validation');
@@ -269,9 +282,7 @@ export class Product {
     if (props.description !== undefined) {
       this._description = props.description?.trim() || null;
     }
-    if (props.requiresLotControl !== undefined) {
-      this._requiresLotControl = Boolean(props.requiresLotControl);
-    }
+    this._inventoryControlMode = inventoryControlMode;
     if (props.prescriptionRequired !== undefined) {
       this._prescriptionRequired = Boolean(props.prescriptionRequired);
     }
@@ -312,6 +323,42 @@ export class Product {
       );
     }
     return trimmed;
+  }
+
+  private static validateMode(value: unknown): InventoryControlMode {
+    if (
+      typeof value !== 'string' ||
+      !INVENTORY_CONTROL_MODES.includes(value as InventoryControlMode)
+    ) {
+      throw new ProductInventoryControlModeException(
+        'El modo de control de inventario no es válido.',
+      );
+    }
+    return value as InventoryControlMode;
+  }
+
+  private static resolveMode(
+    value: InventoryControlMode | undefined,
+    profile: SectorProfileRules,
+  ): InventoryControlMode {
+    return Product.validateMode(value ?? profile.defaultControlMode);
+  }
+
+  private static validateProfileRules(
+    mode: InventoryControlMode,
+    prescriptionRequired: boolean,
+    profile: SectorProfileRules,
+  ): void {
+    if (!profile.allowedControlModes.includes(mode)) {
+      throw new ProductInventoryControlModeException(
+        `El perfil sectorial no permite el modo de control ${mode}.`,
+      );
+    }
+    if (prescriptionRequired && mode !== profile.prescriptionRequiredControlMode) {
+      throw new ProductInventoryControlModeException(
+        `Los productos con fórmula médica deben usar el modo ${profile.prescriptionRequiredControlMode}.`,
+      );
+    }
   }
 
   private static validateName(name: string): string {
@@ -369,7 +416,7 @@ export class Product {
       sanitaryRegistry: this._sanitaryRegistry,
       manufacturer: this._manufacturer,
       description: this._description,
-      requiresLotControl: this._requiresLotControl,
+      inventoryControlMode: this._inventoryControlMode,
       prescriptionRequired: this._prescriptionRequired,
       baseUnit: this._baseUnit,
       basePrice: this._basePrice,

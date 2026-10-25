@@ -115,6 +115,7 @@ describe('ReceivablesController & PayablesController (Integration)', () => {
 
     const product = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'PROD-001',
         name: 'Acetaminofén 500mg',
@@ -130,6 +131,7 @@ describe('ReceivablesController & PayablesController (Integration)', () => {
 
     await prisma.inventoryLot.create({
       data: {
+        controlMode: 'LOT_EXPIRY',
         productId: product.id,
         locationId: location.id,
         lotNumber: 'L001',

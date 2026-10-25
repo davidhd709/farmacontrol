@@ -21,6 +21,7 @@ import {
 import DeleteIcon from '@mui/icons-material/Delete';
 import type {
   CustomerDto,
+  InventoryControlMode,
   ProductDto,
   ProductPresentationDto,
   SaleDto,
@@ -33,6 +34,7 @@ import { PosCustomerSelector } from '../components/PosCustomerSelector';
 import { fromCents, toCents, formatMoney, lineAmounts } from '../../../utils/money';
 import { confirmSale } from '../api/sales.api';
 import { PosPaymentDialog } from '../components/PosPaymentDialog';
+import { PosSerialPicker } from '../components/PosSerialPicker';
 import { SaleReceiptDialog } from '../components/SaleReceiptDialog';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { SweetModal } from '../../../components/SweetModal';
@@ -42,6 +44,9 @@ interface CartItem {
   productCode: string;
   productName: string;
   baseUnit: string;
+  inventoryControlMode: InventoryControlMode;
+  /** Series elegidas para entregar; solo en productos SERIAL */
+  serialNumbers: string[];
   // Monetary fields in this cart are integer cents; API payloads retain major units.
   basePrice: number;
   availableStock?: number;
@@ -89,6 +94,14 @@ export const PosPage: React.FC = () => {
     severity: 'success',
   });
 
+  // Una línea SERIAL solo se cobra con una serie por cada unidad base
+  const serialsPending = cart.some(
+    (item) =>
+      item.inventoryControlMode === 'SERIAL' &&
+      item.serialNumbers.length !== item.quantityCommercial * item.presentationFactor,
+  );
+  const canCharge = cart.length > 0 && !serialsPending;
+
   // Referencia al buscador para autoenfoque
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -97,14 +110,14 @@ export const PosPage: React.FC = () => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'F2') {
         e.preventDefault();
-        if (cart.length > 0 && !paymentDialogOpen && !receiptSale) {
+        if (canCharge && !paymentDialogOpen && !receiptSale) {
           setPaymentDialogOpen(true);
         }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [cart.length, paymentDialogOpen, receiptSale]);
+  }, [canCharge, paymentDialogOpen, receiptSale]);
 
   // Cargar cliente por defecto al iniciar
   useEffect(() => {
@@ -134,15 +147,6 @@ export const PosPage: React.FC = () => {
   // Agregar ítem al carrito con validación de existencia vigente (no vencida)
   const handleAddToCart = (product: ProductDto, presentation?: ProductPresentationDto | null) => {
     setErrorMsg(null);
-
-    // FARM-AUD-002: un producto sin control por lote no descuenta inventario; el backend lo
-    // rechaza y aquí se explica antes de llegar al cobro
-    if (!product.requiresLotControl) {
-      const msg = `El producto "${product.name}" tiene desactivado el control por lote y no puede venderse. Debe regularizarse en el catálogo.`;
-      setErrorMsg(msg);
-      setSnackbar({ open: true, message: msg, severity: 'warning' });
-      return;
-    }
 
     // Validación P0: Prevenir agregar productos sin existencias vigentes
     if (product.availableStock !== undefined && product.availableStock <= 0) {
@@ -218,6 +222,8 @@ export const PosPage: React.FC = () => {
           productCode: product.code,
           productName: product.name,
           baseUnit: product.baseUnit,
+          inventoryControlMode: product.inventoryControlMode,
+          serialNumbers: [],
           basePrice: toCents(product.basePrice),
           availableStock: product.availableStock,
           availablePresentations: salePresentations,
@@ -310,6 +316,10 @@ export const PosPage: React.FC = () => {
     });
   };
 
+  const handleChangeSerials = (index: number, serialNumbers: string[]) => {
+    setCart((prev) => prev.map((item, idx) => (idx === index ? { ...item, serialNumbers } : item)));
+  };
+
   const handleRemoveItem = (index: number) => {
     setCart((prev) => prev.filter((_, idx) => idx !== index));
   };
@@ -350,6 +360,7 @@ export const PosPage: React.FC = () => {
           presentationId: item.presentationId || undefined,
           quantityCommercial: item.quantityCommercial,
           discount: item.discount > 0 ? fromCents(item.discount) : undefined,
+          ...(item.inventoryControlMode === 'SERIAL' ? { serialNumbers: item.serialNumbers } : {}),
         })),
       };
 
@@ -529,7 +540,11 @@ export const PosPage: React.FC = () => {
                           }}
                         >
                           <Chip
-                            label={`FEFO: descuenta ${item.quantityCommercial * item.presentationFactor} ${item.baseUnit}`}
+                            label={
+                              item.inventoryControlMode === 'SERVICE'
+                                ? 'Servicio: no descuenta inventario'
+                                : `${item.inventoryControlMode === 'LOT_EXPIRY' ? 'FEFO' : item.inventoryControlMode === 'SERIAL' ? 'Por serie' : 'Orden de entrada'}: descuenta ${item.quantityCommercial * item.presentationFactor} ${item.baseUnit}`
+                            }
                             size="small"
                             color={item.presentationFactor > 1 ? 'secondary' : 'info'}
                             variant="outlined"
@@ -555,6 +570,20 @@ export const PosPage: React.FC = () => {
                             />
                           )}
                         </Box>
+                        {item.inventoryControlMode === 'SERIAL' && (
+                          <PosSerialPicker
+                            productId={item.productId}
+                            productName={item.productName}
+                            requiredUnits={item.quantityCommercial * item.presentationFactor}
+                            value={item.serialNumbers}
+                            excluded={cart.flatMap((other, otherIdx) =>
+                              otherIdx !== idx && other.productId === item.productId
+                                ? other.serialNumbers
+                                : [],
+                            )}
+                            onChange={(serials) => handleChangeSerials(idx, serials)}
+                          />
+                        )}
                       </TableCell>
                       <TableCell align="center">
                         <Box
@@ -714,7 +743,7 @@ export const PosPage: React.FC = () => {
             color="primary"
             fullWidth
             size="large"
-            disabled={cart.length === 0}
+            disabled={!canCharge}
             onClick={() => setPaymentDialogOpen(true)}
             sx={{
               fontWeight: 800,

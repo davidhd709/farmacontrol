@@ -4,6 +4,7 @@ import { ProductService } from '../../src/modules/catalog/application/services/p
 import type { ProductRepositoryPort } from '../../src/modules/catalog/application/ports/product.repository.port';
 import type { CategoryRepositoryPort } from '../../src/modules/catalog/application/ports/category.repository.port';
 import { Product } from '../../src/modules/catalog/domain/entities/product.entity';
+import { SECTOR_PROFILE_RULES } from '@farmacia/contracts';
 import { Category } from '../../src/modules/catalog/domain/entities/category.entity';
 import {
   ProductBarcodeAlreadyExistsException,
@@ -28,15 +29,18 @@ describe('ProductService (Application Unit)', () => {
     updatedAt: new Date(),
   });
 
-  const sampleProduct = Product.create({
-    id: 'b0000000-0000-0000-0000-000000000001',
-    categoryId: mockCategory.id,
-    categoryName: mockCategory.name,
-    code: 'IBU-400',
-    barcode: '7701112223334',
-    name: 'Ibuprofeno 400mg',
-    basePrice: 1200,
-  });
+  const sampleProduct = Product.create(
+    {
+      id: 'b0000000-0000-0000-0000-000000000001',
+      categoryId: mockCategory.id,
+      categoryName: mockCategory.name,
+      code: 'IBU-400',
+      barcode: '7701112223334',
+      name: 'Ibuprofeno 400mg',
+      basePrice: 1200,
+    },
+    SECTOR_PROFILE_RULES.PHARMACY,
+  );
 
   const transaction = {} as Prisma.TransactionClient;
 
@@ -45,6 +49,7 @@ describe('ProductService (Application Unit)', () => {
   });
 
   beforeEach(() => {
+    vi.spyOn(prisma.company, 'findFirst').mockResolvedValue(null as never);
     vi.spyOn(prisma, '$transaction').mockImplementation(async (operation: any) =>
       operation(transaction),
     );
@@ -54,6 +59,7 @@ describe('ProductService (Application Unit)', () => {
       findByBarcode: vi.fn(async () => null),
       save: vi.fn(async (prod: Product) => prod),
       update: vi.fn(async (prod: Product) => prod),
+      hasInventoryHistory: vi.fn(async () => false),
       findAll: vi.fn(async () => ({ items: [], total: 0 })),
     };
 

@@ -1,5 +1,4 @@
-import { businessToday } from '../../../common/utils/business-date';
-import { PurchaseDto, PurchaseLineDto } from '@farmacia/contracts';
+import { InventoryControlMode, PurchaseDto, PurchaseLineDto } from '@farmacia/contracts';
 import { PurchaseValidationException } from './purchase.exceptions';
 
 export interface CreatePurchaseLineProps {
@@ -9,8 +8,10 @@ export interface CreatePurchaseLineProps {
   presentationId?: string | null;
   presentationName?: string | null;
   lotId?: string;
-  lotNumber: string;
-  expirationDate: Date;
+  lotNumber?: string | null;
+  expirationDate?: Date | null;
+  locationId?: string;
+  controlMode?: InventoryControlMode;
   quantityCommercial: number;
   conversionFactor: number;
   quantityBaseUnits?: number;
@@ -27,8 +28,10 @@ export interface ReconstitutePurchaseLineProps {
   presentationId: string | null;
   presentationName?: string | null;
   lotId: string;
-  lotNumber: string;
-  expirationDate: Date;
+  lotNumber: string | null;
+  expirationDate: Date | null;
+  locationId?: string;
+  controlMode?: InventoryControlMode;
   quantityCommercial: number;
   conversionFactor: number;
   quantityBaseUnits: number;
@@ -45,8 +48,10 @@ export class PurchaseLine {
   private readonly _presentationId: string | null;
   private readonly _presentationName?: string | null;
   private _lotId: string;
-  private readonly _lotNumber: string;
-  private readonly _expirationDate: Date;
+  private readonly _lotNumber: string | null;
+  private readonly _expirationDate: Date | null;
+  private readonly _locationId?: string;
+  private readonly _controlMode?: InventoryControlMode;
   private readonly _quantityCommercial: number;
   private readonly _conversionFactor: number;
   private readonly _quantityBaseUnits: number;
@@ -64,6 +69,8 @@ export class PurchaseLine {
     this._lotId = props.lotId;
     this._lotNumber = props.lotNumber;
     this._expirationDate = props.expirationDate;
+    this._locationId = props.locationId;
+    this._controlMode = props.controlMode;
     this._quantityCommercial = props.quantityCommercial;
     this._conversionFactor = props.conversionFactor;
     this._quantityBaseUnits = props.quantityBaseUnits;
@@ -74,26 +81,10 @@ export class PurchaseLine {
 
   public static create(props: CreatePurchaseLineProps): PurchaseLine {
     if (!props.productId) {
-      throw new PurchaseValidationException(
-        'El producto es obligatorio en cada línea de compra',
-      );
+      throw new PurchaseValidationException('El producto es obligatorio en cada línea de compra');
     }
-    if (!props.lotNumber || !props.lotNumber.trim()) {
-      throw new PurchaseValidationException('El número de lote es obligatorio');
-    }
-    if (!props.expirationDate || isNaN(props.expirationDate.getTime())) {
-      throw new PurchaseValidationException(
-        'La fecha de vencimiento es obligatoria y debe ser una fecha válida',
-      );
-    }
-
-    const today = businessToday();
-    const expDate = props.expirationDate.toISOString().slice(0, 10);
-
-    if (expDate <= today) {
-      throw new PurchaseValidationException(
-        `La fecha de vencimiento (${props.expirationDate.toISOString().split('T')[0]}) no puede ser anterior ni igual a hoy`
-      );
+    if (props.expirationDate && isNaN(props.expirationDate.getTime())) {
+      throw new PurchaseValidationException('La fecha de vencimiento no es válida');
     }
 
     if (props.quantityCommercial <= 0) {
@@ -111,7 +102,10 @@ export class PurchaseLine {
     const exactBaseUnits = props.quantityCommercial * props.conversionFactor;
     const quantityBaseUnits = props.quantityBaseUnits ?? Math.round(exactBaseUnits);
     // El inventario se lleva en unidades base enteras: no se redondea en silencio
-    if (props.quantityBaseUnits === undefined && Math.abs(exactBaseUnits - quantityBaseUnits) > 1e-6) {
+    if (
+      props.quantityBaseUnits === undefined &&
+      Math.abs(exactBaseUnits - quantityBaseUnits) > 1e-6
+    ) {
       throw new PurchaseValidationException(
         `La cantidad ${props.quantityCommercial} con factor ${props.conversionFactor} no equivale a unidades base enteras.`,
       );
@@ -135,8 +129,10 @@ export class PurchaseLine {
       presentationId: props.presentationId ?? null,
       presentationName: props.presentationName ?? null,
       lotId: props.lotId ?? crypto.randomUUID(),
-      lotNumber: props.lotNumber.trim().toUpperCase(),
-      expirationDate: props.expirationDate,
+      lotNumber: props.lotNumber?.trim().toUpperCase() || null,
+      expirationDate: props.expirationDate ?? null,
+      locationId: props.locationId,
+      controlMode: props.controlMode,
       quantityCommercial: props.quantityCommercial,
       conversionFactor: props.conversionFactor,
       quantityBaseUnits,
@@ -175,11 +171,17 @@ export class PurchaseLine {
   public get lotId(): string {
     return this._lotId;
   }
-  public get lotNumber(): string {
+  public get lotNumber(): string | null {
     return this._lotNumber;
   }
-  public get expirationDate(): Date {
+  public get expirationDate(): Date | null {
     return this._expirationDate;
+  }
+  public get locationId(): string | undefined {
+    return this._locationId;
+  }
+  public get controlMode(): InventoryControlMode | undefined {
+    return this._controlMode;
   }
   public get quantityCommercial(): number {
     return this._quantityCommercial;
@@ -210,7 +212,7 @@ export class PurchaseLine {
       presentationName: this._presentationName,
       lotId: this._lotId,
       lotNumber: this._lotNumber,
-      expirationDate: this._expirationDate.toISOString().split('T')[0],
+      expirationDate: this._expirationDate?.toISOString().split('T')[0] ?? null,
       quantityCommercial: this._quantityCommercial.toFixed(4),
       quantityBaseUnits: this._quantityBaseUnits,
       unitCost: this._unitCost.toFixed(2),
@@ -305,7 +307,9 @@ export class Purchase {
       throw new PurchaseValidationException('La fecha de compra es obligatoria');
     }
     if (!props.lines || props.lines.length === 0) {
-      throw new PurchaseValidationException('La compra debe contener al menos una línea de producto');
+      throw new PurchaseValidationException(
+        'La compra debe contener al menos una línea de producto',
+      );
     }
 
     const totalAmount =

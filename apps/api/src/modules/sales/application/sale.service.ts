@@ -27,7 +27,6 @@ import {
   SaleAlreadyCancelledException,
   SaleHasCreditNotesException,
   SaleHasReceivablePaymentsException,
-  ProductWithoutLotControlException,
 } from '../domain/sale.exceptions';
 import { IdempotencyService } from '../../../common/idempotency/idempotency.service';
 import { AuditService } from '../../audit/application/services/audit.service';
@@ -156,12 +155,76 @@ export class SaleService {
     const remainingLots = new Map<string, LockedLot[]>();
     const lines: FefoPreviewDto['lines'] = [];
     for (const item of payload.items) {
-      const { product, requiredBaseUnits } = await this.resolveSaleItem(this.client, item);
+      const { product, requiredBaseUnits } = await this.resolveSaleItem(this.client, item, {
+        serialsRequired: false,
+      });
+      if (product.inventoryControlMode === 'SERVICE') {
+        lines.push({
+          productId: product.id,
+          presentationId: item.presentationId || null,
+          requiredBaseUnits,
+          availableBaseUnits: requiredBaseUnits,
+          shortfallBaseUnits: 0,
+          allocations: [],
+        });
+        continue;
+      }
       let lots = remainingLots.get(product.id);
       if (!lots) {
         lots = await this.inventoryLedger.listFefoCandidates(this.client, product.id, businessDay);
         remainingLots.set(product.id, lots);
       }
+      if (product.inventoryControlMode === 'SERIAL') {
+        // Series que siguen libres para esta consulta, en orden de entrada, para elegir en el POS
+        const availableSerials = lots
+          .filter((lot) => lot.is_active && lot.current_quantity > 0)
+          .map((lot) => lot.lot_number!);
+        const requestedSerials = item.serialNumbers;
+        if (!requestedSerials) {
+          lines.push({
+            productId: product.id,
+            presentationId: item.presentationId || null,
+            requiredBaseUnits,
+            availableBaseUnits: availableSerials.length,
+            shortfallBaseUnits: Math.max(0, requiredBaseUnits - availableSerials.length),
+            allocations: [],
+            availableSerials,
+          });
+          continue;
+        }
+        const bySerial = new Map(lots.map((lot) => [lot.lot_number, lot]));
+        const serialLots = requestedSerials.map((serial) => bySerial.get(serial));
+        const unavailable = requestedSerials.filter((_, index) => {
+          const lot = serialLots[index];
+          return !lot || !lot.is_active || lot.current_quantity <= 0;
+        });
+        if (unavailable.length > 0) {
+          throw new ConflictException(
+            `Series no disponibles para "${product.name}": ${unavailable.join(', ')}.`,
+          );
+        }
+        const allocations = serialLots.map((lot) => {
+          const selected = lot!;
+          selected.current_quantity -= 1;
+          return {
+            lotId: selected.id,
+            lotNumber: selected.lot_number,
+            expirationDate: null,
+            quantityBaseUnits: 1,
+          };
+        });
+        lines.push({
+          productId: product.id,
+          presentationId: item.presentationId || null,
+          requiredBaseUnits,
+          availableBaseUnits: availableSerials.length,
+          shortfallBaseUnits: 0,
+          allocations,
+          availableSerials,
+        });
+        continue;
+      }
+
       const availableBaseUnits = lots.reduce((sum, lot) => sum + lot.current_quantity, 0);
       const plan = planFefoAllocation(lots, requiredBaseUnits);
       const allocations = plan.allocations.map(({ lot, quantityBaseUnits }) => {
@@ -170,7 +233,7 @@ export class SaleService {
         return {
           lotId: lot.id,
           lotNumber: lot.lot_number,
-          expirationDate: lot.expiration_date.toISOString().slice(0, 10),
+          expirationDate: lot.expiration_date?.toISOString().slice(0, 10) ?? null,
           quantityBaseUnits,
         };
       });
@@ -187,7 +250,11 @@ export class SaleService {
   }
 
   /** Resolución y validaciones de catálogo compartidas con la confirmación transaccional. */
-  private async resolveSaleItem(client: Prisma.TransactionClient, item: FefoPreviewLinePayload) {
+  private async resolveSaleItem(
+    client: Prisma.TransactionClient,
+    item: FefoPreviewLinePayload,
+    options: { serialsRequired: boolean } = { serialsRequired: true },
+  ) {
     if (!Number.isFinite(item.quantityCommercial) || item.quantityCommercial <= 0) {
       throw new BadRequestException('La cantidad de cada producto debe ser mayor a cero.');
     }
@@ -218,12 +285,26 @@ export class SaleService {
       unitPrice = Number(presentation.price);
       presentationName = presentation.name;
     }
-    // FARM-AUD-002: toda línea descuenta existencias por FEFO. Un producto antiguo sin control
-    // de lote se rechaza antes de tocar inventario.
-    if (!product.requiresLotControl) {
-      throw new ProductWithoutLotControlException(product.name);
-    }
     const requiredBaseUnits = saleBaseUnits(item.quantityCommercial, factor);
+    if (product.inventoryControlMode === 'SERIAL') {
+      const serials = item.serialNumbers;
+      // La vista previa sin series sólo consulta las disponibles; confirmar siempre las exige
+      if (!serials && !options.serialsRequired) {
+        return { product, factor, unitPrice, presentationName, requiredBaseUnits };
+      }
+      if (!serials || serials.length !== requiredBaseUnits) {
+        throw new BadRequestException(
+          `El producto SERIAL "${product.name}" requiere una serie por cada unidad base.`,
+        );
+      }
+      if (new Set(serials.map((serial) => serial.trim().toUpperCase())).size !== serials.length) {
+        throw new BadRequestException(`No se permiten series repetidas para "${product.name}".`);
+      }
+    } else if (item.serialNumbers !== undefined) {
+      throw new BadRequestException(
+        `"serialNumbers" solo aplica a productos SERIAL; "${product.name}" usa ${product.inventoryControlMode}.`,
+      );
+    }
     return { product, factor, unitPrice, presentationName, requiredBaseUnits };
   }
 
@@ -336,61 +417,108 @@ export class SaleService {
             const lineId = crypto.randomUUID();
             const lineAllocations: SaleLotAllocation[] = [];
 
-            // Asignación FEFO con bloqueo concurrente
-            // Bloquear lotes disponibles ordenados por vencimiento ascendente
-            const availableLots = await this.inventoryLedger.lockFefoCandidates(
-              tx,
-              product.id,
-              businessToday(),
-            );
-
-            const totalAvailable = availableLots.reduce((acc, l) => acc + l.current_quantity, 0);
-            if (totalAvailable < requiredBaseUnits) {
-              throw new InsufficientStockException(product.name, requiredBaseUnits, totalAvailable);
-            }
-
-            let remainingUnits = requiredBaseUnits;
-
-            for (const lot of availableLots) {
-              if (remainingUnits <= 0) break;
-
-              const take = Math.min(lot.current_quantity, remainingUnits);
-              // Descontar existencias del lote y registrar Kardex inmutable
-              await this.inventoryLedger.changeLotQuantity(tx, lot.id, -take, {
-                movementType: 'SALIDA_VENTA',
+            let lineCostCents = 0n;
+            if (product.inventoryControlMode === 'SERIAL') {
+              const serialNumbers = item.serialNumbers!;
+              const locked = await this.inventoryLedger.lockSerials(tx, {
                 productId: product.id,
-                presentationId: item.presentationId || null,
-                quantityBaseUnits: take,
-                presentationFactorHistorical: factor,
-                referenceDocumentType: 'SALE',
-                referenceDocumentId: invoiceNumber,
-                notes: `Venta POS ${invoiceNumber} - Despacho FEFO`,
-                createdByUserId: auditCtx.userId || null,
+                serialNumbers,
               });
-
-              const alloc = SaleLotAllocation.create({
-                saleId,
-                saleLineId: lineId,
-                lotId: lot.id,
-                lotNumber: lot.lot_number,
-                expirationDate: new Date(lot.expiration_date).toISOString().split('T')[0],
-                quantityBaseUnits: take,
+              const bySerial = new Map(locked.map((lot) => [lot.lot_number, lot]));
+              const unavailable = serialNumbers.filter((serial) => {
+                const lot = bySerial.get(serial);
+                return !lot || !lot.is_active || lot.current_quantity !== 1;
               });
-
-              lineAllocations.push(alloc);
-              allLotAllocations.push(alloc);
-              remainingUnits -= take;
+              if (unavailable.length > 0) {
+                throw new ConflictException(
+                  `Series inexistentes, inactivas o sin saldo para "${product.name}": ${unavailable.join(', ')}.`,
+                );
+              }
+              for (const serial of serialNumbers) {
+                const lot = bySerial.get(serial)!;
+                await this.inventoryLedger.changeLotQuantity(tx, lot.id, -1, {
+                  movementType: 'SALIDA_VENTA',
+                  productId: product.id,
+                  presentationId: item.presentationId || null,
+                  quantityBaseUnits: 1,
+                  presentationFactorHistorical: factor,
+                  referenceDocumentType: 'SALE',
+                  referenceDocumentId: invoiceNumber,
+                  notes: `Venta POS ${invoiceNumber} - Serie ${serial}`,
+                  createdByUserId: auditCtx.userId || null,
+                });
+                const allocation = SaleLotAllocation.create({
+                  saleId,
+                  saleLineId: lineId,
+                  lotId: lot.id,
+                  lotNumber: lot.lot_number,
+                  expirationDate: null,
+                  quantityBaseUnits: 1,
+                });
+                lineAllocations.push(allocation);
+                allLotAllocations.push(allocation);
+              }
+              lineCostCents = await this.inventoryLedger.valuation.issue(tx, {
+                productId: product.id,
+                quantityBaseUnits: requiredBaseUnits,
+                movementType: 'SALE',
+                sourceType: 'SALE',
+                sourceId: saleId,
+                userId: auditCtx.userId || null,
+              });
+            } else if (product.inventoryControlMode !== 'SERVICE') {
+              const availableLots = await this.inventoryLedger.lockFefoCandidates(
+                tx,
+                product.id,
+                businessToday(),
+              );
+              const totalAvailable = availableLots.reduce(
+                (acc, lot) => acc + lot.current_quantity,
+                0,
+              );
+              if (totalAvailable < requiredBaseUnits) {
+                throw new InsufficientStockException(
+                  product.name,
+                  requiredBaseUnits,
+                  totalAvailable,
+                );
+              }
+              let remainingUnits = requiredBaseUnits;
+              for (const lot of availableLots) {
+                if (remainingUnits <= 0) break;
+                const take = Math.min(lot.current_quantity, remainingUnits);
+                await this.inventoryLedger.changeLotQuantity(tx, lot.id, -take, {
+                  movementType: 'SALIDA_VENTA',
+                  productId: product.id,
+                  presentationId: item.presentationId || null,
+                  quantityBaseUnits: take,
+                  presentationFactorHistorical: factor,
+                  referenceDocumentType: 'SALE',
+                  referenceDocumentId: invoiceNumber,
+                  notes: `Venta POS ${invoiceNumber} - Despacho ${product.inventoryControlMode === 'LOT_EXPIRY' ? 'FEFO' : 'por orden de entrada'}`,
+                  createdByUserId: auditCtx.userId || null,
+                });
+                const allocation = SaleLotAllocation.create({
+                  saleId,
+                  saleLineId: lineId,
+                  lotId: lot.id,
+                  lotNumber: lot.lot_number,
+                  expirationDate: lot.expiration_date?.toISOString().split('T')[0] ?? null,
+                  quantityBaseUnits: take,
+                });
+                lineAllocations.push(allocation);
+                allLotAllocations.push(allocation);
+                remainingUnits -= take;
+              }
+              lineCostCents = await this.inventoryLedger.valuation.issue(tx, {
+                productId: product.id,
+                quantityBaseUnits: requiredBaseUnits,
+                movementType: 'SALE',
+                sourceType: 'SALE',
+                sourceId: saleId,
+                userId: auditCtx.userId || null,
+              });
             }
-
-            // Submayor de costos (ADR-005): FEFO eligió los lotes; el costo es el promedio vigente
-            const lineCostCents = await this.inventoryLedger.valuation.issue(tx, {
-              productId: product.id,
-              quantityBaseUnits: requiredBaseUnits,
-              movementType: 'SALE',
-              sourceType: 'SALE',
-              sourceId: saleId,
-              userId: auditCtx.userId || null,
-            });
             costOfSalesCents += lineCostCents;
 
             const saleLine = SaleLine.create({
@@ -405,9 +533,13 @@ export class SaleService {
               quantityCommercial: item.quantityCommercial,
               unitPrice,
               discount: item.discount ?? 0,
-              unitCostBase: centsToMoneyString(
-                (lineCostCents * 2n + BigInt(requiredBaseUnits)) / (BigInt(requiredBaseUnits) * 2n),
-              ),
+              unitCostBase:
+                product.inventoryControlMode === 'SERVICE'
+                  ? '0.00'
+                  : centsToMoneyString(
+                      (lineCostCents * 2n + BigInt(requiredBaseUnits)) /
+                        (BigInt(requiredBaseUnits) * 2n),
+                    ),
               costValue: centsToMoneyString(lineCostCents),
               lotAllocations: lineAllocations,
             });

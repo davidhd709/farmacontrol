@@ -98,6 +98,7 @@ describe('AlertsController (Integration with PostgreSQL real & Background Worker
 
     const p1 = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: cat.id,
         code: 'MED-AMOX-500',
         name: 'Amoxicilina 500mg Cápsulas',
@@ -110,6 +111,7 @@ describe('AlertsController (Integration with PostgreSQL real & Background Worker
 
     const p2 = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: cat.id,
         code: 'MED-IBUP-400',
         name: 'Ibuprofeno 400mg Tabletas',
@@ -132,37 +134,47 @@ describe('AlertsController (Integration with PostgreSQL real & Background Worker
 
   describe('Evaluación de Vencimientos y Generación de Alertas (RN-001, RN-002, RF-008)', () => {
     it('responde 409 si el worker conserva el advisory lock de evaluación', async () => {
-    let release!: () => void;
-    const held = new Promise<void>((resolve) => { release = resolve; });
-    let acquired!: () => void;
-    const ready = new Promise<void>((resolve) => { acquired = resolve; });
-    const holder = prisma.$transaction(async (tx) => {
-      const [lock] = await tx.$queryRaw<Array<{ acquired: boolean }>>`SELECT pg_try_advisory_xact_lock(41704, 1) AS acquired`;
-      expect(lock?.acquired).toBe(true);
-      acquired();
-      await held;
-    }, { timeout: 10000 });
-    await ready;
-    try {
-      const res = await request(app.getHttpServer())
-        .post('/api/v1/alerts/evaluate')
-        .set('Cookie', adminCookie)
-        .send({});
-      expect(res.status).toBe(409);
-      expect(res.body.message).toBe('Otra evaluación está en curso');
-    } finally {
-      release();
-      await holder;
-    }
-  });
+      let release!: () => void;
+      const held = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let acquired!: () => void;
+      const ready = new Promise<void>((resolve) => {
+        acquired = resolve;
+      });
+      const holder = prisma.$transaction(
+        async (tx) => {
+          const [lock] = await tx.$queryRaw<
+            Array<{ acquired: boolean }>
+          >`SELECT pg_try_advisory_xact_lock(41704, 1) AS acquired`;
+          expect(lock?.acquired).toBe(true);
+          acquired();
+          await held;
+        },
+        { timeout: 10000 },
+      );
+      await ready;
+      try {
+        const res = await request(app.getHttpServer())
+          .post('/api/v1/alerts/evaluate')
+          .set('Cookie', adminCookie)
+          .send({});
+        expect(res.status).toBe(409);
+        expect(res.body.message).toBe('Otra evaluación está en curso');
+      } finally {
+        release();
+        await holder;
+      }
+    });
 
-  it('debe evaluar los lotes existentes y clasificar en VENCIDO, CRITICO, ALERTA y PROXIMO', async () => {
+    it('debe evaluar los lotes existentes y clasificar en VENCIDO, CRITICO, ALERTA y PROXIMO', async () => {
       const refDate = new Date('2026-06-01T00:00:00Z');
 
       // Crear 4 lotes con distintas fechas relativas a refDate (2026-06-01):
       // Lote 1: Vencido (venció hace 5 días -> 2026-05-27)
       await prisma.inventoryLot.create({
         data: {
+          controlMode: 'LOT_EXPIRY',
           productId: productId1,
           locationId,
           lotNumber: 'LOT-VENC-01',
@@ -174,6 +186,7 @@ describe('AlertsController (Integration with PostgreSQL real & Background Worker
       // Lote 2: Crítico (vence en 15 días -> 2026-06-16)
       await prisma.inventoryLot.create({
         data: {
+          controlMode: 'LOT_EXPIRY',
           productId: productId1,
           locationId,
           lotNumber: 'LOT-CRIT-02',
@@ -185,6 +198,7 @@ describe('AlertsController (Integration with PostgreSQL real & Background Worker
       // Lote 3: Alerta (vence en 45 días -> 2026-07-16)
       await prisma.inventoryLot.create({
         data: {
+          controlMode: 'LOT_EXPIRY',
           productId: productId2,
           locationId,
           lotNumber: 'LOT-ALER-03',
@@ -196,6 +210,7 @@ describe('AlertsController (Integration with PostgreSQL real & Background Worker
       // Lote 4: Próximo (vence en 75 días -> 2026-08-15)
       await prisma.inventoryLot.create({
         data: {
+          controlMode: 'LOT_EXPIRY',
           productId: productId2,
           locationId,
           lotNumber: 'LOT-PROX-04',
@@ -207,6 +222,7 @@ describe('AlertsController (Integration with PostgreSQL real & Background Worker
       // Lote 5: Normal (>90 días -> vence en 150 días, NO debe generar alerta activa)
       await prisma.inventoryLot.create({
         data: {
+          controlMode: 'LOT_EXPIRY',
           productId: productId2,
           locationId,
           lotNumber: 'LOT-NORM-05',
@@ -218,6 +234,7 @@ describe('AlertsController (Integration with PostgreSQL real & Background Worker
       // Lote 6: Sin existencias (currentQuantity = 0, NO debe generar alerta activa)
       await prisma.inventoryLot.create({
         data: {
+          controlMode: 'LOT_EXPIRY',
           productId: productId1,
           locationId,
           lotNumber: 'LOT-CERO-06',
@@ -288,6 +305,7 @@ describe('AlertsController (Integration with PostgreSQL real & Background Worker
 
       const lot = await prisma.inventoryLot.create({
         data: {
+          controlMode: 'LOT_EXPIRY',
           productId: productId1,
           locationId,
           lotNumber: 'LOT-TEMP-01',

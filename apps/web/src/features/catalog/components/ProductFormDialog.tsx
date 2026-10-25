@@ -27,7 +27,8 @@ import type { ProductDto } from '@farmacia/contracts';
 import { ApiError } from '../../../api/http-client';
 import { useCategories } from '../hooks/useCategories';
 import { useUnitsOfMeasure } from '../hooks/useUnitsOfMeasure';
-import { useCreateProduct, useUpdateProduct } from '../hooks/useProducts';
+import { useCreateProduct, useProductSettings, useUpdateProduct } from '../hooks/useProducts';
+import { INVENTORY_CONTROL_MODE_INFO } from '../utils/inventory-control';
 import { productSchema, type ProductFormValues } from '../validation/product.schema';
 
 interface ProductFormDialogProps {
@@ -46,9 +47,10 @@ export function ProductFormDialog({
   onSuccess,
 }: ProductFormDialogProps) {
   const isEditing = Boolean(product);
-  // Producto creado antes de FARM-AUD-002 con el control por lote desactivado: no puede venderse
-  // hasta regularizarlo. El control solo se activa si el usuario lo decide explícitamente.
-  const isLegacyWithoutLotControl = Boolean(product && !product.requiresLotControl);
+  // Modo por defecto y modos permitidos según el perfil sectorial (ADR-006)
+  const { data: settings } = useProductSettings();
+  const defaultControlMode = settings?.defaultControlMode ?? 'LOT_EXPIRY';
+  const allowedControlModes = settings?.allowedControlModes ?? [defaultControlMode];
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const { data: categoriesData, isLoading: isLoadingCategories } = useCategories({
@@ -84,7 +86,7 @@ export function ProductFormDialog({
       sanitaryRegistry: '',
       manufacturer: '',
       description: '',
-      requiresLotControl: true,
+      inventoryControlMode: defaultControlMode,
       prescriptionRequired: false,
       baseUnit: 'UNIDAD',
       basePrice: 0,
@@ -106,7 +108,7 @@ export function ProductFormDialog({
           sanitaryRegistry: product.sanitaryRegistry ?? '',
           manufacturer: product.manufacturer ?? '',
           description: product.description ?? '',
-          requiresLotControl: product.requiresLotControl,
+          inventoryControlMode: product.inventoryControlMode,
           prescriptionRequired: product.prescriptionRequired,
           baseUnit: product.baseUnit,
           basePrice: parseFloat(product.basePrice) || 0,
@@ -123,7 +125,7 @@ export function ProductFormDialog({
           sanitaryRegistry: '',
           manufacturer: '',
           description: '',
-          requiresLotControl: true,
+          inventoryControlMode: defaultControlMode,
           prescriptionRequired: false,
           baseUnit: 'UNIDAD',
           basePrice: 0,
@@ -131,10 +133,23 @@ export function ProductFormDialog({
         });
       }
     }
-  }, [open, product, reset]);
+  }, [open, product, reset, defaultControlMode]);
 
   const onSubmit = async (values: ProductFormValues) => {
     setSubmitError(null);
+    // Misma regla del perfil que valida el backend: un medicamento con fórmula exige su modo
+    const requiredMode = settings?.prescriptionRequiredControlMode;
+    if (
+      values.prescriptionRequired &&
+      requiredMode &&
+      values.inventoryControlMode !== requiredMode
+    ) {
+      setError('inventoryControlMode', {
+        type: 'manual',
+        message: `Un producto bajo fórmula médica debe usar "${INVENTORY_CONTROL_MODE_INFO[requiredMode].label}".`,
+      });
+      return;
+    }
     try {
       const payload = {
         categoryId: values.categoryId,
@@ -146,9 +161,7 @@ export function ProductFormDialog({
         sanitaryRegistry: values.sanitaryRegistry ? values.sanitaryRegistry : null,
         manufacturer: values.manufacturer ? values.manufacturer : null,
         description: values.description ? values.description : null,
-        // Nunca se envía false: el backend lo rechaza. Un producto antiguo sin control conserva
-        // su configuración (campo omitido) mientras el usuario no active el control.
-        ...(values.requiresLotControl ? { requiresLotControl: true } : {}),
+        inventoryControlMode: values.inventoryControlMode,
         prescriptionRequired: values.prescriptionRequired,
         baseUnit: values.baseUnit,
         basePrice: values.basePrice,
@@ -168,6 +181,10 @@ export function ProductFormDialog({
     } catch (error) {
       if (error instanceof ApiError) {
         if (error.status === 409) {
+          if (error.message.includes('existencias')) {
+            setError('inventoryControlMode', { type: 'manual', message: error.message });
+            return;
+          }
           if (error.message.includes('código de barras')) {
             setError('barcode', {
               type: 'manual',
@@ -208,15 +225,6 @@ export function ProductFormDialog({
             {submitError ? (
               <Alert severity="error" onClose={() => setSubmitError(null)}>
                 {submitError}
-              </Alert>
-            ) : null}
-
-            {isLegacyWithoutLotControl ? (
-              <Alert severity="warning" data-testid="legacy-lot-control-warning">
-                Este producto tiene desactivado el control por lote y vencimiento, por lo que{' '}
-                <strong>no puede venderse</strong>: la venta no descontaría inventario. Active el
-                control por lote para regularizarlo; podrá venderse con FEFO sobre sus lotes
-                registrados.
               </Alert>
             ) : null}
 
@@ -544,36 +552,44 @@ export function ProductFormDialog({
 
               <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', gap: 3 }}>
                 <Controller
-                  name="requiresLotControl"
+                  name="inventoryControlMode"
                   control={control}
                   render={({ field }) => (
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={field.value}
-                          onChange={(e) => field.onChange(e.target.checked)}
-                          disabled={isSubmitting || !isLegacyWithoutLotControl}
-                          slotProps={{ input: { 'aria-describedby': 'lot-control-help' } }}
-                        />
-                      }
-                      label={
-                        <Box>
-                          <Typography variant="body2">
-                            Control por lote y vencimiento (FEFO)
-                            {isLegacyWithoutLotControl ? '' : ' · obligatorio'}
-                          </Typography>
-                          <Typography
-                            id="lot-control-help"
-                            variant="caption"
-                            color="text.secondary"
-                          >
-                            {isLegacyWithoutLotControl
-                              ? 'Actívelo para regularizar el producto y habilitar su venta.'
-                              : 'Toda venta descuenta existencias por lote. El inventario sin lote aún no está disponible.'}
-                          </Typography>
-                        </Box>
-                      }
-                    />
+                    <FormControl
+                      sx={{ minWidth: 260, flex: '1 1 260px' }}
+                      error={Boolean(errors.inventoryControlMode)}
+                    >
+                      <InputLabel id="inventory-control-mode-label">
+                        Control de inventario
+                      </InputLabel>
+                      <Select
+                        {...field}
+                        labelId="inventory-control-mode-label"
+                        id="inventory-control-mode-select"
+                        label="Control de inventario"
+                        disabled={isSubmitting}
+                        aria-describedby="inventory-control-mode-help"
+                      >
+                        {allowedControlModes.map((mode) => (
+                          <MenuItem key={mode} value={mode}>
+                            {INVENTORY_CONTROL_MODE_INFO[mode].label}
+                          </MenuItem>
+                        ))}
+                        {!allowedControlModes.includes(field.value) && (
+                          <MenuItem value={field.value}>
+                            {INVENTORY_CONTROL_MODE_INFO[field.value]?.label ?? field.value}
+                          </MenuItem>
+                        )}
+                      </Select>
+                      <FormHelperText id="inventory-control-mode-help">
+                        {errors.inventoryControlMode?.message ||
+                          `${INVENTORY_CONTROL_MODE_INFO[field.value]?.description ?? ''}${
+                            isEditing
+                              ? ' Solo puede cambiarse mientras el producto no tenga existencias registradas.'
+                              : ''
+                          }`}
+                      </FormHelperText>
+                    </FormControl>
                   )}
                 />
 

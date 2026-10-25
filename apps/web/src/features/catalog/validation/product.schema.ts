@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { INVENTORY_CONTROL_MODES } from '@farmacia/contracts';
 
 export const productSchema = z.object({
   categoryId: z.string().trim().min(1, 'Debes seleccionar una categoría'),
@@ -48,7 +49,9 @@ export const productSchema = z.object({
     .max(500, 'La descripción no puede exceder 500 caracteres')
     .optional()
     .or(z.literal('')),
-  requiresLotControl: z.boolean(),
+  inventoryControlMode: z.enum(INVENTORY_CONTROL_MODES, {
+    message: 'Selecciona cómo se controla el inventario del producto',
+  }),
   prescriptionRequired: z.boolean(),
   baseUnit: z.string().trim().min(1, 'La unidad base es requerida'),
   basePrice: z

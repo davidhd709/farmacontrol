@@ -94,7 +94,7 @@ export async function createStockedProduct(
     categoryId: fixtures.categoryId,
     code,
     name: `${options.name} ${code}`,
-    requiresLotControl: true,
+    inventoryControlMode: 'LOT_EXPIRY',
     basePrice: options.basePrice,
     baseCost: options.baseCost ?? Math.round(options.basePrice / 2),
   });

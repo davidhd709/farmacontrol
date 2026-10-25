@@ -39,7 +39,7 @@ const mockProduct: ProductDto = {
   sanitaryRegistry: 'INVIMA 2020M-001',
   manufacturer: 'Genfar',
   description: 'Analgésico',
-  requiresLotControl: true,
+  inventoryControlMode: 'LOT_EXPIRY',
   prescriptionRequired: false,
   baseUnit: 'TABLETA',
   basePrice: '500.00',

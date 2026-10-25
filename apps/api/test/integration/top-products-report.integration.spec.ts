@@ -60,7 +60,16 @@ describe('T-32/T-33/T-34: reportes exactos con PostgreSQL real', () => {
 
   function product(code: string, cost = '0.10', price = '0.20') {
     return prisma.product.create({
-      data: { categoryId, code, name: code, baseUnit: 'TAB', baseCost: cost, basePrice: price },
+      data: {
+        inventoryControlMode: 'LOT_EXPIRY',
+        inventoryControlMode: 'LOT_EXPIRY',
+        categoryId,
+        code,
+        name: code,
+        baseUnit: 'TAB',
+        baseCost: cost,
+        basePrice: price,
+      },
     });
   }
 
@@ -141,6 +150,7 @@ describe('T-32/T-33/T-34: reportes exactos con PostgreSQL real', () => {
     const location = await prisma.location.create({ data: { code: 'L', name: 'Local' } });
     await prisma.inventoryLot.create({
       data: {
+        controlMode: 'LOT_EXPIRY',
         productId: p.id,
         locationId: location.id,
         lotNumber: 'LOT',
@@ -174,6 +184,7 @@ describe('T-32/T-33/T-34: reportes exactos con PostgreSQL real', () => {
       const p = await product(code, cost, price);
       await prisma.inventoryLot.create({
         data: {
+          controlMode: 'LOT_EXPIRY',
           productId: p.id,
           locationId: location.id,
           lotNumber: code,

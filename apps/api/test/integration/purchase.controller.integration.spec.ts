@@ -122,6 +122,7 @@ describe('PurchaseController (Integration with PostgreSQL, Inventory & RBAC)', (
 
     const product = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId,
         code: 'IBU-400',
         name: 'Ibuprofeno 400mg',

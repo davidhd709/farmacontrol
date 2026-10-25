@@ -26,6 +26,7 @@ import {
 } from '@farmacia/contracts';
 import { adjustInventory } from '../api/inventory.api';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
+import { expirationDateLabel, lotNumberLabel } from '../../catalog/utils/inventory-control';
 
 interface AdjustInventoryDialogProps {
   open: boolean;
@@ -179,7 +180,8 @@ export const AdjustInventoryDialog = ({
                 >
                   {availableLots.map((l) => (
                     <MenuItem key={l.id} value={l.id}>
-                      {l.lotNumber} — Saldo: {l.currentQuantity} (Vence: {l.expirationDate})
+                      {lotNumberLabel(l.lotNumber)} — Saldo: {l.currentQuantity} (Vence:{' '}
+                      {expirationDateLabel(l.expirationDate)})
                     </MenuItem>
                   ))}
                 </TextField>
@@ -345,7 +347,7 @@ export const AdjustInventoryDialog = ({
               <strong>Producto:</strong> {selectedProduct?.name || selectedLot?.product?.name}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              <strong>Lote:</strong> {selectedLot?.lotNumber}
+              <strong>Lote:</strong> {lotNumberLabel(selectedLot?.lotNumber)}
             </Typography>
             <Typography variant="body2" color="text.secondary">
               <strong>Motivo:</strong> {reason}

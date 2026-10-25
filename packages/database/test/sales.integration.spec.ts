@@ -51,13 +51,13 @@ describe('Sales & Idempotency — Integridad de Persistencia en PostgreSQL (Inte
 
     const product = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId,
         code: 'MED-001',
         name: 'Amoxicilina 500mg',
         baseUnit: 'TABLETA',
         basePrice: new Prisma.Decimal('1000.00'),
         baseCost: new Prisma.Decimal('600.00'),
-        requiresLotControl: true,
       },
     });
     productId = product.id;
@@ -86,6 +86,7 @@ describe('Sales & Idempotency — Integridad de Persistencia en PostgreSQL (Inte
 
     const lot = await prisma.inventoryLot.create({
       data: {
+        controlMode: 'LOT_EXPIRY',
         productId,
         locationId,
         lotNumber: 'LOTE-AMOX-2026',

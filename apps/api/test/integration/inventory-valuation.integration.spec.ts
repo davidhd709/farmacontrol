@@ -106,7 +106,15 @@ describe('Submayor de costos del inventario (PostgreSQL real)', () => {
 
   async function createProduct(code: string, baseCost: number) {
     const product = await prisma.product.create({
-      data: { categoryId, code, name: `Producto ${code}`, basePrice: 5000, baseCost },
+      data: {
+        inventoryControlMode: 'LOT_EXPIRY',
+        inventoryControlMode: 'LOT_EXPIRY',
+        categoryId,
+        code,
+        name: `Producto ${code}`,
+        basePrice: 5000,
+        baseCost,
+      },
     });
     return product.id;
   }
@@ -334,6 +342,7 @@ describe('Submayor de costos del inventario (PostgreSQL real)', () => {
     });
     const lot = await prisma.inventoryLot.create({
       data: {
+        controlMode: 'LOT_EXPIRY',
         productId,
         locationId,
         lotNumber: 'L-LEGADO',
@@ -377,6 +386,7 @@ describe('Submayor de costos del inventario (PostgreSQL real)', () => {
     ]) {
       await prisma.inventoryLot.create({
         data: {
+          controlMode: 'LOT_EXPIRY',
           productId: product,
           locationId,
           lotNumber,
@@ -402,6 +412,7 @@ describe('Submayor de costos del inventario (PostgreSQL real)', () => {
     // Existencias que no entraron por ningún flujo de la aplicación
     await prisma.inventoryLot.create({
       data: {
+        controlMode: 'LOT_EXPIRY',
         productId,
         locationId,
         lotNumber: 'L-FUERA',

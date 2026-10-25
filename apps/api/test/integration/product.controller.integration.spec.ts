@@ -97,7 +97,6 @@ describe('ProductController (Integration with PostgreSQL & RBAC)', () => {
         sanitaryRegistry: 'INVIMA 2021M-009876',
         manufacturer: 'Laboratorios Farmacia',
         description: 'Cápsulas antibióticas',
-        requiresLotControl: true,
         prescriptionRequired: true,
         baseUnit: 'UNIDAD',
         basePrice: 2500.5,
@@ -108,7 +107,7 @@ describe('ProductController (Integration with PostgreSQL & RBAC)', () => {
     expect(response.body.code).toBe('AMOX-500');
     expect(response.body.name).toBe('Amoxicilina 500mg');
     expect(response.body.basePrice).toBe('2500.50');
-    expect(response.body.requiresLotControl).toBe(true);
+    expect(response.body.inventoryControlMode).toBe('LOT_EXPIRY');
     expect(response.body.categoryName).toBe('Analgésicos');
 
     // Comprobar auditoría
@@ -144,15 +143,12 @@ describe('ProductController (Integration with PostgreSQL & RBAC)', () => {
       data: { name: 'Antipiréticos' },
     });
 
-    await request(app.getHttpServer())
-      .post('/api/v1/products')
-      .set('Cookie', adminCookie)
-      .send({
-        categoryId: category.id,
-        code: 'PAR-500',
-        name: 'Paracetamol 500mg',
-        basePrice: 800,
-      });
+    await request(app.getHttpServer()).post('/api/v1/products').set('Cookie', adminCookie).send({
+      categoryId: category.id,
+      code: 'PAR-500',
+      name: 'Paracetamol 500mg',
+      basePrice: 800,
+    });
 
     const duplicateResponse = await request(app.getHttpServer())
       .post('/api/v1/products')
@@ -173,16 +169,13 @@ describe('ProductController (Integration with PostgreSQL & RBAC)', () => {
       data: { name: 'Gastroenterología' },
     });
 
-    await request(app.getHttpServer())
-      .post('/api/v1/products')
-      .set('Cookie', adminCookie)
-      .send({
-        categoryId: category.id,
-        code: 'OME-20',
-        name: 'Omeprazol 20mg',
-        genericName: 'Omeprazol',
-        basePrice: 1800,
-      });
+    await request(app.getHttpServer()).post('/api/v1/products').set('Cookie', adminCookie).send({
+      categoryId: category.id,
+      code: 'OME-20',
+      name: 'Omeprazol 20mg',
+      genericName: 'Omeprazol',
+      basePrice: 1800,
+    });
 
     const listResponse = await request(app.getHttpServer())
       .get('/api/v1/products?search=Omeprazol')

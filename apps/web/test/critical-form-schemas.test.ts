@@ -6,8 +6,20 @@ import { createCreditNoteSchema } from '../src/features/sales/validation/credit-
 import { createAdjustInventorySchema } from '../src/features/inventory/validation/adjust-inventory.schema';
 
 const products = [
-  { id: 'product', presentations: [{ id: 'box', conversionFactor: 10 }] },
-] as ProductDto[];
+  {
+    id: 'product',
+    inventoryControlMode: 'LOT_EXPIRY',
+    presentations: [{ id: 'box', conversionFactor: 10 }],
+  },
+  { id: 'simple', inventoryControlMode: 'SIMPLE', presentations: [] },
+  { id: 'lot', inventoryControlMode: 'LOT', presentations: [] },
+  {
+    id: 'serial',
+    inventoryControlMode: 'SERIAL',
+    presentations: [{ id: 'pair', conversionFactor: 2 }],
+  },
+  { id: 'service', inventoryControlMode: 'SERVICE', presentations: [] },
+] as unknown as ProductDto[];
 const validPurchase = {
   supplierId: 'supplier',
   invoiceNumber: ' fac-1 ',
@@ -24,6 +36,7 @@ const validPurchase = {
       unitCost: '10.25',
       lotNumber: ' lote ',
       expirationDate: '2099-12-31',
+      serialNumbers: '',
     },
   ],
 };
@@ -70,6 +83,51 @@ describe('Esquema de recepción', () => {
         lines: [{ ...validPurchase.lines[0], [field]: value }],
       }).success,
     ).toBe(false);
+  });
+  describe('lote, vencimiento y series según el modo del producto', () => {
+    const line = (overrides: Record<string, string>) => ({
+      ...validPurchase,
+      lines: [
+        {
+          ...validPurchase.lines[0],
+          presentationId: '',
+          quantityCommercial: '2',
+          lotNumber: '',
+          expirationDate: '',
+          ...overrides,
+        },
+      ],
+    });
+    const ok = (overrides: Record<string, string>) =>
+      purchaseSchema.safeParse(line(overrides)).success;
+
+    it('SIMPLE no exige lote ni vencimiento', () => {
+      expect(ok({ productId: 'simple' })).toBe(true);
+    });
+    it('LOT exige lote pero no vencimiento', () => {
+      expect(ok({ productId: 'lot' })).toBe(false);
+      expect(ok({ productId: 'lot', lotNumber: 'L-1' })).toBe(true);
+    });
+    it('LOT_EXPIRY exige lote y vencimiento', () => {
+      expect(ok({ productId: 'product', lotNumber: 'L-1' })).toBe(false);
+      expect(ok({ productId: 'product', expirationDate: '2099-12-31' })).toBe(false);
+    });
+    it('SERIAL exige una serie distinta por unidad base y solo en la unidad base', () => {
+      expect(ok({ productId: 'serial', serialNumbers: 'S-1' })).toBe(false);
+      expect(ok({ productId: 'serial', serialNumbers: 's-1, S-1' })).toBe(false);
+      expect(ok({ productId: 'serial', serialNumbers: 'S-1\nS-2' })).toBe(true);
+      expect(
+        ok({
+          productId: 'serial',
+          presentationId: 'pair',
+          quantityCommercial: '1',
+          serialNumbers: 'S-1,S-2',
+        }),
+      ).toBe(false);
+    });
+    it('SERVICE no se recibe como inventario', () => {
+      expect(ok({ productId: 'service' })).toBe(false);
+    });
   });
   it('acepta costo cero y avisa fracciones de unidad base sin presentación', () => {
     expect(

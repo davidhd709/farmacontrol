@@ -39,11 +39,13 @@ describe('PurchaseService & Purchase Entities (Unit)', () => {
           isDefault: true,
           isActive: true,
         })),
+        findUnique: vi.fn(async () => ({ id: 'loc-1', isActive: true })),
       },
       product: {
         findUnique: vi.fn(async () => ({
           id: 'prod-1',
           name: 'Acetaminofén 500mg',
+          inventoryControlMode: 'LOT_EXPIRY',
           isActive: true,
         })),
       },
@@ -88,19 +90,17 @@ describe('PurchaseService & Purchase Entities (Unit)', () => {
       expect(line.subtotal).toBe(150000); // 10 * 15000
     });
 
-    it('debe rechazar una fecha de vencimiento que ya expiró o es hoy', () => {
-      const pastDate = new Date('2020-01-01');
-
-      expect(() =>
-        PurchaseLine.create({
-          productId: 'prod-1',
-          lotNumber: 'LOTE-VIEJO',
-          expirationDate: pastDate,
-          quantityCommercial: 1,
-          conversionFactor: 1,
-          unitCost: 1000,
-        }),
-      ).toThrow('no puede ser anterior ni igual a hoy');
+    it('acepta lotNumber y expirationDate nulos para líneas sin lote', () => {
+      const line = PurchaseLine.create({
+        productId: 'prod-1',
+        lotNumber: null,
+        expirationDate: null,
+        quantityCommercial: 1,
+        conversionFactor: 1,
+        unitCost: 1000,
+      });
+      expect(line.lotNumber).toBeNull();
+      expect(line.expirationDate).toBeNull();
     });
 
     it('debe calcular el total de la compra como la suma exacta de sus líneas', () => {

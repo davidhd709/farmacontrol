@@ -15,6 +15,7 @@ export interface IInventoryLotRepository {
     locationId: string,
     lotNumber: string,
   ): Promise<InventoryLot | null>;
+  findSimpleBalance(productId: string, locationId: string): Promise<InventoryLot | null>;
   findAvailableLotsByProductFefo(productId: string, locationId?: string): Promise<InventoryLot[]>;
   findAll(filters: InventoryLotQueryFilters): Promise<PaginatedResponse<InventoryLotDto>>;
   /**

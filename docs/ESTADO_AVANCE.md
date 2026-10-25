@@ -169,7 +169,7 @@ Ninguna se implementó por supuesto; las que se tocaron quedaron con la opción 
 | # | Decisión | Qué desbloquea | Estado actual en el sistema |
 |---|---|---|---|
 | 1 | Una o varias cajas, apertura, arqueo y tolerancias | HU-015 turnos de caja | No existe |
-| 2 | Inventario sin lote y cantidades fraccionarias | T-09 completo | Recepción siempre exige lote |
+| 2 | Inventario sin lote y cantidades fraccionarias | T-09 completo | Inventario sin lote resuelto en F4 ([ADR-006](adr/ADR-006-producto-multisector-y-contabilidad-configurable.md#implementación-de-f4-catálogo-e-inventario-multisector)): modo de control por producto (servicio, simple, lote, lote y vencimiento, serie). Las cantidades fraccionarias siguen pendientes: la unidad base es entera |
 | 3 | IVA: productos gravados, tarifas | T-16 | La venta siempre usa IVA 0 |
 | 4 | Tope de descuento, quién autoriza, motivo | T-19, T-20 | Permiso `sales:discount` (cajero lo conserva); sin tope porcentual |
 | 5 | Quién emite notas crédito y notas débito | T-18 | Admin y supervisor (los roles inventario y compras perdieron las notas débito) |

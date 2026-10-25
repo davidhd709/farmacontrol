@@ -49,7 +49,6 @@ import {
   SaleAlreadyCancelledException,
   SaleHasCreditNotesException,
   SaleHasReceivablePaymentsException,
-  ProductWithoutLotControlException,
   IdempotencyConflictException,
 } from '../../domain/sale.exceptions';
 
@@ -82,6 +81,7 @@ export class SaleController {
               productId: { type: 'string', format: 'uuid' },
               presentationId: { type: 'string', format: 'uuid', nullable: true },
               quantityCommercial: { type: 'number', minimum: 0, exclusiveMinimum: true },
+              serialNumbers: { type: 'array', items: { type: 'string', minLength: 1 } },
             },
           },
         },
@@ -124,12 +124,13 @@ export class SaleController {
                   required: ['lotId', 'lotNumber', 'expirationDate', 'quantityBaseUnits'],
                   properties: {
                     lotId: { type: 'string', format: 'uuid' },
-                    lotNumber: { type: 'string' },
-                    expirationDate: { type: 'string', format: 'date' },
+                    lotNumber: { type: 'string', nullable: true },
+                    expirationDate: { type: 'string', format: 'date', nullable: true },
                     quantityBaseUnits: { type: 'integer' },
                   },
                 },
               },
+              availableSerials: { type: 'array', items: { type: 'string' } },
             },
           },
         },
@@ -139,7 +140,7 @@ export class SaleController {
   @ApiResponse({ status: 400, description: 'Cuerpo, producto, presentación o cantidad inválidos.' })
   @ApiResponse({ status: 401, description: 'Sesión requerida.' })
   @ApiResponse({ status: 403, description: 'Requiere sales:create.' })
-  @ApiResponse({ status: 409, description: 'Producto sin control de lote.' })
+  @ApiResponse({ status: 409, description: 'Conflicto de existencias o series seleccionadas.' })
   public async previewFefo(
     @Body(FefoPreviewValidationPipe) dto: FefoPreviewRequestDto,
   ): Promise<FefoPreviewDto> {
@@ -147,11 +148,11 @@ export class SaleController {
   }
 
   @Post('confirm')
-  @ApiResponse({ status: 400, description: 'Datos inválidos o existencias insuficientes.' })
+  @ApiResponse({ status: 400, description: 'Datos inválidos o cantidad de series incorrecta.' })
   @ApiResponse({ status: 404, description: 'Cliente solicitado no encontrado.' })
   @ApiResponse({
     status: 409,
-    description: 'Conflicto de estado, de idempotencia o producto sin control de lote.',
+    description: 'Conflicto de estado, idempotencia o serie inexistente, inactiva o sin saldo.',
   })
   @ApiResponse({ status: 500, description: 'Fallo interno; la operación se revierte.' })
   @HttpCode(HttpStatus.CREATED)
@@ -179,10 +180,6 @@ export class SaleController {
       }
       if (error instanceof InsufficientStockException) {
         throw new BadRequestException(error.message);
-      }
-      // Producto sin control de lote: conflicto de configuración (409), igual que en fefo-preview
-      if (error instanceof ProductWithoutLotControlException) {
-        throw new ConflictException(error.message);
       }
       if (error instanceof IdempotencyConflictException) {
         throw new ConflictException(error.message);

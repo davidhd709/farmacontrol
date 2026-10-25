@@ -12,6 +12,7 @@ import {
   ReceivePurchasePayload,
   PurchaseQueryFilters,
   PaginatedResponse,
+  InventoryControlMode,
 } from '@farmacia/contracts';
 import { IPurchaseRepository, PURCHASE_REPOSITORY } from '../domain/purchase.repository';
 import { Purchase, PurchaseLine } from '../domain/purchase.entity';
@@ -70,7 +71,7 @@ export class PurchaseService {
       throw new BadRequestException('La compra debe contener al menos un producto');
     }
 
-    // 3. Procesar y Validar cada línea
+    // 3. Validar cada entrada contra el modo de control persistido del producto.
     const purchaseLines: PurchaseLine[] = [];
 
     for (const lineInput of input.lines) {
@@ -109,37 +110,114 @@ export class PurchaseService {
         conversionFactor = pres.conversionFactor;
         presentationName = pres.name;
       }
-
-      const expirationDate = new Date(lineInput.expirationDate);
-      if (isNaN(expirationDate.getTime())) {
-        throw new BadRequestException(
-          `Fecha de vencimiento inválida para el producto "${product.name}"`,
-        );
-      }
-
-      const today = businessToday();
-      const expZero = expirationDate.toISOString().slice(0, 10);
-
-      if (expZero <= today) {
-        throw new ExpiredLotDateException(lineInput.lotNumber, lineInput.expirationDate);
-      }
-
       const commercialQty = Number(lineInput.quantityCommercial);
       const unitCost = Number(lineInput.unitCost);
+      const locationId = lineInput.locationId || defaultLocation.id;
+      const location = await this.client.location.findUnique({ where: { id: locationId } });
+      if (!location || !location.isActive) {
+        throw new BadRequestException(`La ubicación "${locationId}" no existe o está inactiva.`);
+      }
 
-      const purchaseLine = PurchaseLine.create({
-        productId: product.id,
-        productName: product.name,
-        presentationId: lineInput.presentationId,
-        presentationName,
-        lotNumber: lineInput.lotNumber,
-        expirationDate,
-        quantityCommercial: commercialQty,
-        conversionFactor,
-        unitCost,
-      });
+      const controlMode = product.inventoryControlMode as InventoryControlMode;
+      const hasLot = Boolean(lineInput.lotNumber?.trim());
+      const hasExpiration = Boolean(lineInput.expirationDate?.trim());
+      const hasSerials = lineInput.serialNumbers !== undefined;
+      let expirationDate: Date | null = null;
+      if (hasExpiration) {
+        expirationDate = new Date(lineInput.expirationDate!);
+        if (isNaN(expirationDate.getTime())) {
+          throw new BadRequestException(
+            `Fecha de vencimiento inválida para el producto "${product.name}".`,
+          );
+        }
+      }
 
-      purchaseLines.push(purchaseLine);
+      if (controlMode === 'SERVICE') {
+        throw new BadRequestException(
+          `El producto SERVICE "${product.name}" no se puede recibir como inventario.`,
+        );
+      }
+      if (controlMode === 'LOT_EXPIRY') {
+        if (!hasLot || !expirationDate || hasSerials) {
+          throw new BadRequestException(
+            `El producto "${product.name}" requiere lote y vencimiento, y no recibe serialNumbers.`,
+          );
+        }
+        if (expirationDate.toISOString().slice(0, 10) <= businessToday()) {
+          throw new ExpiredLotDateException(lineInput.lotNumber!, lineInput.expirationDate!);
+        }
+      } else if (controlMode === 'LOT') {
+        if (!hasLot || hasExpiration || hasSerials) {
+          throw new BadRequestException(
+            `El producto "${product.name}" requiere lote, prohíbe vencimiento y no recibe serialNumbers.`,
+          );
+        }
+      } else if (controlMode === 'SIMPLE') {
+        if (hasLot || hasExpiration || hasSerials) {
+          throw new BadRequestException(
+            `El producto SIMPLE "${product.name}" prohíbe lote, vencimiento y serialNumbers.`,
+          );
+        }
+      } else if (controlMode === 'SERIAL') {
+        if (conversionFactor !== 1) {
+          throw new BadRequestException(
+            `El producto SERIAL "${product.name}" solo permite presentaciones de factor 1.`,
+          );
+        }
+        if (hasLot || hasExpiration || !lineInput.serialNumbers) {
+          throw new BadRequestException(
+            `El producto SERIAL "${product.name}" requiere serialNumbers y prohíbe lote y vencimiento.`,
+          );
+        }
+        const units = commercialQty * conversionFactor;
+        if (!Number.isInteger(units) || lineInput.serialNumbers.length !== units) {
+          throw new BadRequestException(
+            `La cantidad de series debe ser igual a las unidades base recibidas para "${product.name}".`,
+          );
+        }
+        if (
+          new Set(lineInput.serialNumbers.map((serial) => serial.trim().toUpperCase())).size !==
+          lineInput.serialNumbers.length
+        ) {
+          throw new BadRequestException(
+            `No se permiten series repetidas en la recepción de "${product.name}".`,
+          );
+        }
+        for (const serialNumber of lineInput.serialNumbers) {
+          purchaseLines.push(
+            PurchaseLine.create({
+              productId: product.id,
+              productName: product.name,
+              presentationId: lineInput.presentationId,
+              presentationName,
+              lotNumber: serialNumber,
+              expirationDate: null,
+              quantityCommercial: 1,
+              conversionFactor: 1,
+              unitCost,
+              locationId,
+              controlMode,
+            }),
+          );
+        }
+        continue;
+      }
+
+      purchaseLines.push(
+        PurchaseLine.create({
+          productId: product.id,
+          productName: product.name,
+          presentationId: lineInput.presentationId,
+          presentationName,
+          lotNumber: lineInput.lotNumber,
+          expirationDate,
+          quantityCommercial: commercialQty,
+          conversionFactor,
+          unitCost,
+          locationId,
+          controlMode,
+        }),
+      );
     }
 
     // 4. Crear entidad Purchase

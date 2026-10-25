@@ -216,7 +216,7 @@ export class PrismaSaleRepository implements ISaleRepository {
           lotNumber: a.lot?.lotNumber,
           expirationDate: a.lot?.expirationDate
             ? new Date(a.lot.expirationDate).toISOString().split('T')[0]
-            : undefined,
+            : null,
           createdAt: a.createdAt,
         }),
       );

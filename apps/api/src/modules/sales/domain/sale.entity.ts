@@ -15,8 +15,8 @@ export interface SaleLotAllocationProps {
   saleLineId: string;
   lotId: string;
   quantityBaseUnits: number;
-  lotNumber?: string;
-  expirationDate?: string;
+  lotNumber?: string | null;
+  expirationDate?: string | null;
   createdAt?: Date;
 }
 
@@ -29,8 +29,8 @@ export class SaleLotAllocation {
     saleLineId: string;
     lotId: string;
     quantityBaseUnits: number;
-    lotNumber?: string;
-    expirationDate?: string;
+    lotNumber?: string | null;
+    expirationDate?: string | null;
     createdAt?: Date;
   }): SaleLotAllocation {
     if (props.quantityBaseUnits <= 0) {
@@ -65,10 +65,10 @@ export class SaleLotAllocation {
   public get quantityBaseUnits(): number {
     return this.props.quantityBaseUnits;
   }
-  public get lotNumber(): string | undefined {
+  public get lotNumber(): string | null | undefined {
     return this.props.lotNumber;
   }
-  public get expirationDate(): string | undefined {
+  public get expirationDate(): string | null | undefined {
     return this.props.expirationDate;
   }
 

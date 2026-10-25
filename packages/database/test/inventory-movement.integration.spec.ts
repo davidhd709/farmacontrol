@@ -23,6 +23,7 @@ describe('InventoryMovement (Kardex) — Integridad de Persistencia en PostgreSQ
 
     const product = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'LOSAR-50',
         name: 'Losartán 50mg',
@@ -37,6 +38,7 @@ describe('InventoryMovement (Kardex) — Integridad de Persistencia en PostgreSQ
 
     const lot = await prisma.inventoryLot.create({
       data: {
+        controlMode: 'LOT_EXPIRY',
         productId: product.id,
         locationId: location.id,
         lotNumber: 'LT-KARDEX-01',
@@ -84,6 +86,7 @@ describe('InventoryMovement (Kardex) — Integridad de Persistencia en PostgreSQ
 
     const product = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'BETAM-01',
         name: 'Betametasona Crema',
@@ -98,6 +101,7 @@ describe('InventoryMovement (Kardex) — Integridad de Persistencia en PostgreSQ
 
     const lot = await prisma.inventoryLot.create({
       data: {
+        controlMode: 'LOT_EXPIRY',
         productId: product.id,
         locationId: location.id,
         lotNumber: 'LT-DERMA-01',

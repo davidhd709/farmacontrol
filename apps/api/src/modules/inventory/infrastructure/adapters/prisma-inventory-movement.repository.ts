@@ -1,5 +1,5 @@
 import { businessDayStart, businessDayEnd } from '../../../../common/utils/business-date';
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, ConflictException } from '@nestjs/common';
 import { prisma, Prisma } from '@farmacia/database';
 import {
   IInventoryMovementRepository,
@@ -15,9 +15,7 @@ import type {
 } from '@farmacia/contracts';
 
 @Injectable()
-export class PrismaInventoryMovementRepository
-  implements IInventoryMovementRepository
-{
+export class PrismaInventoryMovementRepository implements IInventoryMovementRepository {
   private readonly valuation = new InventoryValuation();
 
   public async recordMovement(
@@ -28,7 +26,12 @@ export class PrismaInventoryMovementRepository
     return prisma.$transaction(async (tx) => {
       // 1. Bloqueo pesimista del lote: serializa los cambios de saldo concurrentes
       const lockedLots = await tx.$queryRaw<
-        Array<{ id: string; product_id: string; lot_number: string; current_quantity: number }>
+        Array<{
+          id: string;
+          product_id: string;
+          lot_number: string | null;
+          current_quantity: number;
+        }>
       >`
         SELECT id, product_id, lot_number, current_quantity
         FROM inventory_lots
@@ -46,12 +49,12 @@ export class PrismaInventoryMovementRepository
       };
       // FARM-AUD-004: el producto lo define el lote bloqueado, no el identificador recibido
       if (lot.productId !== payload.productId) {
-        throw new LotProductMismatchException(lockedLots[0].lot_number);
+        throw new LotProductMismatchException(lockedLots[0].lot_number ?? 'Sin lote');
       }
 
       const newBalance = lot.currentQuantity + payload.quantityBaseUnits;
       if (newBalance < 0) {
-        throw new BadRequestException(
+        throw new ConflictException(
           `Inventario insuficiente. Existencia actual: ${lot.currentQuantity}, intentó descontar: ${Math.abs(payload.quantityBaseUnits)}`,
         );
       }
@@ -138,9 +141,7 @@ export class PrismaInventoryMovementRepository
           ? {
               id: movement.lot.id,
               lotNumber: movement.lot.lotNumber,
-              expirationDate: movement.lot.expirationDate
-                .toISOString()
-                .split('T')[0],
+              expirationDate: movement.lot.expirationDate?.toISOString().split('T')[0] ?? null,
             }
           : undefined,
         presentation: movement.presentation,
@@ -162,8 +163,7 @@ export class PrismaInventoryMovementRepository
     if (filters.productId) where.productId = filters.productId;
     if (filters.lotId) where.lotId = filters.lotId;
     if (filters.movementType) where.movementType = filters.movementType;
-    if (filters.referenceDocumentId)
-      where.referenceDocumentId = filters.referenceDocumentId;
+    if (filters.referenceDocumentId) where.referenceDocumentId = filters.referenceDocumentId;
 
     if (filters.fromDate || filters.toDate) {
       where.createdAt = {};
@@ -214,9 +214,7 @@ export class PrismaInventoryMovementRepository
           ? {
               id: m.lot.id,
               lotNumber: m.lot.lotNumber,
-              expirationDate: m.lot.expirationDate
-                .toISOString()
-                .split('T')[0],
+              expirationDate: m.lot.expirationDate?.toISOString().split('T')[0] ?? null,
             }
           : undefined,
         presentation: m.presentation,

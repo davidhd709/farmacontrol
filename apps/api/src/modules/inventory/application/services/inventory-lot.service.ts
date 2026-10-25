@@ -1,4 +1,4 @@
-import { prisma } from '@farmacia/database';
+import { prisma, Prisma } from '@farmacia/database';
 import {
   Injectable,
   Inject,
@@ -15,6 +15,7 @@ import {
   ProductRepositoryPort,
 } from '../../../catalog/application/ports/product.repository.port';
 import { InventoryLot } from '../../domain/entities/inventory-lot.entity';
+import { InventoryDomainException } from '../../domain/exceptions/inventory.exceptions';
 import { Location } from '../../domain/entities/location.entity';
 import { AuditService } from '../../../audit/application/services/audit.service';
 import type {
@@ -68,6 +69,34 @@ export class InventoryLotService {
     if (!product) {
       throw new NotFoundException(`Producto con ID "${payload.productId}" no encontrado.`);
     }
+    const controlMode = product.inventoryControlMode;
+    if (controlMode === 'SERVICE') {
+      throw new BadRequestException('Los productos SERVICE no pueden tener existencias manuales.');
+    }
+
+    if (controlMode === 'SIMPLE') {
+      if (payload.lotNumber != null || payload.expirationDate != null) {
+        throw new BadRequestException('El modo SIMPLE no permite lote ni vencimiento.');
+      }
+    } else if (controlMode === 'LOT') {
+      if (!payload.lotNumber || payload.expirationDate != null) {
+        throw new BadRequestException('El modo LOT requiere número de lote y prohíbe vencimiento.');
+      }
+    } else if (controlMode === 'LOT_EXPIRY') {
+      if (!payload.lotNumber || !payload.expirationDate) {
+        throw new BadRequestException('El modo LOT_EXPIRY requiere número de lote y vencimiento.');
+      }
+    } else if (controlMode === 'SERIAL') {
+      if (!payload.lotNumber || payload.expirationDate != null) {
+        throw new BadRequestException('El modo SERIAL requiere una serie y prohíbe vencimiento.');
+      }
+      const quantity = payload.initialQuantity ?? 0;
+      if (quantity !== 0 && quantity !== 1) {
+        throw new BadRequestException(
+          'Una existencia SERIAL solo puede iniciar con cantidad 0 o 1.',
+        );
+      }
+    }
 
     return prisma.$transaction(async (tx) => {
       let location = await this.lotRepository.findLocationById(payload.locationId);
@@ -86,11 +115,21 @@ export class InventoryLotService {
         }
       }
 
-      const existingLot = await this.lotRepository.findByProductLocationAndLotNumber(
-        product.id,
-        location.id,
-        payload.lotNumber,
-      );
+      const existingSimpleBalance =
+        controlMode === 'SIMPLE'
+          ? await this.lotRepository.findSimpleBalance(product.id, location.id)
+          : null;
+      if (existingSimpleBalance) {
+        throw new ConflictException('Ya existe un saldo SIMPLE para este producto y ubicación.');
+      }
+
+      const existingLot = payload.lotNumber
+        ? await this.lotRepository.findByProductLocationAndLotNumber(
+            product.id,
+            location.id,
+            payload.lotNumber,
+          )
+        : null;
 
       if (existingLot) {
         throw new ConflictException(
@@ -102,8 +141,9 @@ export class InventoryLotService {
         const lot = InventoryLot.create({
           productId: product.id,
           locationId: location.id,
-          lotNumber: payload.lotNumber,
-          expirationDate: payload.expirationDate,
+          lotNumber: payload.lotNumber ?? null,
+          expirationDate: payload.expirationDate ?? null,
+          controlMode,
           currentQuantity: payload.initialQuantity ?? 0,
         });
 
@@ -120,7 +160,7 @@ export class InventoryLotService {
               productCode: product.code,
               productName: product.name,
               lotNumber: savedLot.lotNumber,
-              expirationDate: savedLot.expirationDate.toISOString(),
+              expirationDate: savedLot.expirationDate?.toISOString() ?? null,
               initialQuantity: savedLot.currentQuantity,
             },
             ipAddress,
@@ -130,9 +170,14 @@ export class InventoryLotService {
         );
 
         return savedLot.toDto();
-      } catch (err: any) {
-        if (err.name === 'InventoryDomainException' || err.name === 'InvalidLotDataException') {
+      } catch (err: unknown) {
+        if (err instanceof InventoryDomainException) {
           throw new BadRequestException(err.message);
+        }
+        if (isInventoryLotUniqueConflict(err)) {
+          throw new ConflictException(
+            'Ya existe una existencia con esa identidad para el producto y ubicación.',
+          );
         }
         throw err;
       }
@@ -192,4 +237,24 @@ export class InventoryLotService {
       return saved.toDto();
     });
   }
+}
+
+function isInventoryLotUniqueConflict(error: unknown): boolean {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') {
+    return false;
+  }
+  const target = (error.meta as { target?: unknown } | undefined)?.target;
+  const normalizedTarget = (
+    Array.isArray(target) ? target.join('_') : String(target ?? '')
+  ).toLowerCase();
+  const hasProductAndLocation =
+    normalizedTarget.includes('product') && normalizedTarget.includes('location');
+  return (
+    hasProductAndLocation &&
+    (!normalizedTarget.includes('lot') ||
+      normalizedTarget.includes('lot_number') ||
+      normalizedTarget.includes('lotnumber') ||
+      normalizedTarget.includes('inventory_lots_simple_product_location_key') ||
+      normalizedTarget.includes('inventory_lots_product_location_lot_number_key'))
+  );
 }

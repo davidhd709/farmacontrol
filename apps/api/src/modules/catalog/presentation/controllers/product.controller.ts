@@ -19,7 +19,15 @@ import {
   ParseUUIDPipe,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import { type PaginatedResponse, type ProductDto, SYSTEM_PERMISSIONS } from '@farmacia/contracts';
+import {
+  INVENTORY_CONTROL_MODES,
+  type InventoryControlMode,
+  type PaginatedResponse,
+  type ProductDto,
+  type ProductSettingsDto,
+  SYSTEM_PERMISSIONS,
+} from '@farmacia/contracts';
+import { ApiOkResponse, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ProductService } from '../../application/services/product.service';
 import { CreateProductDto, CreateProductValidationPipe } from '../dtos/create-product.dto';
 import { UpdateProductDto, UpdateProductValidationPipe } from '../dtos/update-product.dto';
@@ -39,6 +47,7 @@ import {
 
 @Controller('products')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
+@ApiTags('products')
 export class ProductController {
   constructor(private readonly productService: ProductService) {}
 
@@ -78,19 +87,17 @@ export class ProductController {
 
   /**
    * GET /api/v1/products
-   * Consulta productos con soporte para búsqueda textual, filtro por categoría, lotes y paginación.
+   * Consulta productos con búsqueda textual, filtro por categoría y modo de inventario.
    */
   @Get()
   @HttpCode(HttpStatus.OK)
   @RequirePermissions(SYSTEM_PERMISSIONS.PRODUCTS_READ)
+  @ApiQuery({ name: 'inventoryControlMode', required: false, enum: INVENTORY_CONTROL_MODES })
   public async list(
     @Query('search', new QueryFieldValidationPipe('search', 'text?')) search?: string,
     @Query('categoryId', new QueryFieldValidationPipe('categoryId', 'uuid?')) categoryId?: string,
-    @Query(
-      'requiresLotControl',
-      new QueryFieldValidationPipe('requiresLotControl', 'booleanString?'),
-    )
-    requiresLotControl?: string,
+    @Query('inventoryControlMode', new QueryFieldValidationPipe('inventoryControlMode', 'text?'))
+    inventoryControlMode?: string,
     @Query('isActive', new QueryFieldValidationPipe('isActive', 'booleanString?'))
     isActive?: string,
     @Query('page') page?: string,
@@ -100,9 +107,12 @@ export class ProductController {
     if (isActive === 'true') parsedIsActive = true;
     if (isActive === 'false') parsedIsActive = false;
 
-    let parsedRequiresLotControl: boolean | undefined;
-    if (requiresLotControl === 'true') parsedRequiresLotControl = true;
-    if (requiresLotControl === 'false') parsedRequiresLotControl = false;
+    if (
+      inventoryControlMode !== undefined &&
+      !INVENTORY_CONTROL_MODES.includes(inventoryControlMode as InventoryControlMode)
+    ) {
+      throw new BadRequestException('El filtro "inventoryControlMode" no es válido.');
+    }
 
     const parsedPage = parsePaginationValue(page, 'page');
     const parsedPageSize = parsePaginationValue(pageSize, 'pageSize');
@@ -110,11 +120,20 @@ export class ProductController {
     return this.productService.listProducts({
       search,
       categoryId,
-      requiresLotControl: parsedRequiresLotControl,
+      inventoryControlMode: inventoryControlMode as InventoryControlMode | undefined,
       isActive: parsedIsActive,
       page: parsedPage,
       pageSize: parsedPageSize,
     });
+  }
+
+  @Get('settings')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions(SYSTEM_PERMISSIONS.PRODUCTS_READ)
+  @ApiOperation({ summary: 'Reglas sectoriales para crear y editar productos' })
+  @ApiOkResponse({ description: 'Perfil sectorial y modos de control permitidos.' })
+  public async getSettings(): Promise<ProductSettingsDto> {
+    return this.productService.getProductSettings();
   }
 
   /**

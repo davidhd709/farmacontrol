@@ -37,14 +37,14 @@ export function prorateCents(amountCents: bigint, part: number, whole: number): 
 export interface LotAllocationForReturn {
   lotId: string;
   quantityBaseUnits: number;
-  expirationDate: Date;
+  expirationDate: Date | null;
 }
 
 /**
  * Orden FEFO original de la venta: primero el lote que vencía antes.
  */
 export function sortAllocationsFefo<
-  T extends { lotId: string; quantityBaseUnits: number; lot: { expirationDate: Date } },
+  T extends { lotId: string; quantityBaseUnits: number; lot: { expirationDate: Date | null } },
 >(allocations: T[]): LotAllocationForReturn[] {
   return allocations
     .map((a) => ({
@@ -52,10 +52,18 @@ export function sortAllocationsFefo<
       quantityBaseUnits: a.quantityBaseUnits,
       expirationDate: a.lot.expirationDate,
     }))
-    .sort(
-      (a, b) =>
-        a.expirationDate.getTime() - b.expirationDate.getTime() || a.lotId.localeCompare(b.lotId),
-    );
+    .sort((a, b) => {
+      // Sin vencimiento al final; entre iguales decide el lote para que el orden sea estable
+      const byExpiration =
+        a.expirationDate === null && b.expirationDate === null
+          ? 0
+          : a.expirationDate === null
+            ? 1
+            : b.expirationDate === null
+              ? -1
+              : a.expirationDate.getTime() - b.expirationDate.getTime();
+      return byExpiration || a.lotId.localeCompare(b.lotId);
+    });
 }
 
 export interface ReturnPortion {

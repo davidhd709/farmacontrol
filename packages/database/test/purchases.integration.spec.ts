@@ -33,6 +33,7 @@ describe('Purchases & PurchaseLines — Integridad de Persistencia en PostgreSQL
 
     const product = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId,
         code: 'AMX-500',
         name: 'Amoxicilina 500mg',
@@ -52,6 +53,7 @@ describe('Purchases & PurchaseLines — Integridad de Persistencia en PostgreSQL
 
     const lot = await prisma.inventoryLot.create({
       data: {
+        controlMode: 'LOT_EXPIRY',
         productId,
         locationId,
         lotNumber: 'LOTE-AMX-2026',

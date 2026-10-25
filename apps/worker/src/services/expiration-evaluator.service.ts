@@ -76,7 +76,7 @@ export class ExpirationEvaluatorService {
         }
 
         const lots = await tx.inventoryLot.findMany({
-          where: { isActive: true },
+          where: { isActive: true, expirationDate: { not: null } },
           select: {
             id: true,
             productId: true,
@@ -92,6 +92,7 @@ export class ExpirationEvaluatorService {
         let resolvedAlerts = 0;
 
         for (const lot of lots) {
+          if (lot.expirationDate === null) continue;
           evaluatedLots++;
           const { daysRemaining, severity } = calculateExpirationSeverity(
             lot.expirationDate,

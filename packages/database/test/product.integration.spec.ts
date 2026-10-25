@@ -25,6 +25,7 @@ describe('Product — Integridad de Persistencia en PostgreSQL (Integration)', (
 
     const product = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'MED-001',
         barcode: '7701234567890',
@@ -34,7 +35,6 @@ describe('Product — Integridad de Persistencia en PostgreSQL (Integration)', (
         sanitaryRegistry: 'INVIMA 2020M-001234',
         manufacturer: 'Laboratorios Farmacia',
         description: 'Tabletas orales para el dolor de cabeza y fiebre',
-        requiresLotControl: true,
         prescriptionRequired: false,
         baseUnit: 'UNIDAD',
         basePrice: new Prisma.Decimal('1200.50'),
@@ -50,7 +50,7 @@ describe('Product — Integridad de Persistencia en PostgreSQL (Integration)', (
     expect(product.barcode).toBe('7701234567890');
     expect(product.name).toBe('Acetaminofén 500mg');
     expect(product.genericName).toBe('Paracetamol');
-    expect(product.requiresLotControl).toBe(true);
+    expect(product.inventoryControlMode).toBe('LOT_EXPIRY');
     expect(product.baseUnit).toBe('UNIDAD');
     expect(product.basePrice.toString()).toBe('1200.5');
     expect(product.baseCost.toString()).toBe('750.25');
@@ -65,6 +65,7 @@ describe('Product — Integridad de Persistencia en PostgreSQL (Integration)', (
 
     await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'AMOX-500',
         name: 'Amoxicilina 500mg',
@@ -75,6 +76,7 @@ describe('Product — Integridad de Persistencia en PostgreSQL (Integration)', (
     await expect(
       prisma.product.create({
         data: {
+          inventoryControlMode: 'LOT_EXPIRY',
           categoryId: category.id,
           code: 'AMOX-500',
           name: 'Amoxicilina Genérica 500mg',
@@ -91,6 +93,7 @@ describe('Product — Integridad de Persistencia en PostgreSQL (Integration)', (
 
     await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'LORA-10',
         name: 'Loratadina 10mg',
@@ -101,6 +104,7 @@ describe('Product — Integridad de Persistencia en PostgreSQL (Integration)', (
     await expect(
       prisma.product.create({
         data: {
+          inventoryControlMode: 'LOT_EXPIRY',
           categoryId: category.id,
           code: 'lora-10',
           name: 'Loratadina Genérica 10mg',
@@ -117,6 +121,7 @@ describe('Product — Integridad de Persistencia en PostgreSQL (Integration)', (
 
     await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'VIT-C-1',
         barcode: '7709999999999',
@@ -128,6 +133,7 @@ describe('Product — Integridad de Persistencia en PostgreSQL (Integration)', (
     await expect(
       prisma.product.create({
         data: {
+          inventoryControlMode: 'LOT_EXPIRY',
           categoryId: category.id,
           code: 'VIT-C-2',
           barcode: '7709999999999',
@@ -145,6 +151,7 @@ describe('Product — Integridad de Persistencia en PostgreSQL (Integration)', (
 
     await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'LOSAR-50',
         name: 'Losartán 50mg',
@@ -166,6 +173,7 @@ describe('Product — Integridad de Persistencia en PostgreSQL (Integration)', (
 
     const product = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'GOTAS-01',
         name: 'Lágrimas Artificiales',

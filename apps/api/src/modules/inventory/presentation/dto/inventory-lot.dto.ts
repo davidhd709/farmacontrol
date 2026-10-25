@@ -1,18 +1,14 @@
 import { BadRequestException, Injectable, PipeTransform } from '@nestjs/common';
-import type {
-  CreateInventoryLotPayload,
-  CreateLocationPayload,
-} from '@farmacia/contracts';
+import type { CreateInventoryLotPayload, CreateLocationPayload } from '@farmacia/contracts';
 
-const UUID_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
 export class CreateInventoryLotDto implements CreateInventoryLotPayload {
   productId!: string;
   locationId!: string;
-  lotNumber!: string;
-  expirationDate!: string;
+  lotNumber?: string | null;
+  expirationDate?: string | null;
   initialQuantity?: number;
 }
 
@@ -27,46 +23,39 @@ export class CreateLocationDto implements CreateLocationPayload {
 export class CreateInventoryLotValidationPipe implements PipeTransform {
   public transform(value: unknown): CreateInventoryLotDto {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
-      throw new BadRequestException(
-        'El cuerpo de la solicitud debe ser un objeto JSON válido.',
-      );
+      throw new BadRequestException('El cuerpo de la solicitud debe ser un objeto JSON válido.');
     }
 
     const record = value as Record<string, unknown>;
 
-    if (
-      typeof record.productId !== 'string' ||
-      !UUID_REGEX.test(record.productId.trim())
-    ) {
+    if (typeof record.productId !== 'string' || !UUID_REGEX.test(record.productId.trim())) {
       throw new BadRequestException(
         'El campo "productId" es obligatorio y debe ser un UUID válido.',
       );
     }
 
-    if (
-      typeof record.locationId !== 'string' ||
-      !UUID_REGEX.test(record.locationId.trim())
-    ) {
+    if (typeof record.locationId !== 'string' || !UUID_REGEX.test(record.locationId.trim())) {
       throw new BadRequestException(
         'El campo "locationId" es obligatorio y debe ser un UUID válido.',
       );
     }
 
     if (
-      typeof record.lotNumber !== 'string' ||
-      record.lotNumber.trim().length === 0
+      record.lotNumber !== undefined &&
+      record.lotNumber !== null &&
+      (typeof record.lotNumber !== 'string' || record.lotNumber.trim().length === 0)
     ) {
-      throw new BadRequestException(
-        'El campo "lotNumber" es obligatorio y no puede estar vacío.',
-      );
+      throw new BadRequestException('El campo "lotNumber" debe ser texto no vacío o nulo.');
     }
 
     if (
-      typeof record.expirationDate !== 'string' ||
-      !ISO_DATE_REGEX.test(record.expirationDate.trim())
+      record.expirationDate !== undefined &&
+      record.expirationDate !== null &&
+      (typeof record.expirationDate !== 'string' ||
+        !ISO_DATE_REGEX.test(record.expirationDate.trim()))
     ) {
       throw new BadRequestException(
-        'El campo "expirationDate" es obligatorio y debe tener formato ISO YYYY-MM-DD.',
+        'El campo "expirationDate" debe tener formato ISO YYYY-MM-DD o ser nulo.',
       );
     }
 
@@ -87,8 +76,10 @@ export class CreateInventoryLotValidationPipe implements PipeTransform {
     return {
       productId: record.productId.trim(),
       locationId: record.locationId.trim(),
-      lotNumber: record.lotNumber.trim().toUpperCase(),
-      expirationDate: record.expirationDate.trim(),
+      lotNumber:
+        typeof record.lotNumber === 'string' ? record.lotNumber.trim().toUpperCase() : null,
+      expirationDate:
+        typeof record.expirationDate === 'string' ? record.expirationDate.trim() : null,
       initialQuantity,
     };
   }
@@ -98,9 +89,7 @@ export class CreateInventoryLotValidationPipe implements PipeTransform {
 export class CreateLocationValidationPipe implements PipeTransform {
   public transform(value: unknown): CreateLocationDto {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
-      throw new BadRequestException(
-        'El cuerpo de la solicitud debe ser un objeto JSON válido.',
-      );
+      throw new BadRequestException('El cuerpo de la solicitud debe ser un objeto JSON válido.');
     }
 
     const record = value as Record<string, unknown>;
@@ -116,10 +105,7 @@ export class CreateLocationValidationPipe implements PipeTransform {
     return {
       code: record.code.trim().toUpperCase(),
       name: record.name.trim(),
-      description:
-        typeof record.description === 'string'
-          ? record.description.trim()
-          : null,
+      description: typeof record.description === 'string' ? record.description.trim() : null,
       isDefault: Boolean(record.isDefault),
     };
   }

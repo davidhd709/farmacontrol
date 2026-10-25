@@ -70,13 +70,13 @@ describe('POST sales/fefo-preview (PostgreSQL real)', () => {
     const category = await prisma.category.create({ data: { name: 'FEFO' } });
     const product = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'FEFO-TEST',
         name: 'Producto FEFO',
         baseUnit: 'TABLETA',
         basePrice: '500.00',
         baseCost: '300.00',
-        requiresLotControl: true,
       },
     });
     productId = product.id;
@@ -122,7 +122,13 @@ describe('POST sales/fefo-preview (PostgreSQL real)', () => {
     ];
     for (const data of lots) {
       const lot = await prisma.inventoryLot.create({
-        data: { productId, locationId: location.id, ...data },
+        data: {
+          controlMode: 'LOT_EXPIRY',
+          controlMode: 'LOT_EXPIRY',
+          productId,
+          locationId: location.id,
+          ...data,
+        },
       });
       if (data.lotNumber === 'EARLY') earlyId = lot.id;
       if (data.lotNumber === 'TIED') tiedId = lot.id;
@@ -205,10 +211,24 @@ describe('POST sales/fefo-preview (PostgreSQL real)', () => {
     expect(await snapshot()).toEqual(before);
   });
 
-  it('rechaza producto sin control de lote con 4xx', async () => {
-    await prisma.product.update({ where: { id: productId }, data: { requiresLotControl: false } });
-    const res = await preview([item(1)]).expect(409);
-    expect(res.body.message).toContain('control por lote');
+  it('permite previsualizar productos SERVICE sin asignaciones automáticas', async () => {
+    const category = await prisma.category.create({ data: { name: 'Servicios FEFO' } });
+    const service = await prisma.product.create({
+      data: {
+        inventoryControlMode: 'SERVICE',
+        categoryId: category.id,
+        code: `SERVICE-${randomUUID().slice(0, 8)}`,
+        name: 'Servicio sin inventario',
+        basePrice: 1000,
+      },
+    });
+    const res = await preview([{ productId: service.id, quantityCommercial: 1 }]).expect(200);
+    expect(res.body.lines[0]).toMatchObject({
+      requiredBaseUnits: 1,
+      availableBaseUnits: 1,
+      shortfallBaseUnits: 0,
+      allocations: [],
+    });
   });
 
   it('rechaza producto inactivo o inexistente', async () => {
@@ -231,6 +251,7 @@ describe('POST sales/fefo-preview (PostgreSQL real)', () => {
     await preview([item(1, true)]).expect(400);
     const other = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: (await prisma.product.findUniqueOrThrow({ where: { id: productId } }))
           .categoryId,
         code: 'OTHER',
@@ -238,7 +259,6 @@ describe('POST sales/fefo-preview (PostgreSQL real)', () => {
         baseUnit: 'TABLETA',
         basePrice: '100',
         baseCost: '50',
-        requiresLotControl: true,
       },
     });
     await prisma.productPresentation.update({

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@farmacia/database';
+import type { InventoryControlMode } from '@farmacia/contracts';
 import { InventoryValuation } from './inventory-valuation';
 
 type Tx = Prisma.TransactionClient;
@@ -20,8 +21,8 @@ export interface KardexEntry {
 
 export interface LockedLot {
   id: string;
-  lot_number: string;
-  expiration_date: Date;
+  lot_number: string | null;
+  expiration_date: Date | null;
   current_quantity: number;
   is_active: boolean;
 }
@@ -34,8 +35,8 @@ function fefoCandidatesQuery(productId: string, businessDay: string): Prisma.Sql
     WHERE product_id = ${productId}::uuid
       AND is_active = true
       AND current_quantity > 0
-      AND expiration_date >= ${businessDay}::date
-    ORDER BY expiration_date ASC, created_at ASC
+      AND (expiration_date IS NULL OR expiration_date >= ${businessDay}::date)
+    ORDER BY expiration_date ASC NULLS LAST, created_at ASC
   `;
 }
 
@@ -97,6 +98,53 @@ export class InventoryLedger {
     return rows[0] ?? null;
   }
 
+  /** Bloquea de forma determinista las existencias SERIAL solicitadas que pertenezcan al producto. */
+  async lockSerials(
+    tx: Tx,
+    params: { productId: string; serialNumbers: string[] },
+  ): Promise<LockedLot[]> {
+    const serialNumbers = [
+      ...new Set(params.serialNumbers.map((value) => value.trim().toUpperCase())),
+    ].sort();
+    if (serialNumbers.length === 0) return [];
+    const serialList = Prisma.sql`ARRAY[${Prisma.join(serialNumbers.map((serial) => Prisma.sql`${serial}`))}]::text[]`;
+    return tx.$queryRaw<LockedLot[]>(Prisma.sql`
+      SELECT id, lot_number, expiration_date, current_quantity, is_active
+      FROM inventory_lots
+      WHERE product_id = ${params.productId}::uuid
+        AND lot_number = ANY(${serialList})
+      ORDER BY lot_number ASC
+      FOR UPDATE
+    `);
+  }
+
+  /** Bloquea el saldo SIMPLE existente o lo crea de manera segura ante dos recepciones simultáneas. */
+  async lockOrCreateSimpleBalance(
+    tx: Tx,
+    params: { productId: string; locationId: string },
+  ): Promise<LockedLot> {
+    await tx.$executeRaw(Prisma.sql`
+      INSERT INTO inventory_lots (
+        id, product_id, location_id, lot_number, expiration_date, control_mode,
+        current_quantity, is_active, created_at, updated_at
+      ) VALUES (
+        gen_random_uuid(), ${params.productId}::uuid, ${params.locationId}::uuid,
+        NULL, NULL, 'SIMPLE', 0, true, NOW(), NOW()
+      )
+      ON CONFLICT (product_id, location_id) WHERE lot_number IS NULL DO NOTHING
+    `);
+    const rows = await tx.$queryRaw<LockedLot[]>(Prisma.sql`
+      SELECT id, lot_number, expiration_date, current_quantity, is_active
+      FROM inventory_lots
+      WHERE product_id = ${params.productId}::uuid
+        AND location_id = ${params.locationId}::uuid
+        AND control_mode = 'SIMPLE'
+      FOR UPDATE
+    `);
+    if (!rows[0]) throw new Error('No se pudo bloquear o crear el saldo SIMPLE.');
+    return rows[0];
+  }
+
   /**
    * Suma (positivo) o resta (negativo) unidades base a un lote y registra el kardex con
    * el saldo resultante. Devuelve ese saldo.
@@ -124,8 +172,9 @@ export class InventoryLedger {
       id: string;
       productId: string;
       locationId: string;
-      lotNumber: string;
-      expirationDate: Date;
+      lotNumber: string | null;
+      expirationDate: Date | null;
+      controlMode: InventoryControlMode;
       currentQuantity: number;
     },
   ): Promise<string> {

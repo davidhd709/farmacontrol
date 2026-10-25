@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { Product } from '../../src/modules/catalog/domain/entities/product.entity';
+import { SECTOR_PROFILE_RULES } from '@farmacia/contracts';
+
+const pharmacyProfile = SECTOR_PROFILE_RULES.PHARMACY;
 
 describe('Product Entity (Domain Unit)', () => {
   const validProps = {
@@ -13,7 +16,6 @@ describe('Product Entity (Domain Unit)', () => {
     sanitaryRegistry: 'INVIMA 2020M-001234',
     manufacturer: 'Laboratorios Genéricos',
     description: 'Analgésico y antipirético',
-    requiresLotControl: true,
     prescriptionRequired: false,
     baseUnit: 'unidad',
     basePrice: 1500.5,
@@ -21,7 +23,7 @@ describe('Product Entity (Domain Unit)', () => {
   };
 
   it('debe instanciar un producto válido con valores formateados e invariantes cumplidas', () => {
-    const product = Product.create(validProps);
+    const product = Product.create(validProps, pharmacyProfile);
 
     expect(product.id).toBeDefined();
     expect(product.categoryId).toBe(validProps.categoryId);
@@ -33,7 +35,7 @@ describe('Product Entity (Domain Unit)', () => {
     expect(product.concentration).toBe('500 mg');
     expect(product.sanitaryRegistry).toBe('INVIMA 2020M-001234');
     expect(product.manufacturer).toBe('Laboratorios Genéricos');
-    expect(product.requiresLotControl).toBe(true);
+    expect(product.inventoryControlMode).toBe('LOT_EXPIRY');
     expect(product.prescriptionRequired).toBe(false);
     expect(product.baseUnit).toBe('UNIDAD'); // Normalizado a mayúsculas
     expect(product.basePrice).toBe('1500.50');
@@ -44,55 +46,57 @@ describe('Product Entity (Domain Unit)', () => {
   });
 
   it('debe rechazar código interno vacío o menor a 2 caracteres', () => {
-    expect(() =>
-      Product.create({ ...validProps, code: ' ' }),
-    ).toThrow('El código interno (SKU) del producto es requerido.');
+    expect(() => Product.create({ ...validProps, code: ' ' }, pharmacyProfile)).toThrow(
+      'El código interno (SKU) del producto es requerido.',
+    );
 
-    expect(() =>
-      Product.create({ ...validProps, code: 'A' }),
-    ).toThrow('El código interno (SKU) debe tener entre 2 y 50 caracteres.');
+    expect(() => Product.create({ ...validProps, code: 'A' }, pharmacyProfile)).toThrow(
+      'El código interno (SKU) debe tener entre 2 y 50 caracteres.',
+    );
   });
 
   it('debe rechazar nombre comercial vacío o menor a 2 caracteres', () => {
-    expect(() =>
-      Product.create({ ...validProps, name: ' ' }),
-    ).toThrow('El nombre comercial del producto es requerido.');
+    expect(() => Product.create({ ...validProps, name: ' ' }, pharmacyProfile)).toThrow(
+      'El nombre comercial del producto es requerido.',
+    );
 
-    expect(() =>
-      Product.create({ ...validProps, name: 'X' }),
-    ).toThrow('El nombre comercial debe tener entre 2 y 150 caracteres.');
+    expect(() => Product.create({ ...validProps, name: 'X' }, pharmacyProfile)).toThrow(
+      'El nombre comercial debe tener entre 2 y 150 caracteres.',
+    );
   });
 
   it('debe rechazar código de barras inválido si se proporciona', () => {
-    expect(() =>
-      Product.create({ ...validProps, barcode: '12' }),
-    ).toThrow('El código de barras debe tener entre 3 y 50 caracteres si se proporciona.');
+    expect(() => Product.create({ ...validProps, barcode: '12' }, pharmacyProfile)).toThrow(
+      'El código de barras debe tener entre 3 y 50 caracteres si se proporciona.',
+    );
   });
 
   it('debe rechazar precios negativos o no numéricos', () => {
-    expect(() =>
-      Product.create({ ...validProps, basePrice: -10 }),
-    ).toThrow('El precio base no puede ser un valor negativo.');
+    expect(() => Product.create({ ...validProps, basePrice: -10 }, pharmacyProfile)).toThrow(
+      'El precio base no puede ser un valor negativo.',
+    );
 
-    expect(() =>
-      Product.create({ ...validProps, basePrice: 'abc' }),
-    ).toThrow('El valor para precio base no es un número válido.');
+    expect(() => Product.create({ ...validProps, basePrice: 'abc' }, pharmacyProfile)).toThrow(
+      'El valor para precio base no es un número válido.',
+    );
 
-    expect(() =>
-      Product.create({ ...validProps, baseCost: -5 }),
-    ).toThrow('El costo base no puede ser un valor negativo.');
+    expect(() => Product.create({ ...validProps, baseCost: -5 }, pharmacyProfile)).toThrow(
+      'El costo base no puede ser un valor negativo.',
+    );
   });
 
   it('debe actualizar atributos del producto respetando invariantes', () => {
-    const product = Product.create(validProps);
+    const product = Product.create(validProps, pharmacyProfile);
     const initialUpdatedAt = product.updatedAt;
 
-    product.update({
-      name: 'Acetaminofén Forte 650mg',
-      basePrice: 2200,
-      requiresLotControl: true,
-      prescriptionRequired: true,
-    });
+    product.update(
+      {
+        name: 'Acetaminofén Forte 650mg',
+        basePrice: 2200,
+        prescriptionRequired: true,
+      },
+      pharmacyProfile,
+    );
 
     expect(product.name).toBe('Acetaminofén Forte 650mg');
     expect(product.basePrice).toBe('2200.00');
@@ -101,7 +105,7 @@ describe('Product Entity (Domain Unit)', () => {
   });
 
   it('debe activar y desactivar lógicamente el producto', () => {
-    const product = Product.create(validProps);
+    const product = Product.create(validProps, pharmacyProfile);
 
     product.deactivate();
     expect(product.isActive).toBe(false);
@@ -111,7 +115,7 @@ describe('Product Entity (Domain Unit)', () => {
   });
 
   it('debe serializar a DTO compatible con los contratos del monorepo', () => {
-    const product = Product.create(validProps);
+    const product = Product.create(validProps, pharmacyProfile);
     const dto = product.toDto();
 
     expect(dto.id).toBe(product.id);

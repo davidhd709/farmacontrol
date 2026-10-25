@@ -43,10 +43,25 @@ export class FefoPreviewValidationPipe implements PipeTransform {
       ) {
         throw new BadRequestException(`El campo "presentationId" del ítem ${index} debe ser UUID.`);
       }
+      let serialNumbers: string[] | undefined;
+      if (item.serialNumbers !== undefined) {
+        if (
+          !Array.isArray(item.serialNumbers) ||
+          item.serialNumbers.some((serial) => typeof serial !== 'string' || !serial.trim())
+        ) {
+          throw new BadRequestException(
+            `"serialNumbers" del ítem ${index} debe ser un arreglo de strings no vacíos.`,
+          );
+        }
+        serialNumbers = (item.serialNumbers as string[]).map((serial) =>
+          serial.trim().toUpperCase(),
+        );
+      }
       return {
         productId: item.productId,
         presentationId: (item.presentationId as string | null | undefined) ?? null,
         quantityCommercial: item.quantityCommercial,
+        serialNumbers,
       };
     });
     return { items };

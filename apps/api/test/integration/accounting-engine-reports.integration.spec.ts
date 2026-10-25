@@ -223,6 +223,7 @@ describe('Accounting Engine, Double-Entry, Journal & Reports Integration (Postgr
       });
       const product = await prisma.product.create({
         data: {
+          inventoryControlMode: 'LOT_EXPIRY',
           code: 'PROD-CONT-01',
           name: 'Amoxicilina 500mg',
           basePrice: 15000,
@@ -287,6 +288,7 @@ describe('Accounting Engine, Double-Entry, Journal & Reports Integration (Postgr
         const category = await prisma.category.create({ data: { name: `Cat ${id}` } });
         return prisma.product.create({
           data: {
+            inventoryControlMode: 'LOT_EXPIRY',
             code: `DESC-${id}`,
             name: 'Producto con descuento',
             basePrice: 30000,

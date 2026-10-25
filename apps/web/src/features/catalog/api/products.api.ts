@@ -4,6 +4,7 @@ import type {
   ProductDto,
   ProductPresentationDto,
   ProductQueryFilters,
+  ProductSettingsDto,
   UpdateProductPayload,
 } from '@farmacia/contracts';
 import { apiRequest } from '../../../api/http-client';
@@ -22,8 +23,8 @@ export async function fetchProducts(
     query.set('categoryId', filters.categoryId);
   }
 
-  if (filters.requiresLotControl !== undefined) {
-    query.set('requiresLotControl', String(filters.requiresLotControl));
+  if (filters.inventoryControlMode) {
+    query.set('inventoryControlMode', filters.inventoryControlMode);
   }
 
   if (filters.isActive !== undefined) {
@@ -45,6 +46,11 @@ export async function fetchProducts(
     method: 'GET',
     signal,
   });
+}
+
+/** Modo de control por defecto y modos permitidos según el perfil sectorial vigente. */
+export async function fetchProductSettings(): Promise<ProductSettingsDto> {
+  return apiRequest<ProductSettingsDto>('products/settings', { method: 'GET' });
 }
 
 export async function fetchProductById(id: string): Promise<ProductDto> {

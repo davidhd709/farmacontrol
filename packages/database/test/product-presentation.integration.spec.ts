@@ -23,6 +23,7 @@ describe('ProductPresentation — Integridad de Persistencia en PostgreSQL (Inte
 
     const product = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'ACET-500',
         name: 'Acetaminofén 500mg',
@@ -66,6 +67,7 @@ describe('ProductPresentation — Integridad de Persistencia en PostgreSQL (Inte
 
     const product = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'AMOX-500',
         name: 'Amoxicilina 500mg',
@@ -105,6 +107,7 @@ describe('ProductPresentation — Integridad de Persistencia en PostgreSQL (Inte
 
     const product = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'LORA-10',
         name: 'Loratadina 10mg',
@@ -145,6 +148,7 @@ describe('ProductPresentation — Integridad de Persistencia en PostgreSQL (Inte
 
     const productA = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'OMEP-20',
         name: 'Omeprazol 20mg',
@@ -154,6 +158,7 @@ describe('ProductPresentation — Integridad de Persistencia en PostgreSQL (Inte
 
     const productB = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'ESOM-20',
         name: 'Esomeprazol 20mg',
@@ -201,6 +206,7 @@ describe('ProductPresentation — Integridad de Persistencia en PostgreSQL (Inte
 
     const product = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'LOS-50',
         name: 'Losartán 50mg',
@@ -238,6 +244,7 @@ describe('ProductPresentation — Integridad de Persistencia en PostgreSQL (Inte
 
     const product = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'GOT-01',
         name: 'Gotas Lubricantes',
@@ -268,6 +275,7 @@ describe('ProductPresentation — Integridad de Persistencia en PostgreSQL (Inte
 
     const product = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'IBU-PED',
         name: 'Ibuprofeno Suspensión 100mg/5ml',

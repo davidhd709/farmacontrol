@@ -23,6 +23,7 @@ describe('Inmutabilidad de movimientos de inventario y caja (PostgreSQL real)', 
     const category = await prisma.category.create({ data: { name: 'Inmutables' } });
     const product = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'INM-001',
         name: 'Producto inmutable',
@@ -34,6 +35,7 @@ describe('Inmutabilidad de movimientos de inventario y caja (PostgreSQL real)', 
     productId = product.id;
     const lot = await prisma.inventoryLot.create({
       data: {
+        controlMode: 'LOT_EXPIRY',
         productId,
         locationId: location.id,
         lotNumber: 'LOT-INM',

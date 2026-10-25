@@ -111,13 +111,13 @@ describe('FEFO Inventory Concurrency & Stress Testing (PostgreSQL Real)', () => 
 
     const product = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'AMX-500-CONC',
         name: 'Amoxicilina 500mg Concurrente',
         baseUnit: 'CAPSULA',
         basePrice: new Prisma.Decimal('1000.00'),
         baseCost: new Prisma.Decimal('600.00'),
-        requiresLotControl: true,
       },
     });
     productId = product.id;
@@ -162,6 +162,7 @@ describe('FEFO Inventory Concurrency & Stress Testing (PostgreSQL Real)', () => 
 
       const lot = await prisma.inventoryLot.create({
         data: {
+          controlMode: 'LOT_EXPIRY',
           productId,
           locationId,
           lotNumber: 'LOT-RACE-10',
@@ -239,6 +240,7 @@ describe('FEFO Inventory Concurrency & Stress Testing (PostgreSQL Real)', () => 
       expClose.setDate(expClose.getDate() + 15);
       const lotClose = await prisma.inventoryLot.create({
         data: {
+          controlMode: 'LOT_EXPIRY',
           productId,
           locationId,
           lotNumber: 'LOT-FEFO-CLOSE',
@@ -253,6 +255,7 @@ describe('FEFO Inventory Concurrency & Stress Testing (PostgreSQL Real)', () => 
       expFar.setDate(expFar.getDate() + 90);
       const lotFar = await prisma.inventoryLot.create({
         data: {
+          controlMode: 'LOT_EXPIRY',
           productId,
           locationId,
           lotNumber: 'LOT-FEFO-FAR',
@@ -322,6 +325,7 @@ describe('FEFO Inventory Concurrency & Stress Testing (PostgreSQL Real)', () => 
 
       await prisma.inventoryLot.create({
         data: {
+          controlMode: 'LOT_EXPIRY',
           productId,
           locationId,
           lotNumber: 'LOT-CASH-STRESS',

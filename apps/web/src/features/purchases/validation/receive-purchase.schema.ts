@@ -3,6 +3,14 @@ import type { ProductDto } from '@farmacia/contracts';
 import { toCents } from '../../../utils/money';
 import { businessToday } from '../../../utils/business-date';
 
+/** Series escritas una por línea o separadas por comas, normalizadas como el backend. */
+export function parseSerialNumbers(text: string): string[] {
+  return text
+    .split(/[\n,;]+/)
+    .map((serial) => serial.trim().toUpperCase())
+    .filter((serial) => serial.length > 0);
+}
+
 const required = (message: string) =>
   z.string().refine((value) => value.trim().length > 0, message);
 
@@ -21,20 +29,10 @@ export const createReceivePurchaseSchema = (products: ProductDto[]) =>
           z.object({
             productId: required('Selecciona un producto.'),
             presentationId: z.string(),
-            lotNumber: required('Ingresa el número de lote.'),
-            expirationDate: required('Ingresa la fecha de vencimiento.').superRefine(
-              (value, ctx) => {
-                if (!value) return;
-                // Comparación de días calendario de Bogotá: `new Date('YYYY-MM-DD')` es medianoche
-                // UTC (7 p. m. del día anterior aquí) y rechazaba lotes que vencen mañana.
-                if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || value <= businessToday()) {
-                  ctx.addIssue({
-                    code: 'custom',
-                    message: 'La fecha de vencimiento no puede ser anterior ni igual a hoy.',
-                  });
-                }
-              },
-            ),
+            // Lote, vencimiento y series dependen del modo de control del producto (superRefine)
+            lotNumber: z.string(),
+            expirationDate: z.string(),
+            serialNumbers: z.string(),
             quantityCommercial: z
               .string()
               .refine(
@@ -75,6 +73,43 @@ export const createReceivePurchaseSchema = (products: ProductDto[]) =>
         const factor =
           product?.presentations?.find((p) => p.id === line.presentationId)?.conversionFactor ?? 1;
         const units = Number(line.quantityCommercial) * factor;
+        const issue = (field: keyof PurchaseLineShape, message: string) =>
+          ctx.addIssue({ code: 'custom', path: ['lines', index, field], message });
+        const mode = product?.inventoryControlMode;
+        if (mode === 'LOT' || mode === 'LOT_EXPIRY') {
+          if (!line.lotNumber.trim()) issue('lotNumber', 'Ingresa el número de lote.');
+        }
+        if (mode === 'LOT_EXPIRY') {
+          // Comparación de días calendario de Bogotá: `new Date('YYYY-MM-DD')` es medianoche
+          // UTC (7 p. m. del día anterior aquí) y rechazaba lotes que vencen mañana.
+          if (!line.expirationDate.trim()) {
+            issue('expirationDate', 'Ingresa la fecha de vencimiento.');
+          } else if (
+            !/^\d{4}-\d{2}-\d{2}$/.test(line.expirationDate) ||
+            line.expirationDate <= businessToday()
+          ) {
+            issue(
+              'expirationDate',
+              'La fecha de vencimiento no puede ser anterior ni igual a hoy.',
+            );
+          }
+        }
+        if (mode === 'SERIAL') {
+          const serials = parseSerialNumbers(line.serialNumbers);
+          if (factor !== 1) {
+            issue('presentationId', 'Los productos por serie se reciben en la unidad base.');
+          } else if (serials.length !== units) {
+            issue(
+              'serialNumbers',
+              `Escribe una serie por unidad: van ${serials.length} de ${Number.isFinite(units) ? units : 0}.`,
+            );
+          } else if (new Set(serials).size !== serials.length) {
+            issue('serialNumbers', 'Hay series repetidas.');
+          }
+        }
+        if (mode === 'SERVICE') {
+          issue('productId', 'Un servicio no se recibe como inventario.');
+        }
         // Misma tolerancia que PurchaseLine.create en backend.
         if (
           !Number.isFinite(units) ||
@@ -92,11 +127,13 @@ export const createReceivePurchaseSchema = (products: ProductDto[]) =>
 
 export type ReceivePurchaseFormValues = z.infer<ReturnType<typeof createReceivePurchaseSchema>>;
 export type PurchaseFormLine = ReceivePurchaseFormValues['lines'][number];
+type PurchaseLineShape = PurchaseFormLine;
 export const emptyPurchaseLine = (): PurchaseFormLine => ({
   productId: '',
   presentationId: '',
   lotNumber: '',
   expirationDate: '',
+  serialNumbers: '',
   quantityCommercial: '1',
   unitCost: '0',
 });

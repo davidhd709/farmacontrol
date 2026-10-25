@@ -11,7 +11,7 @@ import {
   LotConflictException,
 } from '../domain/purchase.exceptions';
 
-const toDateOnly = (date: Date) => date.toISOString().slice(0, 10);
+const toDateOnly = (date: Date | null) => date?.toISOString().slice(0, 10) ?? null;
 import { PurchaseQueryFilters } from '@farmacia/contracts';
 
 @Injectable()
@@ -42,7 +42,11 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
       );
     } catch (error) {
       // UNIQUE (supplier_id, invoice_number): también cubre dos recepciones simultáneas
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002' &&
+        isPurchaseInvoiceUniqueError(error)
+      ) {
         throw new DuplicatePurchaseInvoiceException(purchase.invoiceNumber);
       }
       throw error;
@@ -55,135 +59,169 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
     actorUserId: string | null,
     afterSaveTx?: (tx: any, savedPurchase: Purchase) => Promise<void>,
   ): Promise<Purchase> {
-    return await this.client.$transaction(async (tx) => {
-      // 1. Crear registro de la Compra
-      await tx.purchase.create({
-        data: {
-          id: purchase.id,
-          supplierId: purchase.supplierId,
-          invoiceNumber: purchase.invoiceNumber,
-          purchaseDate: purchase.purchaseDate,
-          totalAmount: new Prisma.Decimal(purchase.totalAmount),
-          status: purchase.status,
-          notes: purchase.notes,
-          receivedByUserId: purchase.receivedByUserId,
-          createdAt: purchase.createdAt,
-          updatedAt: purchase.updatedAt,
-        },
-      });
-
-      // Crear cuenta por pagar (Payable) vinculada a la factura de compra
-      // Conforme a MODULO_CONTABILIDAD_FARMACIA.md: registrar la compra y pagarla son eventos distintos.
-      // Toda compra causa una obligación en estado PENDIENTE. Si es CONTADO, vence en la misma fecha de compra.
-      const payableDueDate = purchase.dueDate || purchase.purchaseDate;
-      await this.payablesLedger.openForPurchase(tx, {
-        purchaseId: purchase.id,
-        supplierId: purchase.supplierId,
-        totalAmount: purchase.totalAmount,
-        dueDate: payableDueDate,
-        notes: purchase.notes,
-      });
-
-      // 2. Procesar cada línea de compra y afectar inventario
-      for (const line of purchase.lines) {
-        // Buscar y bloquear el lote en la ubicación
-        const existing = await this.inventoryLedger.lockLotByNumber(tx, {
-          productId: line.productId,
-          locationId: defaultLocationId,
-          lotNumber: line.lotNumber,
-        });
-
-        let lotId: string;
-        if (existing) {
-          // Un lote es un único vencimiento: la recepción no lo reescribe ni lo reactiva
-          if (toDateOnly(existing.expiration_date) !== toDateOnly(line.expirationDate)) {
-            throw new LotConflictException(
-              `El lote "${line.lotNumber}" ya existe con vencimiento ${toDateOnly(existing.expiration_date)}; la factura indica ${toDateOnly(line.expirationDate)}.`,
-            );
-          }
-          if (!existing.is_active) {
-            throw new LotConflictException(
-              `El lote "${line.lotNumber}" está inactivo; no se puede recibir mercancía en él.`,
-            );
-          }
-          lotId = existing.id;
-        } else {
-          lotId = await this.inventoryLedger.createLot(tx, {
-            id: line.lotId,
-            productId: line.productId,
-            locationId: defaultLocationId,
-            lotNumber: line.lotNumber,
-            expirationDate: line.expirationDate,
-            currentQuantity: line.quantityBaseUnits,
-          });
-        }
-        line.setLotId(lotId);
-
-        const factorHistorical = line.conversionFactor;
-
-        // Insertar línea de compra
-        await tx.purchaseLine.create({
+    return await this.client.$transaction(
+      async (tx) => {
+        // 1. Crear registro de la Compra
+        await tx.purchase.create({
           data: {
-            id: line.id,
-            purchaseId: purchase.id,
-            productId: line.productId,
-            presentationId: line.presentationId,
-            lotId,
-            quantityCommercial: new Prisma.Decimal(line.quantityCommercial),
-            presentationFactorHistorical: factorHistorical,
-            quantityBaseUnits: line.quantityBaseUnits,
-            unitCost: new Prisma.Decimal(line.unitCost),
-            subtotal: new Prisma.Decimal(line.subtotal),
-            lotNumber: line.lotNumber,
-            expirationDate: line.expirationDate,
-            createdAt: line.createdAt,
+            id: purchase.id,
+            supplierId: purchase.supplierId,
+            invoiceNumber: purchase.invoiceNumber,
+            purchaseDate: purchase.purchaseDate,
+            totalAmount: new Prisma.Decimal(purchase.totalAmount),
+            status: purchase.status,
+            notes: purchase.notes,
+            receivedByUserId: purchase.receivedByUserId,
+            createdAt: purchase.createdAt,
+            updatedAt: purchase.updatedAt,
           },
         });
 
-        // Entrada al lote (si ya existía) y movimiento inmutable de Kardex
-        const entry = {
-          movementType: 'ENTRADA_COMPRA',
-          productId: line.productId,
-          presentationId: line.presentationId,
-          quantityBaseUnits: line.quantityBaseUnits,
-          presentationFactorHistorical: factorHistorical,
-          quantityCommercial: new Prisma.Decimal(line.quantityCommercial),
-          referenceDocumentType: 'COMPRA',
-          referenceDocumentId: purchase.id,
-          notes: `Recepción factura ${purchase.invoiceNumber} - Lote ${line.lotNumber}`,
-          createdByUserId: actorUserId,
-        };
-        if (existing) {
-          await this.inventoryLedger.changeLotQuantity(tx, lotId, line.quantityBaseUnits, entry);
-        } else {
-          await this.inventoryLedger.recordMovement(tx, lotId, line.quantityBaseUnits, entry);
+        // Crear cuenta por pagar (Payable) vinculada a la factura de compra
+        // Conforme a MODULO_CONTABILIDAD_FARMACIA.md: registrar la compra y pagarla son eventos distintos.
+        // Toda compra causa una obligación en estado PENDIENTE. Si es CONTADO, vence en la misma fecha de compra.
+        const payableDueDate = purchase.dueDate || purchase.purchaseDate;
+        await this.payablesLedger.openForPurchase(tx, {
+          purchaseId: purchase.id,
+          supplierId: purchase.supplierId,
+          totalAmount: purchase.totalAmount,
+          dueDate: payableDueDate,
+          notes: purchase.notes,
+        });
+
+        // 2. Procesar cada línea de compra y afectar inventario
+        for (const line of purchase.lines) {
+          const locationId = line.locationId ?? defaultLocationId;
+          const controlMode = line.controlMode;
+          if (!controlMode) throw new Error('PurchaseLine sin controlMode del producto validado.');
+          let lotId: string;
+          let existing: Awaited<ReturnType<InventoryLedger['lockLotByNumber']>> = null;
+
+          if (controlMode === 'SIMPLE') {
+            existing = await this.inventoryLedger.lockOrCreateSimpleBalance(tx, {
+              productId: line.productId,
+              locationId,
+            });
+            lotId = existing.id;
+          } else if (controlMode === 'SERIAL') {
+            const serialRows = await this.inventoryLedger.lockSerials(tx, {
+              productId: line.productId,
+              serialNumbers: [line.lotNumber!],
+            });
+            if (serialRows.length > 0) {
+              throw new LotConflictException(
+                `La serie "${line.lotNumber}" ya existe para este producto.`,
+              );
+            }
+            lotId = await this.inventoryLedger.createLot(tx, {
+              id: line.lotId,
+              productId: line.productId,
+              locationId,
+              lotNumber: line.lotNumber,
+              expirationDate: null,
+              controlMode,
+              currentQuantity: line.quantityBaseUnits,
+            });
+          } else {
+            existing = await this.inventoryLedger.lockLotByNumber(tx, {
+              productId: line.productId,
+              locationId,
+              lotNumber: line.lotNumber!,
+            });
+            if (existing) {
+              // Un lote es un único vencimiento: la recepción no lo reescribe ni lo reactiva
+              if (toDateOnly(existing.expiration_date) !== toDateOnly(line.expirationDate)) {
+                throw new LotConflictException(
+                  `El lote "${line.lotNumber}" ya existe con vencimiento ${toDateOnly(existing.expiration_date) ?? 'No vence'}; la factura indica ${toDateOnly(line.expirationDate) ?? 'No vence'}.`,
+                );
+              }
+              if (!existing.is_active) {
+                throw new LotConflictException(
+                  `El lote "${line.lotNumber}" está inactivo; no se puede recibir mercancía en él.`,
+                );
+              }
+              lotId = existing.id;
+            } else {
+              lotId = await this.inventoryLedger.createLot(tx, {
+                id: line.lotId,
+                productId: line.productId,
+                locationId,
+                lotNumber: line.lotNumber,
+                expirationDate: line.expirationDate,
+                controlMode,
+                currentQuantity: line.quantityBaseUnits,
+              });
+            }
+          }
+          line.setLotId(lotId);
+
+          const factorHistorical = line.conversionFactor;
+
+          // Insertar línea de compra
+          await tx.purchaseLine.create({
+            data: {
+              id: line.id,
+              purchaseId: purchase.id,
+              productId: line.productId,
+              presentationId: line.presentationId,
+              lotId,
+              quantityCommercial: new Prisma.Decimal(line.quantityCommercial),
+              presentationFactorHistorical: factorHistorical,
+              quantityBaseUnits: line.quantityBaseUnits,
+              unitCost: new Prisma.Decimal(line.unitCost),
+              subtotal: new Prisma.Decimal(line.subtotal),
+              lotNumber: line.lotNumber,
+              expirationDate: line.expirationDate,
+              createdAt: line.createdAt,
+            },
+          });
+
+          // Entrada al lote (si ya existía) y movimiento inmutable de Kardex
+          const entry = {
+            movementType: 'ENTRADA_COMPRA',
+            productId: line.productId,
+            presentationId: line.presentationId,
+            quantityBaseUnits: line.quantityBaseUnits,
+            presentationFactorHistorical: factorHistorical,
+            quantityCommercial: new Prisma.Decimal(line.quantityCommercial),
+            referenceDocumentType: 'COMPRA',
+            referenceDocumentId: purchase.id,
+            notes: `Recepción factura ${purchase.invoiceNumber} - ${line.lotNumber ? `Lote ${line.lotNumber}` : 'Saldo SIMPLE'}`,
+            createdByUserId: actorUserId,
+          };
+          if (existing) {
+            await this.inventoryLedger.changeLotQuantity(tx, lotId, line.quantityBaseUnits, entry);
+          } else {
+            await this.inventoryLedger.recordMovement(tx, lotId, line.quantityBaseUnits, entry);
+          }
+
+          // Submayor de costos (ADR-005): entra al costo de la factura, sin IVA
+          await this.inventoryLedger.valuation.receive(tx, {
+            productId: line.productId,
+            quantityBaseUnits: line.quantityBaseUnits,
+            valueCents: parseMoneyToCents(new Prisma.Decimal(line.subtotal).toFixed(2), 'Subtotal'),
+            movementType: 'PURCHASE',
+            sourceType: 'PURCHASE',
+            sourceId: purchase.id,
+            userId: actorUserId,
+          });
         }
 
-        // Submayor de costos (ADR-005): entra al costo de la factura, sin IVA
-        await this.inventoryLedger.valuation.receive(tx, {
-          productId: line.productId,
-          quantityBaseUnits: line.quantityBaseUnits,
-          valueCents: parseMoneyToCents(new Prisma.Decimal(line.subtotal).toFixed(2), 'Subtotal'),
-          movementType: 'PURCHASE',
-          sourceType: 'PURCHASE',
-          sourceId: purchase.id,
-          userId: actorUserId,
-        });
-      }
+        const result = await this.findByIdWithTx(purchase.id, tx);
+        if (!result) {
+          throw new Error('Error al recargar la compra recién registrada');
+        }
 
-      const result = await this.findByIdWithTx(purchase.id, tx);
-      if (!result) {
-        throw new Error('Error al recargar la compra recién registrada');
-      }
+        if (afterSaveTx) {
+          await afterSaveTx(tx, result);
+        }
 
-      if (afterSaveTx) {
-        await afterSaveTx(tx, result);
-      }
-
-      return result;
-    }, {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-    });
+        return result;
+      },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      },
+    );
   }
 
   async findById(id: string): Promise<Purchase | null> {
@@ -245,7 +283,7 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
 
   private async findByIdWithTx(
     id: string,
-    prismaClient: PrismaClient | Prisma.TransactionClient
+    prismaClient: PrismaClient | Prisma.TransactionClient,
   ): Promise<Purchase | null> {
     const raw = await prismaClient.purchase.findUnique({
       where: { id },
@@ -284,7 +322,7 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
         unitCost: Number(l.unitCost),
         subtotal: Number(l.subtotal),
         createdAt: l.createdAt,
-      })
+      }),
     );
 
     const dueDate = raw.payable?.dueDate ?? null;
@@ -293,9 +331,17 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
       paymentCondition = 'CONTADO';
     } else if (raw.notes && raw.notes.includes('Condición: Crédito')) {
       paymentCondition = 'CREDITO';
-    } else if (dueDate && raw.purchaseDate && new Date(dueDate).getTime() <= new Date(raw.purchaseDate).getTime()) {
+    } else if (
+      dueDate &&
+      raw.purchaseDate &&
+      new Date(dueDate).getTime() <= new Date(raw.purchaseDate).getTime()
+    ) {
       paymentCondition = 'CONTADO';
-    } else if (dueDate && raw.purchaseDate && new Date(dueDate).getTime() > new Date(raw.purchaseDate).getTime()) {
+    } else if (
+      dueDate &&
+      raw.purchaseDate &&
+      new Date(dueDate).getTime() > new Date(raw.purchaseDate).getTime()
+    ) {
       paymentCondition = 'CREDITO';
     } else if (raw.payable) {
       paymentCondition = raw.payable.status === 'PAGADA' ? 'CONTADO' : 'CREDITO';
@@ -320,4 +366,10 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
       updatedAt: raw.updatedAt,
     });
   }
+}
+
+function isPurchaseInvoiceUniqueError(error: Prisma.PrismaClientKnownRequestError): boolean {
+  const target = error.meta?.target;
+  const rendered = `${String(target ?? '')} ${error.message}`.toLowerCase();
+  return rendered.includes('invoice_number') || rendered.includes('supplier_id_invoice_number');
 }

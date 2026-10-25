@@ -23,12 +23,12 @@ describe('InventoryLot & Location — Integridad de Persistencia en PostgreSQL (
 
     const product = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'AMOX-500',
         name: 'Amoxicilina 500mg',
         baseUnit: 'CÁPSULA',
         basePrice: new Prisma.Decimal('1200.00'),
-        requiresLotControl: true,
       },
     });
 
@@ -43,6 +43,7 @@ describe('InventoryLot & Location — Integridad de Persistencia en PostgreSQL (
     const expirationDate = new Date('2027-12-31');
     const lot = await prisma.inventoryLot.create({
       data: {
+        controlMode: 'LOT_EXPIRY',
         productId: product.id,
         locationId: location.id,
         lotNumber: 'LOTE-AMOX-2027',
@@ -66,6 +67,7 @@ describe('InventoryLot & Location — Integridad de Persistencia en PostgreSQL (
 
     const product = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'IBUP-400',
         name: 'Ibuprofeno 400mg',
@@ -84,6 +86,7 @@ describe('InventoryLot & Location — Integridad de Persistencia en PostgreSQL (
     await expect(
       prisma.inventoryLot.create({
         data: {
+          controlMode: 'LOT_EXPIRY',
           productId: product.id,
           locationId: location.id,
           lotNumber: 'LOTE-NEGATIVO',
@@ -101,6 +104,7 @@ describe('InventoryLot & Location — Integridad de Persistencia en PostgreSQL (
 
     const product = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'DOLEX-AV',
         name: 'Dolex Avanzado',
@@ -118,6 +122,7 @@ describe('InventoryLot & Location — Integridad de Persistencia en PostgreSQL (
 
     await prisma.inventoryLot.create({
       data: {
+        controlMode: 'LOT_EXPIRY',
         productId: product.id,
         locationId: location.id,
         lotNumber: 'LOTE-UNICO-123',
@@ -130,6 +135,7 @@ describe('InventoryLot & Location — Integridad de Persistencia en PostgreSQL (
     await expect(
       prisma.inventoryLot.create({
         data: {
+          controlMode: 'LOT_EXPIRY',
           productId: product.id,
           locationId: location.id,
           lotNumber: 'LOTE-UNICO-123',
@@ -147,6 +153,7 @@ describe('InventoryLot & Location — Integridad de Persistencia en PostgreSQL (
 
     const product = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'VIT-C-500',
         name: 'Vitamina C 500mg',
@@ -165,6 +172,7 @@ describe('InventoryLot & Location — Integridad de Persistencia en PostgreSQL (
     // Insertamos en orden no cronológico
     await prisma.inventoryLot.create({
       data: {
+        controlMode: 'LOT_EXPIRY',
         productId: product.id,
         locationId: location.id,
         lotNumber: 'LOTE-LEJANO',
@@ -175,6 +183,7 @@ describe('InventoryLot & Location — Integridad de Persistencia en PostgreSQL (
 
     await prisma.inventoryLot.create({
       data: {
+        controlMode: 'LOT_EXPIRY',
         productId: product.id,
         locationId: location.id,
         lotNumber: 'LOTE-PROXIMO',
@@ -185,6 +194,7 @@ describe('InventoryLot & Location — Integridad de Persistencia en PostgreSQL (
 
     await prisma.inventoryLot.create({
       data: {
+        controlMode: 'LOT_EXPIRY',
         productId: product.id,
         locationId: location.id,
         lotNumber: 'LOTE-MEDIO',

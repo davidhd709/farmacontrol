@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, PipeTransform } from '@nestjs/common';
 import type { UpdateProductPayload } from '@farmacia/contracts';
+import { INVENTORY_CONTROL_MODES } from '@farmacia/contracts';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -13,7 +14,7 @@ export class UpdateProductDto implements UpdateProductPayload {
   sanitaryRegistry?: string | null;
   manufacturer?: string | null;
   description?: string | null;
-  requiresLotControl?: boolean;
+  inventoryControlMode?: UpdateProductPayload['inventoryControlMode'];
   prescriptionRequired?: boolean;
   baseUnit?: string;
   basePrice?: number | string;
@@ -46,7 +47,9 @@ export class UpdateProductValidationPipe implements PipeTransform {
       }
       const code = record.code.trim();
       if (code.length < 2 || code.length > 50) {
-        throw new BadRequestException('El código interno (SKU) debe tener entre 2 y 50 caracteres.');
+        throw new BadRequestException(
+          'El código interno (SKU) debe tener entre 2 y 50 caracteres.',
+        );
       }
       result.code = code;
     }
@@ -58,7 +61,9 @@ export class UpdateProductValidationPipe implements PipeTransform {
       }
       const name = record.name.trim();
       if (name.length < 2 || name.length > 150) {
-        throw new BadRequestException('El nombre del producto debe tener entre 2 y 150 caracteres.');
+        throw new BadRequestException(
+          'El nombre del producto debe tener entre 2 y 150 caracteres.',
+        );
       }
       result.name = name;
     }
@@ -94,9 +99,7 @@ export class UpdateProductValidationPipe implements PipeTransform {
     // baseCost
     if (record.baseCost !== undefined) {
       const num =
-        typeof record.baseCost === 'number'
-          ? record.baseCost
-          : parseFloat(String(record.baseCost));
+        typeof record.baseCost === 'number' ? record.baseCost : parseFloat(String(record.baseCost));
       if (isNaN(num) || num < 0) {
         throw new BadRequestException('El costo base debe ser un número mayor o igual a 0.');
       }
@@ -147,15 +150,30 @@ export class UpdateProductValidationPipe implements PipeTransform {
     }
 
     if (record.requiresLotControl !== undefined) {
-      // Solo booleanos JSON: Boolean("false") activaría el control en silencio (FARM-AUD-002)
-      if (typeof record.requiresLotControl !== 'boolean') {
-        throw new BadRequestException('El campo "requiresLotControl" debe ser booleano (true o false).');
+      throw new BadRequestException(
+        'El campo "requiresLotControl" fue reemplazado por "inventoryControlMode".',
+      );
+    }
+    if (record.inventoryControlMode !== undefined) {
+      if (
+        typeof record.inventoryControlMode !== 'string' ||
+        !INVENTORY_CONTROL_MODES.includes(
+          record.inventoryControlMode as (typeof INVENTORY_CONTROL_MODES)[number],
+        )
+      ) {
+        throw new BadRequestException(
+          'El campo "inventoryControlMode" debe ser uno de los modos de inventario permitidos.',
+        );
       }
-      result.requiresLotControl = record.requiresLotControl;
+      result.inventoryControlMode =
+        record.inventoryControlMode as UpdateProductDto['inventoryControlMode'];
     }
 
     if (record.prescriptionRequired !== undefined) {
-      result.prescriptionRequired = Boolean(record.prescriptionRequired);
+      if (typeof record.prescriptionRequired !== 'boolean') {
+        throw new BadRequestException('El campo "prescriptionRequired" debe ser booleano.');
+      }
+      result.prescriptionRequired = record.prescriptionRequired;
     }
 
     if (record.isActive !== undefined) {

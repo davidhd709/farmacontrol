@@ -7,6 +7,7 @@ export interface ProductRepositoryPort {
   findByBarcode(barcode: string): Promise<Product | null>;
   save(product: Product, tx?: unknown): Promise<Product>;
   update(product: Product, tx?: unknown): Promise<Product>;
+  hasInventoryHistory(productId: string): Promise<boolean>;
   findAll(filters: ProductQueryFilters): Promise<{ items: Product[]; total: number }>;
 }
 

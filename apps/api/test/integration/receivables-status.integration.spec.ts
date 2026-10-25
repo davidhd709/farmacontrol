@@ -95,13 +95,13 @@ describe('Estados de cuentas por cobrar tras anular ventas a crédito (FARM-AUD-
     const category = await prisma.category.create({ data: { name: 'Analgésicos' } });
     const product = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'MED-ACE-500',
         name: 'Acetaminofén 500mg',
         baseUnit: 'TABLETA',
         basePrice: new Prisma.Decimal('1000.00'),
         baseCost: new Prisma.Decimal('600.00'),
-        requiresLotControl: true,
       },
     });
     productId = product.id;
@@ -112,6 +112,7 @@ describe('Estados de cuentas por cobrar tras anular ventas a crédito (FARM-AUD-
     expiration.setDate(expiration.getDate() + 180);
     const lot = await prisma.inventoryLot.create({
       data: {
+        controlMode: 'LOT_EXPIRY',
         productId,
         locationId: location.id,
         lotNumber: 'LOTE-CARTERA-01',

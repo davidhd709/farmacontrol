@@ -83,6 +83,7 @@ describe('ProductPresentationController (Integration with PostgreSQL & RBAC)', (
     const category = await prisma.category.create({ data: { name: 'Analgésicos' } });
     const product = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'ACET-500',
         name: 'Acetaminofén 500mg',
@@ -128,6 +129,7 @@ describe('ProductPresentationController (Integration with PostgreSQL & RBAC)', (
     const category = await prisma.category.create({ data: { name: 'Antibióticos' } });
     const product = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'AMOX-500',
         name: 'Amoxicilina 500mg',
@@ -151,6 +153,7 @@ describe('ProductPresentationController (Integration with PostgreSQL & RBAC)', (
     const category = await prisma.category.create({ data: { name: 'Cardiología' } });
     const product = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'LOS-50',
         name: 'Losartán 50mg',
@@ -195,6 +198,7 @@ describe('ProductPresentationController (Integration with PostgreSQL & RBAC)', (
     const category = await prisma.category.create({ data: { name: 'Gastroenterología' } });
     const product = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'OMEP-20',
         name: 'Omeprazol 20mg',
@@ -235,6 +239,7 @@ describe('ProductPresentationController (Integration with PostgreSQL & RBAC)', (
     const category = await prisma.category.create({ data: { name: 'Antialérgicos' } });
     const product = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'CET-10',
         name: 'Cetirizina 10mg',
@@ -268,6 +273,7 @@ describe('ProductPresentationController (Integration with PostgreSQL & RBAC)', (
     const category = await prisma.category.create({ data: { name: 'Jerarquías' } });
     const product = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'JER-001',
         name: 'Producto jerárquico',
@@ -324,6 +330,7 @@ describe('ProductPresentationController (Integration with PostgreSQL & RBAC)', (
     const category = await prisma.category.create({ data: { name: 'Restricciones' } });
     const product = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'CHK-001',
         name: 'Producto constraint',
@@ -348,6 +355,7 @@ describe('ProductPresentationController (Integration with PostgreSQL & RBAC)', (
     const category = await prisma.category.create({ data: { name: 'Vitaminas' } });
     const product = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'VIT-E',
         name: 'Vitamina E 400UI',
@@ -393,6 +401,7 @@ describe('ProductPresentationController (Integration with PostgreSQL & RBAC)', (
     const category = await prisma.category.create({ data: { name: 'Pediatría' } });
     const product = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'AMOX-SUSP',
         name: 'Amoxicilina 250mg/5ml',

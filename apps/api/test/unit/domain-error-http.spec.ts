@@ -5,7 +5,6 @@ import { HttpExceptionFilter } from '../../src/common/filters/http-exception.fil
 import { toHundredths } from '../../src/modules/sales/domain/sale-money';
 import {
   SaleNotFoundException,
-  ProductWithoutLotControlException,
   InsufficientStockException,
   SaleAlreadyCancelledException,
 } from '../../src/modules/sales/domain/sale.exceptions';
@@ -51,6 +50,7 @@ const invalidLot = () =>
   InventoryLot.create({
     productId: '',
     locationId: 'location',
+    controlMode: 'LOT_EXPIRY',
     lotNumber: 'LOT',
     expirationDate: '2099-01-01',
   });
@@ -75,7 +75,7 @@ describe('Errores representativos por módulo a través del filtro HTTP', () => 
       'ventas: conflict',
       409,
       () => {
-        throw new ProductWithoutLotControlException('Producto');
+        throw new InsufficientStockException('Producto', 2, 0);
       },
     ],
     [

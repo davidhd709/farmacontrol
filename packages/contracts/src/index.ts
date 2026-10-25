@@ -4,6 +4,8 @@
  * Sin lógica de negocio ni dependencias de infraestructura.
  */
 
+import type { InventoryControlMode } from './company';
+
 export interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
@@ -309,7 +311,7 @@ export interface ProductDto {
   sanitaryRegistry: string | null;
   manufacturer: string | null;
   description: string | null;
-  requiresLotControl: boolean;
+  inventoryControlMode: InventoryControlMode;
   prescriptionRequired: boolean;
   baseUnit: string;
   basePrice: string;
@@ -331,7 +333,7 @@ export interface CreateProductPayload {
   sanitaryRegistry?: string | null;
   manufacturer?: string | null;
   description?: string | null;
-  requiresLotControl?: boolean;
+  inventoryControlMode?: InventoryControlMode;
   prescriptionRequired?: boolean;
   baseUnit?: string;
   basePrice: number | string;
@@ -348,7 +350,7 @@ export interface UpdateProductPayload {
   sanitaryRegistry?: string | null;
   manufacturer?: string | null;
   description?: string | null;
-  requiresLotControl?: boolean;
+  inventoryControlMode?: InventoryControlMode;
   prescriptionRequired?: boolean;
   baseUnit?: string;
   basePrice?: number | string;
@@ -359,7 +361,7 @@ export interface UpdateProductPayload {
 export interface ProductQueryFilters {
   categoryId?: string;
   search?: string;
-  requiresLotControl?: boolean;
+  inventoryControlMode?: InventoryControlMode;
   isActive?: boolean;
   page?: number;
   pageSize?: number;
@@ -455,8 +457,8 @@ export interface InventoryLotDto {
   id: string;
   productId: string;
   locationId: string;
-  lotNumber: string;
-  expirationDate: string; // ISO date YYYY-MM-DD
+  lotNumber: string | null;
+  expirationDate: string | null; // ISO date YYYY-MM-DD
   currentQuantity: number; // En unidades base
   isActive: boolean;
   createdAt: string;
@@ -477,8 +479,8 @@ export interface InventoryLotDto {
 export interface CreateInventoryLotPayload {
   productId: string;
   locationId: string;
-  lotNumber: string;
-  expirationDate: string;
+  lotNumber?: string | null;
+  expirationDate?: string | null;
   initialQuantity?: number;
 }
 
@@ -530,8 +532,8 @@ export interface InventoryMovementDto {
   };
   lot?: {
     id: string;
-    lotNumber: string;
-    expirationDate: string;
+    lotNumber: string | null;
+    expirationDate: string | null;
   };
   presentation?: {
     id: string;
@@ -567,8 +569,8 @@ export interface InventoryMovementQueryFilters {
 
 export interface FefoAllocationItem {
   lotId: string;
-  lotNumber: string;
-  expirationDate: string;
+  lotNumber: string | null;
+  expirationDate: string | null;
   quantityBaseUnits: number;
 }
 
@@ -646,8 +648,8 @@ export interface PurchaseLineDto {
   presentationId?: string | null;
   presentationName?: string | null;
   lotId: string;
-  lotNumber: string;
-  expirationDate: string;
+  lotNumber: string | null;
+  expirationDate: string | null;
   quantityCommercial: string;
   quantityBaseUnits: number;
   unitCost: string;
@@ -677,8 +679,9 @@ export interface PurchaseDto {
 export interface ReceivePurchaseLinePayload {
   productId: string;
   presentationId?: string | null;
-  lotNumber: string;
-  expirationDate: string; // 'YYYY-MM-DD'
+  lotNumber?: string | null;
+  expirationDate?: string | null; // 'YYYY-MM-DD'
+  serialNumbers?: string[];
   quantityCommercial: number | string;
   unitCost: number | string;
   locationId?: string;
@@ -724,7 +727,8 @@ export interface DebitNoteLineDto {
   productCode?: string;
   productName?: string;
   lotId: string;
-  lotNumber?: string;
+  lotNumber: string | null;
+  expirationDate: string | null;
   quantityCommercial: number;
   quantityBaseUnits: number;
   unitCost: number;
@@ -899,14 +903,14 @@ export type ExpirationSeverity = 'VENCIDO' | 'CRITICO' | 'ALERTA' | 'PROXIMO' | 
 export interface InventoryAlertDto {
   id: string;
   lotId: string;
-  lotNumber: string;
+  lotNumber: string | null;
   productId: string;
   productCode: string;
   productName: string;
   categoryName?: string;
   locationId?: string;
   locationName?: string;
-  expirationDate: string;
+  expirationDate: string | null;
   daysRemaining: number;
   severity: ExpirationSeverity;
   currentQuantity: number;
@@ -919,10 +923,10 @@ export interface InventoryAlertDto {
 
 export interface AlertsSummaryDto {
   totalActive: number;
-  vencidos: number;       // <= 0 días
-  criticos: number;       // 1 - 30 días
-  alertas: number;        // 31 - 60 días
-  proximos: number;       // 61 - 90 días
+  vencidos: number; // <= 0 días
+  criticos: number; // 1 - 30 días
+  alertas: number; // 31 - 60 días
+  proximos: number; // 61 - 90 días
   lastEvaluatedAt?: string;
 }
 
@@ -1045,12 +1049,12 @@ export interface TopProductsReportDto {
 
 export interface ExpirationReportItemDto {
   lotId: string;
-  lotNumber: string;
+  lotNumber: string | null;
   productId: string;
   productCode: string;
   productName: string;
   categoryName: string;
-  expirationDate: string;
+  expirationDate: string | null;
   daysRemaining: number;
   severity: ExpirationSeverity;
   currentQuantity: number;
@@ -1171,10 +1175,10 @@ export type SupplierReturnStatus = 'AVISAR_AHORA' | 'AVISO_ATRASADO' | 'FUERA_DE
 
 export interface SupplierReturnItemDto {
   lotId: string;
-  lotNumber: string;
+  lotNumber: string | null;
   productCode: string;
   productName: string;
-  expirationDate: string;
+  expirationDate: string | null;
   daysRemaining: number;
   currentQuantity: number;
   baseUnit: string;

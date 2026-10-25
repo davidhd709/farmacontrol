@@ -3,6 +3,7 @@ import { Alert, Autocomplete, Box, Chip, TextField, Typography } from '@mui/mate
 import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ProductDto } from '@farmacia/contracts';
 import { fetchProducts } from '../../catalog/api/products.api';
+import { inventoryControlModeLabel } from '../../catalog/utils/inventory-control';
 import { useDebouncedValue } from '../../../hooks/useDebouncedValue';
 import { formatMoney, toCents } from '../../../utils/money';
 
@@ -15,9 +16,7 @@ function productSearchOptions(term: string) {
   });
 }
 const isSellable = (product: ProductDto) =>
-  product.isActive &&
-  product.requiresLotControl &&
-  (product.availableStock === undefined || product.availableStock > 0);
+  product.isActive && (product.availableStock === undefined || product.availableStock > 0);
 
 export function PosProductSearch({
   onSelect,
@@ -129,14 +128,13 @@ export function PosProductSearch({
         renderOption={(props, opt) => {
           const { key, ...optionProps } = props;
           const isOutOfStock = opt.availableStock !== undefined && opt.availableStock <= 0;
-          const needsRegularization = !opt.requiresLotControl;
           return (
             <li {...optionProps} key={key}>
               <Box
                 sx={{
                   width: '100%',
                   py: 0.5,
-                  opacity: isOutOfStock || needsRegularization ? 0.6 : 1,
+                  opacity: isOutOfStock ? 0.6 : 1,
                 }}
               >
                 <Box
@@ -151,30 +149,18 @@ export function PosProductSearch({
                     {opt.name}
                   </Typography>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    {needsRegularization ? (
+                    {opt.availableStock !== undefined && (
                       <Chip
                         size="small"
-                        label="No vendible: regularizar en catálogo"
-                        color="warning"
-                        variant="outlined"
+                        label={
+                          isOutOfStock ? 'Sin stock' : `Disp: ${opt.availableStock} ${opt.baseUnit}`
+                        }
+                        color={
+                          isOutOfStock ? 'error' : opt.availableStock > 10 ? 'success' : 'warning'
+                        }
+                        variant={isOutOfStock ? 'filled' : 'outlined'}
                         sx={{ height: 20, fontSize: '0.68rem', fontWeight: 700 }}
                       />
-                    ) : (
-                      opt.availableStock !== undefined && (
-                        <Chip
-                          size="small"
-                          label={
-                            isOutOfStock
-                              ? 'Sin stock'
-                              : `Disp: ${opt.availableStock} ${opt.baseUnit}`
-                          }
-                          color={
-                            isOutOfStock ? 'error' : opt.availableStock > 10 ? 'success' : 'warning'
-                          }
-                          variant={isOutOfStock ? 'filled' : 'outlined'}
-                          sx={{ height: 20, fontSize: '0.68rem', fontWeight: 700 }}
-                        />
-                      )
                     )}
                     <Typography
                       variant="body2"
@@ -194,7 +180,8 @@ export function PosProductSearch({
                   }}
                 >
                   <Typography variant="caption" color="text.secondary">
-                    SKU: {opt.code} • Base: {opt.baseUnit} {opt.requiresLotControl && '• FEFO'}
+                    SKU: {opt.code} • Base: {opt.baseUnit} •{' '}
+                    {inventoryControlModeLabel(opt.inventoryControlMode)}
                   </Typography>
                   {opt.presentations &&
                     opt.presentations.length > 0 &&

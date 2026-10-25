@@ -43,6 +43,7 @@ describe('Auditoría atómica con PostgreSQL real', () => {
     productId = (
       await prisma.product.create({
         data: {
+          inventoryControlMode: 'LOT_EXPIRY',
           categoryId,
           code: 'ATOMIC',
           name: 'Producto atómico',

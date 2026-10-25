@@ -19,7 +19,7 @@ test('recibir una compra desde la web crea el lote con su existencia', async ({ 
     categoryId: fixtures.categoryId,
     code,
     name: `Losartán compra ${code}`,
-    requiresLotControl: true,
+    inventoryControlMode: 'LOT_EXPIRY',
     basePrice: 900,
     baseCost: 450,
   });

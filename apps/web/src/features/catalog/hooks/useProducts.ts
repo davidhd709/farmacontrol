@@ -9,6 +9,7 @@ import {
   deactivateProduct,
   fetchProductById,
   fetchProducts,
+  fetchProductSettings,
   updateProduct,
 } from '../api/products.api';
 
@@ -19,6 +20,14 @@ export function useProducts(filters: ProductQueryFilters = {}) {
     queryKey: [...PRODUCTS_QUERY_KEY, filters],
     queryFn: () => fetchProducts(filters),
     placeholderData: (previousData) => previousData,
+  });
+}
+
+export function useProductSettings() {
+  return useQuery({
+    queryKey: [...PRODUCTS_QUERY_KEY, 'settings'],
+    queryFn: fetchProductSettings,
+    staleTime: 5 * 60 * 1000,
   });
 }
 

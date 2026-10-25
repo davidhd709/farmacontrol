@@ -54,13 +54,13 @@ describe('Migración de integridad de ajustes de inventario (FARM-AUD-004 / FARM
     const createProduct = (code: string) =>
       prisma.product.create({
         data: {
+          inventoryControlMode: 'LOT_EXPIRY',
           categoryId: category.id,
           code,
           name: `Producto ${code}`,
           baseUnit: 'TABLETA',
           basePrice: new Prisma.Decimal('500.00'),
           baseCost: new Prisma.Decimal('200.00'),
-          requiresLotControl: true,
         },
       });
     productAId = (await createProduct('PRD-A')).id;
@@ -71,6 +71,7 @@ describe('Migración de integridad de ajustes de inventario (FARM-AUD-004 / FARM
     lotAId = (
       await prisma.inventoryLot.create({
         data: {
+          controlMode: 'LOT_EXPIRY',
           productId: productAId,
           locationId: location.id,
           lotNumber: 'LOT-A',

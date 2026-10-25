@@ -196,6 +196,7 @@ export class ReportsService {
       where: {
         isActive: true,
         currentQuantity: { gt: 0 },
+        expirationDate: { not: null },
       },
       include: {
         product: {
@@ -214,6 +215,7 @@ export class ReportsService {
     const items: ExpirationReportItemDto[] = [];
 
     for (const lot of lots) {
+      if (lot.expirationDate === null) continue;
       const { daysRemaining, severity } = calculateExpirationSeverity(
         lot.expirationDate,
         referenceDate,
@@ -267,7 +269,7 @@ export class ReportsService {
       where: {
         isActive: true,
         currentQuantity: { gt: 0 },
-        expirationDate: { gt: reference, lte: horizon },
+        expirationDate: { not: null, gt: reference, lte: horizon },
       },
       include: { product: true },
       orderBy: { expirationDate: 'asc' },
@@ -285,6 +287,7 @@ export class ReportsService {
 
     const items: SupplierReturnItemDto[] = [];
     for (const lot of lots) {
+      if (lot.expirationDate === null) continue;
       const { daysRemaining } = calculateExpirationSeverity(
         lot.expirationDate,
         businessDayStart(referenceDay),

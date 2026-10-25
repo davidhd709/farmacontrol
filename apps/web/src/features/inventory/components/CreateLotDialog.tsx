@@ -12,6 +12,7 @@ import {
 } from '@mui/material';
 import type { LocationDto, ProductDto } from '@farmacia/contracts';
 import { createInventoryLot } from '../api/inventory.api';
+import { INVENTORY_CONTROL_MODE_INFO } from '../../catalog/utils/inventory-control';
 
 interface CreateLotDialogProps {
   open: boolean;
@@ -36,6 +37,12 @@ export const CreateLotDialog = ({
   const [expirationDate, setExpirationDate] = useState('');
   const [initialQuantity, setInitialQuantity] = useState(0);
 
+  // Lote, vencimiento y cantidad máxima dependen del modo de control del producto (ADR-006)
+  const mode = products.find((p) => p.id === productId)?.inventoryControlMode;
+  const needsLot = mode === 'LOT' || mode === 'LOT_EXPIRY' || mode === 'SERIAL';
+  const needsExpiration = mode === 'LOT_EXPIRY';
+  const stockProducts = products.filter((p) => p.inventoryControlMode !== 'SERVICE');
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -51,12 +58,18 @@ export const CreateLotDialog = ({
       setErrorMessage('Seleccione una ubicación.');
       return;
     }
-    if (!lotNumber.trim()) {
-      setErrorMessage('Ingrese el código de lote.');
+    if (needsLot && !lotNumber.trim()) {
+      setErrorMessage(
+        mode === 'SERIAL' ? 'Ingrese el número de serie.' : 'Ingrese el código de lote.',
+      );
       return;
     }
-    if (!expirationDate) {
+    if (needsExpiration && !expirationDate) {
       setErrorMessage('Seleccione la fecha de vencimiento.');
+      return;
+    }
+    if (mode === 'SERIAL' && initialQuantity > 1) {
+      setErrorMessage('Una serie es una sola unidad: la cantidad inicial debe ser 0 o 1.');
       return;
     }
 
@@ -65,8 +78,8 @@ export const CreateLotDialog = ({
       await createInventoryLot({
         productId,
         locationId,
-        lotNumber: lotNumber.trim().toUpperCase(),
-        expirationDate,
+        ...(needsLot ? { lotNumber: lotNumber.trim().toUpperCase() } : {}),
+        ...(needsExpiration ? { expirationDate } : {}),
         initialQuantity: Number(initialQuantity) || 0,
       });
 
@@ -99,7 +112,7 @@ export const CreateLotDialog = ({
       }}
     >
       <form onSubmit={handleSubmit}>
-        <DialogTitle sx={{ fontWeight: 700 }}>Registrar Nuevo Lote de Inventario</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 700 }}>Registrar existencia de inventario</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2.5}>
             {errorMessage && <Alert severity="error">{errorMessage}</Alert>}
@@ -113,7 +126,7 @@ export const CreateLotDialog = ({
               fullWidth
               disabled={isSubmitting}
             >
-              {products.map((p) => (
+              {stockProducts.map((p) => (
                 <MenuItem key={p.id} value={p.id}>
                   {p.code} — {p.name} ({p.baseUnit})
                 </MenuItem>
@@ -136,40 +149,60 @@ export const CreateLotDialog = ({
               ))}
             </TextField>
 
-            <TextField
-              label="Código / Número de Lote"
-              value={lotNumber}
-              onChange={(e) => setLotNumber(e.target.value)}
-              placeholder="EJ. LT-9872"
-              required
-              fullWidth
-              disabled={isSubmitting}
-            />
+            {mode && (
+              <Alert severity="info" variant="outlined">
+                {INVENTORY_CONTROL_MODE_INFO[mode].label}:{' '}
+                {INVENTORY_CONTROL_MODE_INFO[mode].description}
+              </Alert>
+            )}
 
-            <TextField
-              label="Fecha de Vencimiento"
-              type="date"
-              value={expirationDate}
-              onChange={(e) => setExpirationDate(e.target.value)}
-              slotProps={{ inputLabel: { shrink: true } }}
-              required
-              fullWidth
-              disabled={isSubmitting}
-            />
+            {needsLot && (
+              <TextField
+                label={mode === 'SERIAL' ? 'Número de serie' : 'Código / Número de Lote'}
+                value={lotNumber}
+                onChange={(e) => setLotNumber(e.target.value)}
+                placeholder={mode === 'SERIAL' ? 'EJ. SN-000123' : 'EJ. LT-9872'}
+                required
+                fullWidth
+                disabled={isSubmitting}
+              />
+            )}
+
+            {needsExpiration && (
+              <TextField
+                label="Fecha de Vencimiento"
+                type="date"
+                value={expirationDate}
+                onChange={(e) => setExpirationDate(e.target.value)}
+                slotProps={{ inputLabel: { shrink: true } }}
+                required
+                fullWidth
+                disabled={isSubmitting}
+              />
+            )}
 
             <TextField
               label="Cantidad Inicial (en unidades base)"
               type="number"
               value={initialQuantity}
               onChange={(e) => setInitialQuantity(Math.max(0, parseInt(e.target.value || '0', 10)))}
-              helperText="Saldo inicial en unidad base del producto. No se permiten valores negativos."
+              helperText={
+                mode === 'SERIAL'
+                  ? 'Una serie tiene 0 o 1 unidad.'
+                  : 'Saldo inicial en unidad base del producto. No se permiten valores negativos.'
+              }
               fullWidth
               disabled={isSubmitting}
             />
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button onClick={onClose} disabled={isSubmitting} color="inherit" sx={{ textTransform: 'none' }}>
+          <Button
+            onClick={onClose}
+            disabled={isSubmitting}
+            color="inherit"
+            sx={{ textTransform: 'none' }}
+          >
             Cancelar
           </Button>
           <Button
@@ -184,7 +217,7 @@ export const CreateLotDialog = ({
               '&:active': { transform: 'scale(0.98)' },
             }}
           >
-            {isSubmitting ? 'Registrando...' : 'Guardar Lote'}
+            {isSubmitting ? 'Registrando...' : 'Guardar existencia'}
           </Button>
         </DialogActions>
       </form>

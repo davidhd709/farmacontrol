@@ -23,13 +23,13 @@ describe('Movimientos de inventario concurrentes sobre un mismo lote (PostgreSQL
     });
     const product = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'ACE-500-AJ',
         name: 'Acetaminofén 500mg Ajustes',
         baseUnit: 'TABLETA',
         basePrice: new Prisma.Decimal('500.00'),
         baseCost: new Prisma.Decimal('200.00'),
-        requiresLotControl: true,
       },
     });
     productId = product.id;
@@ -38,6 +38,7 @@ describe('Movimientos de inventario concurrentes sobre un mismo lote (PostgreSQL
     expirationDate.setDate(expirationDate.getDate() + 90);
     const lot = await prisma.inventoryLot.create({
       data: {
+        controlMode: 'LOT_EXPIRY',
         productId,
         locationId: location.id,
         lotNumber: 'LOT-AJ-CONC',

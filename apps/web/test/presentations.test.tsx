@@ -25,7 +25,7 @@ const mockProduct: ProductDto = {
   sanitaryRegistry: 'INVIMA 2021M-001234',
   manufacturer: 'Genfar',
   description: 'Cápsulas orales',
-  requiresLotControl: true,
+  inventoryControlMode: 'LOT_EXPIRY',
   prescriptionRequired: true,
   baseUnit: 'UNIDAD',
   basePrice: '1200.00',

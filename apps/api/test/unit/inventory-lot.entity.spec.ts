@@ -7,6 +7,7 @@ describe('InventoryLot & Location Domain Entities (Unit)', () => {
     const lot = InventoryLot.create({
       productId: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
       locationId: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
+      controlMode: 'LOT_EXPIRY',
       lotNumber: 'lt-12345',
       expirationDate: '2028-12-31',
       currentQuantity: 100,
@@ -26,6 +27,7 @@ describe('InventoryLot & Location Domain Entities (Unit)', () => {
       InventoryLot.create({
         productId: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
         locationId: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
+        controlMode: 'LOT_EXPIRY',
         lotNumber: 'LT-ERR',
         expirationDate: '2028-12-31',
         currentQuantity: -5,
@@ -38,15 +40,17 @@ describe('InventoryLot & Location Domain Entities (Unit)', () => {
       InventoryLot.create({
         productId: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
         locationId: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
+        controlMode: 'LOT_EXPIRY',
         lotNumber: ' ',
         expirationDate: '2028-12-31',
       }),
-    ).toThrow('El código de lote debe tener al menos 2 caracteres.');
+    ).toThrow('El código de lote o serie es obligatorio para el modo LOT_EXPIRY.');
 
     expect(() =>
       InventoryLot.create({
         productId: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
         locationId: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
+        controlMode: 'LOT_EXPIRY',
         lotNumber: 'LT-VAL',
         expirationDate: 'fecha-invalida',
       }),
@@ -59,6 +63,7 @@ describe('InventoryLot & Location Domain Entities (Unit)', () => {
     const expiredLot = InventoryLot.create({
       productId: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
       locationId: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
+      controlMode: 'LOT_EXPIRY',
       lotNumber: 'LT-VENCIDO',
       expirationDate: '2026-09-15',
     });
@@ -66,6 +71,7 @@ describe('InventoryLot & Location Domain Entities (Unit)', () => {
     const activeLot = InventoryLot.create({
       productId: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
       locationId: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
+      controlMode: 'LOT_EXPIRY',
       lotNumber: 'LT-FUTURO',
       expirationDate: '2026-10-11',
     });

@@ -62,13 +62,13 @@ describe('Inventory controllers (Integration with PostgreSQL & RBAC)', () => {
     });
     const product = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'ACE-500-HTTP',
         name: 'Acetaminofén 500mg HTTP',
         baseUnit: 'TABLETA',
         basePrice: new Prisma.Decimal('500.00'),
         baseCost: new Prisma.Decimal('200.00'),
-        requiresLotControl: true,
       },
     });
     productId = product.id;
@@ -77,6 +77,7 @@ describe('Inventory controllers (Integration with PostgreSQL & RBAC)', () => {
     expirationDate.setDate(expirationDate.getDate() + 90);
     const lot = await prisma.inventoryLot.create({
       data: {
+        controlMode: 'LOT_EXPIRY',
         productId,
         locationId,
         lotNumber: 'LOT-HTTP-01',

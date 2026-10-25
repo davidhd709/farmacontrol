@@ -142,6 +142,7 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
 
       const product = await prisma.product.create({
         data: {
+          inventoryControlMode: 'LOT_EXPIRY',
           code: 'PROD-DEV-01',
           name: 'Acetaminofén 500mg',
           basePrice: 10000,
@@ -152,6 +153,7 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
 
       const lot = await prisma.inventoryLot.create({
         data: {
+          controlMode: 'LOT_EXPIRY',
           productId: product.id,
           locationId: location.id,
           lotNumber: 'LOT-DEV-01',
@@ -310,6 +312,7 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
       const category = await prisma.category.create({ data: { name: 'Genéricos' } });
       const product = await prisma.product.create({
         data: {
+          inventoryControlMode: 'LOT_EXPIRY',
           code: 'PROD-ERR-01',
           name: 'Ibuprofeno 400mg',
           basePrice: 5000,
@@ -387,12 +390,12 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
       const category = await prisma.category.create({ data: { name: `Categoría ${code}` } });
       const product = await prisma.product.create({
         data: {
+          inventoryControlMode: 'LOT_EXPIRY',
           code,
           name: `Producto ${code}`,
           basePrice: 10000,
           baseCost: 5000,
           categoryId: category.id,
-          requiresLotControl: true,
         },
       });
       const presentation = await prisma.productPresentation.create({
@@ -407,6 +410,7 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
       });
       const lot = await prisma.inventoryLot.create({
         data: {
+          controlMode: 'LOT_EXPIRY',
           productId: product.id,
           locationId: location.id,
           lotNumber: `LOT-${code}`,
@@ -535,12 +539,12 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
       const category = await prisma.category.create({ data: { name: 'Categoría AUD-007' } });
       const product = await prisma.product.create({
         data: {
+          inventoryControlMode: 'LOT_EXPIRY',
           code: 'AUD007',
           name: 'Producto AUD-007',
           basePrice: 10000,
           baseCost: 5000,
           categoryId: category.id,
-          requiresLotControl: true,
         },
       });
       productId = product.id;
@@ -559,6 +563,7 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
       soonLotId = (
         await prisma.inventoryLot.create({
           data: {
+            controlMode: 'LOT_EXPIRY',
             productId,
             locationId: location.id,
             lotNumber: 'LOT-SOON',
@@ -570,6 +575,7 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
       lateLotId = (
         await prisma.inventoryLot.create({
           data: {
+            controlMode: 'LOT_EXPIRY',
             productId,
             locationId: location.id,
             lotNumber: 'LOT-LATE',
@@ -905,6 +911,7 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
       const category = await prisma.category.create({ data: { name: 'Inyectables' } });
       const product = await prisma.product.create({
         data: {
+          inventoryControlMode: 'LOT_EXPIRY',
           code: 'PROD-PUR-01',
           name: 'Diclofenaco 75mg Ampolla',
           basePrice: 8000,
@@ -915,6 +922,7 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
 
       const lot = await prisma.inventoryLot.create({
         data: {
+          controlMode: 'LOT_EXPIRY',
           productId: product.id,
           locationId: location.id,
           lotNumber: 'LOT-PUR-01',
@@ -1048,6 +1056,7 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
         const category = await prisma.category.create({ data: { name: 'Categoría AUD-009' } });
         const product = await prisma.product.create({
           data: {
+            inventoryControlMode: 'LOT_EXPIRY',
             code: 'AUD009',
             name: 'Producto AUD-009',
             basePrice: 2000,
@@ -1057,6 +1066,7 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
         });
         const lot = await prisma.inventoryLot.create({
           data: {
+            controlMode: 'LOT_EXPIRY',
             productId: product.id,
             locationId: location.id,
             lotNumber: 'LOT-AUD009',
@@ -1159,6 +1169,7 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
       const category = await prisma.category.create({ data: { name: 'Pastas' } });
       const product = await prisma.product.create({
         data: {
+          inventoryControlMode: 'LOT_EXPIRY',
           code: 'PROD-NO-STOCK',
           name: 'Omeprazol 20mg',
           basePrice: 10000,
@@ -1168,6 +1179,7 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
       });
       const lot = await prisma.inventoryLot.create({
         data: {
+          controlMode: 'LOT_EXPIRY',
           productId: product.id,
           locationId: location.id,
           lotNumber: 'LOT-EMPTY',
@@ -1227,6 +1239,7 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
         const category = await prisma.category.create({ data: { name: 'Categoría ND' } });
         const product = await prisma.product.create({
           data: {
+            inventoryControlMode: 'LOT_EXPIRY',
             code: 'ND-001',
             name: 'Producto ND',
             basePrice: 2000,
@@ -1236,6 +1249,7 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
         });
         const lot = await prisma.inventoryLot.create({
           data: {
+            controlMode: 'LOT_EXPIRY',
             productId: product.id,
             locationId: location.id,
             lotNumber: 'LOT-ND',

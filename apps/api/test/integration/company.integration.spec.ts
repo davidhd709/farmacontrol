@@ -224,6 +224,7 @@ describe('Empresa y políticas contables (PostgreSQL real)', () => {
       productId = (
         await prisma.product.create({
           data: {
+            inventoryControlMode: 'LOT_EXPIRY',
             categoryId: category.id,
             code: 'P-1',
             name: 'Producto',
@@ -258,6 +259,7 @@ describe('Empresa y políticas contables (PostgreSQL real)', () => {
       });
       const lot = await prisma.inventoryLot.create({
         data: {
+          controlMode: 'LOT_EXPIRY',
           productId,
           locationId,
           lotNumber: 'L-ANT',

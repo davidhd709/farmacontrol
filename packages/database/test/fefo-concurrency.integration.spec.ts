@@ -23,6 +23,7 @@ describe('Motor FEFO con Bloqueo Concurrente en PostgreSQL Real (Integration & C
 
     const product = await prisma.product.create({
       data: {
+        inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'TRAM-50',
         name: 'Tramadol 50mg',
@@ -38,6 +39,7 @@ describe('Motor FEFO con Bloqueo Concurrente en PostgreSQL Real (Integration & C
     // Creamos un único lote con exactamente 50 unidades
     const lot = await prisma.inventoryLot.create({
       data: {
+        controlMode: 'LOT_EXPIRY',
         productId: product.id,
         locationId: location.id,
         lotNumber: 'LT-CONC-50',
