@@ -21,6 +21,14 @@ Las preguntas están ordenadas por urgencia. Las del bloque A afectan cifras que
 3. ¿Las bonificaciones o unidades sin costo que traen algunos proveedores entran a costo cero o se prorratean?
 4. Para el inventario que ya existe, ¿con qué costo inicial lo cargamos: el último de compra, un promedio o uno que tú nos des?
 
+> **Respondidas el 25 de octubre de 2026 (preguntas 1, 2 y 4), por decisión del propietario.** Quedan en [ADR-005](adr/ADR-005-politica-de-costeo-del-inventario.md):
+>
+> - Promedio ponderado móvil, que se recalcula con cada entrada.
+> - Inventario existente al último costo de compra; si no tiene compras, al costo del catálogo.
+> - Devoluciones de clientes al costo con que salieron.
+>
+> Thony, si no estás de acuerdo con alguna, avísanos antes de cargar la apertura. **Sigue pendiente la pregunta 3 (bonificaciones)**, y también la fecha de corte para cargar el inventario existente.
+
 ### A2. Ventas gravadas y excluidas: las cuentas parecen invertidas
 
 **Hoy:** como todavía no aplicamos IVA en ventas, **todas** las ventas van a 413595 "Venta de otros productos", incluidos los medicamentos. La cuenta 413538 "Venta productos farmacéuticos y medicinales" quedó para las ventas gravadas.
