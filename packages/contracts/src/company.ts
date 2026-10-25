@@ -39,10 +39,10 @@ export interface ProductSettingsDto {
   prescriptionRequiredControlMode: InventoryControlMode;
 }
 
-/** Métodos de costeo (ADR-006). PEPS y costo identificado se habilitan en F5. */
+/** Métodos de costeo (ADR-006): promedio ponderado, PEPS y costo identificado por existencia (F5). */
 export const COSTING_METHODS = ['WEIGHTED_AVERAGE', 'FIFO', 'SPECIFIC_LOT'] as const;
 export type CostingMethod = (typeof COSTING_METHODS)[number];
-export const AVAILABLE_COSTING_METHODS: readonly CostingMethod[] = ['WEIGHTED_AVERAGE'];
+export const AVAILABLE_COSTING_METHODS: readonly CostingMethod[] = COSTING_METHODS;
 
 /** Costo con que se abren las existencias anteriores al submayor (ADR-005). */
 export const OPENING_COST_SOURCES = ['LAST_PURCHASE_THEN_CATALOG', 'CATALOG'] as const;

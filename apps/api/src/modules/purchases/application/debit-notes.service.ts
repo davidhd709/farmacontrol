@@ -242,6 +242,7 @@ export class DebitNotesService {
               sourceType: 'DEBIT_NOTE',
               sourceId: debitNoteNumber,
               userId,
+              lots: [{ lotId: lot.id, quantityBaseUnits }],
             });
 
             const unitCost = new Prisma.Decimal(line.unitCost);

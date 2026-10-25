@@ -108,7 +108,6 @@ describe('Submayor de costos del inventario (PostgreSQL real)', () => {
     const product = await prisma.product.create({
       data: {
         inventoryControlMode: 'LOT_EXPIRY',
-        inventoryControlMode: 'LOT_EXPIRY',
         categoryId,
         code,
         name: `Producto ${code}`,

@@ -1,14 +1,7 @@
 export type CashMovementType =
-  | 'INGRESO_VENTA'
-  | 'INGRESO_MANUAL'
-  | 'EGRESO_MANUAL'
-  | 'EGRESO_PAGO_PROVEEDOR';
+  'INGRESO_VENTA' | 'INGRESO_MANUAL' | 'EGRESO_MANUAL' | 'EGRESO_PAGO_PROVEEDOR';
 
-export type PaymentMethod =
-  | 'EFECTIVO'
-  | 'TRANSFERENCIA'
-  | 'TARJETA_DEBITO'
-  | 'TARJETA_CREDITO';
+export type PaymentMethod = 'EFECTIVO' | 'TRANSFERENCIA' | 'TARJETA_DEBITO' | 'TARJETA_CREDITO';
 
 export interface CashMovementDto {
   id: string;

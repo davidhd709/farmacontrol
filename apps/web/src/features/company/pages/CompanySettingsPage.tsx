@@ -228,7 +228,14 @@ function PolicyForm({
   onDone: () => Promise<void>;
 }) {
   const [error, setError] = useState<string | null>(null);
-  const { control, handleSubmit, reset, formState } = useForm<PolicyFormData>({
+  const {
+    control,
+    handleSubmit,
+    reset,
+    formState,
+    setError: setFieldError,
+    watch,
+  } = useForm<PolicyFormData>({
     resolver: zodResolver(policySchema),
     defaultValues: {
       effectiveFrom: localIsoDate(new Date()),
@@ -239,8 +246,20 @@ function PolicyForm({
       reason: '',
     },
   });
+  const changesMethod = watch('costingMethod') !== current.costingMethod;
   const submit = async (data: PolicyFormData) => {
     setError(null);
+    // Misma regla que el backend (ADR-006, F5): el método cambia al iniciar un mes futuro
+    if (
+      data.costingMethod !== current.costingMethod &&
+      !isFutureMonthStart(data.effectiveFrom, localIsoDate(new Date()))
+    ) {
+      setFieldError('effectiveFrom', {
+        type: 'manual',
+        message: 'Un cambio de método rige desde el primer día de un mes futuro',
+      });
+      return;
+    }
     try {
       await createAccountingPolicy(data);
       reset({ ...data, reason: '' });
@@ -309,6 +328,15 @@ function PolicyForm({
         </Grid>
         {select('costingMethod', 'Método de costeo', COSTING_LABELS, (v) =>
           available.includes(v as CostingMethod),
+        )}
+        {changesMethod && (
+          <Grid size={{ xs: 12 }}>
+            <Alert severity="info" variant="outlined">
+              El cambio de método rige desde el primer día de un mes futuro: el mes en curso cierra
+              con el método actual. Cada producto se convierte en su siguiente movimiento sin
+              cambiar el valor total del inventario, y la conversión queda registrada.
+            </Alert>
+          </Grid>
         )}
         {select('openingCostSource', 'Costo de apertura de existencias', OPENING_LABELS)}
         {select(
@@ -525,3 +553,8 @@ export const CompanySettingsPage = () => {
     </Container>
   );
 };
+
+/** Primer día de un mes posterior al de hoy (YYYY-MM-DD). */
+function isFutureMonthStart(date: string, today: string): boolean {
+  return date.endsWith('-01') && date.slice(0, 7) > today.slice(0, 7);
+}

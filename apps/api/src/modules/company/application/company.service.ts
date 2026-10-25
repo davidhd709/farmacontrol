@@ -18,6 +18,7 @@ import {
   CompanyNotConfiguredError,
   CompanyValidationError,
   DEFAULT_ACCOUNTING_POLICY,
+  assertCostingMethodChangeDate,
   assertMunicipalityCode,
   assertSectorProfile,
   assertValidNit,
@@ -304,11 +305,10 @@ export class CompanyService {
         async (tx) => {
           const company = await this.activeCompany(tx);
           const previous = await accountingPolicyAt(tx, effectiveFrom);
-          // ADR-006: cambiar el método de costeo exige un procedimiento de revaluación (F5)
+          // ADR-006 (F5): el método cambia solo al iniciar un período futuro; el período en
+          // curso cierra con el anterior y cada saldo se convierte sin cambiar su valor total
           if (previous.costingMethod !== values.costingMethod) {
-            throw new CompanyConflictError(
-              'Cambiar el método de costeo requiere el procedimiento de revaluación al cierre de un período, que llega con F5.',
-            );
+            assertCostingMethodChangeDate(effectiveFrom, businessToday());
           }
           const policy = await tx.companyAccountingPolicy.create({
             data: {

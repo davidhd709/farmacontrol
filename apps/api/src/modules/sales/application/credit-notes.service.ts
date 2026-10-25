@@ -343,6 +343,12 @@ export class CreditNotesService {
                   sourceType: 'CREDIT_NOTE',
                   sourceId: creditNoteNumber,
                   userId,
+                  // Reingresa a las mismas existencias de las que salió la venta
+                  lots: portions.flatMap((portion) =>
+                    portion.lotId
+                      ? [{ lotId: portion.lotId, quantityBaseUnits: portion.quantityBaseUnits }]
+                      : [],
+                  ),
                 });
                 totalCostCents += restockCostCents;
               }

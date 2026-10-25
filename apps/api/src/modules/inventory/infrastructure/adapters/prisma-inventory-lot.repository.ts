@@ -279,6 +279,7 @@ export class PrismaInventoryLotRepository implements IInventoryLotRepository {
           sourceType: 'LOT_INITIAL',
           sourceId: created.id,
           userId: userId || null,
+          lots: [{ lotId: created.id, quantityBaseUnits: created.currentQuantity }],
         });
       }
 

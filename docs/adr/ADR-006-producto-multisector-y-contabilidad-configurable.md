@@ -117,7 +117,7 @@ F0, F1 y F2 están cerradas. Las fases siguientes reemplazan F3–F8 del plan h�
   - el costo de apertura de existencias (último costo de compra o costo del catálogo);
   - el propósito de la diferencia en notas débito: `COST_OF_SALES` o el nuevo `INVENTORY_COST_VARIANCE`;
   - el tratamiento de bonificaciones.
-- **Reglas de las versiones:** una versión nueva rige desde hoy o después, nunca hacia atrás. Cambiar el método de costeo se rechaza hasta que F5 traiga el procedimiento de revaluación; por ahora solo está disponible el promedio ponderado.
+- **Reglas de las versiones:** una versión nueva rige desde hoy o después, nunca hacia atrás. Desde F5 están disponibles los tres métodos de costeo; cambiarlo sigue el procedimiento de la sección de F5.
 - **Sin empresa configurada** rigen los valores por defecto, así que una instalación existente se comporta igual que antes de F3.
 - **Contrato de lectura:** `accountingPolicyAt(cliente, día)` entrega la política vigente. El submayor de costos la usa en cada movimiento (método y costo de apertura) y la nota débito la usa para el propósito de la diferencia.
 - **API:** `GET /company`, `POST /company/setup`, `PATCH /company`, `POST /company/branches` y `POST /company/accounting-policies`, con los permisos `company:read` (administrador y supervisor) y `company:manage` (administrador). Cada cambio queda en la auditoría.
@@ -197,6 +197,42 @@ Cada producto tiene un `inventoryControlMode`; reemplaza a `requiresLotControl`.
 ### Alertas y reportes
 
 Las alertas de vencimiento, el reporte de vencimientos y el de devolución a proveedor por vencimiento solo consideran existencias con vencimiento. Las pantallas muestran "Sin lote" y "No vence" cuando corresponde.
+
+## Implementación de F5 (costeo configurable)
+
+Decisión de arquitectura del orquestador (2026-10-25), implementada el mismo día. El método de costeo lo elige cada empresa en su política contable (F3); FEFO y el orden físico siguen siendo independientes del método.
+
+### Métodos
+
+| Método             | Costo de una salida                                                                      |
+| ------------------ | ---------------------------------------------------------------------------------------- |
+| `WEIGHTED_AVERAGE` | Promedio ponderado móvil del producto (F2, sin cambios; valor por defecto)               |
+| `FIFO` (PEPS)      | Capas de costo del producto en orden de entrada, sin importar de qué existencia salió   |
+| `SPECIFIC_LOT`     | Capas de la misma existencia física de la que salió (lote, serie o saldo simple)          |
+
+### Modelo
+
+- **`inventory_cost_layers`**: una capa por entrada y por existencia, con su cantidad y su valor inicial y remanente, en centavos exactos.
+  - Una salida que consume parte de una capa toma su parte proporcional con redondeo half-up; la que vacía la capa se lleva el valor remanente. Así la suma de las salidas siempre coincide con lo que entró.
+  - Con el promedio no se mantienen capas: al convertir hacia PEPS o costo identificado se reconstruyen desde las existencias.
+- **`inventory_cost_balances`** sigue siendo el total valorizado por producto en los tres métodos, y guarda con qué método está valorizado (`costing_method`).
+- **El submayor recibe en cada movimiento el reparto por existencia** (`lots`). Todos los llamadores lo conocen: compra, venta, anulación, notas crédito y débito, ajustes y existencia manual.
+- **Entradas con valor conocido** (compra, devolución al costo de salida): se reparten entre sus existencias.
+  - **Entradas sin documento** (ajuste, existencia manual):
+    - con promedio y PEPS, se valoran al promedio del producto;
+    - con costo identificado, al promedio de las capas de esa existencia, o al del producto si la existencia no tiene capas;
+    - si no hay existencias, al último costo conocido.
+- **Apertura:** un producto que se mueve por primera vez abre sus capas por existencia, con las cantidades previas al movimiento y el costo de apertura de la política.
+
+### Cambio de método
+
+- **Cuándo:** una versión de política con otro método solo puede regir desde el **primer día de un mes futuro**. El período en curso cierra con el método anterior.
+- **Conversión por producto**, perezosa y atómica: la ejecuta el primer movimiento del producto bajo el método nuevo, con su saldo bloqueado.
+  - Hacia el promedio, se cierran las capas abiertas.
+  - Hacia PEPS o costo identificado, se reconstruyen las capas por existencia, valoradas al costo promedio vigente del producto. El último tramo se lleva el residuo.
+  - **El valor total del inventario no cambia**, así que no hay asiento de revaluación.
+- **Constancia:** cada conversión queda en `inventory_costing_conversions` (solo inserción): producto, método anterior y nuevo, cantidad, valor y política. Los movimientos pasados no se recalculan.
+- **Web:** la pantalla de política contable ofrece los tres métodos, explica el cambio y valida la fecha antes de enviar.
 
 ## Pendientes
 

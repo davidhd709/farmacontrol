@@ -5,9 +5,7 @@ import type {
   RecordInventoryMovementPayload,
 } from '@farmacia/contracts';
 
-export const INVENTORY_MOVEMENT_REPOSITORY_PORT = Symbol(
-  'INVENTORY_MOVEMENT_REPOSITORY_PORT',
-);
+export const INVENTORY_MOVEMENT_REPOSITORY_PORT = Symbol('INVENTORY_MOVEMENT_REPOSITORY_PORT');
 
 /**
  * Trabajo que debe confirmarse junto con el movimiento (p. ej. su auditoría). Recibe la

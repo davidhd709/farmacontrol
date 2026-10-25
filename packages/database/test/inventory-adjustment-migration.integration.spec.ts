@@ -26,6 +26,8 @@ const PRE_MIGRATION_SCHEMA = `
   ALTER TABLE "inventory_movements" DROP CONSTRAINT "${LOT_PRODUCT_FK}";
   ALTER TABLE "inventory_movements" DROP CONSTRAINT "${REASON_CHECK}";
   ALTER TABLE "inventory_movements" DROP COLUMN "reason";
+  -- F5: las capas de costo dependen del mismo índice; se revierte junto con la transacción
+  ALTER TABLE "inventory_cost_layers" DROP CONSTRAINT "inventory_cost_layers_lot_id_product_id_fkey";
   DROP INDEX "inventory_lots_id_product_id_key";
   ALTER TABLE "inventory_movements" ADD CONSTRAINT "inventory_movements_lot_id_fkey"
     FOREIGN KEY ("lot_id") REFERENCES "inventory_lots"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

@@ -465,6 +465,10 @@ export class SaleService {
                 sourceType: 'SALE',
                 sourceId: saleId,
                 userId: auditCtx.userId || null,
+                lots: lineAllocations.map((allocation) => ({
+                  lotId: allocation.lotId,
+                  quantityBaseUnits: allocation.quantityBaseUnits,
+                })),
               });
             } else if (product.inventoryControlMode !== 'SERVICE') {
               const availableLots = await this.inventoryLedger.lockFefoCandidates(
@@ -517,6 +521,10 @@ export class SaleService {
                 sourceType: 'SALE',
                 sourceId: saleId,
                 userId: auditCtx.userId || null,
+                lots: lineAllocations.map((allocation) => ({
+                  lotId: allocation.lotId,
+                  quantityBaseUnits: allocation.quantityBaseUnits,
+                })),
               });
             }
             costOfSalesCents += lineCostCents;
@@ -788,6 +796,10 @@ export class SaleService {
                 sourceType: 'SALE_CANCEL',
                 sourceId: sale.id,
                 userId: auditCtx.userId || null,
+                lots: line.lotAllocations.map((alloc) => ({
+                  lotId: alloc.lotId,
+                  quantityBaseUnits: alloc.quantityBaseUnits,
+                })),
               });
             }
           }

@@ -20,6 +20,7 @@ model User {
   inventoryMovements    InventoryMovement[]
   valuationMovements    InventoryValuationMovement[]
   accountingPolicies    CompanyAccountingPolicy[]
+  costingConversions    InventoryCostingConversion[]
   purchasesReceived     Purchase[]
   cashMovements         CashMovement[]
   salesCreated          Sale[]              @relation("SalesCreated")
@@ -185,6 +186,8 @@ model Product {
   presentations        ProductPresentation[]
   lots                 InventoryLot[]
   costBalance          InventoryCostBalance?
+  costLayers           InventoryCostLayer[]
+  costingConversions   InventoryCostingConversion[]
   valuationMovements   InventoryValuationMovement[]
   movements            InventoryMovement[]
   purchaseLines        PurchaseLine[]
@@ -276,6 +279,7 @@ model InventoryLot {
   alerts          InventoryAlert[]
   creditNoteLines CreditNoteLine[]
   debitNoteLines  DebitNoteLine[]
+  costLayers      InventoryCostLayer[]
 
   @@unique([productId, locationId, lotNumber])
   @@unique([id, productId])
@@ -325,12 +329,56 @@ model InventoryCostBalance {
   totalValue        Decimal  @map("total_value") @db.Decimal(20, 2)
   /// Último costo unitario conocido: valora entradas al promedio cuando no hay existencias
   lastUnitCost      Decimal? @map("last_unit_cost") @db.Decimal(20, 6)
+  /// Método con que está valorizado el saldo (F5); si la política cambia, se convierte
+  costingMethod     String   @default("WEIGHTED_AVERAGE") @map("costing_method") @db.VarChar(32)
   createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
   product Product @relation(fields: [productId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
   @@map("inventory_cost_balances")
+}
+
+/// Capa de costo de una entrada en una existencia (F5, ADR-006). PEPS consume las del producto
+/// en orden de entrada; costo identificado, las de la existencia de la que sale.
+model InventoryCostLayer {
+  id                String   @id @default(uuid()) @db.Uuid
+  productId         String   @map("product_id") @db.Uuid
+  lotId             String   @map("lot_id") @db.Uuid
+  quantityInitial   Int      @map("quantity_initial")
+  quantityRemaining Int      @map("quantity_remaining")
+  valueInitial      Decimal  @map("value_initial") @db.Decimal(20, 2)
+  valueRemaining    Decimal  @map("value_remaining") @db.Decimal(20, 2)
+  sourceType        String   @map("source_type") @db.VarChar(64)
+  sourceId          String   @map("source_id") @db.VarChar(128)
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  product Product      @relation(fields: [productId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  lot     InventoryLot @relation(fields: [lotId, productId], references: [id, productId], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([productId, createdAt])
+  @@index([lotId])
+  @@map("inventory_cost_layers")
+}
+
+/// Constancia de la conversión del saldo de un producto a otro método de costeo (solo inserción).
+model InventoryCostingConversion {
+  id                String   @id @default(uuid()) @db.Uuid
+  productId         String   @map("product_id") @db.Uuid
+  fromMethod        String   @map("from_method") @db.VarChar(32)
+  toMethod          String   @map("to_method") @db.VarChar(32)
+  quantityBaseUnits Int      @map("quantity_base_units")
+  totalValue        Decimal  @map("total_value") @db.Decimal(20, 2)
+  policyId          String?  @map("policy_id") @db.Uuid
+  createdByUserId   String?  @map("created_by_user_id") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  product Product                  @relation(fields: [productId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  policy  CompanyAccountingPolicy? @relation(fields: [policyId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  user    User?                    @relation(fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([productId, createdAt])
+  @@map("inventory_costing_conversions")
 }
 
 /// Submayor de valoración: libro de solo inserción con el costo aplicado a cada entrada y salida.
@@ -883,6 +931,7 @@ model CompanyAccountingPolicy {
 
   company                       Company  @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   createdBy                     User?    @relation(fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  costingConversions            InventoryCostingConversion[]
 
   @@unique([companyId, effectiveFrom])
   @@map("company_accounting_policies")

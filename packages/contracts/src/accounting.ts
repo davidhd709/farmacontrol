@@ -358,8 +358,6 @@ export interface ThirdPartyReportFilters {
   search?: string;
 }
 
-
-
 // ===== BLOQUEO DE DOCUMENTOS POR FECHA =====
 
 export interface DocumentLockDto {

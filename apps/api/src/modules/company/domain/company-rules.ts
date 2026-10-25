@@ -122,3 +122,15 @@ export function validatePolicyValues(input: Record<string, unknown>): Accounting
     ),
   };
 }
+
+/**
+ * Un cambio de método de costeo rige desde el primer día de un mes posterior al actual
+ * (ADR-006, F5): el período en curso cierra completo con el método anterior.
+ */
+export function assertCostingMethodChangeDate(effectiveFrom: string, today: string): void {
+  if (!effectiveFrom.endsWith('-01') || effectiveFrom.slice(0, 7) <= today.slice(0, 7)) {
+    throw new CompanyValidationError(
+      'Un cambio de método de costeo debe regir desde el primer día de un mes futuro: el período en curso cierra con el método anterior.',
+    );
+  }
+}

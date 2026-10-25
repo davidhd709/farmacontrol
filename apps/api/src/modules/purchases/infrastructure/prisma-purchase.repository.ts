@@ -204,6 +204,7 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
             sourceType: 'PURCHASE',
             sourceId: purchase.id,
             userId: actorUserId,
+            lots: [{ lotId, quantityBaseUnits: line.quantityBaseUnits }],
           });
         }
 

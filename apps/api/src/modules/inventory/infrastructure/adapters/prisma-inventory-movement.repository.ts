@@ -110,6 +110,7 @@ export class PrismaInventoryMovementRepository implements IInventoryMovementRepo
         sourceType: 'INVENTORY_ADJUSTMENT',
         sourceId: movement.id,
         userId: userId || null,
+        lots: [{ lotId: lot.id, quantityBaseUnits: Math.abs(payload.quantityBaseUnits) }],
       };
       if (payload.quantityBaseUnits > 0) {
         await this.valuation.receiveAtAverage(tx, {

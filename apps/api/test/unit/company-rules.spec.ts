@@ -18,7 +18,7 @@ describe('Reglas de empresa (ADR-006)', () => {
     expect(() => nitCheckDigit('123')).toThrow(/entre 5 y 15 dígitos/);
   });
 
-  it('valida la política contable y solo admite los métodos de costeo disponibles', () => {
+  it('valida la política contable y admite los tres métodos de costeo', () => {
     const valid = {
       costingMethod: 'WEIGHTED_AVERAGE',
       openingCostSource: 'CATALOG',
@@ -26,8 +26,10 @@ describe('Reglas de empresa (ADR-006)', () => {
       bonusUnitsTreatment: 'ZERO_COST_IN_AVERAGE',
     };
     expect(validatePolicyValues(valid)).toEqual(valid);
-    expect(() => validatePolicyValues({ ...valid, costingMethod: 'FIFO' })).toThrow(
-      /todavía no está disponible/,
+    // F5: los tres métodos están disponibles; LIFO no es un método admitido
+    expect(validatePolicyValues({ ...valid, costingMethod: 'FIFO' }).costingMethod).toBe('FIFO');
+    expect(validatePolicyValues({ ...valid, costingMethod: 'SPECIFIC_LOT' }).costingMethod).toBe(
+      'SPECIFIC_LOT',
     );
     expect(() => validatePolicyValues({ ...valid, costingMethod: 'LIFO' })).toThrow(
       /Método de costeo no válido/,

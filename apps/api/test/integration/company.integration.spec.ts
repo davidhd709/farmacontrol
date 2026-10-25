@@ -76,7 +76,7 @@ describe('Empresa y políticas contables (PostgreSQL real)', () => {
       openingCostSource: 'LAST_PURCHASE_THEN_CATALOG',
       purchaseReturnVariancePurpose: 'COST_OF_SALES',
     });
-    expect(res.body.availableCostingMethods).toEqual(['WEIGHTED_AVERAGE']);
+    expect(res.body.availableCostingMethods).toEqual(['WEIGHTED_AVERAGE', 'FIFO', 'SPECIFIC_LOT']);
   });
 
   it('configura la empresa una sola vez, con sucursal principal y auditoría', async () => {
@@ -158,8 +158,9 @@ describe('Empresa y políticas contables (PostgreSQL real)', () => {
     expect((await policy({ effectiveFrom: yesterday })).body.message).toMatch(
       /no puede empezar antes de hoy/,
     );
+    // F5: el método solo cambia desde el primer día de un mes futuro
     expect((await policy({ costingMethod: 'FIFO' })).body.message).toMatch(
-      /todavía no está disponible/,
+      /primer día de un mes futuro/,
     );
     expect((await policy({ reason: ' ' })).status).toBe(400);
 
