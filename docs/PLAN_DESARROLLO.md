@@ -88,6 +88,7 @@ El sistema prioriza de forma no negociable:
 ### 2.7 Contradicciones y Tensiones Identificadas entre Documentos
 1. **Multi-sede vs. Sede Única**: El levantamiento indica que el número de sedes está pendiente, mientras que la arquitectura y diseño mencionan sedes y ubicaciones.  
    *Resolución en Plan:* Se implementa el modelo de datos con una sede/ubicación por defecto (`default_location_id`) para no romper la regla futura sin añadir complejidad innecesaria al MVP actual.
+   *Actualización 2026-10-24:* [ADR-003](adr/ADR-003-despliegue-hibrido-y-frontera-empresarial.md) fija que la sucursal pertenece a la empresa y no es la frontera de datos. Qué se dimensiona por sede queda para F4.
 2. **Apertura de Caja y Turnos**: El diseño UX/UI propone pantallas para apertura y cierre de caja (`UX-25` y `UX-26`), pero el levantamiento indica que el flujo de caja está pendiente de definición por el cliente.  
    *Resolución en Plan:* Se aísla el slice de apertura/cierre de turnos y se marca como **BLOQUEADO** hasta obtener la respuesta del cliente, permitiendo implementar primero el registro básico de movimientos de caja originados por ventas y compras.
 3. **Excepción manual a FEFO**: En UX/UI se describe un botón para "Cambiar lote", pero en requerimientos y en `AGENTS.md` FEFO es obligatorio y cualquier excepción está pendiente de validación.  
