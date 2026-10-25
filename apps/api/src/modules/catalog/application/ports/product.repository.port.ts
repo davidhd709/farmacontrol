@@ -5,8 +5,8 @@ export interface ProductRepositoryPort {
   findById(id: string): Promise<Product | null>;
   findByCode(code: string): Promise<Product | null>;
   findByBarcode(barcode: string): Promise<Product | null>;
-  save(product: Product): Promise<Product>;
-  update(product: Product): Promise<Product>;
+  save(product: Product, tx?: unknown): Promise<Product>;
+  update(product: Product, tx?: unknown): Promise<Product>;
   findAll(filters: ProductQueryFilters): Promise<{ items: Product[]; total: number }>;
 }
 

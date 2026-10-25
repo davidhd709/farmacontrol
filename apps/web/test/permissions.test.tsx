@@ -4,6 +4,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { AuthContext, type AuthContextValue } from '../src/features/auth/context/auth-context';
+import { App } from '../src/App';
+import { AppSidebar } from '../src/components/layout/AppSidebar';
+import { menuGroups, navigationForPath } from '../src/app/navigation';
 import { PermissionGate } from '../src/features/auth/components/PermissionGate';
 import { usePermissions } from '../src/features/auth/hooks/usePermissions';
 import { AuthenticatedHomePage } from '../src/pages/AuthenticatedHomePage';
@@ -23,7 +26,7 @@ function createMockAuthContextValue(user: AuthContextValue['user']): AuthContext
   };
 }
 
-function renderWithContext(ui: React.ReactElement, authValue: AuthContextValue) {
+function renderWithContext(ui: React.ReactElement, authValue: AuthContextValue, path = '/') {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -31,7 +34,7 @@ function renderWithContext(ui: React.ReactElement, authValue: AuthContextValue) 
   return render(
     <ThemeProvider theme={appTheme}>
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
+        <MemoryRouter initialEntries={[path]}>
           <AuthContext.Provider value={authValue}>{ui}</AuthContext.Provider>
         </MemoryRouter>
       </QueryClientProvider>
@@ -188,7 +191,7 @@ describe('RBAC Frontend — usePermissions y PermissionGate (Slice 003.3)', () =
   });
 
   describe('AuthenticatedHomePage adaptada por RBAC', () => {
-    it('muestra las tarjetas de POS pero oculta Administración para un cajero', () => {
+    it('oculta ventas sin reports:read y Administración para un cajero', () => {
       const authValue = createMockAuthContextValue({
         id: 'u-cajero',
         username: 'cajero_operativo',
@@ -204,8 +207,8 @@ describe('RBAC Frontend — usePermissions y PermissionGate (Slice 003.3)', () =
       expect(screen.getByText('cajero')).toBeInTheDocument();
 
       // Módulo POS debe existir
-      expect(screen.getByText('Punto de Venta (POS)')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Nueva Venta' })).toBeInTheDocument();
+      expect(screen.queryByText('Ventas de hoy')).not.toBeInTheDocument();
+      expect(screen.queryByText('Punto de Venta (POS)')).not.toBeInTheDocument();
 
       // Módulo de Administración / Gestión de Usuarios NO debe existir para el cajero
       expect(screen.queryByTestId('users-nav-btn')).not.toBeInTheDocument();
@@ -227,9 +230,54 @@ describe('RBAC Frontend — usePermissions y PermissionGate (Slice 003.3)', () =
 
       renderWithContext(<AuthenticatedHomePage />, authValue);
 
-      expect(screen.getByText('Punto de Venta (POS)')).toBeInTheDocument();
+      expect(screen.queryByText('Ventas de hoy')).not.toBeInTheDocument();
       expect(screen.queryByText('Gestión de Usuarios')).not.toBeInTheDocument();
       expect(screen.queryByTestId('users-nav-btn')).not.toBeInTheDocument();
     });
   });
+});
+
+it.each([
+  '/pos',
+  '/pos/scanner',
+  '/backups',
+  '/audit',
+  '/purchases/receive',
+  '/accounting/import',
+  '/customers',
+  '/suppliers',
+])('URL directa %s muestra Sin permiso sin renderizar la página', async (path) => {
+  const user = { id: 'u', username: 'restricted', isActive: true, roles: [], permissions: [] };
+  renderWithContext(<App />, createMockAuthContextValue(user), path);
+  expect(await screen.findByRole('heading', { name: 'Sin permiso' })).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Ir al panel principal' })).toHaveAttribute('href', '/');
+});
+
+it('menú y guardas comparten la misma configuración, con prioridad para la ruta específica', () => {
+  const entries = menuGroups.flatMap((group) => group.items);
+  for (const entry of entries) {
+    expect(entry.permission).toBeTruthy();
+    expect(navigationForPath(entry.path)).toBe(entry);
+  }
+  expect(navigationForPath('/pos/scanner')?.permission).toBe(SYSTEM_PERMISSIONS.SALES_CREATE);
+  expect(navigationForPath('/purchases/receive')?.permission).toBe(
+    SYSTEM_PERMISSIONS.PURCHASES_RECEIVE,
+  );
+  expect(navigationForPath('/accounting/import')?.permission).toBe(
+    SYSTEM_PERMISSIONS.ACCOUNTING_MANAGE,
+  );
+  const auth = createMockAuthContextValue({
+    id: 'u',
+    username: 'reader',
+    isActive: true,
+    roles: [],
+    permissions: [SYSTEM_PERMISSIONS.AUDIT_READ],
+  });
+  renderWithContext(<AppSidebar open onClose={vi.fn()} />, auth);
+  expect(
+    screen.getByText(entries.find((entry) => entry.path === '/audit')!.title),
+  ).toBeInTheDocument();
+  expect(
+    screen.queryByText(entries.find((entry) => entry.path === '/pos')!.title),
+  ).not.toBeInTheDocument();
 });

@@ -1,3 +1,4 @@
+import { prisma, Prisma } from '@farmacia/database';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import {
   CategoryDto,
@@ -30,12 +31,12 @@ export class CategoryService {
     @Inject(CATEGORY_REPOSITORY_PORT)
     private readonly categoryRepository: CategoryRepositoryPort,
     @Optional()
-    private readonly auditService?: AuditService
+    private readonly auditService?: AuditService,
   ) {}
 
   public async createCategory(
     input: CreateCategoryPayload,
-    auditCtx?: AuditContext
+    auditCtx?: AuditContext,
   ): Promise<Category> {
     const existing = await this.categoryRepository.findByName(input.name);
     if (existing) {
@@ -47,37 +48,40 @@ export class CategoryService {
       description: input.description,
     });
 
-    const saved = await this.categoryRepository.create(category);
+    const persist = async (tx?: Prisma.TransactionClient) => {
+      const saved = await this.categoryRepository.create(category, tx);
 
-    if (this.auditService) {
-      await this.auditService.recordEvent({
-        userId: auditCtx?.userId || null,
-        action: 'catalog:category_created',
-        entity: 'Category',
-        entityId: saved.id,
-        details: { name: saved.name, description: saved.description },
-        ipAddress: auditCtx?.ipAddress || null,
-        correlationId: auditCtx?.correlationId || null,
-      });
-    }
+      if (this.auditService) {
+        await this.auditService.recordEvent(
+          {
+            userId: auditCtx?.userId || null,
+            action: 'catalog:category_created',
+            entity: 'Category',
+            entityId: saved.id,
+            details: { name: saved.name, description: saved.description },
+            ipAddress: auditCtx?.ipAddress || null,
+            correlationId: auditCtx?.correlationId || null,
+          },
+          tx,
+        );
+      }
 
-    return saved;
+      return saved;
+    };
+    return this.auditService ? prisma.$transaction(persist) : persist();
   }
 
   public async updateCategory(
     id: string,
     input: UpdateCategoryPayload,
-    auditCtx?: AuditContext
+    auditCtx?: AuditContext,
   ): Promise<Category> {
     const category = await this.categoryRepository.findById(id);
     if (!category) {
       throw new CategoryNotFoundException(id);
     }
 
-    if (
-      input.name &&
-      input.name.trim().toLowerCase() !== category.name.toLowerCase()
-    ) {
+    if (input.name && input.name.trim().toLowerCase() !== category.name.toLowerCase()) {
       const existing = await this.categoryRepository.findByName(input.name);
       if (existing && existing.id !== id) {
         throw new CategoryAlreadyExistsException(input.name.trim());
@@ -92,34 +96,37 @@ export class CategoryService {
 
     category.update(input);
 
-    const updated = await this.categoryRepository.update(category);
+    const persist = async (tx?: Prisma.TransactionClient) => {
+      const updated = await this.categoryRepository.update(category, tx);
 
-    if (this.auditService) {
-      await this.auditService.recordEvent({
-        userId: auditCtx?.userId || null,
-        action: 'catalog:category_updated',
-        entity: 'Category',
-        entityId: updated.id,
-        details: {
-          previous: previousState,
-          updated: {
-            name: updated.name,
-            description: updated.description,
-            isActive: updated.isActive,
+      if (this.auditService) {
+        await this.auditService.recordEvent(
+          {
+            userId: auditCtx?.userId || null,
+            action: 'catalog:category_updated',
+            entity: 'Category',
+            entityId: updated.id,
+            details: {
+              previous: previousState,
+              updated: {
+                name: updated.name,
+                description: updated.description,
+                isActive: updated.isActive,
+              },
+            },
+            ipAddress: auditCtx?.ipAddress || null,
+            correlationId: auditCtx?.correlationId || null,
           },
-        },
-        ipAddress: auditCtx?.ipAddress || null,
-        correlationId: auditCtx?.correlationId || null,
-      });
-    }
+          tx,
+        );
+      }
 
-    return updated;
+      return updated;
+    };
+    return this.auditService ? prisma.$transaction(persist) : persist();
   }
 
-  public async deactivateCategory(
-    id: string,
-    auditCtx?: AuditContext
-  ): Promise<Category> {
+  public async deactivateCategory(id: string, auditCtx?: AuditContext): Promise<Category> {
     const category = await this.categoryRepository.findById(id);
     if (!category) {
       throw new CategoryNotFoundException(id);
@@ -132,21 +139,27 @@ export class CategoryService {
 
     category.deactivate();
 
-    const deactivated = await this.categoryRepository.update(category);
+    const persist = async (tx?: Prisma.TransactionClient) => {
+      const deactivated = await this.categoryRepository.update(category, tx);
 
-    if (this.auditService) {
-      await this.auditService.recordEvent({
-        userId: auditCtx?.userId || null,
-        action: 'catalog:category_deactivated',
-        entity: 'Category',
-        entityId: deactivated.id,
-        details: { name: deactivated.name },
-        ipAddress: auditCtx?.ipAddress || null,
-        correlationId: auditCtx?.correlationId || null,
-      });
-    }
+      if (this.auditService) {
+        await this.auditService.recordEvent(
+          {
+            userId: auditCtx?.userId || null,
+            action: 'catalog:category_deactivated',
+            entity: 'Category',
+            entityId: deactivated.id,
+            details: { name: deactivated.name },
+            ipAddress: auditCtx?.ipAddress || null,
+            correlationId: auditCtx?.correlationId || null,
+          },
+          tx,
+        );
+      }
 
-    return deactivated;
+      return deactivated;
+    };
+    return this.auditService ? prisma.$transaction(persist) : persist();
   }
 
   public async getCategoryById(id: string): Promise<Category> {
@@ -158,7 +171,7 @@ export class CategoryService {
   }
 
   public async listCategories(
-    filters: CategoryQueryFilters
+    filters: CategoryQueryFilters,
   ): Promise<PaginatedResponse<CategoryDto>> {
     const page = Math.max(1, filters.page ?? 1);
     const pageSize = Math.min(100, Math.max(1, filters.pageSize ?? 20));

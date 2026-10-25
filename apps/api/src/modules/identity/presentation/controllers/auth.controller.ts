@@ -40,7 +40,7 @@ export class AuthController {
     private readonly authService: AuthService,
     @Optional() private readonly auditService?: AuditService,
     @Optional() private readonly sessionService?: SessionService,
-    @Optional() private readonly rateLimiterService?: RateLimiterService
+    @Optional() private readonly rateLimiterService?: RateLimiterService,
   ) {}
 
   /**
@@ -52,7 +52,7 @@ export class AuthController {
   public async login(
     @Body(LoginValidationPipe) loginDto: LoginDto,
     @Req() req: Request,
-    @Res({ passthrough: true }) res: Response
+    @Res({ passthrough: true }) res: Response,
   ): Promise<LoginResponseDto> {
     // req.ip respeta TRUST_PROXY: detrás de Caddy es la IP real del cliente
     const clientIp = req.ip || req.socket?.remoteAddress || 'unknown-ip';
@@ -72,7 +72,7 @@ export class AuthController {
         res.setHeader('Retry-After', ipStatus.retryAfterSeconds);
         throw new HttpException(
           `Demasiados intentos fallidos desde esta dirección IP. Intente de nuevo en ${ipStatus.retryAfterSeconds} segundos.`,
-          HttpStatus.TOO_MANY_REQUESTS
+          HttpStatus.TOO_MANY_REQUESTS,
         );
       }
 
@@ -81,7 +81,7 @@ export class AuthController {
         res.setHeader('Retry-After', userStatus.retryAfterSeconds);
         throw new HttpException(
           `Demasiados intentos fallidos para la cuenta '${loginDto.username}'. Intente de nuevo en ${userStatus.retryAfterSeconds} segundos.`,
-          HttpStatus.TOO_MANY_REQUESTS
+          HttpStatus.TOO_MANY_REQUESTS,
         );
       }
     }
@@ -89,7 +89,23 @@ export class AuthController {
     try {
       const { user, rawToken, roles, permissions } = await this.authService.login(
         loginDto.username,
-        loginDto.password
+        loginDto.password,
+        this.auditService
+          ? async ({ user }, tx) => {
+              await this.auditService!.recordEvent(
+                {
+                  userId: user.id,
+                  action: 'auth:login_success',
+                  entity: 'User',
+                  entityId: user.id,
+                  details: { username: user.username.value },
+                  ipAddress: req?.ip || null,
+                  correlationId: req?.correlationId || null,
+                },
+                tx,
+              );
+            }
+          : undefined,
       );
 
       // Un login correcto limpia solo su par IP+usuario: no debe borrar los fallos
@@ -99,23 +115,7 @@ export class AuthController {
       }
 
       // Establecer cookie HttpOnly segura con el rawToken
-      res.cookie(
-        SESSION_COOKIE_NAME,
-        rawToken,
-        getSessionCookieOptions()
-      );
-
-      if (this.auditService) {
-        await this.auditService.recordEvent({
-          userId: user.id,
-          action: 'auth:login_success',
-          entity: 'User',
-          entityId: user.id,
-          details: { username: user.username.value },
-          ipAddress: req?.ip || null,
-          correlationId: req?.correlationId || null,
-        });
-      }
+      res.cookie(SESSION_COOKIE_NAME, rawToken, getSessionCookieOptions());
 
       return {
         user: {
@@ -162,7 +162,7 @@ export class AuthController {
         if (isBlocked) {
           throw new HttpException(
             `Demasiados intentos fallidos de inicio de sesión. Bloqueo temporal activado por ${retryAfter} segundos.`,
-            HttpStatus.TOO_MANY_REQUESTS
+            HttpStatus.TOO_MANY_REQUESTS,
           );
         }
 
@@ -180,7 +180,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   public async logout(
     @Req() req: Request,
-    @Res({ passthrough: true }) res: Response
+    @Res({ passthrough: true }) res: Response,
   ): Promise<LogoutResponseDto> {
     const rawToken = extractTokenFromCookieHeader(req.headers.cookie);
 
@@ -195,26 +195,30 @@ export class AuthController {
           sessionId = session.id ?? null;
         }
       }
-      await this.authService.logout(rawToken);
     }
 
-    if (this.auditService) {
-      await this.auditService.recordEvent({
-        userId: sessionUserId,
-        action: 'auth:logout',
-        entity: 'Session',
-        entityId: sessionId,
-        details: {},
-        ipAddress: req?.ip || null,
-        correlationId: req?.correlationId || null,
-      });
-    }
+    await this.authService.logout(
+      rawToken ?? undefined,
+      this.auditService
+        ? async (tx) => {
+            await this.auditService!.recordEvent(
+              {
+                userId: sessionUserId,
+                action: 'auth:logout',
+                entity: 'Session',
+                entityId: sessionId,
+                details: {},
+                ipAddress: req?.ip || null,
+                correlationId: req?.correlationId || null,
+              },
+              tx,
+            );
+          }
+        : undefined,
+    );
 
     // Limpiar la cookie en el cliente
-    res.clearCookie(
-      SESSION_COOKIE_NAME,
-      getClearSessionCookieOptions()
-    );
+    res.clearCookie(SESSION_COOKIE_NAME, getClearSessionCookieOptions());
 
     return {
       message: 'Sesión cerrada correctamente.',
@@ -228,9 +232,7 @@ export class AuthController {
    */
   @Get('me')
   @UseGuards(SessionAuthGuard)
-  public getMe(
-    @CurrentUser() user: AuthenticatedUserContext
-  ): CurrentUserResponseDto {
+  public getMe(@CurrentUser() user: AuthenticatedUserContext): CurrentUserResponseDto {
     return {
       user: {
         id: user.id,

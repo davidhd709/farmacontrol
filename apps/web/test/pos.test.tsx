@@ -1,8 +1,8 @@
 import { ThemeProvider } from '@mui/material';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { act, render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   SYSTEM_PERMISSIONS,
   SYSTEM_ROLES,
@@ -99,38 +99,35 @@ const mockAuthContext: AuthContextValue = {
     username: 'cajero_1',
     isActive: true,
     roles: [SYSTEM_ROLES.CAJERO],
-    permissions: [
-      SYSTEM_PERMISSIONS.SALES_CREATE,
-      SYSTEM_PERMISSIONS.SALES_READ,
-    ],
+    permissions: [SYSTEM_PERMISSIONS.SALES_CREATE, SYSTEM_PERMISSIONS.SALES_READ],
   },
-  roles: [SYSTEM_ROLES.CAJERO],
-  permissions: [
-    SYSTEM_PERMISSIONS.SALES_CREATE,
-    SYSTEM_PERMISSIONS.SALES_READ,
-  ],
   status: 'authenticated',
   login: vi.fn(),
   logout: vi.fn(),
-  refreshUser: vi.fn(),
+  retrySession: vi.fn(),
+  sessionError: null,
   isLoggingIn: false,
   isLoggingOut: false,
 };
 
-const renderComponent = () => {
+const renderComponent = (permissions: string[] = mockAuthContext.user!.permissions!) => {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <ThemeProvider theme={appTheme}>
       <QueryClientProvider client={queryClient}>
         <MemoryRouter>
-          <AuthContext.Provider value={mockAuthContext}>
+          <AuthContext.Provider
+            value={{ ...mockAuthContext, user: { ...mockAuthContext.user!, permissions } }}
+          >
             <PosPage />
           </AuthContext.Provider>
         </MemoryRouter>
       </QueryClientProvider>
-    </ThemeProvider>
+    </ThemeProvider>,
   );
 };
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe('PosPage (Frontend POS UX-03 / HU-017)', () => {
   beforeEach(() => {
@@ -144,6 +141,36 @@ describe('PosPage (Frontend POS UX-03 / HU-017)', () => {
       totalPages: 1,
     });
     vi.spyOn(salesApi, 'confirmSale').mockResolvedValue(mockConfirmedSale);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async (url) => {
+        if (!String(url).endsWith('/sales/fefo-preview'))
+          throw new Error(`Unexpected request: ${url}`);
+        return new Response(
+          JSON.stringify({
+            businessDay: '2026-10-18',
+            lines: [
+              {
+                productId: mockProduct.id,
+                presentationId: null,
+                requiredBaseUnits: 1,
+                availableBaseUnits: 10,
+                shortfallBaseUnits: 0,
+                allocations: [
+                  {
+                    lotId: 'lot-preview',
+                    lotNumber: 'FEFO-2027',
+                    expirationDate: '2027-01-01',
+                    quantityBaseUnits: 1,
+                  },
+                ],
+              },
+            ],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }),
+    );
   });
 
   it('debe cargar y mostrar el cliente por defecto Consumidor Final', async () => {
@@ -154,6 +181,8 @@ describe('PosPage (Frontend POS UX-03 / HU-017)', () => {
     });
 
     expect(screen.getByText(/Doc: 222222222222/)).toBeInTheDocument();
+    expect(screen.queryByLabelText('Buscar cliente existente')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Crear cliente nuevo' })).not.toBeInTheDocument();
   });
 
   it('debe permitir buscar un producto y agregarlo al carrito de compras', async () => {
@@ -167,7 +196,10 @@ describe('PosPage (Frontend POS UX-03 / HU-017)', () => {
     fireEvent.change(searchInput, { target: { value: 'Aceta' } });
 
     await waitFor(() => {
-      expect(productsApi.fetchProducts).toHaveBeenCalledWith({ search: 'Aceta' });
+      expect(productsApi.fetchProducts).toHaveBeenCalledWith(
+        { search: 'Aceta' },
+        expect.any(AbortSignal),
+      );
     });
 
     const option = await screen.findByRole('option');
@@ -190,7 +222,10 @@ describe('PosPage (Frontend POS UX-03 / HU-017)', () => {
     const searchInput = screen.getByLabelText(/Buscar producto por nombre/i);
     fireEvent.change(searchInput, { target: { value: 'Acetaminofén' } });
     await waitFor(() => {
-      expect(productsApi.fetchProducts).toHaveBeenCalledWith({ search: 'Acetaminofén' });
+      expect(productsApi.fetchProducts).toHaveBeenCalledWith(
+        { search: 'Acetaminofén' },
+        expect.any(AbortSignal),
+      );
     });
     const option = await screen.findByRole('option');
     fireEvent.click(option);
@@ -213,6 +248,7 @@ describe('PosPage (Frontend POS UX-03 / HU-017)', () => {
 
     // Confirmamos la venta
     const confirmBtn = screen.getByTestId('confirm-payment-btn');
+    await waitFor(() => expect(confirmBtn).not.toBeDisabled());
     fireEvent.click(confirmBtn);
 
     await waitFor(() => {
@@ -245,6 +281,7 @@ describe('PosPage (Frontend POS UX-03 / HU-017)', () => {
     expect(await screen.findByText('Cobro y Liquidación de Venta')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText(/Efectivo Recibido/i), { target: { value: '2000' } });
 
+    await waitFor(() => expect(screen.getByTestId('confirm-payment-btn')).not.toBeDisabled());
     // Primer intento: falla la red y el diálogo sigue abierto
     fireEvent.click(screen.getByTestId('confirm-payment-btn'));
     await waitFor(() => {
@@ -267,4 +304,272 @@ describe('PosPage (Frontend POS UX-03 / HU-017)', () => {
     expect(secondPayload).toEqual(firstPayload);
     expect(await screen.findByText(/Comprobante N°: VEN-20260926-0001/i)).toBeInTheDocument();
   });
+  it('AUD-014: varias teclas rápidas producen una sola consulta con cancelación', async () => {
+    vi.mocked(productsApi.fetchProducts).mockRestore();
+    const searchSpy = vi.spyOn(productsApi, 'fetchProducts');
+    vi.mocked(fetch).mockImplementation(
+      async () =>
+        new Response(JSON.stringify({ items: [mockProduct], total: 1 }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+    );
+    renderComponent();
+    const input = screen.getByLabelText(/Buscar producto por nombre/i);
+    fireEvent.change(input, { target: { value: 'Ac' } });
+    fireEvent.change(input, { target: { value: 'Ace' } });
+    fireEvent.change(input, { target: { value: 'Aceta' } });
+    expect(productsApi.fetchProducts).not.toHaveBeenCalled();
+    await screen.findByRole('option');
+    expect(productsApi.fetchProducts).toHaveBeenCalledTimes(1);
+    expect(searchSpy).toHaveBeenCalledOnce();
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('products?search=Aceta'),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(productsApi.fetchProducts).toHaveBeenCalledWith(
+      { search: 'Aceta' },
+      expect.any(AbortSignal),
+    );
+  });
+
+  it('AUD-014: una respuesta antigua no reemplaza resultados nuevos y se aborta', async () => {
+    const old = deferred<Awaited<ReturnType<typeof productsApi.fetchProducts>>>();
+    vi.mocked(productsApi.fetchProducts).mockImplementation(({ search }, signal) => {
+      if (search === 'Viejo') {
+        oldSignal = signal;
+        return old.promise;
+      }
+      return Promise.resolve({
+        items: [{ ...mockProduct, id: 'new', name: 'Producto nuevo' }],
+        total: 1,
+      });
+    });
+    let oldSignal: AbortSignal | undefined;
+    renderComponent();
+    const input = screen.getByLabelText(/Buscar producto por nombre/i);
+    fireEvent.change(input, { target: { value: 'Viejo' } });
+    await waitFor(() => expect(productsApi.fetchProducts).toHaveBeenCalledTimes(1));
+    fireEvent.change(input, { target: { value: 'Nuevo' } });
+    expect(oldSignal?.aborted).toBe(true);
+    expect(await screen.findByRole('option')).toHaveTextContent('Producto nuevo');
+    await act(async () => old.resolve({ items: [mockProduct], total: 1 }));
+    expect(screen.getByRole('option')).toHaveTextContent('Producto nuevo');
+    expect(screen.queryByRole('option', { name: /Acetaminofén/ })).not.toBeInTheDocument();
+  });
+
+  it('AUD-014: Enter antes del debounce consulta el texto actual y agrega sólo ese producto', async () => {
+    const pending = deferred<Awaited<ReturnType<typeof productsApi.fetchProducts>>>();
+    vi.mocked(productsApi.fetchProducts).mockImplementation(({ search }) =>
+      search === '770nuevo' ? pending.promise : Promise.resolve({ items: [mockProduct], total: 1 }),
+    );
+    renderComponent();
+    const input = screen.getByLabelText(/Buscar producto por nombre/i);
+    fireEvent.change(input, { target: { value: 'Viejo' } });
+    await screen.findByRole('option');
+    fireEvent.change(input, { target: { value: '770nuevo' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(productsApi.fetchProducts).toHaveBeenCalledWith(
+      { search: '770nuevo' },
+      expect.any(AbortSignal),
+    );
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await act(async () =>
+      pending.resolve({
+        items: [{ ...mockProduct, id: 'prod-new', name: 'Producto escaneado' }],
+        total: 1,
+      }),
+    );
+    expect(screen.getByRole('cell', { name: /Producto escaneado/ })).toBeInTheDocument();
+    expect(screen.queryByRole('cell', { name: /Acetaminofén/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('spinbutton', { name: /Cantidad de Producto escaneado/ })).toHaveValue(
+      1,
+    );
+    expect(productsApi.fetchProducts).toHaveBeenCalledTimes(2);
+  });
+
+  it('Enter agrega la opción marcada con las flechas, no el primer resultado', async () => {
+    vi.mocked(productsApi.fetchProducts).mockResolvedValue({
+      items: [mockProduct, { ...mockProduct, id: 'prod-second', name: 'Segundo producto' }],
+      total: 2,
+    });
+    renderComponent();
+    const input = screen.getByLabelText(/Buscar producto por nombre/i);
+    fireEvent.change(input, { target: { value: 'Prod' } });
+    expect(await screen.findAllByRole('option')).toHaveLength(2);
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(await screen.findByRole('cell', { name: /Segundo producto/ })).toBeInTheDocument();
+    expect(screen.queryByRole('cell', { name: /Acetaminofén/ })).not.toBeInTheDocument();
+    expect(productsApi.fetchProducts).toHaveBeenCalledTimes(1);
+  });
+
+  it('asigna un cliente existente al payload de confirmación', async () => {
+    const delayedDefault = deferred<CustomerDto>();
+    vi.mocked(customersApi.fetchDefaultCustomer).mockReturnValueOnce(delayedDefault.promise);
+    vi.spyOn(customersApi, 'fetchCustomers').mockResolvedValue({
+      items: [
+        {
+          ...mockDefaultCustomer,
+          id: 'customer-ana',
+          name: 'Ana Pérez',
+          documentNumber: '123456',
+          isDefault: false,
+        },
+      ],
+      total: 1,
+    });
+    renderComponent([SYSTEM_PERMISSIONS.SALES_CREATE, SYSTEM_PERMISSIONS.CUSTOMERS_READ]);
+    fireEvent.change(screen.getByLabelText('Buscar cliente existente'), {
+      target: { value: 'Ana' },
+    });
+    fireEvent.click(await screen.findByRole('option', { name: /Ana Pérez · 123456/ }));
+    await act(async () => delayedDefault.resolve(mockDefaultCustomer));
+    expect(screen.getByText(/Doc: 123456/)).toBeInTheDocument();
+    await addProductAndPay();
+    await waitFor(() => expect(screen.getByTestId('confirm-payment-btn')).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId('confirm-payment-btn'));
+    await waitFor(() =>
+      expect(salesApi.confirmSale).toHaveBeenCalledWith(
+        expect.objectContaining({ customerId: 'customer-ana' }),
+        expect.any(String),
+      ),
+    );
+  });
+
+  it('permite volver a Consumidor final y respeta los permisos de clientes', async () => {
+    vi.spyOn(customersApi, 'fetchCustomers').mockResolvedValue({
+      items: [{ ...mockDefaultCustomer, id: 'ana', name: 'Ana', isDefault: false }],
+      total: 1,
+    });
+    renderComponent([SYSTEM_PERMISSIONS.SALES_CREATE, SYSTEM_PERMISSIONS.CUSTOMERS_READ]);
+    await screen.findByText('Consumidor Final');
+    expect(screen.queryByRole('button', { name: 'Crear cliente nuevo' })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Buscar cliente existente'), {
+      target: { value: 'Ana' },
+    });
+    fireEvent.click(await screen.findByRole('option', { name: /Ana/ }));
+    expect(screen.getByText('Ana')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Volver a Consumidor final' }));
+    expect(await screen.findByText('Consumidor Final')).toBeInTheDocument();
+    expect(customersApi.fetchDefaultCustomer).toHaveBeenCalledTimes(2);
+  });
+
+  it('muestra asignaciones FEFO con lotes y fechas explícitas', async () => {
+    renderComponent();
+    await addProductAndPay();
+    await waitFor(() => expect(screen.getByTestId('confirm-payment-btn')).not.toBeDisabled());
+    expect(screen.getByText('Asignación prevista; se confirma al cobrar')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Línea 1: 1 unidades base/ }));
+    expect(
+      screen.getByText(/Lote FEFO-2027 · Vencimiento: 1 de enero de 2027 · 1 unidades base/),
+    ).toBeVisible();
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/sales/fefo-preview'),
+      expect.objectContaining({
+        method: 'POST',
+        signal: expect.any(AbortSignal),
+        body: JSON.stringify({
+          items: [{ productId: mockProduct.id, presentationId: null, quantityCommercial: 1 }],
+        }),
+      }),
+    );
+  });
+
+  it('un faltante FEFO impide confirmar e identifica producto y unidades', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          businessDay: '2026-10-18',
+          lines: [
+            {
+              productId: mockProduct.id,
+              presentationId: null,
+              requiredBaseUnits: 1,
+              availableBaseUnits: 0,
+              shortfallBaseUnits: 1,
+              allocations: [],
+            },
+          ],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+    renderComponent();
+    await addProductAndPay();
+    expect(
+      await screen.findByText(/Acetaminofén 500mg: faltan 1 unidades base/),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('confirm-payment-btn')).toBeDisabled();
+    fireEvent.submit(screen.getByTestId('confirm-payment-btn').closest('form')!);
+    expect(salesApi.confirmSale).not.toHaveBeenCalled();
+  });
+
+  it('una falla de vista previa avisa y permite confirmar', async () => {
+    vi.mocked(fetch).mockRejectedValue(new TypeError('Failed to fetch'));
+    renderComponent();
+    await addProductAndPay();
+    expect(
+      await screen.findByText(
+        'No se pudo cargar la vista previa; los lotes se asignarán al confirmar',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('confirm-payment-btn')).not.toBeDisabled();
+    fireEvent.click(screen.getByTestId('confirm-payment-btn'));
+    await waitFor(() => expect(salesApi.confirmSale).toHaveBeenCalledOnce());
+  });
+
+  it('suma 0,10 y 0,20 exactamente y calcula el cambio en centavos', async () => {
+    vi.mocked(productsApi.fetchProducts).mockImplementation(({ search }) =>
+      Promise.resolve({
+        items: [
+          {
+            ...mockProduct,
+            id: search!,
+            name: search!,
+            basePrice: search === 'Diez' ? '0.10' : '0.20',
+          },
+        ],
+        total: 1,
+      }),
+    );
+    renderComponent();
+    const input = screen.getByLabelText(/Buscar producto por nombre/i);
+    fireEvent.change(input, { target: { value: 'Diez' } });
+    fireEvent.click(await screen.findByRole('option'));
+    fireEvent.change(input, { target: { value: 'Veinte' } });
+    fireEvent.click(await screen.findByRole('option'));
+    fireEvent.click(screen.getByRole('button', { name: /Cobrar /i }));
+    const cash = await screen.findByLabelText(/Efectivo Recibido/i);
+    expect(cash).toHaveValue(0.3);
+    fireEvent.change(cash, { target: { value: '0.50' } });
+    expect(screen.getByText(/Cambio \/ Devuelta/).parentElement).toHaveTextContent('0,2');
+    await waitFor(() => expect(screen.getByTestId('confirm-payment-btn')).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId('confirm-payment-btn'));
+    await waitFor(() =>
+      expect(salesApi.confirmSale).toHaveBeenCalledWith(
+        expect.objectContaining({ amountPaid: 0.5 }),
+        expect.any(String),
+      ),
+    );
+  });
 });
+
+async function addProductAndPay() {
+  fireEvent.change(screen.getByLabelText(/Buscar producto por nombre/i), {
+    target: { value: 'Aceta' },
+  });
+  fireEvent.click(await screen.findByRole('option'));
+  fireEvent.click(screen.getByRole('button', { name: /Cobrar /i }));
+  await screen.findByText('Cobro y Liquidación de Venta');
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}

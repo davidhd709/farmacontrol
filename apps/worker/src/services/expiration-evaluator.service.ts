@@ -4,6 +4,9 @@ import { prisma, PrismaClient } from '@farmacia/database';
 import { EvaluationResultDto, ExpirationSeverity } from '@farmacia/contracts';
 import { businessDate } from './business-date';
 
+/** Resultado local del worker; distingue una evaluación vacía de una omitida por concurrencia. */
+export type WorkerEvaluationResult = EvaluationResultDto & { skipped: boolean };
+
 /**
  * Función canónica de cálculo de severidad de vencimientos
  * conforme a RN-001, RN-002 y RF-008.
@@ -47,7 +50,7 @@ export class ExpirationEvaluatorService {
    * Ejecuta el escaneo de lotes en inventario y clasifica vencimientos en PostgreSQL
    * sin bloquear transacciones de venta (consulta indexada sobre expiration_date y current_quantity).
    */
-  async evaluate(referenceDate: Date = new Date()): Promise<EvaluationResultDto> {
+  async evaluate(referenceDate: Date = new Date()): Promise<WorkerEvaluationResult> {
     this.logger.log(
       `[Worker] Iniciando evaluación periódica de lotes con fecha base: ${referenceDate.toISOString()}`,
     );
@@ -63,6 +66,7 @@ export class ExpirationEvaluatorService {
             '[Worker] Evaluación omitida: otra instancia está procesando vencimientos.',
           );
           return {
+            skipped: true,
             evaluatedLots: 0,
             createdAlerts: 0,
             updatedAlerts: 0,
@@ -176,6 +180,7 @@ export class ExpirationEvaluatorService {
         );
 
         return {
+          skipped: false,
           evaluatedLots,
           createdAlerts,
           updatedAlerts,

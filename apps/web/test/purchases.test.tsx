@@ -1,15 +1,24 @@
 import { ThemeProvider } from '@mui/material';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { SYSTEM_PERMISSIONS, SYSTEM_ROLES, type PurchaseDto, type SupplierDto, type ProductDto } from '@farmacia/contracts';
+import {
+  SYSTEM_PERMISSIONS,
+  SYSTEM_ROLES,
+  type PurchaseDto,
+  type SupplierDto,
+  type ProductDto,
+} from '@farmacia/contracts';
 import { AuthContext, type AuthContextValue } from '../src/features/auth/context/auth-context';
 import * as purchasesApi from '../src/features/purchases/api/purchases.api';
 import * as suppliersApi from '../src/features/suppliers/api/suppliers.api';
 import * as productsApi from '../src/features/catalog/api/products.api';
 import { PurchasesListPage } from '../src/features/purchases/pages/PurchasesListPage';
 import { ReceivePurchasePage } from '../src/features/purchases/pages/ReceivePurchasePage';
+import { DebitNoteDialog } from '../src/features/purchases/components/DebitNoteDialog';
+import * as accountingApi from '../src/features/accounting/api/accounting.api';
+import { businessToday, addDaysToDate } from '../src/utils/business-date';
 import { appTheme } from '../src/theme/app-theme';
 
 const mockSuppliers: SupplierDto[] = [
@@ -135,7 +144,7 @@ describe('Purchases Frontend (UX-15 & UX-16)', () => {
               <PurchasesListPage />
             </AuthContext.Provider>
           </MemoryRouter>
-        </ThemeProvider>
+        </ThemeProvider>,
       );
 
       await waitFor(() => {
@@ -167,7 +176,7 @@ describe('Purchases Frontend (UX-15 & UX-16)', () => {
               <ReceivePurchasePage />
             </AuthContext.Provider>
           </MemoryRouter>
-        </ThemeProvider>
+        </ThemeProvider>,
       );
 
       await waitFor(() => {
@@ -176,5 +185,139 @@ describe('Purchases Frontend (UX-15 & UX-16)', () => {
         expect(screen.getByText('Confirmar Recepción de Compra')).toBeInTheDocument();
       });
     });
+  });
+  async function choose(user: ReturnType<typeof userEvent.setup>, label: RegExp, option: RegExp) {
+    await user.click(screen.getByRole('combobox', { name: label }));
+    await user.click(screen.getByRole('option', { name: option }));
+  }
+
+  it('recepción inválida muestra errores por campo, enfoca el proveedor y no llama a la API', async () => {
+    render(
+      <MemoryRouter>
+        <ReceivePurchasePage />
+      </MemoryRouter>,
+    );
+    const submit = await screen.findByRole('button', { name: 'Confirmar Recepción de Compra' });
+    fireEvent.click(submit);
+    expect(await screen.findByText('Debes seleccionar un proveedor.')).toBeInTheDocument();
+    expect(screen.getByText('El número de factura es obligatorio.')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('combobox', { name: /Proveedor/ })).toHaveFocus());
+    expect(purchasesApi.receivePurchase).not.toHaveBeenCalled();
+  });
+
+  it('recepción manda el payload original una sola vez', async () => {
+    const user = userEvent.setup();
+    vi.mocked(purchasesApi.receivePurchase).mockReturnValue(new Promise(() => {}));
+    render(
+      <MemoryRouter>
+        <ReceivePurchasePage />
+      </MemoryRouter>,
+    );
+    await screen.findByRole('button', { name: 'Confirmar Recepción de Compra' });
+    await choose(user, /Proveedor/, /Distribuidora/);
+    fireEvent.change(screen.getByLabelText(/Número de Factura/), { target: { value: ' fac-42 ' } });
+    await choose(user, /^Producto/, /Amoxicilina/);
+    fireEvent.change(screen.getByLabelText(/Número de Lote/), { target: { value: ' lote-42 ' } });
+    fireEvent.change(screen.getByLabelText(/^Fecha de Vencimiento \*/), {
+      target: { value: '2099-12-31' },
+    });
+    fireEvent.change(screen.getByLabelText(/^Cantidad/), { target: { value: '2' } });
+    fireEvent.change(screen.getByLabelText(/Observaciones/), {
+      target: { value: ' Entrega completa ' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar Recepción de Compra' }));
+    const confirm = await screen.findByRole('button', { name: 'Sí, Confirmar Recepción' });
+    fireEvent.click(confirm);
+    fireEvent.click(confirm);
+    const date = businessToday();
+    const due = addDaysToDate(date, 30);
+    await waitFor(() =>
+      expect(purchasesApi.receivePurchase).toHaveBeenCalledExactlyOnceWith({
+        supplierId: 'sup-1',
+        invoiceNumber: 'FAC-42',
+        purchaseDate: date,
+        dueDate: due,
+        paymentCondition: 'CREDITO',
+        notes: `[Factura Vence: ${due} | Condición: Crédito (30 días)] Entrega completa`,
+        lines: [
+          {
+            productId: 'prod-1',
+            presentationId: null,
+            lotNumber: 'LOTE-42',
+            expirationDate: '2099-12-31',
+            quantityCommercial: 2,
+            unitCost: 800,
+          },
+        ],
+      }),
+    );
+    expect(screen.getByRole('button', { name: 'Procesando Transacción...' })).toBeDisabled();
+  });
+
+  it('las líneas dinámicas conservan sus valores al eliminar otra y cambiar de vista', async () => {
+    render(
+      <MemoryRouter>
+        <ReceivePurchasePage />
+      </MemoryRouter>,
+    );
+    await screen.findByRole('button', { name: 'Confirmar Recepción de Compra' });
+    fireEvent.change(screen.getByLabelText(/Número de Lote/), { target: { value: 'LOTE-1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Agregar Producto' }));
+    fireEvent.change(screen.getAllByLabelText(/Número de Lote/)[1], {
+      target: { value: 'LOTE-2' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Eliminar línea 1' }));
+    expect(screen.getByLabelText(/Número de Lote/)).toHaveValue('LOTE-2');
+    fireEvent.click(screen.getByRole('button', { name: 'Tabla', exact: true }));
+    expect(screen.getByRole('textbox', { name: 'Número de lote línea 1' })).toHaveValue('LOTE-2');
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar Recepción de Compra' }));
+    expect(await screen.findByText('Selecciona un producto.')).toBeInTheDocument();
+    expect(purchasesApi.receivePurchase).not.toHaveBeenCalled();
+  });
+
+  it('nota débito inválida muestra errores por campo y enfoca la cantidad sin enviar', async () => {
+    const api = vi.spyOn(accountingApi, 'createPurchaseDebitNote');
+    render(
+      <DebitNoteDialog open purchase={mockPurchases[0]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar nota débito' }));
+    expect(
+      await screen.findByText('Selecciona al menos una cantidad a devolver.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('El motivo debe tener mínimo 5 caracteres.')).toBeInTheDocument();
+    expect(screen.getByRole('spinbutton')).toHaveFocus();
+    expect(api).not.toHaveBeenCalled();
+  });
+
+  it('nota débito conserva payload, bloquea doble envío y reutiliza la clave tras error', async () => {
+    const api = vi
+      .spyOn(accountingApi, 'createPurchaseDebitNote')
+      .mockRejectedValueOnce(new Error('Fallo temporal'))
+      .mockReturnValue(new Promise(() => {}));
+    render(
+      <DebitNoteDialog open purchase={mockPurchases[0]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '2' } });
+    fireEvent.change(screen.getByLabelText(/Motivo de la devolución/), {
+      target: { value: '  Envase roto  ' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar nota débito' }));
+    expect(await screen.findByText('Fallo temporal')).toBeInTheDocument();
+    const confirm = screen.getByRole('button', { name: 'Confirmar nota débito' });
+    fireEvent.click(confirm);
+    fireEvent.click(confirm);
+    await waitFor(() => expect(api).toHaveBeenCalledTimes(2));
+    const expected = [
+      'purch-1',
+      {
+        purchaseId: 'purch-1',
+        reason: 'Envase roto',
+        items: [{ purchaseLineId: 'line-1', quantityCommercial: 2 }],
+      },
+      expect.any(String),
+    ];
+    expect(api.mock.calls[0]).toEqual(expected);
+    expect(api.mock.calls[1]).toEqual(api.mock.calls[0]);
+    expect(screen.getByRole('button', { name: 'Registrando…' })).toBeDisabled();
   });
 });

@@ -161,7 +161,7 @@ describe('CashController (Integration with PostgreSQL & RBAC)', () => {
         paymentMethod: 'EFECTIVO',
         reason: 'Egreso sin saldo',
       })
-      .expect(400);
+      .expect(409);
 
     expect(res.body.message).toContain('Saldo insuficiente en caja');
   });

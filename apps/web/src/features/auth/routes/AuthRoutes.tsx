@@ -1,5 +1,6 @@
 import { Alert, Box, Button, CircularProgress, Stack, Typography } from '@mui/material';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
+import { loginDestination, type LoginLocationState } from './login-destination';
 import { useAuth } from '../hooks/useAuth';
 
 function SessionLoading() {
@@ -65,7 +66,7 @@ function AuthStateBoundary({ requireAuthentication }: { requireAuthentication: b
   }
 
   if (!requireAuthentication && status === 'authenticated') {
-    return <Navigate to="/" replace />;
+    return <Navigate to={loginDestination(location.state as LoginLocationState | null)} replace />;
   }
 
   return <Outlet />;

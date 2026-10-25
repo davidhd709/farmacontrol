@@ -4,7 +4,7 @@ import { SupplierQueryFilters } from '@farmacia/contracts';
 export const SUPPLIER_REPOSITORY = Symbol('SUPPLIER_REPOSITORY');
 
 export interface ISupplierRepository {
-  save(supplier: Supplier): Promise<void>;
+  save(supplier: Supplier, tx?: unknown): Promise<void>;
   findById(id: string): Promise<Supplier | null>;
   findByTaxId(taxId: string): Promise<Supplier | null>;
   findAll(filters: SupplierQueryFilters): Promise<{ items: Supplier[]; total: number }>;

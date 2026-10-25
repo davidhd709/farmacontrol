@@ -1,3 +1,4 @@
+import { prisma, Prisma } from '@farmacia/database';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import {
   CustomerDto,
@@ -52,36 +53,46 @@ export class CustomerService {
       isDefault: input.isDefault,
     });
 
-    await this.customerRepository.save(customer);
-    // Terceros unificado: el cliente creado en el POS también queda como tercero
-    await this.thirdPartyService?.registerRole('customer', {
-      id: customer.id,
-      documentType: customer.documentType,
-      documentNumber: customer.documentNumber,
-      name: customer.name,
-      phone: customer.phone,
-      email: customer.email,
-      address: customer.address,
-    });
-
-    if (this.auditService) {
-      await this.auditService.recordEvent({
-        action: 'customers:customer_created',
-        entity: 'Customer',
-        entityId: customer.id,
-        userId: auditCtx?.userId || null,
-        details: {
+    const persist = async (tx?: Prisma.TransactionClient) => {
+      await this.customerRepository.save(customer, tx);
+      // Terceros unificado: el cliente creado en el POS también queda como tercero
+      await this.thirdPartyService?.registerRole(
+        'customer',
+        {
+          id: customer.id,
           documentType: customer.documentType,
           documentNumber: customer.documentNumber,
           name: customer.name,
-          isDefault: customer.isDefault,
+          phone: customer.phone,
+          email: customer.email,
+          address: customer.address,
         },
-        ipAddress: auditCtx?.ipAddress || null,
-        correlationId: auditCtx?.correlationId || null,
-      });
-    }
+        tx,
+      );
 
-    return customer;
+      if (this.auditService) {
+        await this.auditService.recordEvent(
+          {
+            action: 'customers:customer_created',
+            entity: 'Customer',
+            entityId: customer.id,
+            userId: auditCtx?.userId || null,
+            details: {
+              documentType: customer.documentType,
+              documentNumber: customer.documentNumber,
+              name: customer.name,
+              isDefault: customer.isDefault,
+            },
+            ipAddress: auditCtx?.ipAddress || null,
+            correlationId: auditCtx?.correlationId || null,
+          },
+          tx,
+        );
+      }
+
+      return customer;
+    };
+    return this.auditService ? prisma.$transaction(persist) : persist();
   }
 
   async updateCustomer(
@@ -119,25 +130,31 @@ export class CustomerService {
       isActive: input.isActive,
     });
 
-    await this.customerRepository.save(customer);
+    const persist = async (tx?: Prisma.TransactionClient) => {
+      await this.customerRepository.save(customer, tx);
 
-    if (this.auditService) {
-      await this.auditService.recordEvent({
-        action: 'customers:customer_updated',
-        entity: 'Customer',
-        entityId: customer.id,
-        userId: auditCtx?.userId || null,
-        details: {
-          changes: input,
-          name: customer.name,
-          isActive: customer.isActive,
-        },
-        ipAddress: auditCtx?.ipAddress || null,
-        correlationId: auditCtx?.correlationId || null,
-      });
-    }
+      if (this.auditService) {
+        await this.auditService.recordEvent(
+          {
+            action: 'customers:customer_updated',
+            entity: 'Customer',
+            entityId: customer.id,
+            userId: auditCtx?.userId || null,
+            details: {
+              changes: input,
+              name: customer.name,
+              isActive: customer.isActive,
+            },
+            ipAddress: auditCtx?.ipAddress || null,
+            correlationId: auditCtx?.correlationId || null,
+          },
+          tx,
+        );
+      }
 
-    return customer;
+      return customer;
+    };
+    return this.auditService ? prisma.$transaction(persist) : persist();
   }
 
   async deactivateCustomer(id: string, auditCtx?: AuditContext): Promise<Customer> {
@@ -151,21 +168,27 @@ export class CustomerService {
     }
 
     customer.deactivate();
-    await this.customerRepository.save(customer);
+    const persist = async (tx?: Prisma.TransactionClient) => {
+      await this.customerRepository.save(customer, tx);
 
-    if (this.auditService) {
-      await this.auditService.recordEvent({
-        action: 'customers:customer_deactivated',
-        entity: 'Customer',
-        entityId: customer.id,
-        userId: auditCtx?.userId || null,
-        details: { documentNumber: customer.documentNumber, name: customer.name },
-        ipAddress: auditCtx?.ipAddress || null,
-        correlationId: auditCtx?.correlationId || null,
-      });
-    }
+      if (this.auditService) {
+        await this.auditService.recordEvent(
+          {
+            action: 'customers:customer_deactivated',
+            entity: 'Customer',
+            entityId: customer.id,
+            userId: auditCtx?.userId || null,
+            details: { documentNumber: customer.documentNumber, name: customer.name },
+            ipAddress: auditCtx?.ipAddress || null,
+            correlationId: auditCtx?.correlationId || null,
+          },
+          tx,
+        );
+      }
 
-    return customer;
+      return customer;
+    };
+    return this.auditService ? prisma.$transaction(persist) : persist();
   }
 
   async activateCustomer(id: string, auditCtx?: AuditContext): Promise<Customer> {
@@ -175,21 +198,27 @@ export class CustomerService {
     }
 
     customer.activate();
-    await this.customerRepository.save(customer);
+    const persist = async (tx?: Prisma.TransactionClient) => {
+      await this.customerRepository.save(customer, tx);
 
-    if (this.auditService) {
-      await this.auditService.recordEvent({
-        action: 'customers:customer_activated',
-        entity: 'Customer',
-        entityId: customer.id,
-        userId: auditCtx?.userId || null,
-        details: { documentNumber: customer.documentNumber, name: customer.name },
-        ipAddress: auditCtx?.ipAddress || null,
-        correlationId: auditCtx?.correlationId || null,
-      });
-    }
+      if (this.auditService) {
+        await this.auditService.recordEvent(
+          {
+            action: 'customers:customer_activated',
+            entity: 'Customer',
+            entityId: customer.id,
+            userId: auditCtx?.userId || null,
+            details: { documentNumber: customer.documentNumber, name: customer.name },
+            ipAddress: auditCtx?.ipAddress || null,
+            correlationId: auditCtx?.correlationId || null,
+          },
+          tx,
+        );
+      }
 
-    return customer;
+      return customer;
+    };
+    return this.auditService ? prisma.$transaction(persist) : persist();
   }
 
   async getCustomerById(id: string): Promise<Customer> {

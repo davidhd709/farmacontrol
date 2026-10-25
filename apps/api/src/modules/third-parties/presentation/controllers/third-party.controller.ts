@@ -71,9 +71,6 @@ export class ThirdPartyController {
       if (error instanceof ThirdPartyAlreadyExistsException) {
         throw new ConflictException(error.message);
       }
-      if (error instanceof Error) {
-        throw new BadRequestException(error.message);
-      }
       throw error;
     }
   }
@@ -124,9 +121,6 @@ export class ThirdPartyController {
         throw new NotFoundException(error.message);
       }
       if (error instanceof ThirdPartyDocumentChangeForbiddenException) {
-        throw new BadRequestException(error.message);
-      }
-      if (error instanceof Error) {
         throw new BadRequestException(error.message);
       }
       throw error;

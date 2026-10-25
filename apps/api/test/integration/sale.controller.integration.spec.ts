@@ -1,3 +1,4 @@
+import { AuditService } from '../../src/modules/audit/application/services/audit.service';
 import { randomUUID } from 'crypto';
 import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest';
 import request from 'supertest';
@@ -677,7 +678,7 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
       .post(`/api/v1/sales/${saleRes.body.id}/cancel`)
       .set('Cookie', supervisorCookie)
       .send({ reason: 'Sin fondos para devolver' });
-    expect(rejected.status).toBe(400);
+    expect(rejected.status).toBe(409);
     expect((await prisma.sale.findUniqueOrThrow({ where: { id: saleRes.body.id } })).status).toBe(
       'COMPLETED',
     );
@@ -1151,5 +1152,96 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
       .set('Cookie', cajeroCookie)
       .send({ reason: 'Sin permiso de anular' });
     expect(resCancel.status).toBe(403);
+  });
+  it('un fallo después de auditar revierte venta, FEFO, caja e idempotencia y responde 500', async () => {
+    const audit = app.get(AuditService);
+    const recordEvent = audit.recordEvent.bind(audit);
+    const spy = vi.spyOn(audit, 'recordEvent').mockImplementation(async (input, tx) => {
+      const event = await recordEvent(input, tx);
+      if (input.action === 'sales:sale_confirmed') {
+        expect(tx).toBeDefined();
+        expect(
+          await (tx as Prisma.TransactionClient).auditEvent.count({ where: { id: event.id } }),
+        ).toBe(1);
+        throw new Error('Fallo interno posterior a auditoría de venta');
+      }
+      return event;
+    });
+    const payload = {
+      paymentMethod: 'EFECTIVO',
+      amountPaid: 5000,
+      items: [{ productId, presentationId, quantityCommercial: 1 }],
+    };
+    try {
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/sales/confirm')
+        .set('Cookie', cajeroCookie)
+        .set('Idempotency-Key', 'atomic-sale')
+        .send(payload);
+      expect(response.status).toBe(500);
+      expect(await prisma.sale.count()).toBe(0);
+      expect(await prisma.cashMovement.count()).toBe(0);
+      expect(await prisma.inventoryMovement.count()).toBe(0);
+      expect(
+        (await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lot1Id } })).currentQuantity,
+      ).toBe(10);
+      expect(await prisma.auditEvent.count({ where: { action: 'sales:sale_confirmed' } })).toBe(0);
+      expect(await prisma.idempotencyKey.count({ where: { key: 'atomic-sale' } })).toBe(0);
+    } finally {
+      spy.mockRestore();
+    }
+    await request(app.getHttpServer())
+      .post('/api/v1/sales/confirm')
+      .set('Cookie', cajeroCookie)
+      .set('Idempotency-Key', 'atomic-sale')
+      .send(payload)
+      .expect(201);
+    await request(app.getHttpServer())
+      .post('/api/v1/sales/confirm')
+      .set('Cookie', cajeroCookie)
+      .set('Idempotency-Key', 'atomic-sale')
+      .send(payload)
+      .expect(201);
+    expect(await prisma.sale.count()).toBe(1);
+    expect(await prisma.auditEvent.count({ where: { action: 'sales:sale_confirmed' } })).toBe(1);
+  });
+
+  it('la anulación responde 500 y revierte todas sus escrituras si falla después de auditar', async () => {
+    const sale = await request(app.getHttpServer())
+      .post('/api/v1/sales/confirm')
+      .set('Cookie', cajeroCookie)
+      .set('Idempotency-Key', 'atomic-cancel')
+      .send({
+        paymentMethod: 'EFECTIVO',
+        amountPaid: 5000,
+        items: [{ productId, presentationId, quantityCommercial: 1 }],
+      })
+      .expect(201);
+    const audit = app.get(AuditService);
+    const recordEvent = audit.recordEvent.bind(audit);
+    const spy = vi.spyOn(audit, 'recordEvent').mockImplementation(async (input, tx) => {
+      const event = await recordEvent(input, tx);
+      if (input.action === 'sales:sale_cancelled')
+        throw new Error('Fallo interno posterior a auditoría de anulación');
+      return event;
+    });
+    try {
+      await request(app.getHttpServer())
+        .post(`/api/v1/sales/${sale.body.id}/cancel`)
+        .set('Cookie', supervisorCookie)
+        .send({ reason: 'Prueba atómica' })
+        .expect(500);
+      expect((await prisma.sale.findUniqueOrThrow({ where: { id: sale.body.id } })).status).toBe(
+        'COMPLETED',
+      );
+      expect(
+        (await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lot1Id } })).currentQuantity,
+      ).toBe(0);
+      expect(await prisma.cashMovement.count()).toBe(1);
+      expect(await prisma.inventoryMovement.count()).toBe(1);
+      expect(await prisma.auditEvent.count({ where: { action: 'sales:sale_cancelled' } })).toBe(0);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { prisma, type Prisma } from '@farmacia/database';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProductService } from '../../src/modules/catalog/application/services/product.service';
 import type { ProductRepositoryPort } from '../../src/modules/catalog/application/ports/product.repository.port';
 import type { CategoryRepositoryPort } from '../../src/modules/catalog/application/ports/category.repository.port';
@@ -37,7 +38,16 @@ describe('ProductService (Application Unit)', () => {
     basePrice: 1200,
   });
 
+  const transaction = {} as Prisma.TransactionClient;
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   beforeEach(() => {
+    vi.spyOn(prisma, '$transaction').mockImplementation(async (operation: any) =>
+      operation(transaction),
+    );
     productRepository = {
       findById: vi.fn(async () => null),
       findByCode: vi.fn(async () => null),
@@ -60,11 +70,7 @@ describe('ProductService (Application Unit)', () => {
       recordEvent: vi.fn(async () => {}),
     } as unknown as AuditService;
 
-    productService = new ProductService(
-      productRepository,
-      categoryRepository,
-      auditService,
-    );
+    productService = new ProductService(productRepository, categoryRepository, auditService);
   });
 
   it('debe registrar un nuevo producto y auditar el evento si los datos son válidos', async () => {
@@ -87,6 +93,7 @@ describe('ProductService (Application Unit)', () => {
         action: 'catalog:product_created',
         entity: 'Product',
       }),
+      transaction,
     );
   });
 
@@ -134,9 +141,9 @@ describe('ProductService (Application Unit)', () => {
     const found = await productService.getProductById(sampleProduct.id);
     expect(found.id).toBe(sampleProduct.id);
 
-    await expect(
-      productService.getProductById('invalid-id'),
-    ).rejects.toThrow(ProductNotFoundException);
+    await expect(productService.getProductById('invalid-id')).rejects.toThrow(
+      ProductNotFoundException,
+    );
   });
 
   it('debe actualizar los atributos del producto y auditar la modificación', async () => {
@@ -158,6 +165,7 @@ describe('ProductService (Application Unit)', () => {
       expect.objectContaining({
         action: 'catalog:product_updated',
       }),
+      transaction,
     );
   });
 
@@ -174,6 +182,7 @@ describe('ProductService (Application Unit)', () => {
       expect.objectContaining({
         action: 'catalog:product_deactivated',
       }),
+      transaction,
     );
   });
 

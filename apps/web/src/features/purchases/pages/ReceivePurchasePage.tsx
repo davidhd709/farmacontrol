@@ -1,4 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useForm, useFieldArray } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import {
+  createReceivePurchaseSchema,
+  emptyPurchaseLine,
+  type ReceivePurchaseFormValues,
+  type PurchaseFormLine,
+} from '../validation/receive-purchase.schema';
+import { PurchaseFormField } from '../components/PurchaseFormField';
+import { fromCents, toCents } from '../../../utils/money';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   Box,
@@ -31,24 +41,11 @@ import ViewAgendaIcon from '@mui/icons-material/ViewAgenda';
 import TableRowsIcon from '@mui/icons-material/TableRows';
 import AddIcon from '@mui/icons-material/Add';
 import Inventory2Icon from '@mui/icons-material/Inventory2';
-import type {
-  SupplierDto,
-  ProductDto,
-  ReceivePurchasePayload,
-} from '@farmacia/contracts';
+import type { SupplierDto, ProductDto, ReceivePurchasePayload } from '@farmacia/contracts';
 import { fetchSuppliers } from '../../suppliers/api/suppliers.api';
 import { fetchProducts } from '../../catalog/api/products.api';
 import { receivePurchase } from '../api/purchases.api';
 import { addDaysToDate, businessToday } from '../../../utils/business-date';
-
-interface PurchaseFormLine {
-  productId: string;
-  presentationId: string;
-  lotNumber: string;
-  expirationDate: string;
-  quantityCommercial: string;
-  unitCost: string;
-}
 
 export const ReceivePurchasePage: React.FC = () => {
   const navigate = useNavigate();
@@ -58,38 +55,35 @@ export const ReceivePurchasePage: React.FC = () => {
   const [products, setProducts] = useState<ProductDto[]>([]);
   const [loadingInitial, setLoadingInitial] = useState(true);
 
-  // Cabecera del formulario
-  const [supplierId, setSupplierId] = useState('');
-  const [invoiceNumber, setInvoiceNumber] = useState('');
-  const [purchaseDate, setPurchaseDate] = useState(() => businessToday());
-  const [paymentCondition, setPaymentCondition] = useState<'CONTADO' | 'CREDITO'>('CREDITO');
-  const [creditDays, setCreditDays] = useState('30');
-
-  const calculateDefaultDueDate = (baseDateStr: string, days: number) =>
-    addDaysToDate(baseDateStr, days);
-
-  const [dueDate, setDueDate] = useState(() => {
-    return calculateDefaultDueDate(businessToday(), 30);
-  });
-
-  const [notes, setNotes] = useState('');
-
-  // Líneas de compra
-  const [lines, setLines] = useState<PurchaseFormLine[]>([
-    {
-      productId: '',
-      presentationId: '',
-      lotNumber: '',
-      expirationDate: '',
-      quantityCommercial: '1',
-      unitCost: '0',
+  const {
+    control,
+    watch,
+    setValue,
+    getValues,
+    handleSubmit,
+    formState: { errors, isSubmitting: submitting },
+  } = useForm<ReceivePurchaseFormValues>({
+    resolver: zodResolver(createReceivePurchaseSchema(products)),
+    defaultValues: {
+      supplierId: '',
+      invoiceNumber: '',
+      purchaseDate: businessToday(),
+      paymentCondition: 'CREDITO',
+      creditDays: '30',
+      dueDate: addDaysToDate(businessToday(), 30),
+      notes: '',
+      lines: [emptyPurchaseLine()],
     },
-  ]);
+  });
+  const { fields, append, remove } = useFieldArray({ control, name: 'lines' });
+  const { supplierId, invoiceNumber, purchaseDate, paymentCondition, creditDays, dueDate, lines } =
+    watch();
+  const calculateDefaultDueDate = addDaysToDate;
+  const submittingRef = useRef(false);
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
 
   // Diálogo de confirmación
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -110,137 +104,67 @@ export const ReceivePurchasePage: React.FC = () => {
     loadData();
   }, []);
 
-  const handleAddLine = () => {
-    setLines((prev) => [
-      ...prev,
-      {
-        productId: '',
-        presentationId: '',
-        lotNumber: '',
-        expirationDate: '',
-        quantityCommercial: '1',
-        unitCost: '0',
-      },
-    ]);
-  };
-
+  const handleAddLine = () => append(emptyPurchaseLine());
   const handleRemoveLine = (index: number) => {
-    if (lines.length <= 1) return;
-    setLines((prev) => prev.filter((_, i) => i !== index));
+    if (lines.length > 1) remove(index);
   };
 
   const handleLineChange = (index: number, field: keyof PurchaseFormLine, value: string) => {
-    setLines((prev) => {
-      const updated = [...prev];
-      updated[index] = { ...updated[index], [field]: value };
-      if (field === 'productId') {
-        const prod = products.find((p) => p.id === value);
-        const defaultPres =
-          prod?.presentations?.find((pr) => pr.isActive && (pr.purchaseEnabled ?? true) && pr.isDefaultPurchase) ||
-          prod?.presentations?.find((pr) => pr.isActive && (pr.purchaseEnabled ?? true) && pr.isDefault);
-        updated[index].presentationId = defaultPres ? defaultPres.id : '';
-        if (defaultPres && parseFloat(defaultPres.cost) > 0) {
-          updated[index].unitCost = String(defaultPres.cost);
-        } else if (prod && parseFloat(prod.baseCost) > 0) {
-          updated[index].unitCost = String(prod.baseCost);
-        }
-      } else if (field === 'presentationId') {
-        const prod = products.find((p) => p.id === updated[index].productId);
-        const pres = prod?.presentations?.find((pr) => pr.id === value);
-        if (pres && parseFloat(pres.cost) > 0) {
-          updated[index].unitCost = String(pres.cost);
-        } else if (!value && prod && parseFloat(prod.baseCost) > 0) {
-          updated[index].unitCost = String(prod.baseCost);
-        }
+    const updated = { ...getValues(`lines.${index}`), [field]: value };
+    const product = products.find((p) => p.id === updated.productId);
+    if (field === 'productId' || field === 'presentationId') {
+      const presentation =
+        field === 'productId'
+          ? product?.presentations?.find(
+              (pr) => pr.isActive && (pr.purchaseEnabled ?? true) && pr.isDefaultPurchase,
+            ) ||
+            product?.presentations?.find(
+              (pr) => pr.isActive && (pr.purchaseEnabled ?? true) && pr.isDefault,
+            )
+          : product?.presentations?.find((pr) => pr.id === value);
+      if (field === 'productId') updated.presentationId = presentation?.id ?? '';
+      if (presentation && parseFloat(presentation.cost) > 0) {
+        updated.unitCost = String(presentation.cost);
+      } else if ((field === 'productId' || !value) && product && parseFloat(product.baseCost) > 0) {
+        updated.unitCost = String(product.baseCost);
       }
-      return updated;
+    }
+    setValue(`lines.${index}`, updated, {
+      shouldDirty: true,
+      shouldValidate: Boolean(errors.lines),
     });
   };
 
-  const calculateSubtotal = (line: PurchaseFormLine): number => {
-    const qty = parseFloat(line.quantityCommercial) || 0;
-    const cost = parseFloat(line.unitCost) || 0;
-    return Math.round(qty * cost * 100) / 100;
+  const subtotalCents = (line: PurchaseFormLine): number => {
+    const quantity = Number(line.quantityCommercial);
+    if (!Number.isFinite(quantity)) return 0;
+    try {
+      return Math.round(quantity * toCents(line.unitCost));
+    } catch {
+      return 0;
+    }
   };
+  const calculateSubtotal = (line: PurchaseFormLine) => fromCents(subtotalCents(line));
+  const calculateTotal = () => fromCents(lines.reduce((sum, line) => sum + subtotalCents(line), 0));
 
-  const calculateTotal = (): number => {
-    return lines.reduce((sum, line) => sum + calculateSubtotal(line), 0);
-  };
-
-  const validateForm = (): boolean => {
+  const handlePreSubmit = handleSubmit(() => {
     setErrorMsg(null);
-    if (!supplierId) {
-      setErrorMsg('Debes seleccionar un proveedor.');
-      return false;
-    }
-    if (!invoiceNumber.trim()) {
-      setErrorMsg('El número de factura es obligatorio.');
-      return false;
-    }
-    if (!purchaseDate) {
-      setErrorMsg('La fecha de compra es obligatoria.');
-      return false;
-    }
+    setConfirmOpen(true);
+  });
 
-    if (!dueDate) {
-      setErrorMsg('La fecha de vencimiento de la factura es obligatoria.');
-      return false;
-    }
-
-    if (new Date(dueDate + 'T23:59:59') < new Date(purchaseDate + 'T00:00:00')) {
-      setErrorMsg('La fecha de vencimiento de la factura no puede ser anterior a la fecha de emisión.');
-      return false;
-    }
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      if (!line.productId) {
-        setErrorMsg(`Selecciona un producto en la fila #${i + 1}.`);
-        return false;
-      }
-      if (!line.lotNumber.trim()) {
-        setErrorMsg(`Ingresa el número de lote en la fila #${i + 1}.`);
-        return false;
-      }
-      if (!line.expirationDate) {
-        setErrorMsg(`Ingresa la fecha de vencimiento en la fila #${i + 1}.`);
-        return false;
-      }
-      const exp = new Date(line.expirationDate);
-      exp.setHours(0, 0, 0, 0);
-      if (exp <= today) {
-        setErrorMsg(
-          `La fecha de vencimiento en la fila #${i + 1} (${line.expirationDate}) no puede ser anterior ni igual a hoy.`
-        );
-        return false;
-      }
-      const qty = parseFloat(line.quantityCommercial);
-      if (isNaN(qty) || qty <= 0) {
-        setErrorMsg(`La cantidad comercial debe ser mayor a 0 en la fila #${i + 1}.`);
-        return false;
-      }
-      const cost = parseFloat(line.unitCost);
-      if (isNaN(cost) || cost < 0) {
-        setErrorMsg(`El costo unitario no puede ser negativo en la fila #${i + 1}.`);
-        return false;
-      }
-    }
-
-    return true;
-  };
-
-  const handlePreSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (validateForm()) {
-      setConfirmOpen(true);
-    }
-  };
-
-  const handleConfirmSubmit = async () => {
-    setSubmitting(true);
+  const handleConfirmSubmit = handleSubmit(async (values) => {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    const {
+      supplierId,
+      invoiceNumber,
+      purchaseDate,
+      paymentCondition,
+      creditDays,
+      dueDate,
+      notes,
+      lines,
+    } = values;
     setErrorMsg(null);
     try {
       const conditionLabel =
@@ -275,9 +199,9 @@ export const ReceivePurchasePage: React.FC = () => {
       setErrorMsg(msg);
       setConfirmOpen(false);
     } finally {
-      setSubmitting(false);
+      submittingRef.current = false;
     }
-  };
+  });
 
   if (loadingInitial) {
     return (
@@ -291,7 +215,11 @@ export const ReceivePurchasePage: React.FC = () => {
     <Box sx={{ p: { xs: 2, md: 4 }, maxWidth: 1400, mx: 'auto' }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
-          <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+          <Typography
+            variant="h4"
+            component="h1"
+            sx={{ fontWeight: 'bold', color: 'primary.main' }}
+          >
             Recepción de Compras e Ingreso de Lotes
           </Typography>
           <Typography variant="body1" color="text.secondary">
@@ -309,19 +237,25 @@ export const ReceivePurchasePage: React.FC = () => {
         </Alert>
       )}
 
-      <form onSubmit={handlePreSubmit}>
+      <form noValidate onSubmit={handlePreSubmit}>
         {/* Datos de Cabecera de la Factura */}
         <Paper sx={{ p: 3, mb: 3 }}>
           <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
             Datos del Comprobante / Factura
           </Typography>
 
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' }, gap: 2.5 }}>
-            <TextField
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' },
+              gap: 2.5,
+            }}
+          >
+            <PurchaseFormField
+              name="supplierId"
+              control={control}
               select
               label="Proveedor *"
-              value={supplierId}
-              onChange={(e) => setSupplierId(e.target.value)}
               required
               fullWidth
             >
@@ -331,28 +265,29 @@ export const ReceivePurchasePage: React.FC = () => {
                   {s.name} ({s.taxId})
                 </MenuItem>
               ))}
-            </TextField>
+            </PurchaseFormField>
 
-            <TextField
+            <PurchaseFormField
+              name="invoiceNumber"
+              control={control}
               label="Número de Factura / Comprobante *"
-              value={invoiceNumber}
-              onChange={(e) => setInvoiceNumber(e.target.value)}
               placeholder="Ej. FAC-2026-00891"
               required
               fullWidth
             />
 
-            <TextField
+            <PurchaseFormField
+              name="purchaseDate"
+              control={control}
               label="Fecha de Emisión / Factura *"
               type="date"
-              value={purchaseDate}
               onChange={(e) => {
                 const newDate = e.target.value;
-                setPurchaseDate(newDate);
+                setValue('purchaseDate', newDate);
                 if (paymentCondition === 'CONTADO') {
-                  setDueDate(newDate);
+                  setValue('dueDate', newDate);
                 } else if (creditDays !== 'manual') {
-                  setDueDate(calculateDefaultDueDate(newDate, Number(creditDays) || 30));
+                  setValue('dueDate', calculateDefaultDueDate(newDate, Number(creditDays) || 30));
                 }
               }}
               slotProps={{ inputLabel: { shrink: true } }}
@@ -360,17 +295,21 @@ export const ReceivePurchasePage: React.FC = () => {
               fullWidth
             />
 
-            <TextField
+            <PurchaseFormField
+              name="paymentCondition"
+              control={control}
               select
               label="Condición de Pago *"
-              value={paymentCondition}
               onChange={(e) => {
                 const val = e.target.value as 'CONTADO' | 'CREDITO';
-                setPaymentCondition(val);
+                setValue('paymentCondition', val);
                 if (val === 'CONTADO') {
-                  setDueDate(purchaseDate);
+                  setValue('dueDate', purchaseDate);
                 } else {
-                  setDueDate(calculateDefaultDueDate(purchaseDate, Number(creditDays) || 30));
+                  setValue(
+                    'dueDate',
+                    calculateDefaultDueDate(purchaseDate, Number(creditDays) || 30),
+                  );
                 }
               }}
               required
@@ -378,18 +317,19 @@ export const ReceivePurchasePage: React.FC = () => {
             >
               <MenuItem value="CONTADO">Contado (Pago Inmediato)</MenuItem>
               <MenuItem value="CREDITO">Crédito Comercial</MenuItem>
-            </TextField>
+            </PurchaseFormField>
 
             {paymentCondition === 'CREDITO' ? (
-              <TextField
+              <PurchaseFormField
+                name="creditDays"
+                control={control}
                 select
                 label="Plazo de Crédito"
-                value={creditDays}
                 onChange={(e) => {
                   const days = e.target.value;
-                  setCreditDays(days);
+                  setValue('creditDays', days);
                   if (days !== 'manual') {
-                    setDueDate(calculateDefaultDueDate(purchaseDate, Number(days)));
+                    setValue('dueDate', calculateDefaultDueDate(purchaseDate, Number(days)));
                   }
                 }}
                 fullWidth
@@ -399,21 +339,17 @@ export const ReceivePurchasePage: React.FC = () => {
                 <MenuItem value="45">45 Días</MenuItem>
                 <MenuItem value="60">60 Días</MenuItem>
                 <MenuItem value="manual">Plazo Personalizado</MenuItem>
-              </TextField>
+              </PurchaseFormField>
             ) : (
-              <TextField
-                label="Modalidad"
-                value="Pago al recibir"
-                disabled
-                fullWidth
-              />
+              <TextField label="Modalidad" value="Pago al recibir" disabled fullWidth />
             )}
 
-            <TextField
+            <PurchaseFormField
+              name="dueDate"
+              control={control}
               label="Fecha de Vencimiento de Factura *"
               type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
+              onChange={(e) => setValue('dueDate', e.target.value)}
               slotProps={{ inputLabel: { shrink: true } }}
               helperText="Fecha límite para el pago al proveedor"
               required
@@ -421,10 +357,10 @@ export const ReceivePurchasePage: React.FC = () => {
             />
 
             <Box sx={{ gridColumn: '1 / -1' }}>
-              <TextField
+              <PurchaseFormField
+                name="notes"
+                control={control}
                 label="Observaciones / Notas"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
                 placeholder="Detalles sobre entrega, transportadora, número de guía o condiciones especiales..."
                 fullWidth
               />
@@ -434,7 +370,16 @@ export const ReceivePurchasePage: React.FC = () => {
 
         {/* Sección Dinámica de Productos y Lotes a Ingresar */}
         <Paper sx={{ p: 3, mb: 3, borderRadius: 2 }}>
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 2, mb: 3 }}>
+          <Box
+            sx={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: 2,
+              mb: 3,
+            }}
+          >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
               <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
                 Productos y Lotes a Ingresar
@@ -456,11 +401,17 @@ export const ReceivePurchasePage: React.FC = () => {
                 onChange={(_, next) => next && setViewMode(next)}
                 aria-label="Modo de visualización"
               >
-                <ToggleButton value="cards" sx={{ px: 1.5, py: 0.5, textTransform: 'none', gap: 0.75, fontWeight: 600 }}>
+                <ToggleButton
+                  value="cards"
+                  sx={{ px: 1.5, py: 0.5, textTransform: 'none', gap: 0.75, fontWeight: 600 }}
+                >
                   <ViewAgendaIcon fontSize="small" />
                   Tarjetas (Espaciosa)
                 </ToggleButton>
-                <ToggleButton value="table" sx={{ px: 1.5, py: 0.5, textTransform: 'none', gap: 0.75, fontWeight: 600 }}>
+                <ToggleButton
+                  value="table"
+                  sx={{ px: 1.5, py: 0.5, textTransform: 'none', gap: 0.75, fontWeight: 600 }}
+                >
                   <TableRowsIcon fontSize="small" />
                   Tabla
                 </ToggleButton>
@@ -478,6 +429,9 @@ export const ReceivePurchasePage: React.FC = () => {
             </Box>
           </Box>
 
+          {errors.lines?.root?.message && (
+            <Alert severity="error">{errors.lines.root.message}</Alert>
+          )}
           {viewMode === 'cards' ? (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
               {lines.map((line, idx) => {
@@ -492,7 +446,7 @@ export const ReceivePurchasePage: React.FC = () => {
 
                 return (
                   <Paper
-                    key={idx}
+                    key={fields[idx].id}
                     variant="outlined"
                     sx={{
                       p: 2.5,
@@ -508,15 +462,32 @@ export const ReceivePurchasePage: React.FC = () => {
                     }}
                   >
                     {/* Encabezado de la Tarjeta */}
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', mb: 2.5, pb: 1.5, borderBottom: '1px solid', borderColor: 'divider', gap: 1 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        mb: 2.5,
+                        pb: 1.5,
+                        borderBottom: '1px solid',
+                        borderColor: 'divider',
+                        gap: 1,
+                      }}
+                    >
+                      <Box
+                        sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}
+                      >
                         <Chip
                           label={`#${idx + 1}`}
                           size="small"
                           color="primary"
                           sx={{ fontWeight: 'bold', borderRadius: 1 }}
                         />
-                        <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: 'text.primary' }}>
+                        <Typography
+                          variant="subtitle1"
+                          sx={{ fontWeight: 'bold', color: 'text.primary' }}
+                        >
                           {p ? `${p.name} (${p.code})` : 'Nuevo Producto a Ingresar'}
                         </Typography>
                         {p && (
@@ -530,21 +501,37 @@ export const ReceivePurchasePage: React.FC = () => {
                       </Box>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2.5 }}>
                         <Box sx={{ textAlign: 'right' }}>
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{
+                              display: 'block',
+                              textTransform: 'uppercase',
+                              letterSpacing: 0.5,
+                            }}
+                          >
                             Subtotal Línea
                           </Typography>
-                          <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'primary.main', lineHeight: 1.2 }}>
+                          <Typography
+                            variant="h6"
+                            sx={{ fontWeight: 'bold', color: 'primary.main', lineHeight: 1.2 }}
+                          >
                             ${subtotal.toLocaleString('es-CO')}
                           </Typography>
                         </Box>
                         <Tooltip title="Eliminar este producto">
                           <span>
                             <IconButton
+                              aria-label={`Eliminar línea ${idx + 1}`}
                               color="error"
                               size="small"
                               onClick={() => handleRemoveLine(idx)}
                               disabled={lines.length <= 1}
-                              sx={{ border: '1px solid', borderColor: 'error.light', borderRadius: 1.5 }}
+                              sx={{
+                                border: '1px solid',
+                                borderColor: 'error.light',
+                                borderRadius: 1.5,
+                              }}
                             >
                               <DeleteIcon fontSize="small" />
                             </IconButton>
@@ -554,16 +541,28 @@ export const ReceivePurchasePage: React.FC = () => {
                     </Box>
 
                     {/* Fila 1: Producto y Presentación */}
-                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1.2fr 1fr' }, gap: 2.5, mb: 2 }}>
-                      <TextField
+                    <Box
+                      sx={{
+                        display: 'grid',
+                        gridTemplateColumns: { xs: '1fr', md: '1.2fr 1fr' },
+                        gap: 2.5,
+                        mb: 2,
+                      }}
+                    >
+                      <PurchaseFormField
+                        name={`lines.${idx}.productId`}
+                        control={control}
                         select
                         size="small"
                         label="Producto *"
                         fullWidth
-                        value={line.productId}
                         onChange={(e) => handleLineChange(idx, 'productId', e.target.value)}
                         required
-                        helperText={p ? `Código/SKU: ${p.code} | Unidad mínima: ${p.baseUnit}` : 'Seleccione el medicamento o artículo'}
+                        helperText={
+                          p
+                            ? `Código/SKU: ${p.code} | Unidad mínima: ${p.baseUnit}`
+                            : 'Seleccione el medicamento o artículo'
+                        }
                       >
                         <MenuItem value="">Selecciona un producto...</MenuItem>
                         {products.map((prod) => (
@@ -571,26 +570,28 @@ export const ReceivePurchasePage: React.FC = () => {
                             {prod.name} ({prod.code}) — [{prod.baseUnit}]
                           </MenuItem>
                         ))}
-                      </TextField>
+                      </PurchaseFormField>
 
-                      <TextField
+                      <PurchaseFormField
+                        name={`lines.${idx}.presentationId`}
+                        control={control}
                         select
                         size="small"
                         label="Presentación / Empaque Recibido *"
                         fullWidth
-                        value={line.presentationId || ''}
                         onChange={(e) => handleLineChange(idx, 'presentationId', e.target.value)}
                         disabled={!line.productId}
                         helperText={
                           selectedPres
                             ? `1 ${selectedPres.name} = ${
-                                selectedPres.containedPresentationId && selectedPres.containedPresentationName
+                                selectedPres.containedPresentationId &&
+                                selectedPres.containedPresentationName
                                   ? `${selectedPres.quantityContained} ${selectedPres.containedPresentationName} = `
                                   : ''
                               }${selectedPres.conversionFactor} ${p?.baseUnit}`
                             : p
-                            ? `Ingreso directo en unidad base (${p.baseUnit})`
-                            : 'Primero elija un producto'
+                              ? `Ingreso directo en unidad base (${p.baseUnit})`
+                              : 'Primero elija un producto'
                         }
                       >
                         <MenuItem value="">
@@ -603,58 +604,78 @@ export const ReceivePurchasePage: React.FC = () => {
                               {pres.name} (x{pres.conversionFactor} {p.baseUnit})
                             </MenuItem>
                           ))}
-                      </TextField>
+                      </PurchaseFormField>
                     </Box>
 
                     {/* Fila 2: Lote, Vencimiento, Cantidad y Costo */}
-                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1.2fr 1.2fr 1fr 1.2fr' }, gap: 2.5 }}>
-                      <TextField
+                    <Box
+                      sx={{
+                        display: 'grid',
+                        gridTemplateColumns: {
+                          xs: '1fr',
+                          sm: '1fr 1fr',
+                          md: '1.2fr 1.2fr 1fr 1.2fr',
+                        },
+                        gap: 2.5,
+                      }}
+                    >
+                      <PurchaseFormField
+                        name={`lines.${idx}.lotNumber`}
+                        control={control}
                         size="small"
                         label="Número de Lote *"
                         fullWidth
                         placeholder="Ej. LOT-2026-X"
-                        value={line.lotNumber}
                         onChange={(e) => handleLineChange(idx, 'lotNumber', e.target.value)}
                         helperText="Identificador del lote del fabricante"
                         required
                       />
 
-                      <TextField
+                      <PurchaseFormField
+                        name={`lines.${idx}.expirationDate`}
+                        control={control}
                         size="small"
                         type="date"
                         label="Fecha de Vencimiento *"
                         fullWidth
-                        value={line.expirationDate}
                         onChange={(e) => handleLineChange(idx, 'expirationDate', e.target.value)}
                         slotProps={{ inputLabel: { shrink: true } }}
                         helperText="Vencimiento sanitario (FEFO)"
                         required
                       />
 
-                      <TextField
+                      <PurchaseFormField
+                        name={`lines.${idx}.quantityCommercial`}
+                        control={control}
                         size="small"
                         type="number"
                         label={`Cantidad (${selectedPres ? selectedPres.name : p?.baseUnit || 'Unid.'}) *`}
                         fullWidth
-                        value={line.quantityCommercial}
-                        onChange={(e) => handleLineChange(idx, 'quantityCommercial', e.target.value)}
+                        onChange={(e) =>
+                          handleLineChange(idx, 'quantityCommercial', e.target.value)
+                        }
                         slotProps={{ htmlInput: { min: '1', step: 'any' } }}
                         helperText="Unidades o empaques recibidos"
                         required
                       />
 
-                      <TextField
+                      <PurchaseFormField
+                        name={`lines.${idx}.unitCost`}
+                        control={control}
                         size="small"
                         type="number"
                         label={`Costo por ${selectedPres ? selectedPres.name : p?.baseUnit || 'Unid.'} *`}
                         fullWidth
-                        value={line.unitCost}
                         onChange={(e) => handleLineChange(idx, 'unitCost', e.target.value)}
                         slotProps={{
                           htmlInput: { min: '0', step: 'any' },
                           input: {
                             startAdornment: (
-                              <Typography sx={{ mr: 0.5, color: 'text.secondary', fontWeight: 'bold' }}>$</Typography>
+                              <Typography
+                                sx={{ mr: 0.5, color: 'text.secondary', fontWeight: 'bold' }}
+                              >
+                                $
+                              </Typography>
                             ),
                           },
                         }}
@@ -679,24 +700,56 @@ export const ReceivePurchasePage: React.FC = () => {
                           gap: 1.5,
                         }}
                       >
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                        <Box
+                          sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}
+                        >
                           <Inventory2Icon sx={{ color: 'success.main', fontSize: 20 }} />
-                          <Typography variant="body2" sx={{ fontWeight: 600, color: 'success.dark' }}>
+                          <Typography
+                            variant="body2"
+                            sx={{ fontWeight: 600, color: 'success.dark' }}
+                          >
                             Ingreso a Kardex: +{totalBaseUnits.toLocaleString('es-CO')} {p.baseUnit}
                           </Typography>
                           {selectedPres && (
-                            <Typography variant="caption" sx={{ color: 'text.secondary', bgcolor: 'background.paper', px: 1, py: 0.25, borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+                            <Typography
+                              variant="caption"
+                              sx={{
+                                color: 'text.secondary',
+                                bgcolor: 'background.paper',
+                                px: 1,
+                                py: 0.25,
+                                borderRadius: 1,
+                                border: '1px solid',
+                                borderColor: 'divider',
+                              }}
+                            >
                               {qtyCommercial} {selectedPres.name}
-                              {selectedPres.containedPresentationId && selectedPres.containedPresentationName && (
-                                <> = {(qtyCommercial * (selectedPres.quantityContained || 1)).toLocaleString('es-CO')} {selectedPres.containedPresentationName}</>
-                              )}
-                              {' '}= {totalBaseUnits.toLocaleString('es-CO')} {p.baseUnit}
+                              {selectedPres.containedPresentationId &&
+                                selectedPres.containedPresentationName && (
+                                  <>
+                                    {' '}
+                                    ={' '}
+                                    {(
+                                      qtyCommercial * (selectedPres.quantityContained || 1)
+                                    ).toLocaleString('es-CO')}{' '}
+                                    {selectedPres.containedPresentationName}
+                                  </>
+                                )}{' '}
+                              = {totalBaseUnits.toLocaleString('es-CO')} {p.baseUnit}
                             </Typography>
                           )}
                         </Box>
                         <Box>
                           <Typography variant="body2" color="text.secondary">
-                            Costo unitario base: <strong style={{ color: '#16a34a' }}>${costPerBaseUnit.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong> / {p.baseUnit}
+                            Costo unitario base:{' '}
+                            <strong style={{ color: '#16a34a' }}>
+                              $
+                              {costPerBaseUnit.toLocaleString('es-CO', {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}
+                            </strong>{' '}
+                            / {p.baseUnit}
                           </Typography>
                         </Box>
                       </Box>
@@ -707,25 +760,47 @@ export const ReceivePurchasePage: React.FC = () => {
             </Box>
           ) : (
             /* Vista de Tabla Corregida con Anchos Fijos y Alineación Superior */
-            <TableContainer sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, overflowX: 'auto' }}>
-              <Table size="small" sx={{ minWidth: 1250, '& td, & th': { verticalAlign: 'top', py: 1.5 } }}>
+            <TableContainer
+              sx={{
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 2,
+                overflowX: 'auto',
+              }}
+            >
+              <Table
+                size="small"
+                sx={{ minWidth: 1250, '& td, & th': { verticalAlign: 'top', py: 1.5 } }}
+              >
                 <TableHead sx={{ bgcolor: 'action.hover' }}>
                   <TableRow>
                     <TableCell sx={{ fontWeight: 'bold', minWidth: 260 }}>Producto *</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', minWidth: 220 }}>Presentación / Unidad *</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', minWidth: 220 }}>
+                      Presentación / Unidad *
+                    </TableCell>
                     <TableCell sx={{ fontWeight: 'bold', minWidth: 140 }}>Lote *</TableCell>
                     <TableCell sx={{ fontWeight: 'bold', minWidth: 165 }}>Vence *</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', minWidth: 140, textAlign: 'right' }}>Cantidad *</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', minWidth: 140, textAlign: 'right' }}>Costo Presentación *</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', minWidth: 120, textAlign: 'right' }}>Subtotal</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', minWidth: 60, textAlign: 'center' }}>Acción</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', minWidth: 140, textAlign: 'right' }}>
+                      Cantidad *
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', minWidth: 140, textAlign: 'right' }}>
+                      Costo Presentación *
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', minWidth: 120, textAlign: 'right' }}>
+                      Subtotal
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 'bold', minWidth: 60, textAlign: 'center' }}>
+                      Acción
+                    </TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {lines.map((line, idx) => {
                     const subtotal = calculateSubtotal(line);
                     const p = products.find((prod) => prod.id === line.productId);
-                    const selectedPres = p?.presentations?.find((pr) => pr.id === line.presentationId);
+                    const selectedPres = p?.presentations?.find(
+                      (pr) => pr.id === line.presentationId,
+                    );
                     const factor = selectedPres ? selectedPres.conversionFactor : 1;
                     const qtyCommercial = parseFloat(line.quantityCommercial) || 0;
                     const totalBaseUnits = Math.round(qtyCommercial * factor);
@@ -733,13 +808,17 @@ export const ReceivePurchasePage: React.FC = () => {
                     const costPerBaseUnit = factor > 0 ? unitCost / factor : unitCost;
 
                     return (
-                      <TableRow key={idx} sx={{ '&:hover': { bgcolor: 'action.hover' } }}>
+                      <TableRow
+                        key={fields[idx].id}
+                        sx={{ '&:hover': { bgcolor: 'action.hover' } }}
+                      >
                         <TableCell sx={{ minWidth: 260 }}>
-                          <TextField
+                          <PurchaseFormField
+                            name={`lines.${idx}.productId`}
+                            control={control}
                             select
                             size="small"
                             fullWidth
-                            value={line.productId}
                             onChange={(e) => handleLineChange(idx, 'productId', e.target.value)}
                             required
                           >
@@ -749,21 +828,28 @@ export const ReceivePurchasePage: React.FC = () => {
                                 {prod.name} ({prod.code})
                               </MenuItem>
                             ))}
-                          </TextField>
+                          </PurchaseFormField>
                           {p && (
-                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{ display: 'block', mt: 0.75 }}
+                            >
                               Unidad Base: <strong>{p.baseUnit}</strong>
                             </Typography>
                           )}
                         </TableCell>
 
                         <TableCell sx={{ minWidth: 220 }}>
-                          <TextField
+                          <PurchaseFormField
+                            name={`lines.${idx}.presentationId`}
+                            control={control}
                             select
                             size="small"
                             fullWidth
-                            value={line.presentationId || ''}
-                            onChange={(e) => handleLineChange(idx, 'presentationId', e.target.value)}
+                            onChange={(e) =>
+                              handleLineChange(idx, 'presentationId', e.target.value)
+                            }
                             disabled={!line.productId}
                           >
                             <MenuItem value="">
@@ -776,11 +862,16 @@ export const ReceivePurchasePage: React.FC = () => {
                                   {pres.name} (x{pres.conversionFactor} {p.baseUnit})
                                 </MenuItem>
                               ))}
-                          </TextField>
+                          </PurchaseFormField>
                           {selectedPres && (
-                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{ display: 'block', mt: 0.75 }}
+                            >
                               1 {selectedPres.name} ={' '}
-                              {selectedPres.containedPresentationId && selectedPres.containedPresentationName
+                              {selectedPres.containedPresentationId &&
+                              selectedPres.containedPresentationName
                                 ? `${selectedPres.quantityContained} ${selectedPres.containedPresentationName} = `
                                 : ''}
                               {selectedPres.conversionFactor} {p?.baseUnit}
@@ -789,68 +880,100 @@ export const ReceivePurchasePage: React.FC = () => {
                         </TableCell>
 
                         <TableCell sx={{ minWidth: 140 }}>
-                          <TextField
+                          <PurchaseFormField
+                            name={`lines.${idx}.lotNumber`}
+                            control={control}
                             size="small"
                             fullWidth
                             placeholder="LOTE-001"
-                            value={line.lotNumber}
                             onChange={(e) => handleLineChange(idx, 'lotNumber', e.target.value)}
                             required
                           />
                         </TableCell>
 
                         <TableCell sx={{ minWidth: 165 }}>
-                          <TextField
+                          <PurchaseFormField
+                            name={`lines.${idx}.expirationDate`}
+                            control={control}
                             size="small"
                             type="date"
                             fullWidth
-                            value={line.expirationDate}
-                            onChange={(e) => handleLineChange(idx, 'expirationDate', e.target.value)}
+                            onChange={(e) =>
+                              handleLineChange(idx, 'expirationDate', e.target.value)
+                            }
                             slotProps={{ inputLabel: { shrink: true } }}
                             required
                           />
                         </TableCell>
 
                         <TableCell sx={{ minWidth: 140, textAlign: 'right' }}>
-                          <TextField
+                          <PurchaseFormField
+                            name={`lines.${idx}.quantityCommercial`}
+                            control={control}
                             size="small"
                             type="number"
                             fullWidth
-                            value={line.quantityCommercial}
-                            onChange={(e) => handleLineChange(idx, 'quantityCommercial', e.target.value)}
-                            slotProps={{ htmlInput: { min: '1', step: 'any', style: { textAlign: 'right' } } }}
+                            onChange={(e) =>
+                              handleLineChange(idx, 'quantityCommercial', e.target.value)
+                            }
+                            slotProps={{
+                              htmlInput: { min: '1', step: 'any', style: { textAlign: 'right' } },
+                            }}
                             required
                           />
                           <Box sx={{ mt: 0.75, textAlign: 'right' }}>
-                            {selectedPres?.containedPresentationId && selectedPres?.containedPresentationName && (
-                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                                Equivale a: {(qtyCommercial * (selectedPres.quantityContained || 1)).toLocaleString('es-CO')} {selectedPres.containedPresentationName}
-                              </Typography>
-                            )}
-                            <Typography variant="caption" color="primary.main" sx={{ display: 'block', fontWeight: 'bold' }}>
-                              Ingreso Kardex: +{totalBaseUnits.toLocaleString('es-CO')} {p?.baseUnit || 'unidades'}
+                            {selectedPres?.containedPresentationId &&
+                              selectedPres?.containedPresentationName && (
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                  sx={{ display: 'block' }}
+                                >
+                                  Equivale a:{' '}
+                                  {(
+                                    qtyCommercial * (selectedPres.quantityContained || 1)
+                                  ).toLocaleString('es-CO')}{' '}
+                                  {selectedPres.containedPresentationName}
+                                </Typography>
+                              )}
+                            <Typography
+                              variant="caption"
+                              color="primary.main"
+                              sx={{ display: 'block', fontWeight: 'bold' }}
+                            >
+                              Ingreso Kardex: +{totalBaseUnits.toLocaleString('es-CO')}{' '}
+                              {p?.baseUnit || 'unidades'}
                             </Typography>
                           </Box>
                         </TableCell>
 
                         <TableCell sx={{ minWidth: 140, textAlign: 'right' }}>
-                          <TextField
+                          <PurchaseFormField
+                            name={`lines.${idx}.unitCost`}
+                            control={control}
                             size="small"
                             type="number"
                             fullWidth
-                            value={line.unitCost}
                             onChange={(e) => handleLineChange(idx, 'unitCost', e.target.value)}
-                            slotProps={{ htmlInput: { min: '0', step: 'any', style: { textAlign: 'right' } } }}
+                            slotProps={{
+                              htmlInput: { min: '0', step: 'any', style: { textAlign: 'right' } },
+                            }}
                             required
                           />
                           {factor > 1 && (
-                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{ display: 'block', mt: 0.75 }}
+                            >
                               Costo base: ${costPerBaseUnit.toFixed(2)} / {p?.baseUnit || 'unid'}
                             </Typography>
                           )}
                         </TableCell>
 
-                        <TableCell sx={{ minWidth: 120, textAlign: 'right', fontWeight: 'bold', pt: 2.2 }}>
+                        <TableCell
+                          sx={{ minWidth: 120, textAlign: 'right', fontWeight: 'bold', pt: 2.2 }}
+                        >
                           ${subtotal.toLocaleString('es-CO')}
                         </TableCell>
 
@@ -858,6 +981,7 @@ export const ReceivePurchasePage: React.FC = () => {
                           <Tooltip title="Eliminar línea">
                             <span>
                               <IconButton
+                                aria-label={`Eliminar línea ${idx + 1}`}
                                 size="small"
                                 color="error"
                                 onClick={() => handleRemoveLine(idx)}
@@ -877,7 +1001,19 @@ export const ReceivePurchasePage: React.FC = () => {
           )}
 
           {/* Totalizador */}
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', mt: 3, pt: 2.5, borderTop: 1, borderColor: 'divider', gap: 2 }}>
+          <Box
+            sx={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              mt: 3,
+              pt: 2.5,
+              borderTop: 1,
+              borderColor: 'divider',
+              gap: 2,
+            }}
+          >
             <Button variant="outlined" onClick={handleAddLine} startIcon={<AddIcon />}>
               Agregar Otra Línea
             </Button>
@@ -885,12 +1021,14 @@ export const ReceivePurchasePage: React.FC = () => {
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                 Total Unidades Base a Ingresar:{' '}
                 <strong>
-                  {lines.reduce((acc, l) => {
-                    const prod = products.find((p) => p.id === l.productId);
-                    const pr = prod?.presentations?.find((pres) => pres.id === l.presentationId);
-                    const f = pr ? pr.conversionFactor : 1;
-                    return acc + Math.round((parseFloat(l.quantityCommercial) || 0) * f);
-                  }, 0).toLocaleString('es-CO')}
+                  {lines
+                    .reduce((acc, l) => {
+                      const prod = products.find((p) => p.id === l.productId);
+                      const pr = prod?.presentations?.find((pres) => pres.id === l.presentationId);
+                      const f = pr ? pr.conversionFactor : 1;
+                      return acc + Math.round((parseFloat(l.quantityCommercial) || 0) * f);
+                    }, 0)
+                    .toLocaleString('es-CO')}
                 </strong>
               </Typography>
               <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
@@ -918,6 +1056,7 @@ export const ReceivePurchasePage: React.FC = () => {
           </Button>
           <Button
             type="submit"
+            disabled={submitting}
             variant="contained"
             color="primary"
             size="large"
@@ -954,17 +1093,32 @@ export const ReceivePurchasePage: React.FC = () => {
           <DialogContentText component="div">
             ¿Confirmas la recepción de la factura <strong>{invoiceNumber}</strong> por un total de{' '}
             <strong>${calculateTotal().toLocaleString()}</strong>?
-            <Box sx={{ mt: 2, p: 2, bgcolor: 'action.hover', borderRadius: 2, fontSize: '0.875rem' }}>
-              <div><strong>Proveedor:</strong> {suppliers.find(s => s.id === supplierId)?.name ?? '—'}</div>
-              <div><strong>N° Factura:</strong> {invoiceNumber}</div>
-              <div><strong>Fecha de Emisión:</strong> {purchaseDate}</div>
-              <div><strong>Fecha de Vencimiento Factura:</strong> {dueDate}</div>
-              <div><strong>Líneas a Ingresar:</strong> {lines.length} productos / lotes ({lines.reduce((acc, l) => {
-                const prod = products.find((p) => p.id === l.productId);
-                const pr = prod?.presentations?.find((pres) => pres.id === l.presentationId);
-                const f = pr ? pr.conversionFactor : 1;
-                return acc + Math.round((parseFloat(l.quantityCommercial) || 0) * f);
-              }, 0)} unidades base a Kardex)</div>
+            <Box
+              sx={{ mt: 2, p: 2, bgcolor: 'action.hover', borderRadius: 2, fontSize: '0.875rem' }}
+            >
+              <div>
+                <strong>Proveedor:</strong>{' '}
+                {suppliers.find((s) => s.id === supplierId)?.name ?? '—'}
+              </div>
+              <div>
+                <strong>N° Factura:</strong> {invoiceNumber}
+              </div>
+              <div>
+                <strong>Fecha de Emisión:</strong> {purchaseDate}
+              </div>
+              <div>
+                <strong>Fecha de Vencimiento Factura:</strong> {dueDate}
+              </div>
+              <div>
+                <strong>Líneas a Ingresar:</strong> {lines.length} productos / lotes (
+                {lines.reduce((acc, l) => {
+                  const prod = products.find((p) => p.id === l.productId);
+                  const pr = prod?.presentations?.find((pres) => pres.id === l.presentationId);
+                  const f = pr ? pr.conversionFactor : 1;
+                  return acc + Math.round((parseFloat(l.quantityCommercial) || 0) * f);
+                }, 0)}{' '}
+                unidades base a Kardex)
+              </div>
             </Box>
             <br />
             Esta operación registrará de forma atómica:
@@ -972,8 +1126,7 @@ export const ReceivePurchasePage: React.FC = () => {
             • La factura con sus datos comerciales y vencimiento.
             <br />
             • El incremento de existencias en los lotes correspondientes.
-            <br />
-            • Las entradas inmutables en el Kardex de inventario.
+            <br />• Las entradas inmutables en el Kardex de inventario.
           </DialogContentText>
         </DialogContent>
         <DialogActions sx={{ p: 2 }}>

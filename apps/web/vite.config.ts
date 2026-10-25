@@ -55,7 +55,8 @@ export default defineConfig({
     host: true,
     proxy: {
       '/api/v1': {
-        target: 'http://localhost:3000',
+        // Las pruebas E2E arrancan el API en un puerto libre
+        target: process.env.FARMACIA_API_PROXY_TARGET || 'http://localhost:3000',
         changeOrigin: true,
       },
     },

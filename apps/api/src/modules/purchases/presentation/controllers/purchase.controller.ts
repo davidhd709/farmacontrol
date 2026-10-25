@@ -1,3 +1,4 @@
+import { ApiResponse } from '@nestjs/swagger';
 import { QueryShapeValidationPipe } from '../../../../common/pagination/request-shape.pipe';
 import {
   Controller,
@@ -47,6 +48,13 @@ export class PurchaseController {
   constructor(private readonly purchaseService: PurchaseService) {}
 
   @Post('receive')
+  @ApiResponse({ status: 400, description: 'Datos de compra inválidos.' })
+  @ApiResponse({ status: 404, description: 'Proveedor o producto no encontrado.' })
+  @ApiResponse({
+    status: 409,
+    description: 'Factura duplicada o estado incompatible para recibir.',
+  })
+  @ApiResponse({ status: 500, description: 'Fallo interno; la recepción se revierte.' })
   @HttpCode(HttpStatus.CREATED)
   @RequirePermissions(SYSTEM_PERMISSIONS.PURCHASES_RECEIVE)
   public async receive(

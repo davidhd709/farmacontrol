@@ -1,5 +1,5 @@
 import { Injectable, Optional } from '@nestjs/common';
-import { prisma, PrismaClient } from '@farmacia/database';
+import { prisma, Prisma, PrismaClient } from '@farmacia/database';
 import { SessionRepositoryPort } from '../../application/ports/session.repository.port';
 import { Session } from '../../domain/entities/session.entity';
 
@@ -11,8 +11,9 @@ export class PrismaSessionRepository implements SessionRepositoryPort {
     this.client = customClient ?? prisma;
   }
 
-  public async create(session: Session): Promise<Session> {
-    const record = await this.client.session.create({
+  public async create(session: Session, tx?: unknown): Promise<Session> {
+    const db = (tx as Prisma.TransactionClient | undefined) ?? this.client;
+    const record = await db.session.create({
       data: {
         ...(session.id ? { id: session.id } : {}),
         userId: session.userId,
@@ -27,8 +28,9 @@ export class PrismaSessionRepository implements SessionRepositoryPort {
     return this.toDomain(record);
   }
 
-  public async findByTokenHash(tokenHash: string): Promise<Session | null> {
-    const record = await this.client.session.findUnique({
+  public async findByTokenHash(tokenHash: string, tx?: unknown): Promise<Session | null> {
+    const db = (tx as Prisma.TransactionClient | undefined) ?? this.client;
+    const record = await db.session.findUnique({
       where: { tokenHash: tokenHash.trim().toLowerCase() },
     });
 
@@ -51,22 +53,23 @@ export class PrismaSessionRepository implements SessionRepositoryPort {
     return this.toDomain(record);
   }
 
-  public async update(session: Session): Promise<Session> {
+  public async update(session: Session, tx?: unknown): Promise<Session> {
+    const db = (tx as Prisma.TransactionClient | undefined) ?? this.client;
     if (!session.id) {
       throw new Error('No se puede actualizar una sesión sin identificador primario id.');
     }
 
     if (!session.revokedAt) {
       // Una lectura antigua no puede restaurar una sesión revocada por logout o recuperación.
-      await this.client.session.updateMany({
+      await db.session.updateMany({
         where: { id: session.id, revokedAt: null },
         data: { lastUsedAt: session.lastUsedAt ?? null },
       });
-      const current = await this.client.session.findUniqueOrThrow({ where: { id: session.id } });
+      const current = await db.session.findUniqueOrThrow({ where: { id: session.id } });
       return this.toDomain(current);
     }
 
-    const record = await this.client.session.update({
+    const record = await db.session.update({
       where: { id: session.id },
       data: {
         lastUsedAt: session.lastUsedAt ?? null,

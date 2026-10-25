@@ -2,12 +2,13 @@ import { ThemeProvider } from '@mui/material';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { MemoryRouter, useLocation } from 'react-router-dom';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App';
-import { ApiError } from '../src/api/http-client';
+import { SYSTEM_PERMISSIONS } from '@farmacia/contracts';
+import { ApiError, apiRequest } from '../src/api/http-client';
 import { authApi } from '../src/features/auth/api/auth.api';
-import { AuthProvider } from '../src/features/auth/context/AuthContext';
+import { authQueryKey, AuthProvider } from '../src/features/auth/context/AuthContext';
 import { appTheme } from '../src/theme/app-theme';
 
 function renderApplication(initialEntry = '/login') {
@@ -18,18 +19,33 @@ function renderApplication(initialEntry = '/login') {
     },
   });
 
-  return render(
+  const rendered = render(
     <ThemeProvider theme={appTheme}>
       <QueryClientProvider client={queryClient}>
         <MemoryRouter initialEntries={[initialEntry]}>
           <AuthProvider>
             <App />
+            <LocationProbe />
           </AuthProvider>
         </MemoryRouter>
       </QueryClientProvider>
     </ThemeProvider>,
   );
+  return { ...rendered, queryClient };
 }
+
+function LocationProbe() {
+  const location = useLocation();
+  return (
+    <output data-testid="location">
+      {location.pathname}
+      {location.search}
+      {location.hash}
+    </output>
+  );
+}
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe('flujo frontend de autenticación', () => {
   it('muestra el formulario al no existir una sesión activa', async () => {
@@ -121,4 +137,76 @@ describe('flujo frontend de autenticación', () => {
     await waitFor(() => expect(logoutSpy).toHaveBeenCalledOnce());
     expect(await screen.findByRole('heading', { name: 'Iniciar sesión' })).toBeInTheDocument();
   });
+});
+
+it('401 en una consulta borra caché y sesión, redirige y login vuelve a la URL completa', async () => {
+  const user = {
+    id: 'cashier',
+    username: 'cajero',
+    isActive: true,
+    roles: [],
+    permissions: [SYSTEM_PERMISSIONS.SALES_CREATE],
+  };
+  vi.spyOn(authApi, 'getCurrentUser').mockResolvedValue(user);
+  vi.spyOn(authApi, 'login').mockResolvedValue({ user, message: 'OK' });
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockImplementation(async (url) => {
+      if (String(url).endsWith('/expired-query')) return new Response(null, { status: 401 });
+      if (String(url).endsWith('/customers/default'))
+        return new Response(
+          JSON.stringify({
+            id: 'default',
+            name: 'Consumidor Final',
+            documentNumber: '2222',
+            isDefault: true,
+            isActive: true,
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      return new Response(JSON.stringify({ items: [], total: 0, page: 1, limit: 25 }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }),
+  );
+  const { queryClient } = renderApplication('/pos/scan?search=rx#list');
+  await screen.findByRole('button', { name: /Cerrar sesión/i }, { timeout: 10_000 });
+  queryClient.setQueryData(['private-data'], { customer: 'previous user' });
+  let completeOldQuery!: (value: string) => void;
+  let oldSignal: AbortSignal | undefined;
+  const oldRequest = queryClient
+    .fetchQuery({
+      queryKey: ['old-in-flight'],
+      queryFn: ({ signal }) => {
+        oldSignal = signal;
+        return new Promise<string>((resolve) => {
+          completeOldQuery = resolve;
+        });
+      },
+    })
+    .catch(() => undefined);
+  const request = queryClient.fetchQuery({
+    queryKey: ['expired'],
+    queryFn: () => apiRequest('expired-query'),
+  });
+  await request.catch(() => undefined);
+  expect(await screen.findByRole('heading', { name: 'Iniciar sesión' })).toBeInTheDocument();
+  expect(queryClient.getQueryData(authQueryKey)).toBeNull();
+  expect(oldSignal?.aborted).toBe(true);
+  completeOldQuery('previous user data');
+  await oldRequest;
+  expect(
+    queryClient
+      .getQueryCache()
+      .getAll()
+      .map((query) => query.queryKey),
+  ).toEqual([authQueryKey]);
+  const tester = userEvent.setup();
+  await tester.type(screen.getByLabelText('Usuario'), 'cajero');
+  await tester.type(screen.getByLabelText('Contraseña'), 'Password#2026!');
+  await tester.click(screen.getByRole('button', { name: 'Ingresar' }));
+  await waitFor(() =>
+    expect(screen.getByTestId('location')).toHaveTextContent('/pos/scan?search=rx#list'),
+  );
 });

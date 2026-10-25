@@ -1,3 +1,4 @@
+import { DomainError } from '../../../common/domain-error';
 import {
   ThirdPartyDto,
   ThirdPartyPersonType,
@@ -61,11 +62,11 @@ export class ThirdParty {
   }): ThirdParty {
     const trimmedDoc = payload.documentNumber.trim();
     if (!trimmedDoc) {
-      throw new Error('El número de documento del tercero es obligatorio');
+      throw new DomainError('El número de documento del tercero es obligatorio', 'validation');
     }
     const trimmedName = payload.name.trim();
     if (!trimmedName) {
-      throw new Error('El nombre o razón social del tercero es obligatorio');
+      throw new DomainError('El nombre o razón social del tercero es obligatorio', 'validation');
     }
 
     const now = new Date();
@@ -220,7 +221,8 @@ export class ThirdParty {
   }): void {
     if (payload.name !== undefined) {
       const trimmed = payload.name.trim();
-      if (!trimmed) throw new Error('El nombre o razón social no puede estar vacío');
+      if (!trimmed)
+        throw new DomainError('El nombre o razón social no puede estar vacío', 'validation');
       this.props.name = trimmed;
     }
     if (payload.personType !== undefined) {
@@ -231,7 +233,8 @@ export class ThirdParty {
     }
     if (payload.documentNumber !== undefined) {
       const trimmed = payload.documentNumber.trim();
-      if (!trimmed) throw new Error('El número de documento no puede estar vacío');
+      if (!trimmed)
+        throw new DomainError('El número de documento no puede estar vacío', 'validation');
       this.props.documentNumber = trimmed;
     }
     if (payload.verificationDigit !== undefined) {

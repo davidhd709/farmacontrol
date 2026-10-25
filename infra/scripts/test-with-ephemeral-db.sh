@@ -5,6 +5,7 @@
 #   pnpm test                       suite completa
 #   pnpm test apps/api/test/...     argumentos adicionales para Vitest
 #   pnpm test:watch                 Vitest en modo observación (limpia al salir)
+#   pnpm test:e2e                   E2E con Playwright: API y web reales sobre la base temporal
 #
 # 1. Exige Docker y un cliente PostgreSQL (pg_dump, pg_restore, pg_isready, psql) de la
 #    misma versión mayor que el servidor o superior: la prueba de respaldos usa pg_dump real.
@@ -38,8 +39,8 @@ log() { echo "[test-db] $*"; }
 die() { echo "[test-db] ❌ $*" >&2; exit 1; }
 
 case "${VITEST_MODE}" in
-  run|watch) ;;
-  *) die "FARMACIA_TEST_VITEST_MODE debe ser 'run' o 'watch'." ;;
+  run|watch|e2e) ;;
+  *) die "FARMACIA_TEST_VITEST_MODE debe ser 'run', 'watch' o 'e2e'." ;;
 esac
 
 # Variables de libpq heredadas (PGHOSTADDR, PGSERVICE, PGPASSFILE, PGOPTIONS, PGCLUSTER...)
@@ -222,7 +223,19 @@ pnpm --silent --filter @farmacia/database db:test:migrate
 
 RESULT_LOG="${REPO_ROOT}/.test-runs/${RUN_ID}.log"
 
-if [ "${VITEST_MODE}" = "watch" ]; then
+if [ "${VITEST_MODE}" = "e2e" ]; then
+  # API y web compiladas sobre esta base; el script se encarga de sus procesos
+  log "Ejecutando E2E (Playwright); registro en .test-runs/${RUN_ID}.log"
+  set -m
+  { bash "${REPO_ROOT}/tests/e2e/run-e2e.sh" "$@" 2>&1 < /dev/null | tee "${RESULT_LOG}"; exit "${PIPESTATUS[0]}"; } &
+  TEST_PID=$!
+  set +m
+  set +e
+  wait "${TEST_PID}"
+  TEST_STATUS=$?
+  set -e
+  TEST_PID=""
+elif [ "${VITEST_MODE}" = "watch" ]; then
   # Modo interactivo: Vitest necesita la terminal; Ctrl+C llega a todo el grupo
   log "Ejecutando Vitest (watch)."
   set +e
@@ -243,5 +256,5 @@ else
   TEST_PID=""
 fi
 
-log "Vitest terminó con código ${TEST_STATUS}."
+log "Las pruebas terminaron con código ${TEST_STATUS}."
 exit "${TEST_STATUS}"

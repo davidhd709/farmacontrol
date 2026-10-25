@@ -12,6 +12,9 @@ import { prisma, PrismaClient, Prisma } from '@farmacia/database';
 import {
   SaleDto,
   ConfirmSalePayload,
+  FefoPreviewPayload,
+  FefoPreviewDto,
+  FefoPreviewLinePayload,
   SaleQueryFilters,
   PaginatedResponse,
   SYSTEM_PERMISSIONS,
@@ -30,7 +33,9 @@ import { IdempotencyService } from '../../../common/idempotency/idempotency.serv
 import { AuditService } from '../../audit/application/services/audit.service';
 import { CashService } from '../../cash/application/cash.service';
 import { ReceivablesLedger } from '../../receivables/application/receivables-ledger';
-import { InventoryLedger } from '../../inventory/application/inventory-ledger';
+import { planFefoAllocation } from '../domain/plan-fefo-allocation';
+import { saleBaseUnits } from '../domain/sale-base-units';
+import { InventoryLedger, LockedLot } from '../../inventory/application/inventory-ledger';
 import { recordSourceBankMovement } from '../../treasury/application/record-source-bank-movement';
 import { requirePaymentBankAccountId } from '../../treasury/application/payment-validation';
 import { parseMoneyToCents } from '../../treasury/domain/treasury-rules';
@@ -121,6 +126,83 @@ export class SaleService {
     @Optional() customClient?: PrismaClient,
   ) {
     this.client = customClient ?? prisma;
+  }
+
+  /** La vista previa no bloquea ni reserva: confirmar vuelve a resolver FEFO con FOR UPDATE. */
+  public async previewFefo(payload: FefoPreviewPayload): Promise<FefoPreviewDto> {
+    const businessDay = businessToday();
+    const remainingLots = new Map<string, LockedLot[]>();
+    const lines: FefoPreviewDto['lines'] = [];
+    for (const item of payload.items) {
+      const { product, requiredBaseUnits } = await this.resolveSaleItem(this.client, item);
+      let lots = remainingLots.get(product.id);
+      if (!lots) {
+        lots = await this.inventoryLedger.listFefoCandidates(this.client, product.id, businessDay);
+        remainingLots.set(product.id, lots);
+      }
+      const availableBaseUnits = lots.reduce((sum, lot) => sum + lot.current_quantity, 0);
+      const plan = planFefoAllocation(lots, requiredBaseUnits);
+      const allocations = plan.allocations.map(({ lot, quantityBaseUnits }) => {
+        // Sólo cambia el saldo local de esta consulta para las siguientes líneas del producto.
+        lot.current_quantity -= quantityBaseUnits;
+        return {
+          lotId: lot.id,
+          lotNumber: lot.lot_number,
+          expirationDate: lot.expiration_date.toISOString().slice(0, 10),
+          quantityBaseUnits,
+        };
+      });
+      lines.push({
+        productId: product.id,
+        presentationId: item.presentationId || null,
+        requiredBaseUnits,
+        availableBaseUnits,
+        shortfallBaseUnits: plan.shortfallBaseUnits,
+        allocations,
+      });
+    }
+    return { businessDay, lines };
+  }
+
+  /** Resolución y validaciones de catálogo compartidas con la confirmación transaccional. */
+  private async resolveSaleItem(client: Prisma.TransactionClient, item: FefoPreviewLinePayload) {
+    if (!Number.isFinite(item.quantityCommercial) || item.quantityCommercial <= 0) {
+      throw new BadRequestException('La cantidad de cada producto debe ser mayor a cero.');
+    }
+    const product = await client.product.findUnique({ where: { id: item.productId } });
+    if (!product || !product.isActive) {
+      throw new BadRequestException(
+        `Producto con id '${item.productId}' no existe o está inactivo.`,
+      );
+    }
+    let factor = 1;
+    let unitPrice = Number(product.basePrice);
+    let presentationName: string | null = null;
+    if (item.presentationId) {
+      const presentation = await client.productPresentation.findUnique({
+        where: { id: item.presentationId },
+      });
+      if (!presentation || !presentation.isActive || presentation.productId !== product.id) {
+        throw new BadRequestException(
+          `Presentación '${item.presentationId}' inválida para el producto.`,
+        );
+      }
+      if (!presentation.saleEnabled) {
+        throw new BadRequestException(
+          `La presentación '${presentation.name}' no está habilitada para ventas.`,
+        );
+      }
+      factor = presentation.conversionFactor;
+      unitPrice = Number(presentation.price);
+      presentationName = presentation.name;
+    }
+    // FARM-AUD-002: toda línea descuenta existencias por FEFO. Un producto antiguo sin control
+    // de lote se rechaza antes de tocar inventario.
+    if (!product.requiresLotControl) {
+      throw new ProductWithoutLotControlException(product.name);
+    }
+    const requiredBaseUnits = saleBaseUnits(item.quantityCommercial, factor);
+    return { product, factor, unitPrice, presentationName, requiredBaseUnits };
   }
 
   public async confirmSale(
@@ -221,62 +303,15 @@ export class SaleService {
           const allLotAllocations: SaleLotAllocation[] = [];
 
           for (const item of payload.items) {
-            if (item.quantityCommercial <= 0) {
-              throw new BadRequestException('La cantidad de cada producto debe ser mayor a cero.');
-            }
-
-            // Obtener producto
-            const product = await tx.product.findUnique({
-              where: { id: item.productId },
-            });
-            if (!product || !product.isActive) {
-              throw new NotFoundException(
-                `Producto con id '${item.productId}' no existe o está inactivo.`,
-              );
-            }
-
-            // Obtener presentación si aplica
-            let factor = 1;
-            let unitPrice = Number(product.basePrice);
-            let presentationName: string | null = null;
-
-            if (item.presentationId) {
-              const presentation = await tx.productPresentation.findUnique({
-                where: { id: item.presentationId },
-              });
-              if (
-                !presentation ||
-                !presentation.isActive ||
-                presentation.productId !== product.id
-              ) {
-                throw new BadRequestException(
-                  `Presentación '${item.presentationId}' inválida para el producto.`,
-                );
-              }
-              if (!presentation.saleEnabled) {
-                throw new BadRequestException(
-                  `La presentación '${presentation.name}' no está habilitada para ventas.`,
-                );
-              }
-              factor = presentation.conversionFactor;
-              unitPrice = Number(presentation.price);
-              presentationName = presentation.name;
-            }
-
+            const { product, factor, presentationName, requiredBaseUnits, ...resolved } =
+              await this.resolveSaleItem(tx, item);
+            let unitPrice = resolved.unitPrice;
             if (item.unitPriceOverride !== undefined) {
               unitPrice = item.unitPriceOverride;
             }
 
-            const requiredBaseUnits = Math.round(item.quantityCommercial * factor);
             const lineId = crypto.randomUUID();
             const lineAllocations: SaleLotAllocation[] = [];
-
-            // FARM-AUD-002: toda línea descuenta existencias por FEFO. Un producto antiguo sin
-            // control de lote se rechaza aquí, antes de tocar inventario (la transacción revierte
-            // también lo ya descontado por líneas anteriores).
-            if (!product.requiresLotControl) {
-              throw new ProductWithoutLotControlException(product.name);
-            }
 
             // Asignación FEFO con bloqueo concurrente
             // Bloquear lotes disponibles ordenados por vencimiento ascendente

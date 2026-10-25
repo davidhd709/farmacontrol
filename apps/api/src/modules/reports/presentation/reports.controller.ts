@@ -1,6 +1,8 @@
 import { businessToday } from '../../../common/utils/business-date';
 import { QueryFieldValidationPipe } from '../../../common/pagination/request-shape.pipe';
-import { Controller, Get, Query, Res, UseGuards } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Query, Res, UseGuards } from '@nestjs/common';
+import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import type { TopProductsSortBy } from '@farmacia/contracts';
 import type { Response } from 'express';
 import { ReportsService } from '../application/reports.service';
 import { SYSTEM_PERMISSIONS } from '@farmacia/contracts';
@@ -8,6 +10,7 @@ import { SessionAuthGuard } from '../../identity/presentation/guards/session-aut
 import { PermissionsGuard } from '../../identity/presentation/guards/permissions.guard';
 import { RequirePermissions } from '../../identity/presentation/decorators/require-permissions.decorator';
 
+@ApiTags('reports')
 @Controller('reports')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 @RequirePermissions(SYSTEM_PERMISSIONS.REPORTS_READ)
@@ -110,6 +113,56 @@ export class ReportsController {
       return res.send(csv);
     }
 
+    return res.json({ success: true, data });
+  }
+
+  @Get('top-products')
+  @ApiOperation({ summary: 'Productos más vendidos, netos de devoluciones del período' })
+  @ApiQuery({ name: 'fromDate', required: false, type: String, example: '2026-10-01' })
+  @ApiQuery({ name: 'toDate', required: false, type: String, example: '2026-10-31' })
+  @ApiQuery({
+    name: 'sortBy',
+    required: false,
+    enum: ['units', 'value'],
+    schema: { default: 'units' },
+  })
+  @ApiQuery({ name: 'limit', required: false, type: Number, minimum: 1, maximum: 100, example: 20 })
+  @ApiQuery({ name: 'format', required: false, enum: ['json', 'csv'] })
+  @ApiResponse({ status: 200, description: 'Ranking en JSON o CSV' })
+  @ApiResponse({ status: 400, description: 'Filtros inválidos' })
+  @ApiResponse({ status: 403, description: 'Requiere reports:read' })
+  async getTopProducts(
+    @Query('fromDate', new QueryFieldValidationPipe('fromDate', 'date?'))
+    fromDate: string | undefined,
+    @Query('toDate', new QueryFieldValidationPipe('toDate', 'date?')) toDate: string | undefined,
+    @Query(
+      'sortBy',
+      new QueryFieldValidationPipe('sortBy', { values: ['units', 'value'], optional: true }),
+    )
+    sortBy: TopProductsSortBy | undefined,
+    @Query('limit', new QueryFieldValidationPipe('limit', 'integerString?'))
+    limit: string | undefined,
+    @Query('format', new QueryFieldValidationPipe('format', 'text?')) format: string | undefined,
+    @Res() res: Response,
+  ) {
+    const parsedLimit = limit === undefined ? 20 : Number(limit);
+    if (!Number.isSafeInteger(parsedLimit) || parsedLimit < 1 || parsedLimit > 100) {
+      throw new BadRequestException('limit debe estar entre 1 y 100.');
+    }
+    const data = await this.reportsService.getTopProductsReport({
+      fromDate,
+      toDate,
+      sortBy,
+      limit: parsedLimit,
+    });
+    if (format === 'csv') {
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="productos_mas_vendidos_${businessToday()}.csv"`,
+      );
+      return res.send(this.reportsService.exportTopProductsCsv(data));
+    }
     return res.json({ success: true, data });
   }
 

@@ -124,8 +124,7 @@ export class PurchaseLine {
     }
 
     const subtotal =
-      props.subtotal ??
-      Math.round(props.quantityCommercial * props.unitCost * 100) / 100;
+      props.subtotal ?? Math.round(props.quantityCommercial * props.unitCost * 100) / 100;
 
     const now = new Date();
     return new PurchaseLine({
@@ -155,21 +154,51 @@ export class PurchaseLine {
     this._lotId = lotId;
   }
 
-  public get id(): string { return this._id; }
-  public get purchaseId(): string | undefined { return this._purchaseId; }
-  public get productId(): string { return this._productId; }
-  public get productName(): string | undefined { return this._productName; }
-  public get presentationId(): string | null { return this._presentationId; }
-  public get presentationName(): string | null | undefined { return this._presentationName; }
-  public get lotId(): string { return this._lotId; }
-  public get lotNumber(): string { return this._lotNumber; }
-  public get expirationDate(): Date { return this._expirationDate; }
-  public get quantityCommercial(): number { return this._quantityCommercial; }
-  public get conversionFactor(): number { return this._conversionFactor; }
-  public get quantityBaseUnits(): number { return this._quantityBaseUnits; }
-  public get unitCost(): number { return this._unitCost; }
-  public get subtotal(): number { return this._subtotal; }
-  public get createdAt(): Date { return this._createdAt; }
+  public get id(): string {
+    return this._id;
+  }
+  public get purchaseId(): string | undefined {
+    return this._purchaseId;
+  }
+  public get productId(): string {
+    return this._productId;
+  }
+  public get productName(): string | undefined {
+    return this._productName;
+  }
+  public get presentationId(): string | null {
+    return this._presentationId;
+  }
+  public get presentationName(): string | null | undefined {
+    return this._presentationName;
+  }
+  public get lotId(): string {
+    return this._lotId;
+  }
+  public get lotNumber(): string {
+    return this._lotNumber;
+  }
+  public get expirationDate(): Date {
+    return this._expirationDate;
+  }
+  public get quantityCommercial(): number {
+    return this._quantityCommercial;
+  }
+  public get conversionFactor(): number {
+    return this._conversionFactor;
+  }
+  public get quantityBaseUnits(): number {
+    return this._quantityBaseUnits;
+  }
+  public get unitCost(): number {
+    return this._unitCost;
+  }
+  public get subtotal(): number {
+    return this._subtotal;
+  }
+  public get createdAt(): Date {
+    return this._createdAt;
+  }
 
   public toDto(): PurchaseLineDto {
     return {
@@ -307,22 +336,54 @@ export class Purchase {
     return new Purchase(props);
   }
 
-  public get id(): string { return this._id; }
-  public get supplierId(): string { return this._supplierId; }
-  public get supplierName(): string | undefined { return this._supplierName; }
-  public get supplierTaxId(): string | undefined { return this._supplierTaxId; }
-  public get invoiceNumber(): string { return this._invoiceNumber; }
-  public get purchaseDate(): Date { return this._purchaseDate; }
-  public get dueDate(): Date | null | undefined { return this._dueDate; }
-  public get paymentCondition(): string | null | undefined { return this._paymentCondition; }
-  public get totalAmount(): number { return this._totalAmount; }
-  public get status(): string { return this._status; }
-  public get notes(): string | null { return this._notes; }
-  public get receivedByUserId(): string | null { return this._receivedByUserId; }
-  public get receivedByUsername(): string | null | undefined { return this._receivedByUsername; }
-  public get lines(): PurchaseLine[] { return [...this._lines]; }
-  public get createdAt(): Date { return this._createdAt; }
-  public get updatedAt(): Date { return this._updatedAt; }
+  public get id(): string {
+    return this._id;
+  }
+  public get supplierId(): string {
+    return this._supplierId;
+  }
+  public get supplierName(): string | undefined {
+    return this._supplierName;
+  }
+  public get supplierTaxId(): string | undefined {
+    return this._supplierTaxId;
+  }
+  public get invoiceNumber(): string {
+    return this._invoiceNumber;
+  }
+  public get purchaseDate(): Date {
+    return this._purchaseDate;
+  }
+  public get dueDate(): Date | null | undefined {
+    return this._dueDate;
+  }
+  public get paymentCondition(): string | null | undefined {
+    return this._paymentCondition;
+  }
+  public get totalAmount(): number {
+    return this._totalAmount;
+  }
+  public get status(): string {
+    return this._status;
+  }
+  public get notes(): string | null {
+    return this._notes;
+  }
+  public get receivedByUserId(): string | null {
+    return this._receivedByUserId;
+  }
+  public get receivedByUsername(): string | null | undefined {
+    return this._receivedByUsername;
+  }
+  public get lines(): PurchaseLine[] {
+    return [...this._lines];
+  }
+  public get createdAt(): Date {
+    return this._createdAt;
+  }
+  public get updatedAt(): Date {
+    return this._updatedAt;
+  }
 
   public toDto(): PurchaseDto {
     return {

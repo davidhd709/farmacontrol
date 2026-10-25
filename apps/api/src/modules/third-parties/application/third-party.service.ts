@@ -6,7 +6,7 @@ import {
   ThirdPartyQueryFilters,
   PaginatedResponse,
 } from '@farmacia/contracts';
-import { prisma, PrismaClient } from '@farmacia/database';
+import { prisma, Prisma, PrismaClient } from '@farmacia/database';
 import { IThirdPartyRepository } from '../domain/third-party.repository.interface';
 import { ThirdParty } from '../domain/third-party.entity';
 import {
@@ -126,25 +126,28 @@ export class ThirdPartyService {
         thirdParty.linkSupplier(supplierId);
       }
       await this.thirdPartyRepository.save(thirdParty, tx);
-    });
 
-    if (this.auditService) {
-      await this.auditService.recordEvent({
-        action: 'third_parties:created',
-        entity: 'ThirdParty',
-        entityId: thirdParty.id,
-        userId: auditCtx?.userId || null,
-        details: {
-          documentType: thirdParty.documentType,
-          documentNumber: thirdParty.documentNumber,
-          name: thirdParty.name,
-          isCustomer: thirdParty.isCustomer,
-          isSupplier: thirdParty.isSupplier,
-          isEmployee: thirdParty.isEmployee,
-          isOther: thirdParty.isOther,
-        },
-      });
-    }
+      if (this.auditService) {
+        await this.auditService.recordEvent(
+          {
+            action: 'third_parties:created',
+            entity: 'ThirdParty',
+            entityId: thirdParty.id,
+            userId: auditCtx?.userId || null,
+            details: {
+              documentType: thirdParty.documentType,
+              documentNumber: thirdParty.documentNumber,
+              name: thirdParty.name,
+              isCustomer: thirdParty.isCustomer,
+              isSupplier: thirdParty.isSupplier,
+              isEmployee: thirdParty.isEmployee,
+              isOther: thirdParty.isOther,
+            },
+          },
+          tx,
+        );
+      }
+    });
 
     return thirdParty;
   }
@@ -166,11 +169,13 @@ export class ThirdPartyService {
       email?: string | null;
       address?: string | null;
     },
+    tx?: Prisma.TransactionClient,
   ): Promise<void> {
+    const db = tx ?? this.db;
     const documentNumber = record.documentNumber.trim();
-    const existing = await this.db.thirdParty.findUnique({ where: { documentNumber } });
+    const existing = await db.thirdParty.findUnique({ where: { documentNumber } });
     if (existing) {
-      await this.db.thirdParty.update({
+      await db.thirdParty.update({
         where: { id: existing.id },
         data:
           role === 'customer'
@@ -179,7 +184,7 @@ export class ThirdPartyService {
       });
       return;
     }
-    await this.db.thirdParty.create({
+    await db.thirdParty.create({
       data: {
         documentType: record.documentType || (role === 'supplier' ? 'NIT' : 'CC'),
         documentNumber,
@@ -243,23 +248,26 @@ export class ThirdPartyService {
         }
       }
       await this.thirdPartyRepository.update(thirdParty, tx);
-    });
 
-    if (this.auditService) {
-      await this.auditService.recordEvent({
-        action: 'third_parties:updated',
-        entity: 'ThirdParty',
-        entityId: thirdParty.id,
-        userId: auditCtx?.userId || null,
-        details: {
-          name: thirdParty.name,
-          isActive: thirdParty.isActive,
-          isCustomer: thirdParty.isCustomer,
-          isSupplier: thirdParty.isSupplier,
-          isEmployee: thirdParty.isEmployee,
-        },
-      });
-    }
+      if (this.auditService) {
+        await this.auditService.recordEvent(
+          {
+            action: 'third_parties:updated',
+            entity: 'ThirdParty',
+            entityId: thirdParty.id,
+            userId: auditCtx?.userId || null,
+            details: {
+              name: thirdParty.name,
+              isActive: thirdParty.isActive,
+              isCustomer: thirdParty.isCustomer,
+              isSupplier: thirdParty.isSupplier,
+              isEmployee: thirdParty.isEmployee,
+            },
+          },
+          tx,
+        );
+      }
+    });
 
     return thirdParty;
   }
@@ -280,17 +288,20 @@ export class ThirdPartyService {
         await this.suppliersLedger.setActive(tx, thirdParty.supplierId, false);
       }
       await this.thirdPartyRepository.update(thirdParty, tx);
-    });
 
-    if (this.auditService) {
-      await this.auditService.recordEvent({
-        action: 'third_parties:deactivated',
-        entity: 'ThirdParty',
-        entityId: thirdParty.id,
-        userId: auditCtx?.userId || null,
-        details: { documentNumber: thirdParty.documentNumber, name: thirdParty.name },
-      });
-    }
+      if (this.auditService) {
+        await this.auditService.recordEvent(
+          {
+            action: 'third_parties:deactivated',
+            entity: 'ThirdParty',
+            entityId: thirdParty.id,
+            userId: auditCtx?.userId || null,
+            details: { documentNumber: thirdParty.documentNumber, name: thirdParty.name },
+          },
+          tx,
+        );
+      }
+    });
 
     return thirdParty;
   }
@@ -311,17 +322,20 @@ export class ThirdPartyService {
         await this.suppliersLedger.setActive(tx, thirdParty.supplierId, true);
       }
       await this.thirdPartyRepository.update(thirdParty, tx);
-    });
 
-    if (this.auditService) {
-      await this.auditService.recordEvent({
-        action: 'third_parties:activated',
-        entity: 'ThirdParty',
-        entityId: thirdParty.id,
-        userId: auditCtx?.userId || null,
-        details: { documentNumber: thirdParty.documentNumber, name: thirdParty.name },
-      });
-    }
+      if (this.auditService) {
+        await this.auditService.recordEvent(
+          {
+            action: 'third_parties:activated',
+            entity: 'ThirdParty',
+            entityId: thirdParty.id,
+            userId: auditCtx?.userId || null,
+            details: { documentNumber: thirdParty.documentNumber, name: thirdParty.name },
+          },
+          tx,
+        );
+      }
+    });
 
     return thirdParty;
   }
@@ -334,9 +348,7 @@ export class ThirdPartyService {
     return thirdParty;
   }
 
-  async findPaginated(
-    filters: ThirdPartyQueryFilters,
-  ): Promise<PaginatedResponse<ThirdPartyDto>> {
+  async findPaginated(filters: ThirdPartyQueryFilters): Promise<PaginatedResponse<ThirdPartyDto>> {
     const res = await this.thirdPartyRepository.findPaginated(filters);
     return {
       items: res.items.map((tp) => tp.toDto()),

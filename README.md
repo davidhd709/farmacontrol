@@ -205,6 +205,16 @@ Los proyectos que usan PostgreSQL (api, database, worker), `pnpm db:test:migrate
 
 Si el script se lanza en segundo plano desde un shell sin control de trabajos (por ejemplo `pnpm test &` dentro de otro script), bash le entrega SIGINT ignorado y no puede capturarlo; SIGTERM sigue limpiando correctamente.
 
+
+### Pruebas E2E (Playwright)
+
+```bash
+pnpm test:e2e                                    # todos los flujos
+pnpm test:e2e tests/e2e/specs/pos-fefo.spec.ts   # un archivo
+```
+
+Usa la misma base temporal que `pnpm test`. Sobre ella siembra los permisos y un administrador con contraseña aleatoria, compila el API y la web, y los arranca en puertos libres de `127.0.0.1`. Después ejecuta Playwright con Chromium. Cada prueba crea sus propios productos y lotes con compras reales a través del API. Los flujos cubiertos son: sesión, permisos del cajero en la web y en el API, venta FEFO desde el POS, faltante de existencias, nota crédito y anulación, abono de cartera, recepción de compra y el reporte de más vendidos. El reporte HTML, las trazas y las capturas de los fallos quedan en `.test-runs/e2e-<ejecución>/`. La primera vez instale el navegador con `pnpm exec playwright install chromium`.
+
 ---
 
 ## 6. Procedimientos de Respaldo y Recuperación ante Desastres (DR)

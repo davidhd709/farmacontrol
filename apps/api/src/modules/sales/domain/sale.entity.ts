@@ -7,6 +7,7 @@ import {
 } from '@farmacia/contracts';
 import { centsToNumber, divideHalfUp, toHundredths } from './sale-money';
 import { SaleAlreadyCancelledException, SaleValidationException } from './sale.exceptions';
+import { saleBaseUnits } from './sale-base-units';
 
 export interface SaleLotAllocationProps {
   id: string;
@@ -133,14 +134,7 @@ export class SaleLine {
     }
 
     const factor = payload.presentationFactorHistorical ?? 1;
-    const exactBaseUnits = payload.quantityCommercial * factor;
-    const quantityBaseUnits = Math.round(exactBaseUnits);
-    // El inventario se lleva en unidades base enteras: no se redondea en silencio
-    if (Math.abs(exactBaseUnits - quantityBaseUnits) > 1e-6) {
-      throw new SaleValidationException(
-        `La cantidad ${payload.quantityCommercial} con factor ${factor} no equivale a unidades base enteras.`,
-      );
-    }
+    const quantityBaseUnits = saleBaseUnits(payload.quantityCommercial, factor);
 
     // Importes en centavos exactos; IVA en puntos básicos (tarifa con dos decimales)
     const quantityHundredths = toHundredths(payload.quantityCommercial, 'La cantidad vendida');

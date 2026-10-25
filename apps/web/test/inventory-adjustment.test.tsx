@@ -1,5 +1,7 @@
 import { ThemeProvider } from '@mui/material';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import type { ProductDto, InventoryLotDto } from '@farmacia/contracts';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { InventoryMovementDto } from '@farmacia/contracts';
@@ -97,5 +99,77 @@ describe('Historial de movimientos: motivo del ajuste (FARM-AUD-012)', () => {
     expect(
       within(legacyRow).getByText('AJUSTE_MANUAL: MOTIVO: Sobrante en conteo'),
     ).toBeInTheDocument();
+  });
+});
+
+describe('Formulario ajuste con RHF + Zod', () => {
+  const product = { id: 'prod-1', code: 'ACE-500', name: 'Acetaminofén 500mg' } as ProductDto;
+  const lot = {
+    id: 'lot-1',
+    productId: 'prod-1',
+    lotNumber: 'LOT-ACE-01',
+    currentQuantity: 10,
+    expirationDate: '2099-12-31',
+  } as InventoryLotDto;
+  const renderForm = () =>
+    render(
+      <AdjustInventoryDialog
+        open
+        products={[product]}
+        lots={[lot]}
+        onClose={vi.fn()}
+        onSuccess={vi.fn()}
+      />,
+    );
+  async function choose(user: ReturnType<typeof userEvent.setup>, label: RegExp, option: RegExp) {
+    await user.click(screen.getByRole('combobox', { name: label }));
+    await user.click(screen.getByRole('option', { name: option }));
+  }
+  it('muestra errores de campo y enfoca el primer inválido sin llamar a API', async () => {
+    const api = vi.spyOn(inventoryApi, 'adjustInventory');
+    renderForm();
+    fireEvent.click(screen.getByRole('button', { name: 'Revisar y Confirmar' }));
+    expect(await screen.findByText('Seleccione el producto a ajustar.')).toBeInTheDocument();
+    expect(
+      screen.getByText('La justificación o motivo del ajuste es obligatoria.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: /^Producto/ })).toHaveFocus();
+    expect(api).not.toHaveBeenCalled();
+  });
+  it('valida el motivo antes de confirmar y envía exactamente el payload original una vez', async () => {
+    const api = vi.spyOn(inventoryApi, 'adjustInventory').mockReturnValue(new Promise(() => {}));
+    const user = userEvent.setup();
+    renderForm();
+    await choose(user, /^Producto/, /Acetaminofén/);
+    await choose(user, /Lote Específico/, /LOT-ACE-01/);
+    await choose(user, /Tipo de Ajuste/, /Decremento/);
+    fireEvent.change(screen.getByLabelText(/Cantidad a Ajustar/), { target: { value: '3' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Revisar y Confirmar' }));
+    expect(
+      await screen.findByText('La justificación o motivo del ajuste es obligatoria.'),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText(/Motivo Justificado/)).toHaveFocus();
+    expect(api).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText(/Motivo Justificado/), {
+      target: { value: '  Frasco averiado  ' },
+    });
+    fireEvent.change(screen.getByLabelText(/Notas Adicionales/), {
+      target: { value: '  Acta 15  ' },
+    });
+    await user.click(screen.getByRole('button', { name: 'Revisar y Confirmar' }));
+    const confirm = await screen.findByRole('button', { name: 'Asentar Ajuste' });
+    fireEvent.click(confirm);
+    fireEvent.click(confirm);
+    await waitFor(() =>
+      expect(api).toHaveBeenCalledExactlyOnceWith({
+        productId: 'prod-1',
+        lotId: 'lot-1',
+        adjustmentType: 'DECREMENTO',
+        quantityBaseUnits: 3,
+        reason: 'Frasco averiado',
+        notes: 'Acta 15',
+      }),
+    );
+    expect(screen.getByRole('button', { name: /Procesando/ })).toBeDisabled();
   });
 });

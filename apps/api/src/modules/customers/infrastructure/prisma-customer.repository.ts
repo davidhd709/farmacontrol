@@ -12,8 +12,9 @@ export class PrismaCustomerRepository implements ICustomerRepository {
     this.client = customClient ?? prisma;
   }
 
-  async save(customer: Customer): Promise<void> {
-    await this.client.customer.upsert({
+  async save(customer: Customer, tx?: unknown): Promise<void> {
+    const db = (tx as Prisma.TransactionClient | undefined) ?? this.client;
+    await db.customer.upsert({
       where: { id: customer.id },
       create: {
         id: customer.id,

@@ -1,6 +1,6 @@
 # Estado de avance — FarmaControl
 
-**Corte:** 10 de octubre de 2026 · rama `main` · referencia: [auditoría 2026-10-06](AUDITORIA_2026-10-06.md)
+**Corte:** 18 de octubre de 2026 · rama `fase-5-frontend` · referencia: [auditoría 2026-10-06](AUDITORIA_2026-10-06.md)
 
 Este documento resume qué se corrigió desde la auditoría técnica, qué falta para llegar al 100 % y qué decisiones del cliente bloquean el cierre. Lo que aquí figura como hecho está en `main` con pruebas ejecutadas contra PostgreSQL real.
 
@@ -13,12 +13,12 @@ Este documento resume qué se corrigió desde la auditoría técnica, qué falta
 | 2 | Producción y seguridad | **IMPLEMENTADO** (10 de octubre); falta que el cliente provea el destino externo de respaldos (sección 3) |
 | 3 | Acuerdos de la reunión del 4 de octubre | **IMPLEMENTADO** (10 de octubre), salvo el botón de recordatorio de pago (bloqueado por la decisión 15) |
 | 4 | Contrato de API y estabilidad | **IMPLEMENTADO** (10 de octubre), incluidos los contratos transaccionales entre módulos |
-| 5 | Frontend y UX | PENDIENTE |
-| 6 | Pruebas de cierre (E2E, concurrencia, permisos) | PENDIENTE |
-| 7 | Decisiones del cliente | EN PROGRESO: preguntas identificadas, sin respuesta |
-| 8 | Aceptación (UAT) y release v1.0.0 | PENDIENTE |
+| 5 | Frontend y UX | **IMPLEMENTADO** (18 de octubre). T-35 (ventas por día) espera ratificación y T-36 (rediseño visual de reportes) queda para después de la UAT |
+| 6 | Pruebas de cierre (E2E, concurrencia, permisos) | **IMPLEMENTADO** (18 de octubre) |
+| 7 | Decisiones del cliente | EN PROGRESO: preguntas listas para la contadora (`docs/PREGUNTAS_CONTADORA.md`) y para el dueño (sección 4), sin respuesta |
+| 8 | Aceptación (UAT) y release v1.0.0 | EN PROGRESO: runbook de UAT y manual por rol listos; faltan el ambiente, la simulación con el cliente, la auditoría final y el tag |
 
-**Calidad al corte:** typecheck sin errores, lint sin errores (advertencias `any` preexistentes), **926 pruebas en 137 archivos, todas en verde** en una sola corrida contra PostgreSQL real.
+**Calidad al corte:** 1366 pruebas en 166 archivos y 10 flujos E2E en verde; detalle en la sección 8.
 
 ## 2. Qué se hizo
 
@@ -99,6 +99,37 @@ Verificación de infraestructura: `caddy validate`; Caddy real delante de servic
 
 Auditoría de seguridad de la fase (Antigravity, sólo lectura): dos P1 y un P2 confirmados y corregidos (mensajes de Prisma reenviados por controladores; clave de idempotencia opcional en pagos en efectivo). Un P1 descartado: la CSP no bloquea Swagger UI porque `@nestjs/swagger` carga su inicialización como archivo externo.
 
+### Fase 5 — Frontend y UX
+
+| Tema | Qué hace ahora | Commit |
+|---|---|---|
+| Sesión y permisos | Un 401 limpia la sesión y la caché y vuelve al login conservando la ruta; un 403 muestra un mensaje único. Menú y rutas comparten un solo mapa ruta → permiso; por URL directa se ve "Sin permiso" | `84276e4` |
+| POS (AUD-014) | Búsqueda con espera de 250 ms y cancelación; Enter nunca agrega un resultado de un texto anterior y respeta la opción marcada con flechas | `84276e4` |
+| POS | Elegir cliente existente; vista previa FEFO (`POST /sales/fefo-preview`, sólo lectura) con lote, vencimiento y faltante antes de cobrar; totales del carrito en centavos | `c8836ce`, `84276e4` |
+| Reportes | T-32 margen potencial (rotulado como no realizado, con productos sin costo o precio señalados); T-34 productos más vendidos con devoluciones; T-33 prueba de regresión de anuladas; valorización, ventas y caja sumadas en centavos | `1ae06d6`, `fb3161f` |
+| Panel (T-02) y alertas (T-11) | Caja, bancos, cartera y ventas de hoy por separado y por permiso, desde agregados del servidor; "No disponible" en vez de $0. **Corregido:** el panel y la página de alertas leían el sobre `{ success, data }` y siempre mostraban cero. La severidad vive en la URL y cada lote abre su kardex | `fb3161f` |
+| Formularios críticos | Compra, notas crédito y débito, ajuste, abonos, pagos y gastos con React Hook Form y Zod, mismos payloads y claves de idempotencia. **Corregido:** el vencimiento de un lote se comparaba en UTC y se rechazaba un lote que vence mañana | `bea369e`, `94f597f` |
+| Accesibilidad | Todos los botones de ícono con nombre accesible | `0ad66f6` |
+
+### Fase 6 — Pruebas de cierre
+
+| Tema | Qué hace ahora | Commit |
+|---|---|---|
+| E2E | `pnpm test:e2e`: API y web compiladas sobre la base temporal, Playwright con Chromium. Sesión, permisos, venta FEFO desde el POS, faltante, nota crédito y anulación, abono, recepción de compra y más vendidos. Job propio en CI | `47f1a8c` |
+| Permisos | Matriz endpoint × rol generada desde los metadatos de Nest: 403 exactamente cuando falta un permiso, 401 sin sesión en toda ruta no pública, permiso explícito en toda ruta autenticada | `7255fb7` |
+| Concurrencia | Compras simultáneas sobre un lote, notas crédito simultáneas que superan lo vendido y ventas simultáneas con consecutivos. **Corregido:** dos recepciones del mismo lote abortaban una con error de serialización; ahora se reintenta | `a211c26` |
+
+### Deuda cerrada en esta ronda
+
+| Tema | Qué hace ahora | Commit |
+|---|---|---|
+| Worker | Un trabajo que no obtiene el lock vuelve a PENDING sin gastar intento; los trabajos en PROCESSING por más de 15 minutos se reintentan o fallan | `59c86dc` |
+| Errores sin tipar | 107 → 13 `throw new Error` en dominio y aplicación (los restantes son invariantes internas); los controladores ya no convierten cualquier error en 400. Saldo de caja insuficiente es 409, como el de bancos | `5f9cadb` |
+| Auditoría | Ventas, compras, lotes, catálogo, clientes, proveedores, caja y sesión registran la auditoría en la misma transacción | `5f9cadb` |
+| Idempotencia en gastos | Registrar un gasto o su pago exige `Idempotency-Key`, como todo pago | `152a4d4` |
+| Instalación | Una base nueva no tenía ubicación de inventario y la web no permite crearla: una migración crea la Bodega principal sólo si no existe ninguna | `a27b95e` |
+| CI de respaldos | Las pruebas de respaldos pasan en GitHub Actions desde el aislamiento de pruebas (#7) | `2aac389` |
+
 ## 3. Pasos obligatorios al desplegar estos cambios
 
 1. **Respaldo** de la base antes de migrar.
@@ -125,6 +156,12 @@ Fase 3 (6 migraciones nuevas; se probaron sobre una copia de la base de desarrol
 12. Vincular cada cuenta bancaria existente con su subcuenta del PUC (Tesorería › editar cuenta); mientras no se vincule, sus asientos usan la cuenta general de bancos.
 13. Los movimientos de caja y banco existentes ya reciben su recibo o comprobante, numerados en orden cronológico.
 
+Fases 5 y 6 (1 migración nueva):
+
+14. `prisma migrate deploy`: `20261018090000_ensure_default_inventory_location` crea la Bodega principal sólo si la base no tiene ninguna ubicación.
+15. Integraciones o scripts que llamen al API: `POST /expenses` y `POST /expenses/:id/payments` ahora exigen `Idempotency-Key` (la web ya la envía). Un egreso de caja sin saldo responde 409 en lugar de 400, y los errores internos responden 500 en lugar de 400.
+16. Primera instalación de UAT: seguir `docs/runbooks/uat-ambiente.md`.
+
 ## 4. Decisiones del cliente pendientes
 
 Ninguna se implementó por supuesto; las que se tocaron quedaron con la opción conservadora.
@@ -148,51 +185,69 @@ Ninguna se implementó por supuesto; las que se tocaron quedaron con la opción 
 | 15 | Canal del recordatorio de pago y franja "Corriente" en cartera | Fase 3 | No existe / franja extra |
 | 16 | Nombre del sistema | T-01 | FarmaControl provisional |
 | 17 | Participantes, duración y criterio de la UAT | T-40, T-41 | — |
+| 18 | Método de costo del inventario (promedio ponderado o por lote) | Costo de ventas y valorización | El costo de venta y la valorización usan el costo fijo del catálogo, que las compras no actualizan; la cuenta de inventarios se descuadra con el tiempo |
+| 19 | Mapeo de ventas gravadas/excluidas, descuentos, SIMPLE e inventario en el PUC | Asientos correctos | Toda venta va a 413595 (ventas excluidas) mientras no haya IVA; varios mapeos parecen invertidos (ver preguntas A2–A4 y B1) |
+| 20 | Rol de Contabilidad | Acceso de la contadora | Sólo el administrador tiene permisos contables |
+| 21 | Venta a crédito en el POS | Cartera desde la operación diaria | El backend la admite con plazo fijo de 30 días (incluso a Consumidor Final), pero el POS no la ofrece |
+| 22 | Descuentos y cambio de precio en el POS | T-19, T-20 | El backend los admite con permiso; el POS no tiene el campo (siempre envía 0) |
+| 23 | Asientos de ajustes de inventario, bajas por vencimiento, movimientos manuales de caja y banco | Contabilidad completa | Estas operaciones no generan asiento |
 
 ## 5. Qué falta por fase
 
 ### Fase 3 — Acuerdos del 4 de octubre
 - Botón manual de recordatorio de pago: bloqueado hasta definir el canal (decisión 15).
 
-### Fase 4 — API y estabilidad
-- Sin pendientes. La deuda menor está en la sección 6.
-
 ### Fase 5 — Frontend
-- POS: debounce y cancelación de búsquedas (AUD-014); elegir cliente existente; presentación por defecto; vista previa FEFO.
-- Manejo global de 401/403 y rutas protegidas por permiso.
-- Reportes: margen potencial (T-32), más vendidos (T-34), ventas por día (T-35), mejoras de legibilidad (T-36), detalle detrás de alertas (T-11), cifras del dashboard (T-02).
-- Accesibilidad de botones de ícono; formularios críticos con React Hook Form y Zod.
+- T-35 ventas por día: propuesta por ratificar con el cliente.
+- T-36 mejoras visuales de reportes: después de la UAT, con los datos ya validados.
 
-### Fase 6 — Pruebas de cierre
-- E2E con Playwright (hoy `tests/e2e` está vacío).
-- Concurrencia y permisos en los flujos que aún no la tienen.
+### Fase 7 — Decisiones del cliente
+- Enviar `docs/PREGUNTAS_CONTADORA.md` a la contadora y las decisiones 1–17 y 20–22 al dueño. Cada respuesta se implementa como un slice propio.
 
 ### Fase 8 — Aceptación y release
-- Ambiente UAT limpio con el PUC completo; simulación de varios días con el cliente.
-- Auditoría final de seguridad y rendimiento; tag v1.0.0; manual por rol.
+- Montar el ambiente de UAT con `docs/runbooks/uat-ambiente.md` (requiere el destino externo de respaldos del cliente).
+- Simulación de varios días con el cliente (T-41) según el guion aprobado (decisión 17).
+- Auditoría final de seguridad independiente (`codex-auditor`) sobre la rama, changelog y tag v1.0.0 tras la UAT.
+- Manual por rol: `docs/MANUAL_POR_ROL.md` (revisar con los usuarios en la UAT).
 
 ## 6. Deuda técnica conocida
 
 - **Signo del kardex en la base:** las salidas por venta y devolución se guardan con cantidad positiva y los ajustes negativos con cantidad negativa. El historial es inmutable, así que el sentido se deduce del tipo (así lo hace la pantalla). Unificar el signo exige una decisión y una migración de lectura, no de datos.
-- **Idempotencia:** sólo los pagos de cartera y CxP reintentan ante conflictos de serialización; las demás operaciones ya tienen pruebas de duplicado concurrente en verde. `getRecord` todavía acepta un modo que lanza `ConflictException` de Nest (acoplamiento a HTTP en infraestructura).
-- **Worker:** un trabajo que no obtiene el lock de evaluación termina COMPLETED sin evaluar; un trabajo interrumpido queda en PROCESSING sin recuperación (ya pasaba antes).
-- **Errores sin tipar:** quedan `throw new Error` en domain/application y las clases de `accounting-rules.ts` y `treasury-rules.ts` fuera de `DomainError`; la confirmación de venta sigue devolviendo 400 para cualquier `Error` que no sea de Prisma.
+- **Idempotencia:** pagos de cartera, CxP, gastos y recepciones de compra reintentan ante conflictos de serialización; las demás operaciones ya tienen pruebas de duplicado concurrente en verde.
+- **Errores sin tipar:** quedan 13 `throw new Error` en dominio y aplicación, todos invariantes internas o de configuración (por ejemplo, falta el Consumidor Final): responden 500 a propósito.
+- **Transacciones de auditoría:** varios servicios abren la transacción con el cliente Prisma global para incluir la auditoría; las pruebas unitarias de esos servicios deben simular `prisma.$transaction`.
 - **Validación:** la regla `decimal` del pipe acepta números, pero las notas contables exigen texto decimal; los errores de inicialización de Prisma no se sanean fuera de producción.
 - **RN-006:** el lote es vendible el día de su vencimiento y se marca VENCIDO desde el día siguiente; es la conducta existente, no una regla confirmada.
 - **Consecutivos** (`count() + 1`): se mantienen porque, con reintento en transacción serializable, producen numeración sin saltos. Una secuencia de PostgreSQL deja huecos al revertir, lo que no conviene para documentos con numeración legal. A revisar cuando se defina el comprobante.
 - **Tipos de movimiento de caja:** sin restricción; las pruebas usan valores fuera del contrato (`APERTURA`, `EGRESO`). Revisar datos reales antes de restringirlos.
-- **Auditoría fuera de la transacción** en varios servicios (lotes, compras).
-- **Prueba intermitente:** el `beforeEach` de `product-tax-profile` puede superar 30 s con el disco lento.
+- **Prueba intermitente:** el `beforeEach` de `product-tax-profile` puede superar 30 s con el disco lento (no se repitió en las corridas de esta ronda).
 - **`pnpm audit` restante:** `vitest` 3 arrastra `tinypool` (2 críticas) y `@vitest/mocker`: solo desarrollo, no llegan a la imagen; requiere migrar a Vitest 4 como tarea aparte. `deepmerge-ts` (alta) viene fijado por `prisma` 7.10 y solo lo usa la CLI al leer su configuración. `uuid` 8 en `exceljs`: el aviso afecta a v3/v5/v6 con búfer y `exceljs` solo usa `v4()`.
 - **Rate limit en memoria:** válido con una sola instancia de la API. Un ataque distribuido contra una cuenta solo lo frena el límite por IP y el costo de Argon2.
 - **RPO de 24 horas:** no hay archivado continuo de WAL (PITR).
 - **Límite por IP en la farmacia:** si todos los equipos salen por la misma IP pública, 20 fallos en 15 minutos bloquean el login en la sede; ajustable con `AUTH_RATE_LIMIT_IP_MAX_ATTEMPTS`.
 - **Terceros:** editar un cliente o proveedor desde su propio módulo no actualiza su tercero (al revés sí, en una sola transacción). Las líneas de notas contables no llevan tercero.
 - **Límites entre módulos:** la prueba de arquitectura vigila lotes, kardex, ubicaciones, caja, cartera, CxP, clientes, proveedores y tesorería; varios módulos siguen escribiendo `audit_events` directamente y las tablas de ventas, compras, contabilidad y catálogo no están vigiladas. Terceros instancia `CustomersLedger`/`SuppliersLedger` directamente porque clientes y proveedores ya importan su módulo (un import de vuelta sería circular).
-- **CI:** las pruebas de respaldos (`backups.integration`) fallan en GitHub Actions desde antes de la Fase 4 (500 al generar el respaldo real en el runner); en local pasan.
 - **Notas crédito y descuentos:** la devolución se registra neta del descuento en `SALES_RETURNS`; no se revierte la parte proporcional en `SALES_DISCOUNTS`.
 - 128 advertencias de lint por `any` y componentes de más de 600 líneas, a reducir solo cuando se toquen.
 
 ## 7. Siguiente paso recomendado
 
-Validar con la contadora, en el ambiente de pruebas, la naturaleza de las cuentas, el cierre anual y los recibos/comprobantes; enviarle las decisiones de la sección 4 (incluido el canal del recordatorio de pago) junto con el pedido del destino externo de respaldos. En paralelo, la **Fase 5** (frontend), que no depende de decisiones del cliente, y corregir el fallo de respaldos en CI.
+1. Enviar a la contadora `docs/PREGUNTAS_CONTADORA.md` (las del bloque A afectan cifras que ya produce el sistema) y al dueño las decisiones de la sección 4, junto con el pedido del destino externo de respaldos.
+2. Revisar y fusionar la rama `fase-5-frontend` a `main`, previa auditoría independiente con `codex-auditor`.
+3. Montar el ambiente de UAT con `docs/runbooks/uat-ambiente.md`.
+
+## 8. Validación final de esta ronda
+
+Ejecutada el 18 de octubre sobre la rama integrada (fases 5 y 6, deuda y Vitest 4.1.11):
+
+| Comando | Resultado |
+|---|---|
+| `pnpm typecheck` y `pnpm typecheck:e2e` | Sin errores |
+| `pnpm lint` | 0 errores; 149 advertencias (antes 163), todas `no-explicit-any` o tamaño de componentes ya existentes |
+| `pnpm build` | Correcto |
+| `pnpm test` (PostgreSQL 18 temporal) | **1366 pruebas en 166 archivos, todas en verde** (línea base de `main`: 1051 en 148) |
+| `pnpm test:e2e` (Playwright) | **10 de 10 flujos en verde** |
+| `bash tests/infra/check-test-runner.sh` | 28 de 28 verificaciones |
+| `pnpm audit` | Sin críticas; quedan `deepmerge-ts` (alta, solo CLI de Prisma), `uuid` y `js-yaml` (moderadas, sin uso explotable) |
+
+La auditoría independiente con `codex-auditor` no se pudo ejecutar porque Codex alcanzó su límite de uso. El orquestador hizo una revisión de seguridad de los cambios sin bloqueantes, pero hay que repetir la auditoría con Codex antes de fusionar a `main`.

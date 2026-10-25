@@ -253,7 +253,7 @@ describe('Control de inventario obligatorio en catálogo y ventas (FARM-AUD-002)
         items: [{ productId: product.id, quantityCommercial: 1 }],
       });
 
-      expect(response.status, JSON.stringify(response.body)).toBe(400);
+      expect(response.status, JSON.stringify(response.body)).toBe(409);
       expect(response.body.message).toMatch(/Caldero 20 cm/);
       expect(response.body.message).toMatch(/regulari[cz]/i);
       expect(await snapshot()).toEqual(before);
@@ -280,7 +280,7 @@ describe('Control de inventario obligatorio en catálogo y ventas (FARM-AUD-002)
         items: [{ productId: product.id, quantityCommercial: 1 }],
       });
 
-      expect(response.status, JSON.stringify(response.body)).toBe(400);
+      expect(response.status, JSON.stringify(response.body)).toBe(409);
       expect(await snapshot()).toEqual(before);
     });
 
@@ -308,7 +308,7 @@ describe('Control de inventario obligatorio en catálogo y ventas (FARM-AUD-002)
         ],
       });
 
-      expect(response.status, JSON.stringify(response.body)).toBe(400);
+      expect(response.status, JSON.stringify(response.body)).toBe(409);
       expect(await snapshot()).toEqual(before);
       expect(
         (await prisma.inventoryLot.findUniqueOrThrow({ where: { id: tracked.id } }))

@@ -1,4 +1,8 @@
-import { businessDayStart, businessDayEnd, businessToday } from '../../../common/utils/business-date';
+import {
+  businessDayStart,
+  businessDayEnd,
+  businessToday,
+} from '../../../common/utils/business-date';
 import { Injectable, Logger } from '@nestjs/common';
 import { prisma as defaultPrisma, PrismaClient } from '@farmacia/database';
 import {
@@ -9,6 +13,10 @@ import {
   ExpirationReportItemDto,
   ExpirationsReportDto,
   ExpirationSeverity,
+  InventoryValuationIssue,
+  TopProductsFilter,
+  TopProductItemDto,
+  TopProductsReportDto,
   InventoryValuationItemDto,
   InventoryValuationReportDto,
   ReportDateFilter,
@@ -16,6 +24,8 @@ import {
   SalesReportItemDto,
 } from '@farmacia/contracts';
 import { calculateExpirationSeverity } from '../../alerts/domain/alert.entity';
+import { centsToNumber, moneyToCents } from '../domain/report-money';
+import { queryTopProducts } from '../infrastructure/top-products.query';
 import { generateCsv } from '../utils/csv-exporter.util';
 import {
   SUPPLIER_NOTICE_FROM_DAYS,
@@ -53,18 +63,28 @@ export class ReportsService {
     });
 
     let totalUnits = 0;
-    let totalCostValuation = 0;
-    let totalPriceValuation = 0;
+    let totalCostValuation = 0n;
+    let totalPriceValuation = 0n;
+    let totalPotentialMargin = 0n;
+    let productsWithValuationIssues = 0;
 
-    const items: InventoryValuationItemDto[] = products.map((prod: any) => {
-      const currentStock = prod.lots.reduce(
-        (sum: number, lot: any) => sum + lot.currentQuantity,
-        0,
-      );
-      const baseCost = Number(prod.baseCost);
-      const basePrice = Number(prod.basePrice);
-      const totalCostValue = Math.round(currentStock * baseCost * 100) / 100;
-      const totalPriceValue = Math.round(currentStock * basePrice * 100) / 100;
+    const items: InventoryValuationItemDto[] = products.map((prod) => {
+      const currentStock = prod.lots.reduce((sum, lot) => sum + lot.currentQuantity, 0);
+      const baseCost = moneyToCents(prod.baseCost);
+      const basePrice = moneyToCents(prod.basePrice);
+      const totalCostValue = BigInt(currentStock) * baseCost;
+      const totalPriceValue = BigInt(currentStock) * basePrice;
+      const valuationIssue: InventoryValuationIssue | null =
+        baseCost <= 0n
+          ? basePrice <= 0n
+            ? 'MISSING_COST_AND_PRICE'
+            : 'MISSING_COST'
+          : basePrice <= 0n
+            ? 'MISSING_PRICE'
+            : null;
+      const potentialMargin = valuationIssue ? null : totalPriceValue - totalCostValue;
+      if (potentialMargin !== null) totalPotentialMargin += potentialMargin;
+      if (currentStock > 0 && valuationIssue) productsWithValuationIssues++;
 
       totalUnits += currentStock;
       totalCostValuation += totalCostValue;
@@ -77,10 +97,12 @@ export class ReportsService {
         categoryName: prod.category?.name || 'Sin Categoría',
         baseUnit: prod.baseUnit,
         currentStock,
-        baseCost,
-        basePrice,
-        totalCostValue,
-        totalPriceValue,
+        baseCost: centsToNumber(baseCost),
+        basePrice: centsToNumber(basePrice),
+        totalCostValue: centsToNumber(totalCostValue),
+        totalPriceValue: centsToNumber(totalPriceValue),
+        potentialMargin: potentialMargin === null ? null : centsToNumber(potentialMargin),
+        valuationIssue,
         activeLotsCount: prod.lots.length,
       };
     });
@@ -89,8 +111,10 @@ export class ReportsService {
       generatedAt: new Date().toISOString(),
       totalProducts: items.length,
       totalUnits,
-      totalCostValuation: Math.round(totalCostValuation * 100) / 100,
-      totalPriceValuation: Math.round(totalPriceValuation * 100) / 100,
+      totalPotentialMargin: centsToNumber(totalPotentialMargin),
+      productsWithValuationIssues,
+      totalCostValuation: centsToNumber(totalCostValuation),
+      totalPriceValuation: centsToNumber(totalPriceValuation),
       items,
     };
   }
@@ -99,14 +123,44 @@ export class ReportsService {
     return generateCsv(
       [
         { header: 'Código', accessor: (i: InventoryValuationItemDto) => i.productCode },
-        { header: 'Medicamento / Producto', accessor: (i: InventoryValuationItemDto) => i.productName },
+        {
+          header: 'Medicamento / Producto',
+          accessor: (i: InventoryValuationItemDto) => i.productName,
+        },
         { header: 'Categoría', accessor: (i: InventoryValuationItemDto) => i.categoryName },
         { header: 'Unidad Base', accessor: (i: InventoryValuationItemDto) => i.baseUnit },
         { header: 'Stock Actual', accessor: (i: InventoryValuationItemDto) => i.currentStock },
-        { header: 'Costo Unitario ($)', accessor: (i: InventoryValuationItemDto) => i.baseCost.toFixed(2) },
-        { header: 'Precio Unitario ($)', accessor: (i: InventoryValuationItemDto) => i.basePrice.toFixed(2) },
-        { header: 'Valorización al Costo ($)', accessor: (i: InventoryValuationItemDto) => i.totalCostValue.toFixed(2) },
-        { header: 'Valorización al Precio ($)', accessor: (i: InventoryValuationItemDto) => i.totalPriceValue.toFixed(2) },
+        {
+          header: 'Costo Unitario ($)',
+          accessor: (i: InventoryValuationItemDto) => i.baseCost.toFixed(2),
+        },
+        {
+          header: 'Precio Unitario ($)',
+          accessor: (i: InventoryValuationItemDto) => i.basePrice.toFixed(2),
+        },
+        {
+          header: 'Valorización al Costo ($)',
+          accessor: (i: InventoryValuationItemDto) => i.totalCostValue.toFixed(2),
+        },
+        {
+          header: 'Valorización al Precio ($)',
+          accessor: (i: InventoryValuationItemDto) => i.totalPriceValue.toFixed(2),
+        },
+        {
+          header: 'Margen Potencial ($)',
+          accessor: (i: InventoryValuationItemDto) => i.potentialMargin?.toFixed(2) ?? '',
+        },
+        {
+          header: 'Observación',
+          accessor: (i: InventoryValuationItemDto) =>
+            i.valuationIssue
+              ? {
+                  MISSING_COST: 'Sin costo',
+                  MISSING_PRICE: 'Sin precio',
+                  MISSING_COST_AND_PRICE: 'Sin costo ni precio',
+                }[i.valuationIssue]
+              : '',
+        },
         { header: 'Lotes Activos', accessor: (i: InventoryValuationItemDto) => i.activeLotsCount },
       ],
       data.items,
@@ -184,7 +238,9 @@ export class ReportsService {
    * Lotes con existencias que vencen en 120 días o menos, con el proveedor de su última
    * compra, para avisarle entre 120 y 110 días antes y devolver antes de los 90 días.
    */
-  async getSupplierReturnsReport(referenceDay: string = businessToday()): Promise<SupplierReturnReportDto> {
+  async getSupplierReturnsReport(
+    referenceDay: string = businessToday(),
+  ): Promise<SupplierReturnReportDto> {
     const reference = new Date(`${referenceDay}T00:00:00.000Z`);
     const horizon = new Date(reference.getTime() + SUPPLIER_NOTICE_FROM_DAYS * 86_400_000);
     const lots = await this.prisma.inventoryLot.findMany({
@@ -254,9 +310,15 @@ export class ReportsService {
     return generateCsv(
       [
         { header: 'Estado', accessor: (i: SupplierReturnItemDto) => statusLabels[i.status] },
-        { header: 'Proveedor', accessor: (i: SupplierReturnItemDto) => i.supplierName ?? 'Sin compra registrada' },
+        {
+          header: 'Proveedor',
+          accessor: (i: SupplierReturnItemDto) => i.supplierName ?? 'Sin compra registrada',
+        },
         { header: 'Teléfono', accessor: (i: SupplierReturnItemDto) => i.supplierPhone ?? '' },
-        { header: 'Factura de compra', accessor: (i: SupplierReturnItemDto) => i.lastPurchaseInvoice ?? '' },
+        {
+          header: 'Factura de compra',
+          accessor: (i: SupplierReturnItemDto) => i.lastPurchaseInvoice ?? '',
+        },
         { header: 'Código', accessor: (i: SupplierReturnItemDto) => i.productCode },
         { header: 'Producto', accessor: (i: SupplierReturnItemDto) => i.productName },
         { header: 'Lote', accessor: (i: SupplierReturnItemDto) => i.lotNumber },
@@ -315,28 +377,30 @@ export class ReportsService {
       orderBy: { createdAt: 'desc' },
     });
 
-    let totalAmount = 0;
-    const byPaymentMethod: Record<string, number> = {};
+    let totalAmount = 0n;
+    const byPaymentMethod: Record<string, bigint> = {};
 
-    const items: SalesReportItemDto[] = sales.map((sale: any) => {
-      const amount = Number(sale.total);
+    const items: SalesReportItemDto[] = sales.map((sale) => {
+      const amount = moneyToCents(sale.total);
       totalAmount += amount;
 
       const method = sale.paymentMethod || 'EFECTIVO';
-      byPaymentMethod[method] = (byPaymentMethod[method] || 0) + amount;
+      byPaymentMethod[method] = (byPaymentMethod[method] ?? 0n) + amount;
 
       return {
         saleId: sale.id,
         invoiceNumber: sale.invoiceNumber,
         soldAt: sale.createdAt.toISOString(),
         customerName: sale.customer?.name || 'Cliente Ocasional',
-        customerDocument: sale.customer ? `${sale.customer.documentType} ${sale.customer.documentNumber}` : 'Consumidor Final',
+        customerDocument: sale.customer
+          ? `${sale.customer.documentType} ${sale.customer.documentNumber}`
+          : 'Consumidor Final',
         paymentMethod: method,
         status: sale.status,
         itemsCount: sale.lines.length,
-        subtotal: Number(sale.subtotal),
-        taxAmount: Number(sale.taxTotal),
-        totalAmount: amount,
+        subtotal: centsToNumber(moneyToCents(sale.subtotal)),
+        taxAmount: centsToNumber(moneyToCents(sale.taxTotal)),
+        totalAmount: centsToNumber(amount),
       };
     });
 
@@ -345,10 +409,61 @@ export class ReportsService {
       fromDate: filter.fromDate || null,
       toDate: filter.toDate || null,
       totalSales: items.length,
-      totalAmount: Math.round(totalAmount * 100) / 100,
-      byPaymentMethod,
+      totalAmount: centsToNumber(totalAmount),
+      byPaymentMethod: Object.fromEntries(
+        Object.entries(byPaymentMethod).map(([method, cents]) => [method, centsToNumber(cents)]),
+      ),
       items,
     };
+  }
+
+  async getTopProductsReport(filter: TopProductsFilter = {}): Promise<TopProductsReportDto> {
+    const sortBy = filter.sortBy ?? 'units';
+    const limit = filter.limit ?? 20;
+    const rows = await queryTopProducts(
+      this.prisma,
+      filter.fromDate ? businessDayStart(filter.fromDate) : undefined,
+      filter.toDate ? businessDayEnd(filter.toDate) : undefined,
+      sortBy,
+      limit,
+    );
+    return {
+      generatedAt: new Date().toISOString(),
+      fromDate: filter.fromDate ?? null,
+      toDate: filter.toDate ?? null,
+      sortBy,
+      limit,
+      items: rows.map((row, index) => ({
+        ...row,
+        rank: index + 1,
+        soldBaseUnits: Number(row.soldBaseUnits),
+        returnedBaseUnits: Number(row.returnedBaseUnits),
+        netBaseUnits: Number(row.netBaseUnits),
+        salesCount: Number(row.salesCount),
+        soldValue: centsToNumber(moneyToCents(row.soldValue)),
+        returnedValue: centsToNumber(moneyToCents(row.returnedValue)),
+        netValue: centsToNumber(moneyToCents(row.netValue)),
+      })),
+    };
+  }
+
+  exportTopProductsCsv(data: TopProductsReportDto): string {
+    return generateCsv<TopProductItemDto>(
+      [
+        { header: 'Posición', accessor: (i) => i.rank },
+        { header: 'Código', accessor: (i) => i.productCode },
+        { header: 'Producto', accessor: (i) => i.productName },
+        { header: 'Unidad Base', accessor: (i) => i.baseUnit },
+        { header: 'Unidades Vendidas', accessor: (i) => i.soldBaseUnits },
+        { header: 'Unidades Devueltas', accessor: (i) => i.returnedBaseUnits },
+        { header: 'Unidades Netas', accessor: (i) => i.netBaseUnits },
+        { header: 'Valor Vendido ($)', accessor: (i) => i.soldValue.toFixed(2) },
+        { header: 'Valor Devuelto ($)', accessor: (i) => i.returnedValue.toFixed(2) },
+        { header: 'Valor Neto ($)', accessor: (i) => i.netValue.toFixed(2) },
+        { header: 'Ventas', accessor: (i) => i.salesCount },
+      ],
+      data.items,
+    );
   }
 
   exportSalesCsv(data: SalesReportDto): string {
@@ -361,7 +476,10 @@ export class ReportsService {
         { header: 'Medio de Pago', accessor: (i: SalesReportItemDto) => i.paymentMethod },
         { header: 'Líneas', accessor: (i: SalesReportItemDto) => i.itemsCount },
         { header: 'Subtotal ($)', accessor: (i: SalesReportItemDto) => i.subtotal.toFixed(2) },
-        { header: 'IVA / Impuesto ($)', accessor: (i: SalesReportItemDto) => i.taxAmount.toFixed(2) },
+        {
+          header: 'IVA / Impuesto ($)',
+          accessor: (i: SalesReportItemDto) => i.taxAmount.toFixed(2),
+        },
         { header: 'Total ($)', accessor: (i: SalesReportItemDto) => i.totalAmount.toFixed(2) },
         { header: 'Estado', accessor: (i: SalesReportItemDto) => i.status },
       ],
@@ -394,11 +512,11 @@ export class ReportsService {
       orderBy: { createdAt: 'desc' },
     });
 
-    let totalInflows = 0;
-    let totalOutflows = 0;
+    let totalInflows = 0n;
+    let totalOutflows = 0n;
 
-    const items: CashMovementReportItemDto[] = movements.map((m: any) => {
-      const amount = Number(m.amount);
+    const items: CashMovementReportItemDto[] = movements.map((m) => {
+      const amount = moneyToCents(m.amount);
       // Tipos reales: INGRESO_VENTA, INGRESO_MANUAL, EGRESO_MANUAL, EGRESO_PAGO_PROVEEDOR.
       // Antes solo se reconocían 'INGRESO', 'VENTA' y 'APERTURA', así que toda venta en
       // efectivo salía como egreso. Se aceptan también esos nombres por datos antiguos.
@@ -418,10 +536,10 @@ export class ReportsService {
         createdAt: m.createdAt.toISOString(),
         movementType: isIngreso ? 'IN' : 'OUT',
         concept: m.reason || m.movementType,
-        amount,
-        debit: isIngreso ? amount : 0,
-        credit: isIngreso ? 0 : -amount,
-        balanceAfter: Number(m.balanceAfter),
+        amount: centsToNumber(amount),
+        debit: isIngreso ? centsToNumber(amount) : 0,
+        credit: isIngreso ? 0 : centsToNumber(-amount),
+        balanceAfter: centsToNumber(moneyToCents(m.balanceAfter)),
         paymentMethod: m.paymentMethod,
         referenceDocumentType: m.referenceDocumentType,
         referenceDocumentId: m.referenceDocumentId,
@@ -434,9 +552,9 @@ export class ReportsService {
       fromDate: filter.fromDate || null,
       toDate: filter.toDate || null,
       totalMovements: items.length,
-      totalInflows: Math.round(totalInflows * 100) / 100,
-      totalOutflows: Math.round(totalOutflows * 100) / 100,
-      netCashFlow: Math.round((totalInflows - totalOutflows) * 100) / 100,
+      totalInflows: centsToNumber(totalInflows),
+      totalOutflows: centsToNumber(totalOutflows),
+      netCashFlow: centsToNumber(totalInflows - totalOutflows),
       items,
     };
   }
@@ -445,14 +563,27 @@ export class ReportsService {
     return generateCsv(
       [
         { header: 'Fecha y Hora', accessor: (i: CashMovementReportItemDto) => i.createdAt },
-        { header: 'Tipo Flujo', accessor: (i: CashMovementReportItemDto) => (i.movementType === 'IN' ? 'INGRESO' : 'EGRESO') },
+        {
+          header: 'Tipo Flujo',
+          accessor: (i: CashMovementReportItemDto) =>
+            i.movementType === 'IN' ? 'INGRESO' : 'EGRESO',
+        },
         { header: 'Concepto / Descripción', accessor: (i: CashMovementReportItemDto) => i.concept },
         // Acuerdo del 4 de octubre: débitos positivos, créditos negativos y saldo
         { header: 'Débito ($)', accessor: (i: CashMovementReportItemDto) => i.debit.toFixed(2) },
         { header: 'Crédito ($)', accessor: (i: CashMovementReportItemDto) => i.credit.toFixed(2) },
-        { header: 'Saldo ($)', accessor: (i: CashMovementReportItemDto) => i.balanceAfter.toFixed(2) },
+        {
+          header: 'Saldo ($)',
+          accessor: (i: CashMovementReportItemDto) => i.balanceAfter.toFixed(2),
+        },
         { header: 'Medio de Pago', accessor: (i: CashMovementReportItemDto) => i.paymentMethod },
-        { header: 'Doc. Referencia', accessor: (i: CashMovementReportItemDto) => i.referenceDocumentType ? `${i.referenceDocumentType} ${i.referenceDocumentId || ''}` : 'N/A' },
+        {
+          header: 'Doc. Referencia',
+          accessor: (i: CashMovementReportItemDto) =>
+            i.referenceDocumentType
+              ? `${i.referenceDocumentType} ${i.referenceDocumentId || ''}`
+              : 'N/A',
+        },
         { header: 'Usuario', accessor: (i: CashMovementReportItemDto) => i.userName || 'Sistema' },
       ],
       data.items,

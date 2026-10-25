@@ -1,5 +1,5 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
-import { prisma } from '@farmacia/database';
+import { prisma, Prisma } from '@farmacia/database';
 import type {
   CreateProductPresentationPayload,
   ProductPresentationDto,
@@ -94,10 +94,6 @@ export class ProductPresentationService {
       quantityContained,
     });
 
-    if (payload.isDefault || payload.isDefaultSale) {
-      await this.presentationRepository.unsetDefaultPresentations(productId);
-    }
-
     const presentation = ProductPresentation.create({
       productId,
       unitOfMeasureId: payload.unitOfMeasureId ?? null,
@@ -115,31 +111,41 @@ export class ProductPresentationService {
       isDefaultSale: payload.isDefaultSale ?? payload.isDefault ?? false,
     });
 
-    const saved = await this.presentationRepository.save(presentation);
+    const persist = async (tx?: Prisma.TransactionClient) => {
+      if (payload.isDefault || payload.isDefaultSale) {
+        await this.presentationRepository.unsetDefaultPresentations(productId, undefined, tx);
+      }
 
-    if (this.auditService) {
-      await this.auditService.recordEvent({
-        userId: auditCtx?.userId || null,
-        action: 'catalog:presentation_created',
-        entity: 'ProductPresentation',
-        entityId: saved.id,
-        details: {
-          productId: saved.productId,
-          productName: product.name,
-          name: saved.name,
-          unitOfMeasureId: saved.unitOfMeasureId,
-          containedPresentationId: saved.containedPresentationId,
-          quantityContained: saved.quantityContained,
-          conversionFactor: saved.conversionFactor,
-          price: saved.price,
-          isDefault: saved.isDefault,
-        },
-        ipAddress: auditCtx?.ipAddress || null,
-        correlationId: auditCtx?.correlationId || null,
-      });
-    }
+      const saved = await this.presentationRepository.save(presentation, tx);
 
-    return saved;
+      if (this.auditService) {
+        await this.auditService.recordEvent(
+          {
+            userId: auditCtx?.userId || null,
+            action: 'catalog:presentation_created',
+            entity: 'ProductPresentation',
+            entityId: saved.id,
+            details: {
+              productId: saved.productId,
+              productName: product.name,
+              name: saved.name,
+              unitOfMeasureId: saved.unitOfMeasureId,
+              containedPresentationId: saved.containedPresentationId,
+              quantityContained: saved.quantityContained,
+              conversionFactor: saved.conversionFactor,
+              price: saved.price,
+              isDefault: saved.isDefault,
+            },
+            ipAddress: auditCtx?.ipAddress || null,
+            correlationId: auditCtx?.correlationId || null,
+          },
+          tx,
+        );
+      }
+
+      return saved;
+    };
+    return this.auditService ? prisma.$transaction(persist) : persist();
   }
 
   public async getPresentationsByProductId(
@@ -203,10 +209,6 @@ export class ProductPresentationService {
       throw new CannotDeactivateDefaultPresentationException();
     }
 
-    if (payload.isDefault && !presentation.isDefault) {
-      await this.presentationRepository.unsetDefaultPresentations(productId, presentation.id);
-    }
-
     // Resolver nuevo factor acumulado si cambia quantityContained o containedPresentationId
     const newContainedId =
       payload.containedPresentationId !== undefined
@@ -230,6 +232,7 @@ export class ProductPresentationService {
     });
 
     const previousConversionFactor = presentation.conversionFactor;
+    const shouldUnsetDefault = payload.isDefault && !presentation.isDefault;
 
     presentation.update({
       ...payload,
@@ -238,33 +241,43 @@ export class ProductPresentationService {
       containedPresentationId: newContainedId,
     });
 
-    const updated =
-      newConversionFactor !== previousConversionFactor
-        ? await this.presentationRepository.updateAndPropagateFactors(presentation)
-        : await this.presentationRepository.update(presentation);
+    const persist = async (tx?: Prisma.TransactionClient) => {
+      if (shouldUnsetDefault) {
+        await this.presentationRepository.unsetDefaultPresentations(productId, presentation.id, tx);
+      }
 
-    if (this.auditService) {
-      await this.auditService.recordEvent({
-        userId: auditCtx?.userId || null,
-        action: 'catalog:presentation_updated',
-        entity: 'ProductPresentation',
-        entityId: updated.id,
-        details: {
-          productId: updated.productId,
-          productName: product.name,
-          name: updated.name,
-          quantityContained: updated.quantityContained,
-          conversionFactor: updated.conversionFactor,
-          price: updated.price,
-          isDefault: updated.isDefault,
-          isActive: updated.isActive,
-        },
-        ipAddress: auditCtx?.ipAddress || null,
-        correlationId: auditCtx?.correlationId || null,
-      });
-    }
+      const updated =
+        newConversionFactor !== previousConversionFactor
+          ? await this.presentationRepository.updateAndPropagateFactors(presentation, tx)
+          : await this.presentationRepository.update(presentation, tx);
 
-    return updated;
+      if (this.auditService) {
+        await this.auditService.recordEvent(
+          {
+            userId: auditCtx?.userId || null,
+            action: 'catalog:presentation_updated',
+            entity: 'ProductPresentation',
+            entityId: updated.id,
+            details: {
+              productId: updated.productId,
+              productName: product.name,
+              name: updated.name,
+              quantityContained: updated.quantityContained,
+              conversionFactor: updated.conversionFactor,
+              price: updated.price,
+              isDefault: updated.isDefault,
+              isActive: updated.isActive,
+            },
+            ipAddress: auditCtx?.ipAddress || null,
+            correlationId: auditCtx?.correlationId || null,
+          },
+          tx,
+        );
+      }
+
+      return updated;
+    };
+    return this.auditService ? prisma.$transaction(persist) : persist();
   }
 
   public async deactivatePresentation(
@@ -279,24 +292,30 @@ export class ProductPresentationService {
     }
 
     presentation.deactivate();
-    const updated = await this.presentationRepository.update(presentation);
+    const persist = async (tx?: Prisma.TransactionClient) => {
+      const updated = await this.presentationRepository.update(presentation, tx);
 
-    if (this.auditService) {
-      await this.auditService.recordEvent({
-        userId: auditCtx?.userId || null,
-        action: 'catalog:presentation_deactivated',
-        entity: 'ProductPresentation',
-        entityId: updated.id,
-        details: {
-          productId: updated.productId,
-          name: updated.name,
-        },
-        ipAddress: auditCtx?.ipAddress || null,
-        correlationId: auditCtx?.correlationId || null,
-      });
-    }
+      if (this.auditService) {
+        await this.auditService.recordEvent(
+          {
+            userId: auditCtx?.userId || null,
+            action: 'catalog:presentation_deactivated',
+            entity: 'ProductPresentation',
+            entityId: updated.id,
+            details: {
+              productId: updated.productId,
+              name: updated.name,
+            },
+            ipAddress: auditCtx?.ipAddress || null,
+            correlationId: auditCtx?.correlationId || null,
+          },
+          tx,
+        );
+      }
 
-    return updated;
+      return updated;
+    };
+    return this.auditService ? prisma.$transaction(persist) : persist();
   }
 
   /**

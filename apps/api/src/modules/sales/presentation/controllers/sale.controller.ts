@@ -17,6 +17,7 @@ import {
   HttpException,
   ParseUUIDPipe,
 } from '@nestjs/common';
+import { ApiBody, ApiOperation, ApiOkResponse, ApiResponse } from '@nestjs/swagger';
 import type { Request } from 'express';
 import {
   AccountingConflictError,
@@ -26,11 +27,13 @@ import {
 import {
   SYSTEM_PERMISSIONS,
   SaleDto,
+  FefoPreviewDto,
   SaleQueryFilters,
   PaginatedResponse,
 } from '@farmacia/contracts';
 import { SaleService } from '../../application/sale.service';
 import { ConfirmSaleDto, ConfirmSaleValidationPipe } from '../dtos/confirm-sale.dto';
+import { FefoPreviewRequestDto, FefoPreviewValidationPipe } from '../dtos/fefo-preview.dto';
 import { CancelSaleDto, CancelSaleValidationPipe } from '../dtos/cancel-sale.dto';
 import { SaleQueryValidationPipe } from '../dtos/sale-query.dto';
 import {
@@ -55,7 +58,102 @@ import {
 export class SaleController {
   constructor(private readonly saleService: SaleService) {}
 
+  @Post('fefo-preview')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions(SYSTEM_PERMISSIONS.SALES_CREATE)
+  @ApiOperation({
+    summary: 'Asignación FEFO automática para el carrito actual',
+    description:
+      'Consulta de sólo lectura; no reserva existencias. La confirmación recalcula con bloqueo.',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['items'],
+      properties: {
+        items: {
+          type: 'array',
+          minItems: 1,
+          maxItems: 100,
+          items: {
+            type: 'object',
+            required: ['productId', 'quantityCommercial'],
+            properties: {
+              productId: { type: 'string', format: 'uuid' },
+              presentationId: { type: 'string', format: 'uuid', nullable: true },
+              quantityCommercial: { type: 'number', minimum: 0, exclusiveMinimum: true },
+            },
+          },
+        },
+      },
+    },
+  })
+  @ApiOkResponse({
+    description:
+      'Asignaciones parciales, existencias disponibles y faltantes por línea, en orden de carrito.',
+    schema: {
+      type: 'object',
+      required: ['businessDay', 'lines'],
+      properties: {
+        businessDay: { type: 'string', format: 'date', description: 'Día de negocio en Bogotá' },
+        lines: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: [
+              'productId',
+              'presentationId',
+              'requiredBaseUnits',
+              'availableBaseUnits',
+              'shortfallBaseUnits',
+              'allocations',
+            ],
+            properties: {
+              productId: { type: 'string', format: 'uuid' },
+              presentationId: { type: 'string', format: 'uuid', nullable: true },
+              requiredBaseUnits: { type: 'integer' },
+              availableBaseUnits: {
+                type: 'integer',
+                description: 'Saldo previo a esta línea, tras consumir las anteriores',
+              },
+              shortfallBaseUnits: { type: 'integer' },
+              allocations: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  required: ['lotId', 'lotNumber', 'expirationDate', 'quantityBaseUnits'],
+                  properties: {
+                    lotId: { type: 'string', format: 'uuid' },
+                    lotNumber: { type: 'string' },
+                    expirationDate: { type: 'string', format: 'date' },
+                    quantityBaseUnits: { type: 'integer' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Cuerpo, producto, presentación o cantidad inválidos.' })
+  @ApiResponse({ status: 401, description: 'Sesión requerida.' })
+  @ApiResponse({ status: 403, description: 'Requiere sales:create.' })
+  @ApiResponse({ status: 409, description: 'Producto sin control de lote.' })
+  public async previewFefo(
+    @Body(FefoPreviewValidationPipe) dto: FefoPreviewRequestDto,
+  ): Promise<FefoPreviewDto> {
+    return this.saleService.previewFefo(dto);
+  }
+
   @Post('confirm')
+  @ApiResponse({ status: 400, description: 'Datos inválidos o existencias insuficientes.' })
+  @ApiResponse({ status: 404, description: 'Cliente solicitado no encontrado.' })
+  @ApiResponse({
+    status: 409,
+    description: 'Conflicto de estado, de idempotencia o producto sin control de lote.',
+  })
+  @ApiResponse({ status: 500, description: 'Fallo interno; la operación se revierte.' })
   @HttpCode(HttpStatus.CREATED)
   @RequirePermissions(SYSTEM_PERMISSIONS.SALES_CREATE)
   public async confirmSale(
@@ -79,11 +177,12 @@ export class SaleController {
       if (error instanceof HttpException) {
         throw error;
       }
-      if (
-        error instanceof InsufficientStockException ||
-        error instanceof ProductWithoutLotControlException
-      ) {
+      if (error instanceof InsufficientStockException) {
         throw new BadRequestException(error.message);
+      }
+      // Producto sin control de lote: conflicto de configuración (409), igual que en fefo-preview
+      if (error instanceof ProductWithoutLotControlException) {
+        throw new ConflictException(error.message);
       }
       if (error instanceof IdempotencyConflictException) {
         throw new ConflictException(error.message);

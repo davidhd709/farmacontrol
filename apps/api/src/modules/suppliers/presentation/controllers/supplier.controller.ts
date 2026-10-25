@@ -14,7 +14,6 @@ import {
   HttpStatus,
   NotFoundException,
   ConflictException,
-  BadRequestException,
   ForbiddenException,
   ParseUUIDPipe,
 } from '@nestjs/common';
@@ -60,9 +59,6 @@ export class SupplierController {
     } catch (error) {
       if (error instanceof SupplierAlreadyExistsException) {
         throw new ConflictException(error.message);
-      }
-      if (error instanceof Error) {
-        throw new BadRequestException(error.message);
       }
       throw error;
     }
@@ -119,9 +115,6 @@ export class SupplierController {
       }
       if (error instanceof SupplierTaxIdChangeForbiddenException) {
         throw new ForbiddenException(error.message);
-      }
-      if (error instanceof Error) {
-        throw new BadRequestException(error.message);
       }
       throw error;
     }

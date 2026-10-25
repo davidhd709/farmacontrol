@@ -1,3 +1,4 @@
+import { DomainError } from '../../../common/domain-error';
 export type PayableStatus = 'PENDIENTE' | 'PAGADA' | 'ANULADA';
 
 export class Payable {
@@ -21,18 +22,17 @@ export class Payable {
    */
   applyPayment(amount: number): void {
     if (this.status !== 'PENDIENTE') {
-      throw new Error(
-        `No se puede pagar una cuenta en estado "${this.status}"`,
-      );
+      throw new DomainError(`No se puede pagar una cuenta en estado "${this.status}"`, 'conflict');
     }
     if (amount <= 0) {
-      throw new Error('El monto del pago debe ser mayor a cero');
+      throw new DomainError('El monto del pago debe ser mayor a cero', 'validation');
     }
     const roundedAmount = Math.round(amount * 100) / 100;
     const roundedBalance = Math.round(this.balance * 100) / 100;
     if (roundedAmount > roundedBalance) {
-      throw new Error(
+      throw new DomainError(
         `El monto del pago (${roundedAmount}) supera el saldo pendiente (${roundedBalance})`,
+        'conflict',
       );
     }
     this.amountPaid = Math.round((this.amountPaid + roundedAmount) * 100) / 100;

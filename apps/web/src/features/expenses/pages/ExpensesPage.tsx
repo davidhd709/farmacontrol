@@ -1,4 +1,9 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { ExpenseFormDialog } from '../components/ExpenseFormDialog';
+import { ExpensePaymentDialog } from '../components/ExpensePaymentDialog';
+import { ExpenseReasonDialog } from '../components/ExpenseReasonDialog';
+import type { ExpenseReasonFormData } from '../validation/expense-reason.schema';
+import { toCents } from '../../../utils/money';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -43,14 +48,11 @@ import {
   ExpensePaymentMethod,
   ExpensesSummaryDto,
   BankAccountDto,
-  ThirdPartyDto,
 } from '@farmacia/contracts';
-import { ThirdPartyAutocomplete } from '../../third-parties/components/ThirdPartyAutocomplete';
+
 import {
   fetchExpenses,
   fetchExpensesSummary,
-  createExpense,
-  payExpense,
   cancelExpense,
   reverseExpensePayment,
   fetchExpenseCategories,
@@ -67,8 +69,6 @@ function formatCurrency(val: string | number | undefined): string {
 }
 
 export const ExpensesPage: React.FC = () => {
-  const createRetry = useRef<{ fingerprint: string; key: string } | null>(null);
-  const paymentRetry = useRef<{ fingerprint: string; key: string } | null>(null);
   // Filtros
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -99,30 +99,6 @@ export const ExpensesPage: React.FC = () => {
   // Registro activo para modales
   const [selectedExpense, setSelectedExpense] = useState<ExpenseDto | null>(null);
   const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(null);
-
-  // Campos para crear gasto
-  const [newCatId, setNewCatId] = useState('');
-  const [newThirdParty, setNewThirdParty] = useState<ThirdPartyDto | null>(null);
-  const [newBeneficiary, setNewBeneficiary] = useState('');
-  const [newDescription, setNewDescription] = useState('');
-  const [newDocumentNumber, setNewDocumentNumber] = useState('');
-  const [newAmount, setNewAmount] = useState('');
-  const [newExpenseDate, setNewExpenseDate] = useState(localIsoDate(new Date()));
-  const [newDueDate, setNewDueDate] = useState('');
-  const [newPaymentMethod, setNewPaymentMethod] = useState<ExpensePaymentMethod>('EFECTIVO');
-  const [newBankAccountId, setNewBankAccountId] = useState('');
-  const [newNotes, setNewNotes] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-
-  // Campos para pagar gasto
-  const [payAmount, setPayAmount] = useState('');
-  const [payDate, setPayDate] = useState(localIsoDate(new Date()));
-  const [payMethod, setPayMethod] = useState<'EFECTIVO' | 'TRANSFERENCIA'>('EFECTIVO');
-  const [payBankAccountId, setPayBankAccountId] = useState('');
-  const [payNotes, setPayNotes] = useState('');
-
-  // Campos para cancelación / reversión
-  const [reasonInput, setReasonInput] = useState('');
 
   // Carga de categorías y bancos auxiliares
   const loadAuxData = useCallback(async () => {
@@ -204,193 +180,60 @@ export const ExpensesPage: React.FC = () => {
     setPage(1);
   };
 
-  // Manejo de Creación de Gasto
   const handleOpenCreate = () => {
-    setNewCatId(categories.length > 0 ? categories[0].id : '');
-    setNewThirdParty(null);
-    setNewBeneficiary('');
-    setNewDescription('');
-    setNewDocumentNumber('');
-    setNewAmount('');
-    setNewExpenseDate(localIsoDate(new Date()));
-    setNewDueDate('');
-    setNewPaymentMethod('EFECTIVO');
-    setNewBankAccountId(bankAccounts.length > 0 ? bankAccounts[0].id : '');
-    setNewNotes('');
     setCreateModalOpen(true);
     setError(null);
   };
-
-  const handleCreateSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newCatId) {
-      setError('Debe seleccionar una categoría de gasto.');
-      return;
-    }
-    if (!newBeneficiary.trim() || !newDescription.trim()) {
-      setError('El beneficiario y la descripción son obligatorios.');
-      return;
-    }
-    if (!newAmount || parseFloat(newAmount) <= 0) {
-      setError('El monto debe ser mayor a cero.');
-      return;
-    }
-    if (newPaymentMethod === 'CREDITO' && !newDueDate) {
-      setError('La fecha de vencimiento es obligatoria para gastos a crédito.');
-      return;
-    }
-    if (newPaymentMethod === 'TRANSFERENCIA' && !newBankAccountId) {
-      setError('Debe seleccionar una cuenta bancaria para pago por transferencia.');
-      return;
-    }
-
-    setSubmitting(true);
-    setError(null);
-    try {
-      const payload = {
-        categoryId: newCatId,
-        beneficiary: newBeneficiary.trim(),
-        description: newDescription.trim(),
-        documentNumber: newDocumentNumber.trim() || undefined,
-        amount: newAmount,
-        expenseDate: newExpenseDate,
-        dueDate: newPaymentMethod === 'CREDITO' ? newDueDate : undefined,
-        paymentMethod: newPaymentMethod,
-        bankAccountId: newPaymentMethod === 'TRANSFERENCIA' ? newBankAccountId : undefined,
-        notes: newNotes.trim() || undefined,
-      };
-      const fingerprint = JSON.stringify(payload);
-      if (createRetry.current?.fingerprint !== fingerprint) {
-        createRetry.current = { fingerprint, key: crypto.randomUUID() };
-      }
-      await createExpense(payload, createRetry.current.key);
-      createRetry.current = null;
-      setSuccess('Gasto registrado exitosamente con partida doble y tesorería.');
-      setCreateModalOpen(false);
-      await loadExpenses();
-    } catch (err: any) {
-      setError(err?.message || 'Error al registrar el gasto.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  // Manejo de Pago Posterior de Gasto
   const handleOpenPay = (exp: ExpenseDto) => {
     setSelectedExpense(exp);
-    setPayAmount(exp.balance);
-    setPayDate(localIsoDate(new Date()));
-    setPayMethod('EFECTIVO');
-    setPayBankAccountId(bankAccounts.length > 0 ? bankAccounts[0].id : '');
-    setPayNotes('');
     setPayModalOpen(true);
     setError(null);
-  };
-
-  const handlePaySubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedExpense) return;
-    if (!payAmount || parseFloat(payAmount) <= 0) {
-      setError('El monto a pagar debe ser mayor a cero.');
-      return;
-    }
-    if (parseFloat(payAmount) > parseFloat(selectedExpense.balance)) {
-      setError('El monto a pagar no puede superar el saldo pendiente.');
-      return;
-    }
-    if (payMethod === 'TRANSFERENCIA' && !payBankAccountId) {
-      setError('Debe seleccionar una cuenta bancaria para transferencia.');
-      return;
-    }
-
-    setSubmitting(true);
-    setError(null);
-    try {
-      const payload = {
-        amount: payAmount,
-        paymentDate: payDate,
-        paymentMethod: payMethod,
-        bankAccountId: payMethod === 'TRANSFERENCIA' ? payBankAccountId : undefined,
-        notes: payNotes.trim() || undefined,
-      };
-      const fingerprint = JSON.stringify({ expenseId: selectedExpense.id, payload });
-      if (paymentRetry.current?.fingerprint !== fingerprint) {
-        paymentRetry.current = { fingerprint, key: crypto.randomUUID() };
-      }
-      await payExpense(selectedExpense.id, payload, paymentRetry.current.key);
-      paymentRetry.current = null;
-      setSuccess('Pago de gasto registrado exitosamente.');
-      setPayModalOpen(false);
-      await loadExpenses();
-    } catch (err: any) {
-      setError(err?.message || 'Error al procesar el pago.');
-    } finally {
-      setSubmitting(false);
-    }
   };
 
   // Manejo de Anulación de Gasto
   const handleOpenCancel = (exp: ExpenseDto) => {
     setSelectedExpense(exp);
-    setReasonInput('');
     setCancelModalOpen(true);
     setError(null);
   };
 
-  const handleCancelSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCancelSubmit = async ({ reason }: ExpenseReasonFormData) => {
     if (!selectedExpense) return;
-    if (reasonInput.trim().length < 5) {
-      setError('El motivo de anulación es obligatorio (mínimo 5 caracteres).');
-      return;
-    }
 
-    setSubmitting(true);
     setError(null);
     try {
       await cancelExpense(selectedExpense.id, {
-        cancellationReason: reasonInput.trim(),
+        cancellationReason: reason.trim(),
       });
       setSuccess('Gasto anulado exitosamente con reversión contable y reintegro a tesorería.');
       setCancelModalOpen(false);
       await loadExpenses();
     } catch (err: any) {
-      setError(err?.message || 'Error al anular el gasto.');
-    } finally {
-      setSubmitting(false);
+      throw new Error(err?.message || 'Error al anular el gasto.');
     }
   };
 
   // Manejo de Reversión de Pago de Gasto
   const handleOpenReversePayment = (paymentId: string) => {
     setSelectedPaymentId(paymentId);
-    setReasonInput('');
     setReversePaymentModalOpen(true);
     setError(null);
   };
 
-  const handleReversePaymentSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleReversePaymentSubmit = async ({ reason }: ExpenseReasonFormData) => {
     if (!selectedPaymentId) return;
-    if (reasonInput.trim().length < 5) {
-      setError('El motivo de reversión es obligatorio (mínimo 5 caracteres).');
-      return;
-    }
 
-    setSubmitting(true);
     setError(null);
     try {
       const updated = await reverseExpensePayment(selectedPaymentId, {
-        reversalReason: reasonInput.trim(),
+        reversalReason: reason.trim(),
       });
       setSuccess('Pago revertido exitosamente.');
       setSelectedExpense(updated);
       setReversePaymentModalOpen(false);
       await loadExpenses();
     } catch (err: any) {
-      setError(err?.message || 'Error al revertir el pago.');
-    } finally {
-      setSubmitting(false);
+      throw new Error(err?.message || 'Error al revertir el pago.');
     }
   };
 
@@ -609,7 +452,10 @@ export const ExpensesPage: React.FC = () => {
               }}
             />
           </Grid>
-          <Grid size={{ xs: 12, md: 8 }} sx={{ display: 'flex', gap: 1, justifyContent: { xs: 'flex-start', md: 'flex-end' } }}>
+          <Grid
+            size={{ xs: 12, md: 8 }}
+            sx={{ display: 'flex', gap: 1, justifyContent: { xs: 'flex-start', md: 'flex-end' } }}
+          >
             <Button size="small" variant="outlined" onClick={setTodayPreset}>
               Hoy
             </Button>
@@ -635,7 +481,9 @@ export const ExpensesPage: React.FC = () => {
               <TableCell sx={{ fontWeight: 'bold' }}>Medio de Pago</TableCell>
               <TableCell sx={{ fontWeight: 'bold', textAlign: 'center' }}>Estado</TableCell>
               <TableCell sx={{ fontWeight: 'bold', textAlign: 'right' }}>Total ($)</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', textAlign: 'right' }}>Saldo Pendiente ($)</TableCell>
+              <TableCell sx={{ fontWeight: 'bold', textAlign: 'right' }}>
+                Saldo Pendiente ($)
+              </TableCell>
               <TableCell sx={{ fontWeight: 'bold', textAlign: 'center' }}>Acciones</TableCell>
             </TableRow>
           </TableHead>
@@ -659,7 +507,11 @@ export const ExpensesPage: React.FC = () => {
                 const isCancelled = e.status === 'ANULADO';
 
                 return (
-                  <TableRow key={e.id} hover sx={isCancelled ? { opacity: 0.6, backgroundColor: 'action.hover' } : {}}>
+                  <TableRow
+                    key={e.id}
+                    hover
+                    sx={isCancelled ? { opacity: 0.6, backgroundColor: 'action.hover' } : {}}
+                  >
                     <TableCell sx={{ whiteSpace: 'nowrap' }}>{e.expenseDate}</TableCell>
                     <TableCell>
                       <Chip label={e.categoryName} size="small" variant="outlined" />
@@ -676,7 +528,11 @@ export const ExpensesPage: React.FC = () => {
                     <TableCell>
                       <Typography variant="body2">{e.paymentMethod}</Typography>
                       {e.bankAccountName && (
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ display: 'block' }}
+                        >
                           {e.bankAccountName}
                         </Typography>
                       )}
@@ -688,7 +544,10 @@ export const ExpensesPage: React.FC = () => {
                         size="small"
                       />
                       {isPending && e.dueDate && (
-                        <Typography variant="caption" sx={{ color: 'warning.main', display: 'block' }}>
+                        <Typography
+                          variant="caption"
+                          sx={{ color: 'warning.main', display: 'block' }}
+                        >
                           Vence: {e.dueDate}
                         </Typography>
                       )}
@@ -708,6 +567,7 @@ export const ExpensesPage: React.FC = () => {
                     <TableCell sx={{ textAlign: 'center' }}>
                       <Tooltip title="Ver Detalle / Historial">
                         <IconButton
+                          aria-label="Ver detalle del gasto"
                           size="small"
                           color="primary"
                           onClick={() => {
@@ -721,6 +581,7 @@ export const ExpensesPage: React.FC = () => {
                       {isPending && (
                         <Tooltip title="Pagar / Abonar">
                           <IconButton
+                            aria-label="Pagar gasto"
                             size="small"
                             color="success"
                             onClick={() => handleOpenPay(e)}
@@ -732,6 +593,7 @@ export const ExpensesPage: React.FC = () => {
                       {!isCancelled && (
                         <Tooltip title="Anular Gasto">
                           <IconButton
+                            aria-label="Anular gasto"
                             size="small"
                             color="error"
                             onClick={() => handleOpenCancel(e)}
@@ -761,269 +623,38 @@ export const ExpensesPage: React.FC = () => {
         )}
       </Card>
 
-      {/* Modal Registrar Nuevo Gasto */}
-      <Dialog open={createModalOpen} onClose={() => setCreateModalOpen(false)} maxWidth="sm" fullWidth>
-        <form onSubmit={handleCreateSubmit}>
-          <DialogTitle sx={{ fontWeight: 'bold' }}>Registrar Causación de Gasto</DialogTitle>
-          <DialogContent dividers>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
-              <TextField
-                select
-                label="Categoría de Gasto"
-                value={newCatId}
-                onChange={(e) => setNewCatId(e.target.value)}
-                required
-                fullWidth
-                size="small"
-              >
-                {categories.map((c) => (
-                  <MenuItem key={c.id} value={c.id}>
-                    {c.name} ({c.accountCode} - {c.accountName})
-                  </MenuItem>
-                ))}
-              </TextField>
-
-              <ThirdPartyAutocomplete
-                value={newThirdParty}
-                onChange={(tp, raw) => {
-                  setNewThirdParty(tp);
-                  if (tp) {
-                    setNewBeneficiary(tp.name);
-                    if (tp.documentNumber && !newDocumentNumber) {
-                      setNewDocumentNumber(tp.documentNumber);
-                    }
-                  } else if (raw !== undefined) {
-                    setNewBeneficiary(raw);
-                  }
-                }}
-                label="Beneficiario / Tercero / Proveedor"
-                placeholder="Buscar en el directorio o escribir nombre..."
-                required
-                freeSolo
-                showQuickCreate
-              />
-
-              <TextField
-                label="Concepto / Descripción del Gasto"
-                value={newDescription}
-                onChange={(e) => setNewDescription(e.target.value)}
-                required
-                fullWidth
-                placeholder="Ej. Servicio de energía eléctrica mes de septiembre"
-                size="small"
-              />
-
-              <Grid container spacing={2}>
-                <Grid size={{ xs: 6 }}>
-                  <TextField
-                    label="Nº Factura / Documento Soporte"
-                    value={newDocumentNumber}
-                    onChange={(e) => setNewDocumentNumber(e.target.value)}
-                    fullWidth
-                    size="small"
-                    placeholder="Ej. FAC-1029"
-                  />
-                </Grid>
-                <Grid size={{ xs: 6 }}>
-                  <TextField
-                    label="Valor Total ($)"
-                    type="number"
-                    slotProps={{ htmlInput: { step: '0.01', min: '0.01' } }}
-                    value={newAmount}
-                    onChange={(e) => setNewAmount(e.target.value)}
-                    required
-                    fullWidth
-                    size="small"
-                  />
-                </Grid>
-              </Grid>
-
-              <Grid container spacing={2}>
-                <Grid size={{ xs: 6 }}>
-                  <TextField
-                    label="Fecha de Gasto"
-                    type="date"
-                    value={newExpenseDate}
-                    onChange={(e) => setNewExpenseDate(e.target.value)}
-                    required
-                    fullWidth
-                    size="small"
-                    slotProps={{ inputLabel: { shrink: true } }}
-                  />
-                </Grid>
-                <Grid size={{ xs: 6 }}>
-                  <TextField
-                    select
-                    label="Forma de Pago"
-                    value={newPaymentMethod}
-                    onChange={(e) => setNewPaymentMethod(e.target.value as ExpensePaymentMethod)}
-                    required
-                    fullWidth
-                    size="small"
-                  >
-                    <MenuItem value="EFECTIVO">Efectivo (Caja General)</MenuItem>
-                    <MenuItem value="TRANSFERENCIA">Transferencia (Cuenta Bancaria)</MenuItem>
-                    <MenuItem value="CREDITO">A Crédito (Pendiente por Pagar)</MenuItem>
-                  </TextField>
-                </Grid>
-              </Grid>
-
-              {newPaymentMethod === 'TRANSFERENCIA' && (
-                <TextField
-                  select
-                  label="Cuenta Bancaria de Origen"
-                  value={newBankAccountId}
-                  onChange={(e) => setNewBankAccountId(e.target.value)}
-                  required
-                  fullWidth
-                  size="small"
-                >
-                  {bankAccounts.map((b) => (
-                    <MenuItem key={b.id} value={b.id}>
-                      {b.bankName} - {b.accountNumber} ({formatCurrency(b.currentBalance)})
-                    </MenuItem>
-                  ))}
-                </TextField>
-              )}
-
-              {newPaymentMethod === 'CREDITO' && (
-                <TextField
-                  label="Fecha de Vencimiento de Pago"
-                  type="date"
-                  value={newDueDate}
-                  onChange={(e) => setNewDueDate(e.target.value)}
-                  required
-                  fullWidth
-                  size="small"
-                  slotProps={{ inputLabel: { shrink: true } }}
-                  helperText="Fecha límite para cancelar la obligación"
-                />
-              )}
-
-              <TextField
-                label="Notas / Observaciones"
-                value={newNotes}
-                onChange={(e) => setNewNotes(e.target.value)}
-                fullWidth
-                multiline
-                rows={2}
-                size="small"
-              />
-            </Box>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setCreateModalOpen(false)} color="inherit">
-              Cancelar
-            </Button>
-            <Button type="submit" variant="contained" color="primary" disabled={submitting}>
-              {submitting ? 'Guardando...' : 'Confirmar Gasto'}
-            </Button>
-          </DialogActions>
-        </form>
-      </Dialog>
-
-      {/* Modal Pagar Gasto Pendiente */}
-      <Dialog open={payModalOpen} onClose={() => setPayModalOpen(false)} maxWidth="sm" fullWidth>
-        <form onSubmit={handlePaySubmit}>
-          <DialogTitle sx={{ fontWeight: 'bold' }}>Pagar / Abonar Gasto</DialogTitle>
-          <DialogContent dividers>
-            {selectedExpense && (
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
-                <Box sx={{ p: 2, backgroundColor: 'action.hover', borderRadius: 1 }}>
-                  <Typography variant="body2">
-                    <strong>Beneficiario:</strong> {selectedExpense.beneficiary}
-                  </Typography>
-                  <Typography variant="body2">
-                    <strong>Concepto:</strong> {selectedExpense.description}
-                  </Typography>
-                  <Typography variant="body2">
-                    <strong>Total Obligación:</strong> {formatCurrency(selectedExpense.amount)}
-                  </Typography>
-                  <Typography variant="body2">
-                    <strong>Monto Pagado:</strong> {formatCurrency(selectedExpense.amountPaid)}
-                  </Typography>
-                  <Typography variant="h6" sx={{ color: 'warning.main', fontWeight: 'bold', mt: 1 }}>
-                    Saldo Pendiente: {formatCurrency(selectedExpense.balance)}
-                  </Typography>
-                </Box>
-
-                <TextField
-                  label="Monto a Pagar ($)"
-                  type="number"
-                  slotProps={{ htmlInput: { step: '0.01', min: '0.01', max: selectedExpense.balance } }}
-                  value={payAmount}
-                  onChange={(e) => setPayAmount(e.target.value)}
-                  required
-                  fullWidth
-                  size="small"
-                />
-
-                <TextField
-                  label="Fecha del Pago"
-                  type="date"
-                  value={payDate}
-                  onChange={(e) => setPayDate(e.target.value)}
-                  required
-                  fullWidth
-                  size="small"
-                  slotProps={{ inputLabel: { shrink: true } }}
-                />
-
-                <TextField
-                  select
-                  label="Medio de Pago"
-                  value={payMethod}
-                  onChange={(e) => setPayMethod(e.target.value as any)}
-                  required
-                  fullWidth
-                  size="small"
-                >
-                  <MenuItem value="EFECTIVO">Efectivo (Caja General)</MenuItem>
-                  <MenuItem value="TRANSFERENCIA">Transferencia (Cuenta Bancaria)</MenuItem>
-                </TextField>
-
-                {payMethod === 'TRANSFERENCIA' && (
-                  <TextField
-                    select
-                    label="Cuenta Bancaria de Origen"
-                    value={payBankAccountId}
-                    onChange={(e) => setPayBankAccountId(e.target.value)}
-                    required
-                    fullWidth
-                    size="small"
-                  >
-                    {bankAccounts.map((b) => (
-                      <MenuItem key={b.id} value={b.id}>
-                        {b.bankName} - {b.accountNumber} ({formatCurrency(b.currentBalance)})
-                      </MenuItem>
-                    ))}
-                  </TextField>
-                )}
-
-                <TextField
-                  label="Notas / Referencia del Pago"
-                  value={payNotes}
-                  onChange={(e) => setPayNotes(e.target.value)}
-                  fullWidth
-                  size="small"
-                  placeholder="Ej. Recibo de caja menor, comprobante N° 123"
-                />
-              </Box>
-            )}
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setPayModalOpen(false)} color="inherit">
-              Cancelar
-            </Button>
-            <Button type="submit" variant="contained" color="success" disabled={submitting}>
-              {submitting ? 'Procesando...' : 'Confirmar Pago'}
-            </Button>
-          </DialogActions>
-        </form>
-      </Dialog>
+      {createModalOpen && (
+        <ExpenseFormDialog
+          categories={categories}
+          bankAccounts={bankAccounts}
+          onClose={() => setCreateModalOpen(false)}
+          onSuccess={async () => {
+            setSuccess('Gasto registrado exitosamente con partida doble y tesorería.');
+            setCreateModalOpen(false);
+            await loadExpenses();
+          }}
+        />
+      )}
+      {payModalOpen && selectedExpense && (
+        <ExpensePaymentDialog
+          expense={selectedExpense}
+          bankAccounts={bankAccounts}
+          onClose={() => setPayModalOpen(false)}
+          onSuccess={async () => {
+            setSuccess('Pago de gasto registrado exitosamente.');
+            setPayModalOpen(false);
+            await loadExpenses();
+          }}
+        />
+      )}
 
       {/* Modal Detalle de Gasto */}
-      <Dialog open={detailModalOpen} onClose={() => setDetailModalOpen(false)} maxWidth="md" fullWidth>
+      <Dialog
+        open={detailModalOpen}
+        onClose={() => setDetailModalOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
         <DialogTitle sx={{ fontWeight: 'bold' }}>Detalle de Gasto e Historial de Pagos</DialogTitle>
         <DialogContent dividers>
           {selectedExpense && (
@@ -1065,9 +696,7 @@ export const ExpensesPage: React.FC = () => {
                   <Typography variant="caption" color="text.secondary">
                     Comprobante
                   </Typography>
-                  <Typography variant="body1">
-                    {selectedExpense.documentNumber || '—'}
-                  </Typography>
+                  <Typography variant="body1">{selectedExpense.documentNumber || '—'}</Typography>
                 </Grid>
                 <Grid size={{ xs: 6, sm: 4 }}>
                   <Typography variant="caption" color="text.secondary">
@@ -1081,7 +710,13 @@ export const ExpensesPage: React.FC = () => {
                   <Typography variant="caption" color="text.secondary">
                     Saldo Pendiente
                   </Typography>
-                  <Typography variant="body1" sx={{ fontWeight: 'bold', color: parseFloat(selectedExpense.balance) > 0 ? 'warning.main' : 'text.primary' }}>
+                  <Typography
+                    variant="body1"
+                    sx={{
+                      fontWeight: 'bold',
+                      color: toCents(selectedExpense.balance) > 0 ? 'warning.main' : 'text.primary',
+                    }}
+                  >
                     {formatCurrency(selectedExpense.balance)}
                   </Typography>
                 </Grid>
@@ -1089,9 +724,7 @@ export const ExpensesPage: React.FC = () => {
                   <Typography variant="caption" color="text.secondary">
                     Registrado Por
                   </Typography>
-                  <Typography variant="body2">
-                    {selectedExpense.createdByName || '—'}
-                  </Typography>
+                  <Typography variant="body2">{selectedExpense.createdByName || '—'}</Typography>
                 </Grid>
                 <Grid size={{ xs: 6, sm: 4 }}>
                   <Typography variant="caption" color="text.secondary">
@@ -1104,8 +737,8 @@ export const ExpensesPage: React.FC = () => {
                         selectedExpense.status === 'PAGADO'
                           ? 'success'
                           : selectedExpense.status === 'PENDIENTE'
-                          ? 'warning'
-                          : 'error'
+                            ? 'warning'
+                            : 'error'
                       }
                       size="small"
                     />
@@ -1131,7 +764,9 @@ export const ExpensesPage: React.FC = () => {
                       <TableCell sx={{ fontWeight: 'bold' }}>Fecha</TableCell>
                       <TableCell sx={{ fontWeight: 'bold' }}>Medio</TableCell>
                       <TableCell sx={{ fontWeight: 'bold' }}>Cuenta / Origen</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold', textAlign: 'right' }}>Valor Pagado</TableCell>
+                      <TableCell sx={{ fontWeight: 'bold', textAlign: 'right' }}>
+                        Valor Pagado
+                      </TableCell>
                       <TableCell sx={{ fontWeight: 'bold' }}>Registrado Por</TableCell>
                       <TableCell sx={{ fontWeight: 'bold', textAlign: 'center' }}>Estado</TableCell>
                       <TableCell sx={{ fontWeight: 'bold', textAlign: 'right' }}>Acción</TableCell>
@@ -1162,7 +797,11 @@ export const ExpensesPage: React.FC = () => {
                               variant={p.isReversed ? 'outlined' : 'filled'}
                             />
                             {p.reversalReason && (
-                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                                sx={{ display: 'block' }}
+                              >
                                 {p.reversalReason}
                               </Typography>
                             )}
@@ -1171,6 +810,7 @@ export const ExpensesPage: React.FC = () => {
                             {!p.isReversed && (
                               <Tooltip title="Revertir Pago">
                                 <IconButton
+                                  aria-label="Revertir pago"
                                   size="small"
                                   color="warning"
                                   onClick={() => handleOpenReversePayment(p.id)}
@@ -1196,71 +836,20 @@ export const ExpensesPage: React.FC = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Modal Confirmar Anulación de Gasto */}
-      <Dialog open={cancelModalOpen} onClose={() => setCancelModalOpen(false)} maxWidth="xs" fullWidth>
-        <form onSubmit={handleCancelSubmit}>
-          <DialogTitle sx={{ color: 'error.main', fontWeight: 'bold' }}>
-            Anular Gasto Operativo
-          </DialogTitle>
-          <DialogContent dividers>
-            <Typography variant="body2" sx={{ mb: 2 }}>
-              ¿Está seguro de anular este gasto? Se generará un asiento contable de reversión y se devolverán los fondos a tesorería si fue pagado de contado.
-            </Typography>
-            <TextField
-              label="Motivo de la Anulación (Obligatorio)"
-              value={reasonInput}
-              onChange={(e) => setReasonInput(e.target.value)}
-              required
-              fullWidth
-              multiline
-              rows={3}
-              size="small"
-              placeholder="Describa la razón de la anulación (mínimo 5 caracteres)..."
-            />
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setCancelModalOpen(false)} color="inherit">
-              Cancelar
-            </Button>
-            <Button type="submit" variant="contained" color="error" disabled={submitting}>
-              {submitting ? 'Anulando...' : 'Confirmar Anulación'}
-            </Button>
-          </DialogActions>
-        </form>
-      </Dialog>
-
-      {/* Modal Confirmar Reversión de Pago */}
-      <Dialog open={reversePaymentModalOpen} onClose={() => setReversePaymentModalOpen(false)} maxWidth="xs" fullWidth>
-        <form onSubmit={handleReversePaymentSubmit}>
-          <DialogTitle sx={{ color: 'warning.main', fontWeight: 'bold' }}>
-            Revertir Pago de Gasto
-          </DialogTitle>
-          <DialogContent dividers>
-            <Typography variant="body2" sx={{ mb: 2 }}>
-              Esta operación revertirá el pago, reintegrará el saldo pendiente a la obligación y registrará una entrada compensatoria en tesorería.
-            </Typography>
-            <TextField
-              label="Motivo de la Reversión (Obligatorio)"
-              value={reasonInput}
-              onChange={(e) => setReasonInput(e.target.value)}
-              required
-              fullWidth
-              multiline
-              rows={3}
-              size="small"
-              placeholder="Describa la razón de la reversión..."
-            />
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setReversePaymentModalOpen(false)} color="inherit">
-              Cancelar
-            </Button>
-            <Button type="submit" variant="contained" color="warning" disabled={submitting}>
-              {submitting ? 'Revirtiendo...' : 'Confirmar Reversión'}
-            </Button>
-          </DialogActions>
-        </form>
-      </Dialog>
+      {cancelModalOpen && (
+        <ExpenseReasonDialog
+          kind="cancel"
+          onClose={() => setCancelModalOpen(false)}
+          onSubmit={handleCancelSubmit}
+        />
+      )}
+      {reversePaymentModalOpen && (
+        <ExpenseReasonDialog
+          kind="reverse"
+          onClose={() => setReversePaymentModalOpen(false)}
+          onSubmit={handleReversePaymentSubmit}
+        />
+      )}
 
       {/* Modal de Gestión de Categorías */}
       <ExpenseCategoriesModal

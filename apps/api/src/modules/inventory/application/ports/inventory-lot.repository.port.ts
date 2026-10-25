@@ -1,22 +1,30 @@
 import { InventoryLot } from '../../domain/entities/inventory-lot.entity';
 import { Location } from '../../domain/entities/location.entity';
-import type { InventoryLotQueryFilters, PaginatedResponse, InventoryLotDto } from '@farmacia/contracts';
+import type {
+  InventoryLotQueryFilters,
+  PaginatedResponse,
+  InventoryLotDto,
+} from '@farmacia/contracts';
 
 export const INVENTORY_LOT_REPOSITORY_PORT = Symbol('INVENTORY_LOT_REPOSITORY_PORT');
 
 export interface IInventoryLotRepository {
   findById(id: string): Promise<InventoryLot | null>;
-  findByProductLocationAndLotNumber(productId: string, locationId: string, lotNumber: string): Promise<InventoryLot | null>;
+  findByProductLocationAndLotNumber(
+    productId: string,
+    locationId: string,
+    lotNumber: string,
+  ): Promise<InventoryLot | null>;
   findAvailableLotsByProductFefo(productId: string, locationId?: string): Promise<InventoryLot[]>;
   findAll(filters: InventoryLotQueryFilters): Promise<PaginatedResponse<InventoryLotDto>>;
   /**
    * Crea el lote y, si trae cantidad inicial, su movimiento de kardex en la misma transacción.
    */
-  createWithInitialStock(lot: InventoryLot, userId?: string): Promise<InventoryLot>;
+  createWithInitialStock(lot: InventoryLot, userId?: string, tx?: unknown): Promise<InventoryLot>;
 
   // Ubicaciones
   findLocationById(id: string): Promise<Location | null>;
   findDefaultLocation(): Promise<Location | null>;
   findAllLocations(): Promise<Location[]>;
-  saveLocation(location: Location): Promise<Location>;
+  saveLocation(location: Location, tx?: unknown): Promise<Location>;
 }
