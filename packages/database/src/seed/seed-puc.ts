@@ -196,8 +196,15 @@ export async function seedPuc(filePath?: string) {
 
   // Configurar los propósitos contables de la farmacia
   console.log('[Seed PUC] Configurando mapeos de propósitos contables...');
-  const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
+  // Día calendario de Bogotá (en-CA da YYYY-MM-DD), como lo compara la API. En UTC, después de
+  // las 7 p. m. ya sería el día siguiente y los mapeos no regirían para operaciones de hoy.
+  const businessDay = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Bogota',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+  const today = new Date(`${businessDay}T00:00:00.000Z`);
 
   // Buscar un usuario administrador para registrar los mapeos
   const adminUser = await prisma.user.findFirst({

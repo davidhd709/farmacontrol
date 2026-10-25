@@ -55,8 +55,10 @@ cd "${REPO_ROOT}"
 ADMIN_USERNAME="e2e_admin"
 ADMIN_PASSWORD="E2e-$(od -An -N12 -tx1 /dev/urandom | tr -d ' \n')"
 
-log "Sembrando permisos y administrador..."
+log "Sembrando permisos, plan de cuentas y administrador..."
 pnpm --silent db:seed:rbac >"${LOG_DIR}/seed.log" 2>&1 || { cat "${LOG_DIR}/seed.log" >&2; die "Falló la siembra RBAC."; }
+# Igual que una instalación: compras y ventas contabilizan en su transacción y exigen mapeos (ADR-004)
+pnpm --silent db:seed:puc >>"${LOG_DIR}/seed.log" 2>&1 || { cat "${LOG_DIR}/seed.log" >&2; die "Falló la siembra del plan de cuentas."; }
 INITIAL_ADMIN_USERNAME="${ADMIN_USERNAME}" INITIAL_ADMIN_PASSWORD="${ADMIN_PASSWORD}" \
   pnpm --silent db:seed:admin >>"${LOG_DIR}/seed.log" 2>&1 || { cat "${LOG_DIR}/seed.log" >&2; die "Falló la creación del administrador."; }
 
