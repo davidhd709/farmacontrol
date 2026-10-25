@@ -24,6 +24,14 @@ type Tx = Prisma.TransactionClient;
 const journalInclude = { lines: { orderBy: { position: 'asc' as const } } } as const;
 type PostedEntry = Prisma.JournalEntryGetPayload<{ include: typeof journalInclude }>;
 
+/**
+ * yearEndClosing: el cierre anual se fecha el 31 de diciembre aunque diciembre ya esté cerrado.
+ * Solo lo usa AnnualClosingService; exige su origen y su fecha y conserva el bloqueo de documentos.
+ */
+export interface JournalPostOptions {
+  yearEndClosing?: boolean;
+}
+
 const fullJournalInclude = {
   lines: {
     orderBy: { position: 'asc' as const },
@@ -146,7 +154,11 @@ export class JournalService {
     });
   }
 
-  private async postOnce(input: ValidatedJournalPost, tx: Tx): Promise<PostedEntry> {
+  private async postOnce(
+    input: ValidatedJournalPost,
+    tx: Tx,
+    options: JournalPostOptions,
+  ): Promise<PostedEntry> {
     const existing = await this.findBySource(input.sourceType, input.sourceId, tx);
     if (existing) {
       if (!samePost(existing, input))
@@ -155,8 +167,18 @@ export class JournalService {
     }
 
     const date = parseJournalDate(input.entryDate);
+    if (
+      options.yearEndClosing &&
+      (input.sourceType !== 'ANNUAL_CLOSING' ||
+        date.getUTCMonth() !== 11 ||
+        date.getUTCDate() !== 31)
+    ) {
+      throw new AccountingValidationError(
+        'Solo el cierre anual del 31 de diciembre puede registrarse en un diciembre cerrado.',
+      );
+    }
 
-    await this.assertDateWritable(date, 'registrar asientos', tx);
+    await this.assertDateWritable(date, 'registrar asientos', tx, options.yearEndClosing === true);
 
     const accounts = new Map<DbPurpose, string>();
     const purposesToLookup = new Set<DbPurpose>();
@@ -225,7 +247,11 @@ export class JournalService {
     });
   }
 
-  async post(raw: JournalPostInput, tx?: Tx): Promise<PostedEntry> {
+  async post(
+    raw: JournalPostInput,
+    tx?: Tx,
+    options: JournalPostOptions = {},
+  ): Promise<PostedEntry> {
     const input = validateJournalPost(raw);
     if (tx) {
       const isolation = await tx.$queryRaw<{ level: string }[]>`
@@ -233,11 +259,11 @@ export class JournalService {
       `;
       if (isolation[0]?.level !== 'serializable')
         throw new AccountingValidationError('El asiento requiere una transacción SERIALIZABLE.');
-      return this.postOnce(input, tx);
+      return this.postOnce(input, tx, options);
     }
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        return await prisma.$transaction((client) => this.postOnce(input, client), {
+        return await prisma.$transaction((client) => this.postOnce(input, client, options), {
           isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
         });
       } catch (error) {
@@ -279,8 +305,26 @@ export class JournalService {
         throw new AccountingConflictError('El asiento ya fue reversado con datos diferentes.');
       return existing;
     }
+    // Reversar la reversión de un cierre anual lo restablecería con el año ya reabierto
+    if (original.sourceType === 'REVERSAL' && original.reversalOfId) {
+      const reversed = await tx.journalEntry.findUnique({
+        where: { id: original.reversalOfId },
+        select: { sourceType: true },
+      });
+      if (reversed?.sourceType === 'ANNUAL_CLOSING')
+        throw new AccountingConflictError(
+          'Un cierre anual reversado no se restablece reversando su reversión; publique un cierre anual nuevo.',
+        );
+    }
 
-    await this.assertDateWritable(date, 'reversar asientos', tx);
+    // El cierre anual se reversa en su misma fecha aunque diciembre esté cerrado: es el paso
+    // previo obligatorio para reabrir los meses de ese año
+    const yearEndReversal =
+      original.sourceType === 'ANNUAL_CLOSING' &&
+      date.getTime() === original.entryDate.getTime() &&
+      date.getUTCMonth() === 11 &&
+      date.getUTCDate() === 31;
+    await this.assertDateWritable(date, 'reversar asientos', tx, yearEndReversal);
 
     const entry = await tx.journalEntry.create({
       data: {
@@ -383,14 +427,21 @@ export class JournalService {
    * documentos vigente (fecha igual o anterior a lockedThrough). Son controles distintos:
    * el bloqueo protege un corte revisado aunque el período siga abierto.
    */
-  private async assertDateWritable(day: Date, action: string, client: Tx | typeof prisma) {
-    const closedPeriod = await client.fiscalPeriod.findFirst({
-      where: {
-        status: 'CLOSED',
-        startDate: { lte: day },
-        endDate: { gte: day },
-      },
-    });
+  private async assertDateWritable(
+    day: Date,
+    action: string,
+    client: Tx | typeof prisma,
+    allowClosedPeriod = false,
+  ) {
+    const closedPeriod = allowClosedPeriod
+      ? null
+      : await client.fiscalPeriod.findFirst({
+          where: {
+            status: 'CLOSED',
+            startDate: { lte: day },
+            endDate: { gte: day },
+          },
+        });
     if (closedPeriod) {
       throw new AccountingValidationError(
         `No es posible ${action} en el período cerrado ${closedPeriod.name} (${closedPeriod.year}-${String(closedPeriod.month).padStart(2, '0')}).`,

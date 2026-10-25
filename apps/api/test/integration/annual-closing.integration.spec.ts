@@ -608,11 +608,54 @@ describe('Cierre anual', () => {
       await expectBlocked(2025, /2 cierres mensuales vigentes/);
     });
 
-    it('un cierre anual restablecido tras reversar su reversión impide un segundo cierre', async () => {
+    /**
+     * Reversión escrita como lo hacían las versiones anteriores, que permitían reversar la
+     * reversión de un cierre anual. Sirve para probar datos que ya pueden existir.
+     */
+    async function legacyReverse(entryId: string, date: string) {
+      const original = await prisma.journalEntry.findUniqueOrThrow({
+        where: { id: entryId },
+        include: { lines: true },
+      });
+      return prisma.$transaction(async (tx) => {
+        const reversal = await tx.journalEntry.create({
+          data: {
+            entryDate: new Date(`${date}T00:00:00.000Z`),
+            description: `Reversión de asiento ${original.id}`,
+            sourceType: 'REVERSAL',
+            sourceId: original.id,
+            reversalOfId: original.id,
+            reversalReason: 'Versión anterior',
+          },
+        });
+        await tx.journalEntryLine.createMany({
+          data: original.lines.map((line) => ({
+            journalEntryId: reversal.id,
+            position: line.position,
+            accountId: line.accountId,
+            purpose: line.purpose,
+            description: line.description,
+            debit: line.credit,
+            credit: line.debit,
+          })),
+        });
+        return tx.journalEntry.update({
+          where: { id: reversal.id },
+          data: { status: 'POSTED', postedAt: new Date() },
+        });
+      });
+    }
+
+    it('un cierre anual heredado y restablecido tras reversar su reversión impide un segundo cierre', async () => {
       await february();
       await legacyFebruaryClosing();
       const first = await close(2025).expect(201);
-      await reverseTwice(first.body.journalEntryId, '2025-12-31');
+      const undone = await journal.reverse({
+        entryId: first.body.journalEntryId,
+        entryDate: '2025-12-31',
+        reason: 'Reversión',
+      });
+      await legacyReverse(undone.id, '2025-12-31');
 
       expect((await preview(2025).expect(200)).body.existingEntryId).toBe(
         first.body.journalEntryId,
@@ -620,6 +663,27 @@ describe('Cierre anual', () => {
       await close(2025).expect(409);
       expect(await balance('resultado')).toBe('0.00');
       expect(await balance('utilidades')).toBe('-4000000.00');
+    });
+
+    it('no permite restablecer un cierre anual reversando su reversión', async () => {
+      await february();
+      await legacyFebruaryClosing();
+      const first = await close(2025).expect(201);
+      const undone = await journal.reverse({
+        entryId: first.body.journalEntryId,
+        entryDate: '2025-12-31',
+        reason: 'Reversión',
+      });
+      const res = await request(app.getHttpServer())
+        .post(`/api/v1/journal-entries/${undone.id}/reverse`)
+        .set('Cookie', adminCookie)
+        .send({ entryDate: '2025-12-31', reason: 'Se restablece el cierre' })
+        .expect(409);
+      expect(res.body.message).toMatch(/no se restablece reversando su reversión/);
+      expect(await prisma.journalEntry.count({ where: { reversalOfId: undone.id } })).toBe(0);
+      // El año queda abierto para un cierre nuevo
+      expect((await preview(2025).expect(200)).body.existingEntryId).toBeNull();
+      await confirmClosing(2025, '4000000.00');
     });
 
     it('bloquea un cierre mensual que mueve cuentas que no son de resultado ni patrimonio', async () => {
@@ -644,6 +708,144 @@ describe('Cierre anual', () => {
       await confirmClosing(2025, '4000000.00');
       expect(await balance('resultado')).toBe('0.00');
       expect(await balance('utilidades')).toBe('-5000000.00');
+    });
+
+    it('publica el cierre anual aunque diciembre ya esté cerrado', async () => {
+      await february();
+      await entry('2025-12-10', 'caja', 'ventas', '2000000.00');
+      await closeMonth(2);
+      await closeMonth(12);
+
+      const { lines } = await confirmClosing(2025, '6000000.00');
+      expect(await balance('resultado')).toBe('0.00');
+      expect(await balance('utilidades')).toBe('-6000000.00');
+    });
+
+    it('rehacer el cierre anual con diciembre cerrado: reversar, reabrir, corregir y volver a cerrar', async () => {
+      await february();
+      await entry('2025-12-10', 'caja', 'ventas', '2000000.00');
+      await closeMonth(2);
+      const december = await closeMonth(12);
+      const first = await close(2025).expect(201);
+      const reverseAnnual = (entryDate: string) =>
+        request(app.getHttpServer())
+          .post(`/api/v1/journal-entries/${first.body.journalEntryId}/reverse`)
+          .set('Cookie', adminCookie)
+          .send({ entryDate, reason: 'Faltaba una venta de diciembre' });
+
+      // Con el cierre anual vigente no se reabre ningún mes de ese año
+      const reopenDec = () =>
+        request(app.getHttpServer())
+          .post(`/api/v1/accounting/periods/${december.id}/reopen`)
+          .set('Cookie', adminCookie)
+          .send({ reason: 'Faltaba una venta de diciembre' });
+      expect((await reopenDec().expect(409)).body.message).toMatch(/cierre anual vigente/);
+      await expect(
+        periods.reopenPeriod((await period(2)).id, { reason: 'Revisión de febrero' }, adminId),
+      ).rejects.toThrow(/cierre anual vigente/);
+
+      // La excepción solo cubre la reversión del cierre anual en su misma fecha
+      expect((await reverseAnnual('2025-12-30').expect(400)).body.message).toMatch(
+        /período cerrado Diciembre 2025/,
+      );
+      await reverseAnnual('2025-12-31').expect(201);
+
+      await reopenDec().expect(201);
+      await entry('2025-12-20', 'caja', 'ventas', '500000.00');
+      await closeMonth(12);
+      await confirmClosing(2025, '6500000.00');
+      expect(await balance('resultado')).toBe('0.00');
+      expect(await balance('utilidades')).toBe('-6500000.00');
+    });
+
+    it('diciembre cerrado sigue rechazando cualquier otro asiento u operación', async () => {
+      await february();
+      await entry('2025-12-05', 'caja', 'ventas', '100000.00');
+      await closeMonth(12);
+      const closedDecember = /período cerrado Diciembre 2025/;
+
+      await expect(entry('2025-12-31', 'caja', 'ventas', '1000.00')).rejects.toThrow(
+        closedDecember,
+      );
+      await expect(
+        journal.canPostForPurposes([], new Date('2025-12-20T00:00:00.000Z'), undefined, true),
+      ).rejects.toThrow(closedDecember);
+      // El origen ANNUAL_CLOSING por sí solo no basta: la excepción la pide el cierre anual
+      const annualLike = {
+        entryDate: '2025-12-31',
+        description: 'Intento fuera del flujo de cierre anual',
+        sourceType: 'ANNUAL_CLOSING',
+        sourceId: '2025-99',
+        lines: [
+          { accountId: acc.ventas, debit: '1000.00', credit: '0.00' },
+          { accountId: acc.utilidades, debit: '0.00', credit: '1000.00' },
+        ],
+      };
+      await expect(journal.post(annualLike)).rejects.toThrow(closedDecember);
+      // Reversar en su fecha un asiento que no es el cierre anual también se rechaza
+      const decemberClosing = await prisma.journalEntry.findFirstOrThrow({
+        where: { sourceType: 'FISCAL_CLOSING', entryDate: new Date('2025-12-31T00:00:00.000Z') },
+      });
+      await expect(
+        journal.reverse({
+          entryId: decemberClosing.id,
+          entryDate: '2025-12-31',
+          reason: 'Intento de reversión',
+        }),
+      ).rejects.toThrow(closedDecember);
+      // Y la excepción no sirve para otro origen ni para otra fecha
+      await expect(
+        journal.post({ ...annualLike, sourceType: 'TEST' }, undefined, { yearEndClosing: true }),
+      ).rejects.toThrow(/Solo el cierre anual del 31 de diciembre/);
+      await expect(
+        journal.post({ ...annualLike, entryDate: '2025-12-15' }, undefined, {
+          yearEndClosing: true,
+        }),
+      ).rejects.toThrow(/Solo el cierre anual del 31 de diciembre/);
+      expect(
+        await prisma.journalEntry.count({
+          where: {
+            entryDate: { gte: new Date('2025-12-01T00:00:00.000Z') },
+            sourceType: { notIn: ['FISCAL_CLOSING', 'TEST'] },
+          },
+        }),
+      ).toBe(0);
+    });
+
+    it('con diciembre cerrado el bloqueo de documentos sigue impidiendo el cierre anual', async () => {
+      await february();
+      await closeMonth(12);
+      await request(app.getHttpServer())
+        .post('/api/v1/accounting/document-lock')
+        .set('Cookie', adminCookie)
+        .send({ lockedThrough: '2025-12-31', reason: 'Año revisado' })
+        .expect(201);
+      const locked = await close(2025).expect(400);
+      expect(locked.body.message).toMatch(/bloqueados/);
+      expect(await prisma.journalEntry.count({ where: { sourceType: 'ANNUAL_CLOSING' } })).toBe(0);
+    });
+
+    it('no traslada a 2025 ingresos y gastos de 2024 que nunca se cerraron', async () => {
+      await entry('2024-05-10', 'caja', 'ventas', '3000000.00');
+      await entry('2024-05-11', 'gasto', 'caja', '500000.00');
+      await february();
+      await expectBlocked(
+        2025,
+        /el año 2024 tiene saldos de ingresos, costos o gastos sin cierre anual/,
+      );
+
+      // Al cerrar 2024, el cierre de 2025 traslada solo el resultado de 2025
+      await confirmClosing(2024, '2500000.00');
+      await confirmClosing(2025, '4000000.00');
+      expect(await balance('utilidades')).toBe('-6500000.00');
+    });
+
+    it('informa todos los años anteriores con resultado pendiente', async () => {
+      await entry('2023-03-10', 'caja', 'ventas', '100000.00');
+      await entry('2024-05-10', 'gasto', 'caja', '50000.00');
+      await february();
+      await expectBlocked(2025, /los años 2023, 2024 tienen saldos de ingresos/);
+      await expectBlocked(2024, /el año 2023 tiene saldos de ingresos/);
     });
   });
 });
