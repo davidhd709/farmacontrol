@@ -16,6 +16,7 @@ import {
 } from '@mui/material';
 import type { BankAccountDto, BankMovementType, CreateBankMovementDto } from '@farmacia/contracts';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
+import { CounterpartAccountSelect } from '../../accounting/components/CounterpartAccountSelect';
 
 interface BankMovementDialogProps {
   open: boolean;
@@ -45,6 +46,7 @@ export const BankMovementDialog: React.FC<BankMovementDialogProps> = ({
   const [amount, setAmount] = useState('');
   const [concept, setConcept] = useState('');
   const [externalReference, setExternalReference] = useState('');
+  const [counterpartAccountId, setCounterpartAccountId] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [pendingData, setPendingData] = useState<CreateBankMovementDto | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
@@ -54,6 +56,7 @@ export const BankMovementDialog: React.FC<BankMovementDialogProps> = ({
     setAmount('');
     setConcept('');
     setExternalReference('');
+    setCounterpartAccountId('');
     setErrorMessage(null);
     setPendingData(null);
     setConfirmLoading(false);
@@ -87,11 +90,17 @@ export const BankMovementDialog: React.FC<BankMovementDialogProps> = ({
       return;
     }
 
+    if (!counterpartAccountId) {
+      setErrorMessage('Seleccione la cuenta de contrapartida del asiento.');
+      return;
+    }
+
     setPendingData({
       movementType,
       amount: amount.trim(),
       concept: concept.trim(),
       externalReference: externalReference.trim() || null,
+      counterpartAccountId,
     });
   };
 
@@ -123,6 +132,11 @@ export const BankMovementDialog: React.FC<BankMovementDialogProps> = ({
         <DialogContent dividers>
           <Stack spacing={2.5} sx={{ mt: 0.5 }}>
             {errorMessage && <Alert severity="error">{errorMessage}</Alert>}
+
+            <CounterpartAccountSelect
+              value={counterpartAccountId}
+              onChange={setCounterpartAccountId}
+            />
 
             <Alert severity="info" sx={{ py: 0.5 }}>
               <Typography variant="body2">
@@ -206,7 +220,11 @@ export const BankMovementDialog: React.FC<BankMovementDialogProps> = ({
         title="Confirmar Movimiento Bancario"
         description={`¿Estás seguro de registrar un movimiento de ${pendingData ? MOVEMENT_TYPE_LABELS[pendingData.movementType].label : ''} por $${Number(pendingData?.amount || 0).toLocaleString('es-CO', { minimumFractionDigits: 2 })} COP en la cuenta "${account.name}" (${account.bankName})?`}
         confirmText="Confirmar y Asentar"
-        confirmColor={pendingData && MOVEMENT_TYPE_LABELS[pendingData.movementType].isOutflow ? 'error' : 'primary'}
+        confirmColor={
+          pendingData && MOVEMENT_TYPE_LABELS[pendingData.movementType].isOutflow
+            ? 'error'
+            : 'primary'
+        }
         isLoading={confirmLoading}
         onConfirm={handleConfirmMovement}
         onCancel={() => !confirmLoading && setPendingData(null)}

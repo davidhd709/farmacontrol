@@ -84,6 +84,8 @@ const PURPOSE_ACCOUNT_TYPES: Record<AccountingPurpose, readonly AccountType[]> =
   WITHHOLDING_INCOME_PAYABLE: ['LIABILITY'],
   WITHHOLDING_VAT_PAYABLE: ['LIABILITY'],
   WITHHOLDING_ICA_PAYABLE: ['LIABILITY'],
+  INVENTORY_SHRINKAGE: ['EXPENSE', 'COST'],
+  INVENTORY_SURPLUS: ['INCOME'],
 };
 
 export function validatePurposeAccountType(

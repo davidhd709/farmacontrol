@@ -414,7 +414,7 @@ describe('Catálogo normativo y motor tributario', () => {
     // El inventario se valoriza sin el IVA descontable
     expect(await balance()).toEqual({ quantity: 100, value: '2000000.00' });
 
-    // Las notas débito sobre compras con impuestos llegan con F8
+    // F8: la nota débito sobre una compra con impuestos ya se confirma (cubierta en accounting-coverage)
     const note = await api()
       .post(`/api/v1/purchases/${purchase.id}/debit-notes`)
       .set('Cookie', cookie)
@@ -423,7 +423,7 @@ describe('Catálogo normativo y motor tributario', () => {
         reason: 'Devolución de prueba',
         items: [{ purchaseLineId: purchase.lines[0].id, quantityCommercial: 1 }],
       });
-    expect(note.status, JSON.stringify(note.body)).toBe(409);
+    expect(note.status, JSON.stringify(note.body)).toBe(201);
   });
 
   it('compra: una empresa no responsable de IVA lo lleva como mayor costo del inventario', async () => {

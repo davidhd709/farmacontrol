@@ -117,3 +117,57 @@ export interface ProductSaleTaxDto {
   /** La empresa es responsable de IVA y el producto no tiene clasificación activa */
   missingClassification: boolean;
 }
+
+/** Borradores tributarios (ADR-006, F8): apoyo para la contadora, no el formulario oficial. */
+export interface VatDraftDto {
+  from: string;
+  to: string;
+  draft: true;
+  sales: Array<{ treatment: string; ratePct: string; base: string; vat: string }>;
+  salesReturns: { base: string; vat: string };
+  inc: { base: string; amount: string; returns: string };
+  purchases: Array<{ ratePct: string; base: string; vat: string }>;
+  purchaseReturns: { base: string; vat: string };
+  vatGenerated: string;
+  vatDeductible: string;
+  /** Positivo: saldo a pagar; negativo: saldo a favor */
+  balance: string;
+}
+
+export interface WithholdingDraftDto {
+  from: string;
+  to: string;
+  draft: true;
+  concepts: Array<{ taxType: string; ruleCode: string | null; base: string; amount: string }>;
+  reversed: { income: string; vat: string; ica: string };
+  totals: { income: string; vat: string; ica: string; total: string };
+}
+
+export interface IcaDraftDto {
+  from: string;
+  to: string;
+  draft: true;
+  grossIncome: string;
+  returns: string;
+  netIncome: string;
+  activity: string | null;
+  ratePerMil: string | null;
+  tax: string;
+  withheldIca: string;
+}
+
+export interface ExogenousDraftDto {
+  year: number;
+  draft: true;
+  /** Formato 1001: pagos o abonos en cuenta y retenciones practicadas */
+  payments: Array<{
+    taxId: string;
+    name: string;
+    amount: string;
+    vat: string;
+    withholdingIncome: string;
+    withholdingVat: string;
+  }>;
+  /** Formato 1007: ingresos recibidos */
+  income: Array<{ documentNumber: string; name: string; amount: string; returns: string }>;
+}

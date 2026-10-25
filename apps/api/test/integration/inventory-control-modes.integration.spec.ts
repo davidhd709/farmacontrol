@@ -8,6 +8,7 @@ import { AppModule } from '../../src/app.module';
 import { UserProvisioningService } from '../../src/modules/identity/application/services/user-provisioning.service';
 import { AuthService } from '../../src/modules/identity/application/services/auth.service';
 import { SESSION_COOKIE_NAME } from '../../src/modules/identity/presentation/utils/session-cookie.util';
+import { seedPurposeMappings } from './support/accounting-fixtures';
 
 describe('F4: modos de control de catálogo e inventario (PostgreSQL)', () => {
   let app: INestApplication;
@@ -177,6 +178,8 @@ describe('F4: modos de control de catálogo e inventario (PostgreSQL)', () => {
         data: { code: 'F4-BOD', name: 'Bodega F4', isDefault: true },
       })
     ).id;
+    // F8: la contabilidad es estricta en ajustes, existencias, caja y bancos
+    await seedPurposeMappings();
   });
 
   afterAll(async () => {

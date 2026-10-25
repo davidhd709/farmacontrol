@@ -320,6 +320,56 @@ Decisión de arquitectura del orquestador (2026-10-25), implementada el mismo d�
 | Saldos de apertura | No, recomendado |
 | Conciliación del inventario | No, informativa |
 
+## Implementación de F8 (cobertura contable completa y reportes)
+
+Decisión de arquitectura del orquestador (2026-10-25), implementada el mismo día.
+
+### Cobertura contable
+
+Toda operación que mueve dinero o inventario genera su asiento, con la misma regla estricta de F1: sin el mapeo, la operación se rechaza.
+
+| Operación | Asiento |
+| --- | --- |
+| Ajuste de inventario positivo y existencia inicial manual | Inventario contra `INVENTORY_SURPLUS` (sobrantes) |
+| Ajuste negativo, incluidas las bajas por vencimiento | `INVENTORY_SHRINKAGE` (faltantes y bajas) contra inventario |
+| Movimiento manual de caja o banco | Caja o banco contra una cuenta de contrapartida |
+
+- **Valor de los ajustes:** el costo que entra o sale del submayor de valoración (F2/F5). Si el valor es 0, no hay asiento.
+- **Contrapartida de caja y banco:** obligatoria, con una cuenta imputable que elige el usuario. Revertir un movimiento bancario reversa su asiento.
+- **Transacciones:** las de ajustes, existencias y caja pasan a SERIALIZABLE con reintentos, como exige ADR-004 para publicar asientos.
+- **Pendientes de F6:**
+  - la nota débito sobre una compra con impuestos revierte en proporción el IVA (descontable o mayor costo) y las retenciones, y la cuenta por pagar baja por el neto;
+  - la nota crédito devuelve el INC en proporción contra `INC_PAYABLE`.
+
+- **Web:** selector de cuenta de contrapartida en caja y bancos; pantallas de libros oficiales, conciliación contable y borradores tributarios.
+
+### Libros y conciliación
+
+- **Libro diario** (`GET /accounting/books/journal`): asientos publicados del período con sus líneas y totales.
+- **Libro mayor y balances** (`GET /accounting/books/ledger`): por cuenta imputable, saldo inicial, débitos, créditos y saldo final.
+- **Conciliación** (`GET /accounting/reconciliation`):
+
+| Cuenta contable | Se compara con |
+| --- | --- |
+| Caja | Saldo de caja |
+| Bancos | Saldo de cada cuenta bancaria |
+| Clientes | Saldo de cartera |
+| Proveedores | Saldo de cuentas por pagar |
+| Inventarios | Submayor de valoración |
+
+  Además verifica la ecuación patrimonial.
+
+### Borradores tributarios
+
+Se calculan desde las instantáneas del motor (F6). Son borradores de apoyo para la contadora, no el diligenciamiento oficial ante la DIAN.
+
+| Borrador | Contenido |
+| --- | --- |
+| 300, IVA | Ingresos gravados por tarifa, exentos y excluidos; IVA generado y descontable; devoluciones |
+| 350, retenciones | Retenciones practicadas por concepto, base y valor, netas de notas débito |
+| ICA | Ingresos netos del período por la tarifa de la empresa, y ReteICA practicada |
+| Exógena | 1001: pagos a proveedores, con IVA y retenciones. 1007: ingresos por cliente. Por año |
+
 ## Pendientes
 
 - Revisar los requerimientos multisector (POS, inventario y catálogo), que hoy solo están descritos para farmacia.

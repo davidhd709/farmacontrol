@@ -9,6 +9,7 @@ import { UserProvisioningService } from '../../src/modules/identity/application/
 import { AuthService } from '../../src/modules/identity/application/services/auth.service';
 import { SESSION_COOKIE_NAME } from '../../src/modules/identity/presentation/utils/session-cookie.util';
 import { businessToday } from '../../src/common/utils/business-date';
+import { seedPurposeMappings } from './support/accounting-fixtures';
 
 /**
  * F2 (ADR-005): submayor de costos con promedio ponderado móvil, separado de FEFO, con
@@ -97,6 +98,8 @@ describe('Submayor de costos del inventario (PostgreSQL real)', () => {
       },
     });
     productId = await createProduct('ACE-500', 0);
+    // F8: la contabilidad es estricta en ajustes, existencias, caja y bancos
+    await seedPurposeMappings();
   });
 
   afterAll(async () => {

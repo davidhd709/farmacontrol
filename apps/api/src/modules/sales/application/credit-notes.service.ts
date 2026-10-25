@@ -192,11 +192,14 @@ export class CreditNotesService {
             subtotal: Prisma.Decimal;
             taxRate: Prisma.Decimal;
             taxAmount: Prisma.Decimal;
+            incRate: Prisma.Decimal;
+            incAmount: Prisma.Decimal;
             total: Prisma.Decimal;
           }> = [];
 
           let totalSubtotalCents = 0n;
           let totalTaxCents = 0n;
+          let totalIncCents = 0n;
           let totalCostCents = 0n;
 
           for (const item of payload.items) {
@@ -225,21 +228,16 @@ export class CreditNotesService {
             let creditedBaseUnits = 0;
             let creditedSubtotalCents = 0n;
             let creditedTaxCents = 0n;
+            let creditedIncCents = 0n;
             for (const cn of sale.creditNotes) {
               for (const cnl of cn.lines) {
                 if (cnl.saleLineId === line.id) {
                   creditedBaseUnits += cnl.quantityBaseUnits;
                   creditedSubtotalCents += toCents(cnl.subtotal, 'Subtotal acreditado');
                   creditedTaxCents += toCents(cnl.taxAmount, 'IVA acreditado');
+                  creditedIncCents += toCents(cnl.incAmount, 'INC acreditado');
                 }
               }
-            }
-
-            // F6: el INC de la línea todavía no se devuelve en notas crédito (llega con F8)
-            if (new Prisma.Decimal(line.incAmount).gt(0)) {
-              throw new ConflictException(
-                `La línea de ${line.product.name} tiene impuesto al consumo (INC): su devolución con nota crédito se habilita en F8.`,
-              );
             }
 
             const remainingBaseUnits = line.quantityBaseUnits - creditedBaseUnits;
@@ -259,9 +257,15 @@ export class CreditNotesService {
             const returnTaxCents = isLastReturn
               ? lineTaxCents - creditedTaxCents
               : prorateCents(lineTaxCents, quantityBaseUnits, line.quantityBaseUnits);
+            // F8: el INC se devuelve en la misma proporción que el IVA
+            const lineIncCents = toCents(line.incAmount, 'INC línea');
+            const returnIncCents = isLastReturn
+              ? lineIncCents - creditedIncCents
+              : prorateCents(lineIncCents, quantityBaseUnits, line.quantityBaseUnits);
 
             totalSubtotalCents += returnSubtotalCents;
             totalTaxCents += returnTaxCents;
+            totalIncCents += returnIncCents;
 
             // Costo con que salió la línea (ADR-005), repartido por unidades de forma acumulada:
             // la última devolución se lleva el resto exacto. Las ventas anteriores al submayor
@@ -293,6 +297,7 @@ export class CreditNotesService {
 
             let assignedSubtotalCents = 0n;
             let assignedTaxCents = 0n;
+            let assignedIncCents = 0n;
             portions.forEach((portion, index) => {
               const isLastPortion = index === portions.length - 1;
               const subtotalCents = isLastPortion
@@ -301,8 +306,12 @@ export class CreditNotesService {
               const taxCents = isLastPortion
                 ? returnTaxCents - assignedTaxCents
                 : prorateCents(returnTaxCents, portion.quantityBaseUnits, quantityBaseUnits);
+              const incCents = isLastPortion
+                ? returnIncCents - assignedIncCents
+                : prorateCents(returnIncCents, portion.quantityBaseUnits, quantityBaseUnits);
               assignedSubtotalCents += subtotalCents;
               assignedTaxCents += taxCents;
+              assignedIncCents += incCents;
 
               creditLinesData.push({
                 saleLineId: line.id,
@@ -316,7 +325,9 @@ export class CreditNotesService {
                 subtotal: new Prisma.Decimal(centsToMoneyString(subtotalCents)),
                 taxRate: new Prisma.Decimal(line.taxRate),
                 taxAmount: new Prisma.Decimal(centsToMoneyString(taxCents)),
-                total: new Prisma.Decimal(centsToMoneyString(subtotalCents + taxCents)),
+                incRate: new Prisma.Decimal(line.incRate),
+                incAmount: new Prisma.Decimal(centsToMoneyString(incCents)),
+                total: new Prisma.Decimal(centsToMoneyString(subtotalCents + taxCents + incCents)),
               });
             });
 
@@ -368,7 +379,7 @@ export class CreditNotesService {
             }
           }
 
-          const totalReturnCents = totalSubtotalCents + totalTaxCents;
+          const totalReturnCents = totalSubtotalCents + totalTaxCents + totalIncCents;
 
           // 5. Ajuste financiero según método de reembolso
           if (refundMethod === 'CREDITO_CARTERA') {
@@ -409,6 +420,7 @@ export class CreditNotesService {
               reason: payload.reason,
               subtotal: new Prisma.Decimal(centsToMoneyString(totalSubtotalCents)),
               taxTotal: new Prisma.Decimal(centsToMoneyString(totalTaxCents)),
+              incTotal: new Prisma.Decimal(centsToMoneyString(totalIncCents)),
               total: new Prisma.Decimal(centsToMoneyString(totalReturnCents)),
               refundMethod,
               restock: shouldRestock,
@@ -444,6 +456,7 @@ export class CreditNotesService {
               reason: creditNote.reason,
               subtotal: creditNote.subtotal,
               taxTotal: creditNote.taxTotal,
+              incTotal: creditNote.incTotal,
               total: creditNote.total,
               refundMethod: creditNote.refundMethod,
               bankAccountId:

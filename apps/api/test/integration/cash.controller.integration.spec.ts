@@ -7,8 +7,10 @@ import { AppModule } from '../../src/app.module';
 import { UserProvisioningService } from '../../src/modules/identity/application/services/user-provisioning.service';
 import { AuthService } from '../../src/modules/identity/application/services/auth.service';
 import { SESSION_COOKIE_NAME } from '../../src/modules/identity/presentation/utils/session-cookie.util';
+import { seedPurposeMappings } from './support/accounting-fixtures';
 
 describe('CashController (Integration with PostgreSQL & RBAC)', () => {
+  let counterpartAccountId: string;
   let app: INestApplication;
   let provisioningService: UserProvisioningService;
   let authService: AuthService;
@@ -87,6 +89,7 @@ describe('CashController (Integration with PostgreSQL & RBAC)', () => {
 
     const plainLogin = await authService.login('usuario_sin_caja', 'CajeroPassword#2026');
     unauthorizedCookie = `${SESSION_COOKIE_NAME}=${plainLogin.rawToken}`;
+    counterpartAccountId = (await seedPurposeMappings()).CAPITAL;
   });
 
   afterAll(async () => {
@@ -101,6 +104,7 @@ describe('CashController (Integration with PostgreSQL & RBAC)', () => {
       .set('Cookie', cajeroCookie)
       .send({
         movementType: 'INGRESO_MANUAL',
+        counterpartAccountId,
         amount: 100000,
         paymentMethod: 'EFECTIVO',
         reason: 'Base de caja inicial de apertura',
@@ -118,6 +122,7 @@ describe('CashController (Integration with PostgreSQL & RBAC)', () => {
       .set('Cookie', cajeroCookie)
       .send({
         movementType: 'EGRESO_MANUAL',
+        counterpartAccountId,
         amount: 30000,
         paymentMethod: 'EFECTIVO',
         reason: 'Pago de domicilio urgente',
@@ -157,6 +162,7 @@ describe('CashController (Integration with PostgreSQL & RBAC)', () => {
       .set('Cookie', cajeroCookie)
       .send({
         movementType: 'EGRESO_MANUAL',
+        counterpartAccountId,
         amount: 50000,
         paymentMethod: 'EFECTIVO',
         reason: 'Egreso sin saldo',
@@ -179,6 +185,7 @@ describe('CashController (Integration with PostgreSQL & RBAC)', () => {
       .set('Cookie', cajeroCookie)
       .send({
         movementType: 'INGRESO_MANUAL',
+        counterpartAccountId,
         amount: 10000,
         paymentMethod,
         reason: 'Intento de movimiento no efectivo',
@@ -201,6 +208,7 @@ describe('CashController (Integration with PostgreSQL & RBAC)', () => {
       .set('Cookie', cajeroCookie)
       .send({
         movementType: 'INGRESO_MANUAL',
+        counterpartAccountId,
         amount: 10000,
         reason: 'Ingreso físico sin medio explícito',
       })
@@ -230,6 +238,7 @@ describe('CashController (Integration with PostgreSQL & RBAC)', () => {
       .set('Cookie', unauthorizedCookie)
       .send({
         movementType: 'INGRESO_MANUAL',
+        counterpartAccountId,
         amount: 50000,
         reason: 'Intento no autorizado',
       })

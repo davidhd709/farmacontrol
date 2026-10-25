@@ -136,6 +136,19 @@ const AccountingSetupPage = lazy(() =>
     default: m.AccountingSetupPage,
   })),
 );
+const OfficialBooksPage = lazy(() =>
+  import('./features/accounting/pages/OfficialBooksPage').then((m) => ({
+    default: m.OfficialBooksPage,
+  })),
+);
+const ReconciliationPage = lazy(() =>
+  import('./features/accounting/pages/ReconciliationPage').then((m) => ({
+    default: m.ReconciliationPage,
+  })),
+);
+const TaxDraftsPage = lazy(() =>
+  import('./features/taxes/pages/TaxDraftsPage').then((m) => ({ default: m.TaxDraftsPage })),
+);
 const TaxCatalogPage = lazy(() =>
   import('./features/taxes/pages/TaxCatalogPage').then((m) => ({
     default: m.TaxCatalogPage,
@@ -209,6 +222,9 @@ export const App = () => {
               <Route path="/accounting/periods" element={<FiscalPeriodsPage />} />
               <Route path="/company" element={<CompanySettingsPage />} />
               <Route path="/tax-catalog" element={<TaxCatalogPage />} />
+              <Route path="/accounting/books" element={<OfficialBooksPage />} />
+              <Route path="/accounting/reconciliation" element={<ReconciliationPage />} />
+              <Route path="/tax-reports" element={<TaxDraftsPage />} />
               <Route path="/audit" element={<AuditLogsPage />} />
             </Route>
           </Route>

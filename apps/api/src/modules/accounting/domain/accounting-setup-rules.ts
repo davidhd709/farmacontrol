@@ -25,6 +25,9 @@ export function requiredPurposes(input: {
       'COST_OF_SALES',
       'SALES_RETURNS',
       'SALES_DISCOUNTS',
+      // F8: ajustes de inventario, bajas por vencimiento y existencias iniciales
+      'INVENTORY_SHRINKAGE',
+      'INVENTORY_SURPLUS',
       ...(input.usesInventoryCostVariance ? (['INVENTORY_COST_VARIANCE'] as const) : []),
     ],
     equity: ['CAPITAL', 'CURRENT_YEAR_RESULT', 'RETAINED_EARNINGS', 'ACCUMULATED_LOSSES'],

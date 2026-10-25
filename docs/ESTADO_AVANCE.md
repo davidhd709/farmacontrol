@@ -190,7 +190,7 @@ Ninguna se implementó por supuesto; las que se tocaron quedaron con la opción 
 | 20 | Rol de Contabilidad | Acceso de la contadora | Sólo el administrador tiene permisos contables |
 | 21 | Venta a crédito en el POS | Cartera desde la operación diaria | El backend la admite con plazo fijo de 30 días (incluso a Consumidor Final), pero el POS no la ofrece |
 | 22 | Descuentos y cambio de precio en el POS | T-19, T-20 | El backend los admite con permiso; el POS no tiene el campo (siempre envía 0) |
-| 23 | Asientos de ajustes de inventario, bajas por vencimiento, movimientos manuales de caja y banco | Contabilidad completa | Estas operaciones no generan asiento |
+| 23 | Asientos de ajustes de inventario, bajas por vencimiento, movimientos manuales de caja y banco | Contabilidad completa | Resuelto en F8 ([ADR-006](adr/ADR-006-producto-multisector-y-contabilidad-configurable.md#implementación-de-f8-cobertura-contable-completa-y-reportes)): ajustes y existencias iniciales al costo del submayor; caja y banco manuales contra una cuenta de contrapartida obligatoria |
 
 ## 5. Qué falta por fase
 

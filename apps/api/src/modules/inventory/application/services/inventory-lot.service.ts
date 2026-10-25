@@ -5,6 +5,7 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
+  Optional,
 } from '@nestjs/common';
 import {
   INVENTORY_LOT_REPOSITORY_PORT,
@@ -26,6 +27,9 @@ import type {
   LocationDto,
   CreateLocationPayload,
 } from '@farmacia/contracts';
+import { serializableTransaction } from '../../../../common/utils/serializable-transaction';
+import { AccountingEngineService } from '../../../accounting/application/accounting-engine.service';
+import { parseMoneyToCents } from '../../../treasury/domain/treasury-rules';
 
 @Injectable()
 export class InventoryLotService {
@@ -35,6 +39,9 @@ export class InventoryLotService {
     @Inject(PRODUCT_REPOSITORY_PORT)
     private readonly productRepository: ProductRepositoryPort,
     private readonly auditService: AuditService,
+    /** Opcional: algunas pruebas construyen el servicio sin el motor contable */
+    @Optional()
+    private readonly accountingEngine?: AccountingEngineService,
   ) {}
 
   public async getLots(
@@ -98,7 +105,8 @@ export class InventoryLotService {
       }
     }
 
-    return prisma.$transaction(async (tx) => {
+    // F8: SERIALIZABLE porque la existencia inicial publica su asiento (ADR-004)
+    return serializableTransaction(async (tx) => {
       let location = await this.lotRepository.findLocationById(payload.locationId);
       if (!location) {
         // Intentar obtener o crear ubicación por defecto si no existe
@@ -148,6 +156,23 @@ export class InventoryLotService {
         });
 
         const savedLot = await this.lotRepository.createWithInitialStock(lot, userId, tx);
+        // F8: la existencia inicial entra como sobrante, al costo que le dio el submayor
+        const valuation = await tx.inventoryValuationMovement.findFirst({
+          where: { sourceType: 'LOT_INITIAL', sourceId: savedLot.id },
+        });
+        await this.accountingEngine?.handleInventoryAdjustment(
+          {
+            sourceType: 'INVENTORY_INITIAL',
+            sourceId: savedLot.id,
+            direction: 'IN',
+            valueCents: valuation
+              ? parseMoneyToCents(valuation.value.toFixed(2), 'Valor de la existencia inicial')
+              : 0n,
+            description: `Existencia inicial de ${product.name}${savedLot.lotNumber ? ` (lote ${savedLot.lotNumber})` : ''}`,
+            createdById: userId ?? null,
+          },
+          tx,
+        );
 
         await this.auditService.recordEvent(
           {

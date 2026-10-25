@@ -32,6 +32,8 @@ export interface CreateCashMovementPayload {
   reason: string;
   referenceDocumentType?: string;
   referenceDocumentId?: string;
+  /** F8: cuenta imputable de contrapartida del asiento (obligatoria en movimientos manuales) */
+  counterpartAccountId?: string;
 }
 
 export interface CashMovementQueryFilters {

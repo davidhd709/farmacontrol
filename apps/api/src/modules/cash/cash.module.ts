@@ -1,13 +1,14 @@
 import { Module } from '@nestjs/common';
 import { IdentityModule } from '../identity/identity.module';
 import { AuditModule } from '../audit/audit.module';
+import { AccountingModule } from '../accounting/accounting.module';
 import { CASH_MOVEMENT_REPOSITORY } from './domain/cash-movement.repository';
 import { PrismaCashMovementRepository } from './infrastructure/prisma-cash-movement.repository';
 import { CashService } from './application/cash.service';
 import { CashController } from './presentation/controllers/cash.controller';
 
 @Module({
-  imports: [IdentityModule, AuditModule],
+  imports: [IdentityModule, AuditModule, AccountingModule],
   controllers: [CashController],
   providers: [
     {

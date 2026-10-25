@@ -15,11 +15,9 @@ import {
   Paper,
   Divider,
 } from '@mui/material';
-import type {
-  CashMovementType,
-  CreateCashMovementPayload,
-} from '@farmacia/contracts';
+import type { CashMovementType, CreateCashMovementPayload } from '@farmacia/contracts';
 import { createCashMovement } from '../api/cash.api';
+import { CounterpartAccountSelect } from '../../accounting/components/CounterpartAccountSelect';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
 
 interface CreateCashMovementDialogProps {
@@ -38,6 +36,7 @@ export const CreateCashMovementDialog: React.FC<CreateCashMovementDialogProps> =
   const [movementType, setMovementType] = useState<CashMovementType>('INGRESO_MANUAL');
   const [amountStr, setAmountStr] = useState<string>('');
   const [reason, setReason] = useState<string>('');
+  const [counterpartAccountId, setCounterpartAccountId] = useState('');
 
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -46,9 +45,7 @@ export const CreateCashMovementDialog: React.FC<CreateCashMovementDialogProps> =
   const amountNum = parseFloat(amountStr) || 0;
   const isIncome = movementType === 'INGRESO_MANUAL';
 
-  const projectedBalance = isIncome
-    ? currentBalance + amountNum
-    : currentBalance - amountNum;
+  const projectedBalance = isIncome ? currentBalance + amountNum : currentBalance - amountNum;
 
   const isInsufficient = !isIncome && amountNum > currentBalance;
 
@@ -80,9 +77,14 @@ export const CreateCashMovementDialog: React.FC<CreateCashMovementDialogProps> =
       return;
     }
 
+    if (!counterpartAccountId) {
+      setErrorMsg('Seleccione la cuenta de contrapartida del asiento.');
+      return;
+    }
+
     if (isInsufficient) {
       setErrorMsg(
-        `Saldo insuficiente en caja física. Saldo actual: $${currentBalance.toLocaleString('es-CO')}, Egreso solicitado: $${amountNum.toLocaleString('es-CO')}`
+        `Saldo insuficiente en caja física. Saldo actual: $${currentBalance.toLocaleString('es-CO')}, Egreso solicitado: $${amountNum.toLocaleString('es-CO')}`,
       );
       return;
     }
@@ -92,6 +94,7 @@ export const CreateCashMovementDialog: React.FC<CreateCashMovementDialogProps> =
       amount: amountNum,
       paymentMethod: 'EFECTIVO',
       reason: reason.trim(),
+      counterpartAccountId,
     });
   };
 
@@ -114,7 +117,13 @@ export const CreateCashMovementDialog: React.FC<CreateCashMovementDialogProps> =
   };
 
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth aria-labelledby="cash-movement-title">
+    <Dialog
+      open={open}
+      onClose={handleClose}
+      maxWidth="sm"
+      fullWidth
+      aria-labelledby="cash-movement-title"
+    >
       <form onSubmit={handleSubmit}>
         <DialogTitle id="cash-movement-title" sx={{ fontWeight: 600 }}>
           Registrar Movimiento de Caja
@@ -171,7 +180,6 @@ export const CreateCashMovementDialog: React.FC<CreateCashMovementDialogProps> =
               placeholder="Ej: 50000"
               autoFocus
             />
-
           </Box>
 
           <TextField
@@ -185,6 +193,13 @@ export const CreateCashMovementDialog: React.FC<CreateCashMovementDialogProps> =
             placeholder="Ej: Aporte de cambio inicial para inicio de turno..."
             sx={{ mb: 3 }}
           />
+
+          <Box sx={{ mb: 3 }}>
+            <CounterpartAccountSelect
+              value={counterpartAccountId}
+              onChange={setCounterpartAccountId}
+            />
+          </Box>
 
           <Paper variant="outlined" sx={{ p: 2, bgcolor: 'background.default', borderRadius: 1.5 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
@@ -200,7 +215,10 @@ export const CreateCashMovementDialog: React.FC<CreateCashMovementDialogProps> =
               <Typography variant="body2" color={isIncome ? 'success.main' : 'error.main'}>
                 Impacto de la Operación:
               </Typography>
-              <Typography variant="body2" sx={{ fontWeight: 600, color: isIncome ? 'success.main' : 'error.main' }}>
+              <Typography
+                variant="body2"
+                sx={{ fontWeight: 600, color: isIncome ? 'success.main' : 'error.main' }}
+              >
                 {isIncome ? '+' : '-'}${amountNum.toLocaleString('es-CO')}
               </Typography>
             </Box>
@@ -208,9 +226,7 @@ export const CreateCashMovementDialog: React.FC<CreateCashMovementDialogProps> =
             <Divider sx={{ my: 1 }} />
 
             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-              <Typography variant="subtitle2">
-                Saldo Resultante Proyectado:
-              </Typography>
+              <Typography variant="subtitle2">Saldo Resultante Proyectado:</Typography>
               <Typography
                 variant="subtitle2"
                 sx={{
@@ -236,7 +252,9 @@ export const CreateCashMovementDialog: React.FC<CreateCashMovementDialogProps> =
           <Button
             type="submit"
             variant="contained"
-            disabled={loading || isInsufficient || amountNum <= 0 || !reason.trim()}
+            disabled={
+              loading || isInsufficient || amountNum <= 0 || !reason.trim() || !counterpartAccountId
+            }
             color={isIncome ? 'success' : 'error'}
           >
             {loading ? 'Registrando...' : 'Confirmar Movimiento'}

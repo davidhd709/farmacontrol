@@ -261,6 +261,10 @@ describe('TreasuryBankAccountsPage (Slice 11.4 Frontend)', () => {
     const conceptInput = screen.getByLabelText(/Concepto/i);
     fireEvent.change(conceptInput, { target: { value: 'Depósito manual' } });
 
+    // F8: todo movimiento manual se contabiliza contra una cuenta de contrapartida
+    fireEvent.mouseDown(screen.getByLabelText(/Cuenta de contrapartida/i));
+    fireEvent.click(await screen.findByRole('option', { name: /110505 · Caja general/ }));
+
     const submitBtn = screen.getByTestId('submit-movement-btn');
     fireEvent.click(submitBtn);
 
@@ -274,6 +278,7 @@ describe('TreasuryBankAccountsPage (Slice 11.4 Frontend)', () => {
           movementType: 'DEPOSIT',
           amount: '50000.00',
           concept: 'Depósito manual',
+          counterpartAccountId: 'caja',
         }),
       );
     });

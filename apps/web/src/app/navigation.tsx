@@ -261,6 +261,24 @@ export const menuGroups: MenuGroupConfig[] = [
         permission: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
       },
       {
+        title: 'Libros Oficiales',
+        path: '/accounting/books',
+        icon: <MenuBookIcon fontSize="small" />,
+        permission: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
+      },
+      {
+        title: 'Conciliación Contable',
+        path: '/accounting/reconciliation',
+        icon: <CompareArrowsIcon fontSize="small" />,
+        permission: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
+      },
+      {
+        title: 'Borradores Tributarios',
+        path: '/tax-reports',
+        icon: <ReceiptLongIcon fontSize="small" />,
+        permission: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
+      },
+      {
         title: 'Plan de Cuentas',
         path: '/accounting/accounts',
         icon: <AccountTreeIcon fontSize="small" />,

@@ -4,6 +4,11 @@ import {
   IInventoryMovementRepository,
 } from '../ports/inventory-movement.repository.port';
 import { AuditService } from '../../../audit/application/services/audit.service';
+import type { Prisma } from '@farmacia/database';
+import { AccountingEngineService } from '../../../accounting/application/accounting-engine.service';
+import { parseMoneyToCents } from '../../../treasury/domain/treasury-rules';
+
+const toCents = (value: Prisma.Decimal) => parseMoneyToCents(value.toFixed(2), 'Valor del ajuste');
 import type {
   InventoryMovementDto,
   InventoryMovementQueryFilters,
@@ -16,6 +21,7 @@ export class InventoryMovementService {
     @Inject(INVENTORY_MOVEMENT_REPOSITORY_PORT)
     private readonly movementRepository: IInventoryMovementRepository,
     private readonly auditService: AuditService,
+    private readonly accountingEngine: AccountingEngineService,
   ) {}
 
   public async adjustInventory(
@@ -70,6 +76,22 @@ export class InventoryMovementService {
             correlationId,
           },
           tx,
+        );
+        // F8: el ajuste se contabiliza al costo que movió el submayor de valoración
+        const db = tx as Prisma.TransactionClient;
+        const valuation = await db.inventoryValuationMovement.findFirst({
+          where: { sourceType: 'INVENTORY_ADJUSTMENT', sourceId: movement.id },
+        });
+        await this.accountingEngine.handleInventoryAdjustment(
+          {
+            sourceType: 'INVENTORY_ADJUSTMENT',
+            sourceId: movement.id,
+            direction: isIncrement ? 'IN' : 'OUT',
+            valueCents: valuation ? toCents(valuation.value) : 0n,
+            description: `Ajuste de inventario (${isIncrement ? 'sobrante' : 'faltante o baja'}): ${payload.reason}`,
+            createdById: userId ?? null,
+          },
+          db,
         );
       },
     );

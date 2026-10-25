@@ -94,6 +94,9 @@ export const PHARMACY_PUC_TEMPLATE: PucTemplate = {
     leaf('413501', 'Venta de mercancías gravadas', 'INCOME', 'SALES_TAXED'),
     leaf('413502', 'Venta de mercancías exentas', 'INCOME', 'SALES_EXEMPT'),
     leaf('413503', 'Venta de mercancías excluidas o sin IVA', 'INCOME', 'SALES_EXCLUDED'),
+    group('42', 'No operacionales', 'INCOME'),
+    group('4250', 'Recuperaciones', 'INCOME'),
+    leaf('425050', 'Sobrantes de inventario', 'INCOME', 'INVENTORY_SURPLUS'),
     group('4175', 'Devoluciones en ventas (DB)', 'INCOME'),
     leaf('417505', 'Devoluciones en ventas (DB)', 'INCOME', 'SALES_RETURNS'),
     leaf('417510', 'Descuentos en ventas (DB)', 'INCOME', 'SALES_DISCOUNTS'),
@@ -102,6 +105,7 @@ export const PHARMACY_PUC_TEMPLATE: PucTemplate = {
     group('53', 'No operacionales', 'EXPENSE'),
     group('5315', 'Gastos extraordinarios', 'EXPENSE'),
     leaf('531520', 'Impuestos asumidos (IVA no descontable)', 'EXPENSE', 'VAT_NON_DEDUCTIBLE'),
+    leaf('531595', 'Faltantes y bajas de inventario', 'EXPENSE', 'INVENTORY_SHRINKAGE'),
 
     group('6', 'Costos de ventas', 'COST'),
     group('61', 'Costo de ventas y de prestación de servicios', 'COST'),

@@ -13,6 +13,7 @@ import type {
   PaginatedResponse,
   RecordInventoryMovementPayload,
 } from '@farmacia/contracts';
+import { serializableTransaction } from '../../../../common/utils/serializable-transaction';
 
 @Injectable()
 export class PrismaInventoryMovementRepository implements IInventoryMovementRepository {
@@ -23,7 +24,8 @@ export class PrismaInventoryMovementRepository implements IInventoryMovementRepo
     userId?: string,
     withinTransaction?: WithinMovementTransaction,
   ): Promise<InventoryMovementDto> {
-    return prisma.$transaction(async (tx) => {
+    // F8: SERIALIZABLE porque el ajuste publica su asiento en la misma transacción (ADR-004)
+    return serializableTransaction(async (tx) => {
       // 1. Bloqueo pesimista del lote: serializa los cambios de saldo concurrentes
       const lockedLots = await tx.$queryRaw<
         Array<{

@@ -11,9 +11,10 @@ import { PrismaInventoryMovementRepository } from './infrastructure/adapters/pri
 import { InventoryMovementService } from './application/services/inventory-movement.service';
 import { InventoryMovementController } from './presentation/controllers/inventory-movement.controller';
 import { InventoryLedger } from './application/inventory-ledger';
+import { AccountingModule } from '../accounting/accounting.module';
 
 @Module({
-  imports: [IdentityModule, AuditModule, CatalogModule],
+  imports: [IdentityModule, AuditModule, CatalogModule, AccountingModule],
   controllers: [InventoryLotController, InventoryMovementController],
   providers: [
     {

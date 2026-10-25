@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import { prisma, cleanTestDatabase, Prisma } from '@farmacia/database';
 import { PrismaInventoryMovementRepository } from '../../src/modules/inventory/infrastructure/adapters/prisma-inventory-movement.repository';
+import { seedPurposeMappings } from './support/accounting-fixtures';
 
 /**
  * AUD-001: recordMovement debe serializar los cambios de saldo sobre un mismo lote.
@@ -48,6 +49,8 @@ describe('Movimientos de inventario concurrentes sobre un mismo lote (PostgreSQL
       },
     });
     lotId = lot.id;
+    // F8: la contabilidad es estricta en ajustes, existencias, caja y bancos
+    await seedPurposeMappings();
   }, 30000);
 
   afterAll(async () => {

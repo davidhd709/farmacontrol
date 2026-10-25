@@ -124,6 +124,7 @@ export interface CreditNoteEventInput {
   customerName?: string;
   reason: string;
   subtotal: number | string | Prisma.Decimal;
+  incTotal?: number | string | Prisma.Decimal;
   taxTotal: number | string | Prisma.Decimal;
   total: number | string | Prisma.Decimal;
   refundMethod: string;
@@ -150,6 +151,12 @@ export interface DebitNoteEventInput {
   inventoryCost: number | string | Prisma.Decimal;
   /** Propósito de la diferencia frente al costo de compra, según la política de la empresa. */
   variancePurpose: 'COST_OF_SALES' | 'INVENTORY_COST_VARIANCE';
+  /** F8: IVA descontable (se revierte de VAT_INPUT) o mayor costo (va a la diferencia) */
+  vatDeductible?: boolean;
+  /** F8: retenciones de la compra revertidas en proporción */
+  withholdingIncome?: string;
+  withholdingVat?: string;
+  withholdingIca?: string;
   createdById?: string | null;
   createdAt?: Date | string;
 }
@@ -824,7 +831,10 @@ export class AccountingEngineService {
     const taxCents = note.taxTotal
       ? parseMoneyToCents(new Prisma.Decimal(note.taxTotal).toFixed(2), 'IVA de nota crédito')
       : 0n;
-    const subtotalCents = totalCents - taxCents;
+    const incCents = note.incTotal
+      ? parseMoneyToCents(new Prisma.Decimal(note.incTotal).toFixed(2), 'INC de nota crédito')
+      : 0n;
+    const subtotalCents = totalCents - taxCents - incCents;
 
     const cogsCents = note.costTotal
       ? parseMoneyToCents(new Prisma.Decimal(note.costTotal).toFixed(2), 'Costo revertido')
@@ -857,6 +867,16 @@ export class AccountingEngineService {
         debit: centsToMoneyString(taxCents),
         credit: '0.00',
         description: `IVA revertido por devolución NC ${note.creditNoteNumber}`,
+      });
+    }
+
+    // F8: débito al INC por pagar devuelto
+    if (incCents > 0n) {
+      lines.push({
+        purpose: 'INC_PAYABLE',
+        debit: centsToMoneyString(incCents),
+        credit: '0.00',
+        description: `INC revertido por devolución NC ${note.creditNoteNumber}`,
       });
     }
 
@@ -918,19 +938,49 @@ export class AccountingEngineService {
     const taxCents = note.taxTotal
       ? parseMoneyToCents(new Prisma.Decimal(note.taxTotal).toFixed(2), 'IVA de nota débito')
       : 0n;
-    const subtotalCents = totalCents - taxCents;
+    const vatDeductible = note.vatDeductible !== false;
+    // Sin IVA descontable, el IVA fue mayor costo: se compara con el costo devuelto
+    const subtotalCents = totalCents - (vatDeductible ? taxCents : 0n);
+    const withholdings: Array<[DbPurpose, bigint, string]> = [
+      [
+        'WITHHOLDING_INCOME_PAYABLE',
+        parseMoneyToCents(note.withholdingIncome ?? '0', 'Retención'),
+        'retención en la fuente',
+      ],
+      [
+        'WITHHOLDING_VAT_PAYABLE',
+        parseMoneyToCents(note.withholdingVat ?? '0', 'ReteIVA'),
+        'retención de IVA',
+      ],
+      [
+        'WITHHOLDING_ICA_PAYABLE',
+        parseMoneyToCents(note.withholdingIca ?? '0', 'ReteICA'),
+        'retención de ICA',
+      ],
+    ];
+    const withheldCents = withholdings.reduce((sum, [, amount]) => sum + amount, 0n);
 
     const entryDate = note.createdAt ? new Date(note.createdAt) : new Date();
 
     const lines: JournalLineInput[] = [];
 
-    // Débito a Proveedores (2205)
+    // Débito a Proveedores (2205) por el neto: las retenciones se revierten aparte
     lines.push({
       purpose: 'SUPPLIERS',
-      debit: centsToMoneyString(totalCents),
+      debit: centsToMoneyString(totalCents - withheldCents),
       credit: '0.00',
       description: `Nota Débito ND ${note.debitNoteNumber} a proveedor ${note.supplierName || ''}`,
     });
+    for (const [purpose, amount, label] of withholdings) {
+      if (amount > 0n) {
+        lines.push({
+          purpose,
+          debit: centsToMoneyString(amount),
+          credit: '0.00',
+          description: `Reversión de ${label} ND ${note.debitNoteNumber}`,
+        });
+      }
+    }
 
     // Crédito a Inventario (1435) por el valor que salió del submayor al costo promedio
     const inventoryCents = parseMoneyToCents(
@@ -958,7 +1008,7 @@ export class AccountingEngineService {
     }
 
     // Crédito a IVA Descontable (2408)
-    if (taxCents > 0n) {
+    if (vatDeductible && taxCents > 0n) {
       lines.push({
         purpose: 'VAT_INPUT',
         debit: '0.00',
@@ -975,6 +1025,135 @@ export class AccountingEngineService {
         sourceId: note.id,
         createdById: note.createdById ?? undefined,
         lines,
+      },
+      tx,
+    );
+  }
+
+  /**
+   * F8: ajuste de inventario o existencia inicial manual al costo que entró o salió del
+   * submayor. Entrada: inventario contra sobrantes; salida: faltantes y bajas contra inventario.
+   * Sin valor no hay asiento.
+   */
+  async handleInventoryAdjustment(
+    adjustment: {
+      sourceType: 'INVENTORY_ADJUSTMENT' | 'INVENTORY_INITIAL';
+      sourceId: string;
+      direction: 'IN' | 'OUT';
+      valueCents: bigint;
+      description: string;
+      createdById?: string | null;
+    },
+    tx: Tx,
+  ) {
+    if (adjustment.valueCents <= 0n) return null;
+    const value = centsToMoneyString(adjustment.valueCents);
+    const counterpart: DbPurpose =
+      adjustment.direction === 'IN' ? 'INVENTORY_SURPLUS' : 'INVENTORY_SHRINKAGE';
+    const lines: JournalLineInput[] =
+      adjustment.direction === 'IN'
+        ? [
+            {
+              purpose: 'INVENTORY',
+              debit: value,
+              credit: '0.00',
+              description: adjustment.description,
+            },
+            {
+              purpose: counterpart,
+              debit: '0.00',
+              credit: value,
+              description: adjustment.description,
+            },
+          ]
+        : [
+            {
+              purpose: counterpart,
+              debit: value,
+              credit: '0.00',
+              description: adjustment.description,
+            },
+            {
+              purpose: 'INVENTORY',
+              debit: '0.00',
+              credit: value,
+              description: adjustment.description,
+            },
+          ];
+    return this.journalService.post(
+      {
+        entryDate: businessDateOf(new Date()),
+        description: adjustment.description,
+        sourceType: adjustment.sourceType,
+        sourceId: adjustment.sourceId,
+        createdById: adjustment.createdById ?? undefined,
+        lines,
+      },
+      tx,
+    );
+  }
+
+  /**
+   * F8: movimiento manual de caja o de banco contra la cuenta de contrapartida que eligió el
+   * usuario. Ingreso: caja o banco al débito; egreso: al crédito.
+   */
+  async handleManualTreasuryMovement(
+    movement: {
+      sourceType: 'CASH_MOVEMENT' | 'BANK_MOVEMENT';
+      sourceId: string;
+      direction: 'IN' | 'OUT';
+      amount: string;
+      counterpartAccountId: string;
+      bankAccountId?: string | null;
+      description: string;
+      entryDate?: string;
+      createdById?: string | null;
+    },
+    tx: Tx,
+  ) {
+    const purpose: DbPurpose = movement.sourceType === 'CASH_MOVEMENT' ? 'CASH' : 'BANK';
+    const treasury: JournalLineInput = {
+      purpose,
+      debit: movement.direction === 'IN' ? movement.amount : '0.00',
+      credit: movement.direction === 'OUT' ? movement.amount : '0.00',
+      description: movement.description,
+    };
+    const counterpart: JournalLineInput = {
+      accountId: movement.counterpartAccountId,
+      debit: movement.direction === 'OUT' ? movement.amount : '0.00',
+      credit: movement.direction === 'IN' ? movement.amount : '0.00',
+      description: movement.description,
+    };
+    const ledger = await this.bankLedger(movement.bankAccountId, tx);
+    return this.journalService.post(
+      {
+        entryDate: movement.entryDate ?? businessDateOf(new Date()),
+        description: movement.description,
+        sourceType: movement.sourceType,
+        sourceId: movement.sourceId,
+        createdById: movement.createdById ?? undefined,
+        lines: this.bindBank([treasury, counterpart], ledger),
+      },
+      tx,
+    );
+  }
+
+  /** Reversa el asiento de un origen, si lo tiene (p. ej. un movimiento bancario revertido). */
+  async reverseSourceEntry(
+    sourceType: string,
+    sourceId: string,
+    reason: string,
+    userId: string | undefined,
+    tx: Tx,
+  ) {
+    const entry = await this.journalService.findBySource(sourceType, sourceId, tx);
+    if (!entry || entry.status !== 'POSTED') return null;
+    return this.journalService.reverse(
+      {
+        entryId: entry.id,
+        entryDate: businessDateOf(new Date()),
+        reason,
+        createdById: userId,
       },
       tx,
     );

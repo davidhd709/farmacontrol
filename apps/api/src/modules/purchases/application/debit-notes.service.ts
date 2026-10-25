@@ -14,6 +14,7 @@ import { InventoryLedger } from '../../inventory/application/inventory-ledger';
 import { parseMoneyToCents, centsToMoneyString } from '../../treasury/domain/treasury-rules';
 import { accountingPolicyAt } from '../../company/application/accounting-policy.reader';
 import { businessToday } from '../../../common/utils/business-date';
+import { companyTaxStatusAt } from '../../taxes/application/tax-context.reader';
 
 type Tx = Parameters<Parameters<PrismaClient['$transaction']>[0]>[0];
 
@@ -139,18 +140,6 @@ export class DebitNotesService {
           if (!purchase) {
             throw new NotFoundException(`Compra con id '${purchaseId}' no encontrada.`);
           }
-          // F6: devolver una compra con IVA o retenciones exige revertirlos (llega con F8)
-          if (
-            purchase.vatTotal.gt(0) ||
-            purchase.withholdingIncome.gt(0) ||
-            purchase.withholdingVat.gt(0) ||
-            purchase.withholdingIca.gt(0)
-          ) {
-            throw new ConflictException(
-              'La compra tiene IVA o retenciones calculados por el motor tributario: las notas débito sobre ella se habilitan en F8.',
-            );
-          }
-
           if (purchase.status !== 'RECEIVED') {
             throw new BadRequestException(
               `La compra ${purchase.invoiceNumber} no se encuentra en estado RECIBIDA. Estado actual: ${purchase.status}.`,
@@ -264,12 +253,29 @@ export class DebitNotesService {
 
             const unitCost = new Prisma.Decimal(line.unitCost);
             const lineSubtotal = unitCost.mul(new Prisma.Decimal(item.quantityCommercial));
-            const lineTaxRate = new Prisma.Decimal(0); // Compras base
-            const lineTax = new Prisma.Decimal(0);
-            const lineTotal = lineSubtotal;
+            // F8: el IVA de la línea de compra se devuelve en proporción a las unidades; la
+            // última devolución de la línea se lleva el resto exacto
+            const lineTaxRate = new Prisma.Decimal(line.vatRate);
+            const purchaseLineVatCents = parseMoneyToCents(
+              line.vatAmount.toFixed(2),
+              'IVA de la línea',
+            );
+            const alreadyDebitedVatCents = purchase.debitNotes
+              .flatMap((dn) => dn.lines)
+              .filter((dnl) => dnl.purchaseLineId === line.id)
+              .reduce(
+                (sum, dnl) => sum + parseMoneyToCents(dnl.taxAmount.toFixed(2), 'IVA devuelto'),
+                0n,
+              );
+            const returnsRest =
+              alreadyDebitedBaseUnits + quantityBaseUnits === line.quantityBaseUnits;
+            const lineTaxCents = returnsRest
+              ? purchaseLineVatCents - alreadyDebitedVatCents
+              : (purchaseLineVatCents * BigInt(quantityBaseUnits) * 2n +
+                  BigInt(line.quantityBaseUnits)) /
+                (BigInt(line.quantityBaseUnits) * 2n);
 
             const lineSubCents = parseMoneyToCents(lineSubtotal.toFixed(2), 'Subtotal compra');
-            const lineTaxCents = 0n;
             const lineTotCents = lineSubCents + lineTaxCents;
 
             totalSubtotalCents += lineSubCents;
@@ -290,12 +296,32 @@ export class DebitNotesService {
             });
           }
 
-          // 4. Ajuste en Cuentas por Pagar: lo adeudado baja y lo pagado no cambia
+          // F8: las retenciones de la compra se revierten en proporción al subtotal devuelto
+          const purchaseSubtotalCents = purchase.subtotal
+            ? parseMoneyToCents(purchase.subtotal.toFixed(2), 'Subtotal de la compra')
+            : 0n;
+          const proportional = (amount: Prisma.Decimal) => {
+            const cents = parseMoneyToCents(amount.toFixed(2), 'Retención de la compra');
+            if (cents === 0n || purchaseSubtotalCents === 0n) return 0n;
+            return (
+              (cents * totalSubtotalCents * 2n + purchaseSubtotalCents) /
+              (purchaseSubtotalCents * 2n)
+            );
+          };
+          const withholdingIncomeCents = proportional(purchase.withholdingIncome);
+          const withholdingVatCents = proportional(purchase.withholdingVat);
+          const withholdingIcaCents = proportional(purchase.withholdingIca);
+          const withheldCents = withholdingIncomeCents + withholdingVatCents + withholdingIcaCents;
+          // IVA descontable o mayor costo, según la empresa a la fecha de la compra (F6)
+          const purchaseDay = purchase.purchaseDate.toISOString().slice(0, 10);
+          const vatDeductible = (await companyTaxStatusAt(tx, purchaseDay))?.vatResponsible ?? true;
+
+          // 4. Ajuste en Cuentas por Pagar: lo adeudado baja por el neto y lo pagado no cambia
           await this.payablesLedger.applyDebitNote(tx, {
             purchaseId: purchase.id,
             invoiceNumber: purchase.invoiceNumber,
             debitNoteNumber,
-            amountCents: totalDebitCents,
+            amountCents: totalDebitCents - withheldCents,
           });
 
           // 5. Guardar la Nota Débito y sus líneas
@@ -308,6 +334,9 @@ export class DebitNotesService {
               subtotal: new Prisma.Decimal(centsToMoneyString(totalSubtotalCents)),
               taxTotal: new Prisma.Decimal(centsToMoneyString(totalTaxCents)),
               total: new Prisma.Decimal(centsToMoneyString(totalDebitCents)),
+              withholdingIncome: new Prisma.Decimal(centsToMoneyString(withholdingIncomeCents)),
+              withholdingVat: new Prisma.Decimal(centsToMoneyString(withholdingVatCents)),
+              withholdingIca: new Prisma.Decimal(centsToMoneyString(withholdingIcaCents)),
               createdById: userId,
               lines: {
                 create: debitLinesData.map((dl) => ({
@@ -353,6 +382,10 @@ export class DebitNotesService {
               taxTotal: debitNote.taxTotal,
               total: debitNote.total,
               inventoryCost: centsToMoneyString(inventoryCostCents),
+              vatDeductible,
+              withholdingIncome: centsToMoneyString(withholdingIncomeCents),
+              withholdingVat: centsToMoneyString(withholdingVatCents),
+              withholdingIca: centsToMoneyString(withholdingIcaCents),
               variancePurpose: (await accountingPolicyAt(tx, businessToday()))
                 .purchaseReturnVariancePurpose,
               createdById: userId,

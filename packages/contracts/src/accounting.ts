@@ -42,6 +42,9 @@ export const ACCOUNTING_PURPOSES = [
   'WITHHOLDING_INCOME_PAYABLE',
   'WITHHOLDING_VAT_PAYABLE',
   'WITHHOLDING_ICA_PAYABLE',
+  // Cobertura contable completa (ADR-006, F8)
+  'INVENTORY_SHRINKAGE',
+  'INVENTORY_SURPLUS',
 ] as const;
 export type AccountingPurpose = (typeof ACCOUNTING_PURPOSES)[number];
 
@@ -502,4 +505,55 @@ export interface OpeningBalanceDto {
   totalDebit: string;
   totalCredit: string;
   lines: Array<{ accountId: string; accountCode: string; accountName: string; debit: string; credit: string }>;
+}
+
+/** Libros oficiales y conciliación (ADR-006, F8). Fechas YYYY-MM-DD; dinero como texto. */
+export interface JournalBookDto {
+  from: string;
+  to: string;
+  entries: Array<{
+    id: string;
+    entryDate: string;
+    description: string;
+    sourceType: string;
+    lines: Array<{ accountCode: string; accountName: string; debit: string; credit: string }>;
+  }>;
+  totalDebit: string;
+  totalCredit: string;
+}
+
+export interface LedgerBookDto {
+  from: string;
+  to: string;
+  accounts: Array<{
+    accountId: string;
+    code: string;
+    name: string;
+    nature: AccountNature;
+    /** Saldos con el signo de la naturaleza: positivo en su lado normal */
+    openingBalance: string;
+    debit: string;
+    credit: string;
+    closingBalance: string;
+  }>;
+  totalDebit: string;
+  totalCredit: string;
+}
+
+export interface ReconciliationItemDto {
+  key: 'CASH' | 'BANK' | 'CUSTOMERS' | 'SUPPLIERS' | 'INVENTORY';
+  label: string;
+  ledgerBalance: string;
+  subledgerBalance: string;
+  difference: string;
+  ok: boolean;
+  detail: string;
+}
+
+export interface ReconciliationDto {
+  items: ReconciliationItemDto[];
+  /** Débitos y créditos publicados cuadran (partida doble) */
+  balanced: boolean;
+  totalDebit: string;
+  totalCredit: string;
 }

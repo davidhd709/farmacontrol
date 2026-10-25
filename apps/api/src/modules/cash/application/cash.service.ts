@@ -26,6 +26,8 @@ import {
   CashMovementNotFoundException,
 } from '../domain/cash.exceptions';
 import { AuditService } from '../../audit/application/services/audit.service';
+import { serializableTransaction } from '../../../common/utils/serializable-transaction';
+import { AccountingEngineService } from '../../accounting/application/accounting-engine.service';
 
 export interface AuditContext {
   userId?: string | null;
@@ -40,6 +42,8 @@ export class CashService {
     private readonly cashRepository: ICashMovementRepository,
     @Optional()
     private readonly auditService?: AuditService,
+    @Optional()
+    private readonly accountingEngine?: AccountingEngineService,
   ) {}
 
   async registerMovement(
@@ -95,8 +99,30 @@ export class CashService {
           );
         }
 
+        // F8: el movimiento manual se contabiliza contra la contrapartida que eligió el usuario
+        if (this.accountingEngine) {
+          if (!payload.counterpartAccountId) {
+            throw new BadRequestException(
+              'El movimiento manual de caja requiere la cuenta de contrapartida del asiento.',
+            );
+          }
+          await this.accountingEngine.handleManualTreasuryMovement(
+            {
+              sourceType: 'CASH_MOVEMENT',
+              sourceId: savedMovement.id,
+              direction: savedMovement.movementType.startsWith('INGRESO') ? 'IN' : 'OUT',
+              amount: Number(savedMovement.amount).toFixed(2),
+              counterpartAccountId: payload.counterpartAccountId,
+              description: `Movimiento de caja: ${savedMovement.reason}`,
+              createdById: userId,
+            },
+            tx!,
+          );
+        }
+
         return this.toDto(savedMovement);
       };
+      if (this.accountingEngine) return serializableTransaction(persist);
       return this.auditService ? prisma.$transaction(persist) : persist();
     } catch (err: any) {
       if (

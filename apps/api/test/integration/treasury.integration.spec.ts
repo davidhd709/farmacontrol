@@ -7,8 +7,10 @@ import { AppModule } from '../../src/app.module';
 import { UserProvisioningService } from '../../src/modules/identity/application/services/user-provisioning.service';
 import { AuthService } from '../../src/modules/identity/application/services/auth.service';
 import { SESSION_COOKIE_NAME } from '../../src/modules/identity/presentation/utils/session-cookie.util';
+import { seedPurposeMappings } from './support/accounting-fixtures';
 
 describe('Treasury & Bank Accounts (Slice 11.4 Integration with PostgreSQL)', () => {
+  let counterpartAccountId: string;
   let app: INestApplication;
   let adminCookie: string;
   let cashierCookie: string;
@@ -56,6 +58,7 @@ describe('Treasury & Bank Accounts (Slice 11.4 Integration with PostgreSQL)', ()
     const cashierRole = await prisma.role.findUniqueOrThrow({ where: { name: 'cajero' } });
     await prisma.userRole.create({ data: { userId: cashier.id, roleId: cashierRole.id } });
     cashierCookie = `${SESSION_COOKIE_NAME}=${(await auth.login('treasury_cashier', 'AdminPassword#2026')).rawToken}`;
+    counterpartAccountId = (await seedPurposeMappings()).CAPITAL;
   }, 30000);
 
   afterAll(async () => {
@@ -236,6 +239,7 @@ describe('Treasury & Bank Accounts (Slice 11.4 Integration with PostgreSQL)', ()
       .set('Cookie', adminCookie)
       .send({
         movementType: 'TRANSFER_IN',
+        counterpartAccountId,
         amount: '50000.00',
         concept: 'Transferencia cliente factura F-001',
         externalReference: 'TRX-998877',
@@ -250,6 +254,7 @@ describe('Treasury & Bank Accounts (Slice 11.4 Integration with PostgreSQL)', ()
       .set('Cookie', adminCookie)
       .send({
         movementType: 'WITHDRAWAL',
+        counterpartAccountId,
         amount: '30000.00',
         concept: 'Retiro cajero para fondo de caja menor',
       });
@@ -263,6 +268,7 @@ describe('Treasury & Bank Accounts (Slice 11.4 Integration with PostgreSQL)', ()
       .set('Cookie', adminCookie)
       .send({
         movementType: 'WITHDRAWAL',
+        counterpartAccountId,
         amount: '150000.00',
         concept: 'Retiro excesivo',
       });
@@ -297,6 +303,7 @@ describe('Treasury & Bank Accounts (Slice 11.4 Integration with PostgreSQL)', ()
         .set('Cookie', adminCookie)
         .send({
           movementType: 'DEPOSIT',
+          counterpartAccountId,
           amount: '10000.00',
           concept: `Depósito concurrente #${i + 1}`,
         }),
@@ -334,6 +341,7 @@ describe('Treasury & Bank Accounts (Slice 11.4 Integration with PostgreSQL)', ()
       .set('Cookie', adminCookie)
       .send({
         movementType: 'DEPOSIT',
+        counterpartAccountId,
         amount: '0.01',
         concept: 'Verificación de centavos',
       });

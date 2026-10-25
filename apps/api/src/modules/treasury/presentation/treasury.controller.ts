@@ -195,6 +195,7 @@ export class TreasuryController {
         referenceDocumentType: 'text?',
         referenceDocumentId: 'text?',
         movementDate: 'date?',
+        counterpartAccountId: 'uuid',
       }),
     )
     dto: CreateBankMovementDto,

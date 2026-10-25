@@ -9,6 +9,7 @@ import { UserProvisioningService } from '../../src/modules/identity/application/
 import { AuthService } from '../../src/modules/identity/application/services/auth.service';
 import { SESSION_COOKIE_NAME } from '../../src/modules/identity/presentation/utils/session-cookie.util';
 import { businessToday } from '../../src/common/utils/business-date';
+import { seedPurposeMappings } from './support/accounting-fixtures';
 
 /**
  * F5 (ADR-006): costeo configurable por empresa. PEPS consume las capas más antiguas del
@@ -98,6 +99,8 @@ describe('Costeo configurable: PEPS, costo identificado y cambio de método', ()
       },
     });
     productId = await createProduct('ACE-500', 0);
+    // F8: la contabilidad es estricta en ajustes, existencias, caja y bancos
+    await seedPurposeMappings();
   });
 
   afterAll(async () => {

@@ -28,6 +28,7 @@ import { PrismaUserRepository } from '../../src/modules/identity/infrastructure/
 import { CashService } from '../../src/modules/cash/application/cash.service';
 import { PrismaCashMovementRepository } from '../../src/modules/cash/infrastructure/prisma-cash-movement.repository';
 import { TreasuryService } from '../../src/modules/treasury/application/treasury.service';
+import { seedPurposeMappings } from './support/accounting-fixtures';
 
 // Se escribe auditoría REAL y se provoca un fallo posterior: ambas escrituras deben revertirse.
 describe('Auditoría atómica con PostgreSQL real', () => {
@@ -62,6 +63,8 @@ describe('Auditoría atómica con PostgreSQL real', () => {
       await prisma.supplier.create({ data: { taxId: '900001', name: 'Proveedor atómico' } })
     ).id;
     audit = new AuditService(new PrismaAuditEventRepository());
+    // F8: la contabilidad es estricta en ajustes, existencias, caja y bancos
+    await seedPurposeMappings();
   });
 
   afterAll(async () => {

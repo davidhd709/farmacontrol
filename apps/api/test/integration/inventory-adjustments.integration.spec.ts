@@ -9,6 +9,7 @@ import { UserProvisioningService } from '../../src/modules/identity/application/
 import { AuthService } from '../../src/modules/identity/application/services/auth.service';
 import { SESSION_COOKIE_NAME } from '../../src/modules/identity/presentation/utils/session-cookie.util';
 import { AuditService } from '../../src/modules/audit/application/services/audit.service';
+import { seedPurposeMappings } from './support/accounting-fixtures';
 
 /**
  * FARM-AUD-004: un ajuste solo puede mover el lote del producto indicado y el kardex registra el
@@ -90,6 +91,8 @@ describe('Ajustes manuales de inventario (FARM-AUD-004 / FARM-AUD-012)', () => {
       });
     lotAId = (await createLot(productAId, 'LOT-ACE-01', 50)).id;
     lotBId = (await createLot(productBId, 'LOT-IBU-01', 20)).id;
+    // F8: la contabilidad es estricta en ajustes, existencias, caja y bancos
+    await seedPurposeMappings();
   }, 30000);
 
   afterAll(async () => {

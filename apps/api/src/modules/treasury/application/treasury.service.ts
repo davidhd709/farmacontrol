@@ -1,5 +1,11 @@
-import { businessDayStart, businessDayEnd } from '../../../common/utils/business-date';
-import { Injectable } from '@nestjs/common';
+import {
+  businessDateOf,
+  businessDayStart,
+  businessDayEnd,
+} from '../../../common/utils/business-date';
+import { Injectable, Optional } from '@nestjs/common';
+import { serializableTransaction } from '../../../common/utils/serializable-transaction';
+import { AccountingEngineService } from '../../accounting/application/accounting-engine.service';
 import { Prisma, prisma, type BankAccount, type BankMovement } from '@farmacia/database';
 import type {
   BankAccountDto,
@@ -23,6 +29,7 @@ import {
   validateBankName,
   validateConcept,
   validateUuid,
+  isOutflow,
 } from '../domain/treasury-rules';
 
 export interface MovementFilter {
@@ -117,6 +124,9 @@ function mapMovementToDto(movement: BankMovement): BankMovementDto {
 
 @Injectable()
 export class TreasuryService {
+  /** Opcional: algunas pruebas construyen el servicio sin el motor contable */
+  constructor(@Optional() private readonly accountingEngine?: AccountingEngineService) {}
+
   async listAccountOptions(): Promise<BankAccountOptionDto[]> {
     const accounts = await prisma.bankAccount.findMany({
       where: { isActive: true },
@@ -329,6 +339,12 @@ export class TreasuryService {
   ): Promise<BankMovementDto> {
     validateUuid(accountId, 'ID de cuenta bancaria');
     const concept = validateConcept(dto.concept);
+    // F8: sin contrapartida no hay asiento, y todo movimiento manual debe contabilizarse
+    const counterpartAccountId =
+      typeof dto.counterpartAccountId === 'string' ? dto.counterpartAccountId : undefined;
+    if (this.accountingEngine) {
+      validateUuid(counterpartAccountId ?? '', 'Cuenta de contrapartida');
+    }
     const amountCents = parseMoneyToCents(dto.amount, 'Importe del movimiento');
     const movementType = dto.movementType;
     const externalReference =
@@ -349,90 +365,103 @@ export class TreasuryService {
       movementDate = parsedDate;
     }
 
-    return prisma.$transaction(
-      async (tx) => {
-        // Obtenemos la cuenta con bloqueo exclusivo a nivel de fila
-        const rows = await tx.$queryRaw<
-          Array<{ id: string; current_balance: Prisma.Decimal; is_active: boolean }>
-        >`
+    return serializableTransaction(async (tx) => {
+      // Obtenemos la cuenta con bloqueo exclusivo a nivel de fila
+      const rows = await tx.$queryRaw<
+        Array<{ id: string; current_balance: Prisma.Decimal; is_active: boolean }>
+      >`
           SELECT id, current_balance, is_active
           FROM bank_accounts
           WHERE id = ${accountId}::uuid
           FOR UPDATE
         `;
 
-        const locked = rows[0];
-        if (!locked) {
-          throw new TreasuryNotFoundError('Cuenta bancaria no encontrada.');
-        }
-        if (!locked.is_active) {
-          throw new TreasuryValidationError(
-            'No se pueden registrar movimientos en una cuenta bancaria inactiva.',
-          );
-        }
-
-        const currentBalanceCents = parseMoneyToCents(
-          locked.current_balance.toString(),
-          'Saldo actual',
+      const locked = rows[0];
+      if (!locked) {
+        throw new TreasuryNotFoundError('Cuenta bancaria no encontrada.');
+      }
+      if (!locked.is_active) {
+        throw new TreasuryValidationError(
+          'No se pueden registrar movimientos en una cuenta bancaria inactiva.',
         );
+      }
 
-        const { balanceBefore, balanceAfter } = calculateNewBalanceCents(
-          currentBalanceCents,
+      const currentBalanceCents = parseMoneyToCents(
+        locked.current_balance.toString(),
+        'Saldo actual',
+      );
+
+      const { balanceBefore, balanceAfter } = calculateNewBalanceCents(
+        currentBalanceCents,
+        movementType,
+        amountCents,
+        false,
+      );
+
+      const balanceBeforeDec = new Prisma.Decimal(centsToMoneyString(balanceBefore));
+      const balanceAfterDec = new Prisma.Decimal(centsToMoneyString(balanceAfter));
+      const amountDec = new Prisma.Decimal(centsToMoneyString(amountCents));
+
+      await tx.bankAccount.update({
+        where: { id: accountId },
+        data: {
+          currentBalance: balanceAfterDec,
+        },
+      });
+
+      const movement = await tx.bankMovement.create({
+        data: {
+          bankAccountId: accountId,
           movementType,
-          amountCents,
-          false,
-        );
+          amount: amountDec,
+          balanceBefore: balanceBeforeDec,
+          balanceAfter: balanceAfterDec,
+          concept,
+          referenceDocumentType,
+          referenceDocumentId,
+          externalReference,
+          movementDate,
+          createdById: userId,
+        },
+      });
 
-        const balanceBeforeDec = new Prisma.Decimal(centsToMoneyString(balanceBefore));
-        const balanceAfterDec = new Prisma.Decimal(centsToMoneyString(balanceAfter));
-        const amountDec = new Prisma.Decimal(centsToMoneyString(amountCents));
-
-        await tx.bankAccount.update({
-          where: { id: accountId },
-          data: {
-            currentBalance: balanceAfterDec,
-          },
-        });
-
-        const movement = await tx.bankMovement.create({
-          data: {
+      await tx.auditEvent.create({
+        data: {
+          action: 'treasury:bank_movement_created',
+          entity: 'BankMovement',
+          entityId: movement.id,
+          userId,
+          details: {
             bankAccountId: accountId,
             movementType,
-            amount: amountDec,
-            balanceBefore: balanceBeforeDec,
-            balanceAfter: balanceAfterDec,
+            amount: centsToMoneyString(amountCents),
+            balanceBefore: centsToMoneyString(balanceBefore),
+            balanceAfter: centsToMoneyString(balanceAfter),
             concept,
-            referenceDocumentType,
-            referenceDocumentId,
-            externalReference,
-            movementDate,
+          } as unknown as Prisma.InputJsonValue,
+        },
+      });
+
+      // F8: el movimiento manual se contabiliza contra la contrapartida que eligió el usuario
+      if (this.accountingEngine) {
+        await this.accountingEngine.handleManualTreasuryMovement(
+          {
+            sourceType: 'BANK_MOVEMENT',
+            sourceId: movement.id,
+            direction: isOutflow(movementType) ? 'OUT' : 'IN',
+            amount: centsToMoneyString(amountCents),
+            counterpartAccountId: counterpartAccountId!,
+            bankAccountId: accountId,
+            description: `Movimiento bancario: ${concept}`,
+            entryDate: businessDateOf(movementDate),
             createdById: userId,
           },
-        });
+          tx,
+        );
+      }
 
-        await tx.auditEvent.create({
-          data: {
-            action: 'treasury:bank_movement_created',
-            entity: 'BankMovement',
-            entityId: movement.id,
-            userId,
-            details: {
-              bankAccountId: accountId,
-              movementType,
-              amount: centsToMoneyString(amountCents),
-              balanceBefore: centsToMoneyString(balanceBefore),
-              balanceAfter: centsToMoneyString(balanceAfter),
-              concept,
-            } as unknown as Prisma.InputJsonValue,
-          },
-        });
-
-        return mapMovementToDto(movement);
-      },
-      {
-        isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
-      },
-    );
+      return mapMovementToDto(movement);
+    });
   }
 
   async listMovements(
@@ -516,122 +545,126 @@ export class TreasuryService {
     validateUuid(movementId, 'ID de movimiento');
     const trimmedReason = validateConcept(reason);
 
-    return prisma.$transaction(
-      async (tx) => {
-        const movement = await tx.bankMovement.findUnique({
-          where: { id: movementId },
-        });
+    return serializableTransaction(async (tx) => {
+      const movement = await tx.bankMovement.findUnique({
+        where: { id: movementId },
+      });
 
-        if (!movement || movement.bankAccountId !== accountId) {
-          throw new TreasuryNotFoundError('Movimiento bancario no encontrado en esta cuenta.');
-        }
+      if (!movement || movement.bankAccountId !== accountId) {
+        throw new TreasuryNotFoundError('Movimiento bancario no encontrado en esta cuenta.');
+      }
 
-        if (movement.referenceDocumentType === 'REVERSAL') {
-          throw new TreasuryValidationError(
-            'No se puede reversar un movimiento que ya es una reversión.',
-          );
-        }
+      if (movement.referenceDocumentType === 'REVERSAL') {
+        throw new TreasuryValidationError(
+          'No se puede reversar un movimiento que ya es una reversión.',
+        );
+      }
 
-        // Verificar si ya fue reversado previamente
-        const alreadyReversed = await tx.bankMovement.findFirst({
-          where: {
-            bankAccountId: accountId,
-            referenceDocumentType: 'REVERSAL',
-            referenceDocumentId: movementId,
-          },
-        });
-        if (alreadyReversed) {
-          throw new TreasuryConflictError('Este movimiento bancario ya fue reversado previamente.');
-        }
+      // Verificar si ya fue reversado previamente
+      const alreadyReversed = await tx.bankMovement.findFirst({
+        where: {
+          bankAccountId: accountId,
+          referenceDocumentType: 'REVERSAL',
+          referenceDocumentId: movementId,
+        },
+      });
+      if (alreadyReversed) {
+        throw new TreasuryConflictError('Este movimiento bancario ya fue reversado previamente.');
+      }
 
-        // Si era DEPOSIT / TRANSFER_IN, se revierte con WITHDRAWAL; si era WITHDRAWAL / TRANSFER_OUT, se revierte con DEPOSIT
-        const isOriginalInflow =
-          movement.movementType === 'DEPOSIT' || movement.movementType === 'TRANSFER_IN';
-        const reversalType = isOriginalInflow ? 'WITHDRAWAL' : 'DEPOSIT';
+      // Si era DEPOSIT / TRANSFER_IN, se revierte con WITHDRAWAL; si era WITHDRAWAL / TRANSFER_OUT, se revierte con DEPOSIT
+      const isOriginalInflow =
+        movement.movementType === 'DEPOSIT' || movement.movementType === 'TRANSFER_IN';
+      const reversalType = isOriginalInflow ? 'WITHDRAWAL' : 'DEPOSIT';
 
-        const rows = await tx.$queryRaw<
-          Array<{ id: string; current_balance: Prisma.Decimal; is_active: boolean }>
-        >`
+      const rows = await tx.$queryRaw<
+        Array<{ id: string; current_balance: Prisma.Decimal; is_active: boolean }>
+      >`
           SELECT id, current_balance, is_active
           FROM bank_accounts
           WHERE id = ${accountId}::uuid
           FOR UPDATE
         `;
 
-        const locked = rows[0];
-        if (!locked) {
-          throw new TreasuryNotFoundError('Cuenta bancaria no encontrada.');
-        }
-        if (!locked.is_active) {
-          throw new TreasuryValidationError(
-            'No se pueden registrar reversiones en una cuenta bancaria inactiva.',
-          );
-        }
-
-        const currentBalanceCents = parseMoneyToCents(
-          locked.current_balance.toString(),
-          'Saldo actual',
+      const locked = rows[0];
+      if (!locked) {
+        throw new TreasuryNotFoundError('Cuenta bancaria no encontrada.');
+      }
+      if (!locked.is_active) {
+        throw new TreasuryValidationError(
+          'No se pueden registrar reversiones en una cuenta bancaria inactiva.',
         );
+      }
 
-        const amountCents = parseMoneyToCents(movement.amount.toString(), 'Importe');
+      const currentBalanceCents = parseMoneyToCents(
+        locked.current_balance.toString(),
+        'Saldo actual',
+      );
 
-        const { balanceBefore, balanceAfter } = calculateNewBalanceCents(
-          currentBalanceCents,
-          reversalType,
-          amountCents,
-          false,
-        );
+      const amountCents = parseMoneyToCents(movement.amount.toString(), 'Importe');
 
-        const balanceBeforeDec = new Prisma.Decimal(centsToMoneyString(balanceBefore));
-        const balanceAfterDec = new Prisma.Decimal(centsToMoneyString(balanceAfter));
-        const amountDec = new Prisma.Decimal(centsToMoneyString(amountCents));
+      const { balanceBefore, balanceAfter } = calculateNewBalanceCents(
+        currentBalanceCents,
+        reversalType,
+        amountCents,
+        false,
+      );
 
-        await tx.bankAccount.update({
-          where: { id: accountId },
-          data: {
-            currentBalance: balanceAfterDec,
-          },
-        });
+      const balanceBeforeDec = new Prisma.Decimal(centsToMoneyString(balanceBefore));
+      const balanceAfterDec = new Prisma.Decimal(centsToMoneyString(balanceAfter));
+      const amountDec = new Prisma.Decimal(centsToMoneyString(amountCents));
 
-        const reversalMovement = await tx.bankMovement.create({
-          data: {
+      await tx.bankAccount.update({
+        where: { id: accountId },
+        data: {
+          currentBalance: balanceAfterDec,
+        },
+      });
+
+      const reversalMovement = await tx.bankMovement.create({
+        data: {
+          bankAccountId: accountId,
+          movementType: reversalType,
+          amount: amountDec,
+          balanceBefore: balanceBeforeDec,
+          balanceAfter: balanceAfterDec,
+          concept: `Reversión de movimiento #${movement.id.slice(0, 8)}: ${trimmedReason}`,
+          referenceDocumentType: 'REVERSAL',
+          referenceDocumentId: movement.id,
+          externalReference: movement.externalReference,
+          movementDate: new Date(),
+          createdById: userId,
+        },
+      });
+
+      await tx.auditEvent.create({
+        data: {
+          action: 'treasury:bank_movement_reversed',
+          entity: 'BankMovement',
+          entityId: reversalMovement.id,
+          userId,
+          details: {
             bankAccountId: accountId,
-            movementType: reversalType,
-            amount: amountDec,
-            balanceBefore: balanceBeforeDec,
-            balanceAfter: balanceAfterDec,
-            concept: `Reversión de movimiento #${movement.id.slice(0, 8)}: ${trimmedReason}`,
-            referenceDocumentType: 'REVERSAL',
-            referenceDocumentId: movement.id,
-            externalReference: movement.externalReference,
-            movementDate: new Date(),
-            createdById: userId,
-          },
-        });
+            originalMovementId: movement.id,
+            reversalMovementId: reversalMovement.id,
+            amount: centsToMoneyString(amountCents),
+            reason: trimmedReason,
+            balanceBefore: centsToMoneyString(balanceBefore),
+            balanceAfter: centsToMoneyString(balanceAfter),
+          } as unknown as Prisma.InputJsonValue,
+        },
+      });
 
-        await tx.auditEvent.create({
-          data: {
-            action: 'treasury:bank_movement_reversed',
-            entity: 'BankMovement',
-            entityId: reversalMovement.id,
-            userId,
-            details: {
-              bankAccountId: accountId,
-              originalMovementId: movement.id,
-              reversalMovementId: reversalMovement.id,
-              amount: centsToMoneyString(amountCents),
-              reason: trimmedReason,
-              balanceBefore: centsToMoneyString(balanceBefore),
-              balanceAfter: centsToMoneyString(balanceAfter),
-            } as unknown as Prisma.InputJsonValue,
-          },
-        });
+      // F8: revertir el movimiento reversa también su asiento, si lo tiene
+      await this.accountingEngine?.reverseSourceEntry(
+        'BANK_MOVEMENT',
+        movement.id,
+        `Reversión de movimiento bancario: ${trimmedReason}`,
+        userId,
+        tx,
+      );
 
-        return mapMovementToDto(reversalMovement);
-      },
-      {
-        isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
-      },
-    );
+      return mapMovementToDto(reversalMovement);
+    });
   }
 }

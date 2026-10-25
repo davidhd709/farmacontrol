@@ -7,6 +7,7 @@ import { AppModule } from '../../src/app.module';
 import { UserProvisioningService } from '../../src/modules/identity/application/services/user-provisioning.service';
 import { AuthService } from '../../src/modules/identity/application/services/auth.service';
 import { SESSION_COOKIE_NAME } from '../../src/modules/identity/presentation/utils/session-cookie.util';
+import { seedPurposeMappings } from './support/accounting-fixtures';
 
 /**
  * AUD-005: los endpoints de inventario deben registrar al usuario autenticado
@@ -87,6 +88,8 @@ describe('Inventory controllers (Integration with PostgreSQL & RBAC)', () => {
       },
     });
     lotId = lot.id;
+    // F8: la contabilidad es estricta en ajustes, existencias, caja y bancos
+    await seedPurposeMappings();
   });
 
   afterAll(async () => {

@@ -1,4 +1,5 @@
 import { ThemeProvider } from '@mui/material';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -10,6 +11,7 @@ import {
 } from '@farmacia/contracts';
 import { AuthContext, type AuthContextValue } from '../src/features/auth/context/auth-context';
 import * as cashApi from '../src/features/cash/api/cash.api';
+import * as accountingApi from '../src/features/accounting/api/accounting.api';
 import { CashPage } from '../src/features/cash/pages/CashPage';
 import { appTheme } from '../src/theme/app-theme';
 
@@ -71,11 +73,14 @@ const mockAuthContext: AuthContextValue = {
 };
 
 const renderWithProviders = (ui: React.ReactElement) => {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <ThemeProvider theme={appTheme}>
-      <AuthContext.Provider value={mockAuthContext}>
-        <MemoryRouter>{ui}</MemoryRouter>
-      </AuthContext.Provider>
+      <QueryClientProvider client={queryClient}>
+        <AuthContext.Provider value={mockAuthContext}>
+          <MemoryRouter>{ui}</MemoryRouter>
+        </AuthContext.Provider>
+      </QueryClientProvider>
     </ThemeProvider>
   );
 };
@@ -84,6 +89,19 @@ describe('Operación de Caja — Pantalla CashPage (UX-25)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.spyOn(cashApi, 'fetchCashBalance').mockResolvedValue(mockBalance);
+    vi.spyOn(accountingApi, 'fetchAccounts').mockResolvedValue([
+      {
+        id: 'capital',
+        code: '310505',
+        name: 'Capital',
+        type: 'EQUITY',
+        nature: 'CREDIT',
+        parentId: null,
+        level: 4,
+        allowsMovement: true,
+        isActive: true,
+      } as unknown as Awaited<ReturnType<typeof accountingApi.fetchAccounts>>[number],
+    ]);
     vi.spyOn(cashApi, 'fetchCashMovements').mockResolvedValue({
       items: mockMovements,
       total: mockMovements.length,
@@ -135,6 +153,15 @@ describe('Operación de Caja — Pantalla CashPage (UX-25)', () => {
 
     fireEvent.change(amountInput, { target: { value: '50000' } });
     fireEvent.change(reasonInput, { target: { value: 'Aporte de cambio adicional' } });
+    // F8: el ingreso manual se contabiliza contra una cuenta de contrapartida
+    await waitFor(() =>
+      expect(screen.getByLabelText(/Cuenta de contrapartida/i)).not.toHaveAttribute(
+        'aria-disabled',
+        'true',
+      ),
+    );
+    fireEvent.mouseDown(screen.getByLabelText(/Cuenta de contrapartida/i));
+    fireEvent.click(await screen.findByRole('option', { name: /310505 · Capital/ }));
 
     const confirmBtn = screen.getByRole('button', { name: 'Confirmar Movimiento' });
     expect(confirmBtn).toBeEnabled();
@@ -151,6 +178,7 @@ describe('Operación de Caja — Pantalla CashPage (UX-25)', () => {
           amount: 50000,
           paymentMethod: 'EFECTIVO',
           reason: 'Aporte de cambio adicional',
+          counterpartAccountId: 'capital',
         })
       );
     });
