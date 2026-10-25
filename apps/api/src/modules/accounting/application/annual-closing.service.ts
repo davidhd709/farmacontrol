@@ -66,6 +66,46 @@ function isWithin(date: Date, from: Date, to: Date): boolean {
   return date.getTime() >= from.getTime() && date.getTime() <= to.getTime();
 }
 
+/**
+ * Cadena de reversiones de cada asiento publicado que cumple el filtro. Una reversión también
+ * puede reversarse, así que el asiento sigue vigente si se reversó un número par de veces.
+ */
+async function reversalChains(
+  where: Prisma.JournalEntryWhereInput,
+  client: Client,
+): Promise<ReversalChain[]> {
+  const roots = await client.journalEntry.findMany({
+    where: { ...where, status: 'POSTED' },
+    select: { id: true, entryDate: true, sourceId: true },
+    orderBy: { entryDate: 'asc' },
+  });
+  const chains: ReversalChain[] = [];
+  for (const root of roots) {
+    const entries: ChainEntry[] = [root];
+    const seen = new Set([root.id]);
+    for (;;) {
+      const next = await client.journalEntry.findUnique({
+        where: { reversalOfId: entries[entries.length - 1].id },
+        select: { id: true, entryDate: true, status: true },
+      });
+      if (!next || next.status !== 'POSTED') break;
+      assertAcyclic(seen, next.id);
+      entries.push({ id: next.id, entryDate: next.entryDate });
+    }
+    chains.push({ root, entries, effective: entries.length % 2 === 1 });
+  }
+  return chains;
+}
+
+/** Cierre anual vigente del año, siguiendo la cadena de reversiones de cada intento. */
+export async function annualClosingInForce(year: number, client: Client): Promise<string | null> {
+  const chains = await reversalChains(
+    { sourceType: ANNUAL_CLOSING_SOURCE, sourceId: { startsWith: `${year}-` } },
+    client,
+  );
+  return chains.find((chain) => chain.effective)?.root.id ?? null;
+}
+
 function centsToString(cents: bigint): string {
   const negative = cents < 0n;
   const abs = negative ? -cents : cents;
@@ -177,6 +217,8 @@ export class AnnualClosingService {
                 lines,
               },
               tx,
+              // Diciembre puede estar cerrado: el cierre anual va después de los mensuales
+              { yearEndClosing: true },
             );
             const result: AnnualClosingResultDto = {
               year,
@@ -357,7 +399,7 @@ export class AnnualClosingService {
       chain.entries.filter((entry) => !isWithin(entry.entryDate, yearStart, cutoff));
     const problems: string[] = [];
 
-    const monthly = await this.reversalChains(
+    const monthly = await reversalChains(
       { sourceType: FISCAL_CLOSING_SOURCE, entryDate: { gte: yearStart, lte: cutoff } },
       client,
     );
@@ -405,7 +447,7 @@ export class AnnualClosingService {
       );
     }
 
-    const annual = await this.reversalChains(
+    const annual = await reversalChains(
       { sourceType: ANNUAL_CLOSING_SOURCE, sourceId: { startsWith: `${year}-` } },
       client,
     );
@@ -442,8 +484,56 @@ export class AnnualClosingService {
       }
     }
 
+    // Ingresos, costos y gastos se toman acumulados: si un año anterior quedó sin cerrar, su
+    // resultado se sumaría a este. Se informa qué años tienen saldo en lugar de trasladarlo.
+    const priorNominal = await client.journalEntryLine.groupBy({
+      by: ['accountId'],
+      where: {
+        journalEntry: { status: 'POSTED', entryDate: { lt: yearStart } },
+        account: { type: { in: [...NOMINAL_TYPES] } },
+      },
+      _sum: { debit: true, credit: true },
+    });
+    const unbalanced = (sums: typeof priorNominal) =>
+      sums.some((sum) => !(sum._sum.debit ?? new Prisma.Decimal(0)).equals(sum._sum.credit ?? 0));
+    if (unbalanced(priorNominal)) {
+      const nominalYears = await client.$queryRaw<{ year: number }[]>`
+        SELECT DISTINCT EXTRACT(YEAR FROM je.entry_date)::int AS year
+        FROM journal_entry_lines l
+        JOIN journal_entries je ON je.id = l.journal_entry_id
+        JOIN accounts a ON a.id = l.account_id
+        WHERE je.status = 'POSTED'
+          AND je.entry_date < ${yearStart}
+          AND a.type IN ('INCOME', 'COST', 'EXPENSE')
+        ORDER BY year
+      `;
+      const pendingYears: number[] = [];
+      for (const { year: nominalYear } of nominalYears) {
+        const sums = await client.journalEntryLine.groupBy({
+          by: ['accountId'],
+          where: {
+            journalEntry: {
+              status: 'POSTED',
+              entryDate: {
+                gte: new Date(`${nominalYear}-01-01T00:00:00.000Z`),
+                lte: new Date(`${nominalYear}-12-31T00:00:00.000Z`),
+              },
+            },
+            account: { type: { in: [...NOMINAL_TYPES] } },
+          },
+          _sum: { debit: true, credit: true },
+        });
+        if (unbalanced(sums)) pendingYears.push(nominalYear);
+      }
+      problems.push(
+        pendingYears.length > 0
+          ? `${pendingYears.length === 1 ? 'el año' : 'los años'} ${pendingYears.join(', ')} ${pendingYears.length === 1 ? 'tiene' : 'tienen'} saldos de ingresos, costos o gastos sin cierre anual; ciérrelos o concílielos primero`
+          : 'las cuentas de ingresos, costos y gastos tienen saldos anteriores al año sin cierre anual; concílielos primero',
+      );
+    }
+
     // Un año anterior con resultado mensual sin cierre anual dejaría ese saldo sin trasladar
-    const prior = await this.reversalChains(
+    const prior = await reversalChains(
       { sourceType: FISCAL_CLOSING_SOURCE, entryDate: { lt: yearStart } },
       client,
     );
@@ -451,7 +541,7 @@ export class AnnualClosingService {
       (a, b) => a - b,
     );
     for (const priorYear of priorYears) {
-      const priorAnnual = await this.reversalChains(
+      const priorAnnual = await reversalChains(
         { sourceType: ANNUAL_CLOSING_SOURCE, sourceId: { startsWith: `${priorYear}-` } },
         client,
       );
@@ -487,37 +577,6 @@ export class AnnualClosingService {
       monthlyEntryIds: monthly.flatMap((chain) => chain.entries.map((entry) => entry.id)),
       existingEntryId: annual.find((chain) => chain.effective)?.root.id ?? null,
     };
-  }
-
-  /**
-   * Cadena de reversiones de cada asiento publicado que cumple el filtro. Una reversión también
-   * puede reversarse, así que el asiento sigue vigente si se reversó un número par de veces.
-   */
-  private async reversalChains(
-    where: Prisma.JournalEntryWhereInput,
-    client: Client,
-  ): Promise<ReversalChain[]> {
-    const roots = await client.journalEntry.findMany({
-      where: { ...where, status: 'POSTED' },
-      select: { id: true, entryDate: true, sourceId: true },
-      orderBy: { entryDate: 'asc' },
-    });
-    const chains: ReversalChain[] = [];
-    for (const root of roots) {
-      const entries: ChainEntry[] = [root];
-      const seen = new Set([root.id]);
-      for (;;) {
-        const next = await client.journalEntry.findUnique({
-          where: { reversalOfId: entries[entries.length - 1].id },
-          select: { id: true, entryDate: true, status: true },
-        });
-        if (!next || next.status !== 'POSTED') break;
-        assertAcyclic(seen, next.id);
-        entries.push({ id: next.id, entryDate: next.entryDate });
-      }
-      chains.push({ root, entries, effective: entries.length % 2 === 1 });
-    }
-    return chains;
   }
 
   /** Asiento original de una cadena de reversiones. */

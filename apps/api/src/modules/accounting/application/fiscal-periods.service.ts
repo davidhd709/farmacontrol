@@ -7,8 +7,13 @@ import {
   ReopenFiscalPeriodPayload,
 } from '@farmacia/contracts';
 import { JournalService } from './journal.service';
+import { annualClosingInForce } from './annual-closing.service';
 import { IdempotencyService } from '../../../common/idempotency/idempotency.service';
-import { AccountingNotFoundError, AccountingValidationError } from '../domain/accounting-rules';
+import {
+  AccountingConflictError,
+  AccountingNotFoundError,
+  AccountingValidationError,
+} from '../domain/accounting-rules';
 import { normalizeJournalAmount, JournalLineInput } from '../domain/journal-rules';
 
 const MONTH_NAMES = [
@@ -436,6 +441,12 @@ export class FiscalPeriodsService {
           }
           if (period.status !== 'CLOSED') {
             throw new AccountingValidationError('El período fiscal no está cerrado.');
+          }
+          // Reabrir un mes de un año ya cerrado dejaría desactualizado su cierre anual
+          if (await annualClosingInForce(period.year, tx)) {
+            throw new AccountingConflictError(
+              `El año ${period.year} tiene un cierre anual vigente; revérselo antes de reabrir ${period.name}.`,
+            );
           }
 
           await tx.fiscalPeriod.update({
