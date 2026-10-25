@@ -18,6 +18,13 @@ export interface SaleEventInput {
   discountTotal?: number | string | Prisma.Decimal;
   /** Costo retirado del submayor de valoración (ADR-005), no el costo del catálogo. */
   costOfSales: number | string | Prisma.Decimal;
+  /** F6: impuesto nacional al consumo de la venta */
+  incTotal?: number | string | Prisma.Decimal;
+  /**
+   * F6: ingreso bruto (antes de descuento) por tratamiento tributario, cuando el motor está
+   * activo. Sin él la venta se contabiliza como antes del motor.
+   */
+  revenue?: { taxed: string; exempt: string; excluded: string };
   paymentMethod: string;
   createdById?: string | null;
   createdAt?: Date | string;
@@ -42,6 +49,16 @@ export interface PurchaseEventInput {
   totalAmount: number | string | Prisma.Decimal;
   purchaseDate: Date | string;
   receivedByUserId?: string | null;
+  /** F6: desglose del motor tributario; sin él la compra se contabiliza como antes */
+  taxes?: {
+    subtotal: string;
+    vat: string;
+    /** IVA descontable o mayor costo del inventario (empresa no responsable) */
+    vatDeductible: boolean;
+    withholdingIncome: string;
+    withholdingVat: string;
+    withholdingIca: string;
+  };
 }
 
 export interface ReceivablePaymentEventInput {
@@ -182,7 +199,10 @@ export class AccountingEngineService {
     const taxCents = sale.taxTotal
       ? parseMoneyToCents(new Prisma.Decimal(sale.taxTotal).toFixed(2), 'IVA de venta')
       : 0n;
-    const subtotalCents = totalCents - taxCents;
+    const incCents = sale.incTotal
+      ? parseMoneyToCents(new Prisma.Decimal(sale.incTotal).toFixed(2), 'INC de venta')
+      : 0n;
+    const subtotalCents = totalCents - taxCents - incCents;
     const discountCents = sale.discountTotal
       ? parseMoneyToCents(new Prisma.Decimal(sale.discountTotal).toFixed(2), 'Descuento de venta')
       : 0n;
@@ -215,8 +235,41 @@ export class AccountingEngineService {
       description: `Ingreso por venta mostrador factura ${sale.invoiceNumber}`,
     });
 
-    // Crédito a IVA generado si aplica
-    if (taxCents > 0n) {
+    if (sale.revenue) {
+      // F6: el motor tributario separa el ingreso por tratamiento y el INC por pagar
+      if (taxCents > 0n) {
+        lines.push({
+          purpose: 'VAT_OUTPUT',
+          debit: '0.00',
+          credit: centsToMoneyString(taxCents),
+          description: `IVA generado factura ${sale.invoiceNumber}`,
+        });
+      }
+      if (incCents > 0n) {
+        lines.push({
+          purpose: 'INC_PAYABLE',
+          debit: '0.00',
+          credit: centsToMoneyString(incCents),
+          description: `INC generado factura ${sale.invoiceNumber}`,
+        });
+      }
+      const revenueLines: Array<[DbPurpose, string, string]> = [
+        ['SALES_TAXED', sale.revenue.taxed, 'Venta gravada'],
+        ['SALES_EXEMPT', sale.revenue.exempt, 'Venta exenta'],
+        ['SALES_EXCLUDED', sale.revenue.excluded, 'Venta excluida o sin IVA'],
+      ];
+      for (const [purpose, amount, label] of revenueLines) {
+        if (parseMoneyToCents(amount, label) > 0n) {
+          lines.push({
+            purpose,
+            debit: '0.00',
+            credit: amount,
+            description: `${label} factura ${sale.invoiceNumber}`,
+          });
+        }
+      }
+    } else if (taxCents > 0n) {
+      // Crédito a IVA generado si aplica
       lines.push({
         purpose: 'VAT_OUTPUT',
         debit: '0.00',
@@ -325,20 +378,22 @@ export class AccountingEngineService {
 
     const purchaseDate = new Date(purchase.purchaseDate);
     const totalStr = centsToMoneyString(totalCents);
-    const lines: JournalLineInput[] = [
-      {
-        purpose: 'INVENTORY',
-        debit: totalStr,
-        credit: '0.00',
-        description: `Entrada a inventario factura compra ${purchase.invoiceNumber}`,
-      },
-      {
-        purpose: 'SUPPLIERS',
-        debit: '0.00',
-        credit: totalStr,
-        description: `Causación factura proveedor ${purchase.supplierName || purchase.invoiceNumber}`,
-      },
-    ];
+    const lines: JournalLineInput[] = purchase.taxes
+      ? this.taxedPurchaseLines(purchase, totalCents)
+      : [
+          {
+            purpose: 'INVENTORY',
+            debit: totalStr,
+            credit: '0.00',
+            description: `Entrada a inventario factura compra ${purchase.invoiceNumber}`,
+          },
+          {
+            purpose: 'SUPPLIERS',
+            debit: '0.00',
+            credit: totalStr,
+            description: `Causación factura proveedor ${purchase.supplierName || purchase.invoiceNumber}`,
+          },
+        ];
 
     return this.journalService.post(
       {
@@ -351,6 +406,61 @@ export class AccountingEngineService {
       },
       tx,
     );
+  }
+
+  /**
+   * F6: inventario por el subtotal (más el IVA si no es descontable), IVA descontable,
+   * proveedor por el neto y cada retención practicada por pagar.
+   */
+  private taxedPurchaseLines(purchase: PurchaseEventInput, totalCents: bigint): JournalLineInput[] {
+    const t = purchase.taxes!;
+    const cents = (value: string, label: string) => parseMoneyToCents(value, label);
+    const subtotalCents = cents(t.subtotal, 'Subtotal de compra');
+    const vatCents = cents(t.vat, 'IVA de compra');
+    const withholdings: Array<[DbPurpose, bigint, string]> = [
+      [
+        'WITHHOLDING_INCOME_PAYABLE',
+        cents(t.withholdingIncome, 'Retención en la fuente'),
+        'Retención en la fuente',
+      ],
+      ['WITHHOLDING_VAT_PAYABLE', cents(t.withholdingVat, 'ReteIVA'), 'Retención de IVA'],
+      ['WITHHOLDING_ICA_PAYABLE', cents(t.withholdingIca, 'ReteICA'), 'Retención de ICA'],
+    ];
+    const withheldCents = withholdings.reduce((sum, [, amount]) => sum + amount, 0n);
+    const inventoryCents = subtotalCents + (t.vatDeductible ? 0n : vatCents);
+    const lines: JournalLineInput[] = [
+      {
+        purpose: 'INVENTORY',
+        debit: centsToMoneyString(inventoryCents),
+        credit: '0.00',
+        description: `Entrada a inventario factura compra ${purchase.invoiceNumber}`,
+      },
+    ];
+    if (t.vatDeductible && vatCents > 0n) {
+      lines.push({
+        purpose: 'VAT_INPUT',
+        debit: centsToMoneyString(vatCents),
+        credit: '0.00',
+        description: `IVA descontable factura compra ${purchase.invoiceNumber}`,
+      });
+    }
+    lines.push({
+      purpose: 'SUPPLIERS',
+      debit: '0.00',
+      credit: centsToMoneyString(totalCents - withheldCents),
+      description: `Causación factura proveedor ${purchase.supplierName || purchase.invoiceNumber}`,
+    });
+    for (const [purpose, amount, label] of withholdings) {
+      if (amount > 0n) {
+        lines.push({
+          purpose,
+          debit: '0.00',
+          credit: centsToMoneyString(amount),
+          description: `${label} factura compra ${purchase.invoiceNumber}`,
+        });
+      }
+    }
+    return lines;
   }
 
   /**

@@ -26,8 +26,12 @@ export function lineAmounts(
   unitPriceCents: number,
   discountCents: number,
   taxRate: number,
+  incRate = 0,
 ) {
   const subtotal = Math.max(0, quantity * unitPriceCents - discountCents);
-  const taxAmount = Math.round((subtotal * toCents(taxRate)) / 10_000);
+  // IVA e INC se redondean por separado, como el backend (F6)
+  const taxAmount =
+    Math.round((subtotal * toCents(taxRate)) / 10_000) +
+    Math.round((subtotal * toCents(incRate)) / 10_000);
   return { subtotal, taxAmount, total: subtotal + taxAmount };
 }

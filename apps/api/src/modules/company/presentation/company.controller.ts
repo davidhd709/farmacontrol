@@ -20,10 +20,14 @@ import {
   type CompanySettingsDto,
   type CreateAccountingPolicyPayload,
   type CreateBranchPayload,
+  type CompanyTaxProfileDto,
+  type CompanyTaxProfilesDto,
+  type CreateCompanyTaxProfilePayload,
   type SetupCompanyPayload,
   type UpdateCompanyPayload,
 } from '@farmacia/contracts';
 import { CompanyService, type CompanyAuditContext } from '../application/company.service';
+import { CompanyTaxProfileService } from '../application/company-tax-profile.service';
 import { SessionAuthGuard } from '../../identity/presentation/guards/session-auth.guard';
 import { PermissionsGuard } from '../../identity/presentation/guards/permissions.guard';
 import { RequirePermissions } from '../../identity/presentation/decorators/require-permissions.decorator';
@@ -49,7 +53,37 @@ function auditContext(req: Request, user: AuthenticatedUserContext): CompanyAudi
 @Controller('company')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 export class CompanyController {
-  constructor(private readonly companyService: CompanyService) {}
+  constructor(
+    private readonly companyService: CompanyService,
+    private readonly taxProfileService: CompanyTaxProfileService,
+  ) {}
+
+  @Get('tax-profiles')
+  @RequirePermissions(SYSTEM_PERMISSIONS.COMPANY_READ)
+  @ApiOperation({ summary: 'Perfil tributario vigente de la empresa y su historial (F6)' })
+  getTaxProfiles(): Promise<CompanyTaxProfilesDto> {
+    return this.taxProfileService.list();
+  }
+
+  @Post('tax-profiles')
+  @HttpCode(HttpStatus.CREATED)
+  @RequirePermissions(SYSTEM_PERMISSIONS.COMPANY_MANAGE)
+  @ApiOperation({
+    summary:
+      'Registra una versión del perfil tributario (responsabilidades del RUT e ICA); activa el motor tributario',
+  })
+  @ApiResponse({ status: 400, description: 'Responsabilidades, ICA o vigencia no válidos.' })
+  @ApiResponse({ status: 409, description: 'Ya existe una versión con esa vigencia.' })
+  createTaxProfile(
+    @Body() payload: unknown,
+    @Req() req: Request,
+    @CurrentUser() user: AuthenticatedUserContext,
+  ): Promise<CompanyTaxProfileDto> {
+    return this.taxProfileService.create(
+      body<CreateCompanyTaxProfilePayload>(payload),
+      auditContext(req, user),
+    );
+  }
 
   @Get()
   @RequirePermissions(SYSTEM_PERMISSIONS.COMPANY_READ)

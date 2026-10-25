@@ -131,6 +131,11 @@ const CompanySettingsPage = lazy(() =>
     default: m.CompanySettingsPage,
   })),
 );
+const TaxCatalogPage = lazy(() =>
+  import('./features/taxes/pages/TaxCatalogPage').then((m) => ({
+    default: m.TaxCatalogPage,
+  })),
+);
 const FiscalPeriodsPage = lazy(() =>
   import('./features/accounting/pages/FiscalPeriodsPage').then((m) => ({
     default: m.FiscalPeriodsPage,
@@ -197,6 +202,7 @@ export const App = () => {
               <Route path="/accounting/third-parties" element={<ThirdPartiesReportPage />} />
               <Route path="/accounting/periods" element={<FiscalPeriodsPage />} />
               <Route path="/company" element={<CompanySettingsPage />} />
+              <Route path="/tax-catalog" element={<TaxCatalogPage />} />
               <Route path="/audit" element={<AuditLogsPage />} />
             </Route>
           </Route>

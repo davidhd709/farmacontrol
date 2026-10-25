@@ -5,6 +5,7 @@
  */
 
 import type { InventoryControlMode } from './company';
+import type { ProductSaleTaxDto } from './tax';
 
 export interface ApiResponse<T = unknown> {
   success: boolean;
@@ -136,6 +137,7 @@ export * from './product-tax-profile';
 export * from './treasury';
 export * from './expenses';
 export * from './company';
+export * from './tax';
 
 export interface RoleDto {
   id: string;
@@ -318,6 +320,8 @@ export interface ProductDto {
   baseCost: string;
   isActive: boolean;
   availableStock?: number;
+  /** F6: tarifas de venta vigentes cuando el motor tributario está activo */
+  saleTax?: ProductSaleTaxDto;
   presentations?: ProductPresentationDto[];
   createdAt: string;
   updatedAt: string;
@@ -609,6 +613,9 @@ export interface SupplierDto {
   phone: string | null;
   email: string | null;
   address: string | null;
+  /** F6: responsabilidades del RUT (códigos DIAN) y si declara renta */
+  taxResponsibilities: string[];
+  isIncomeTaxDeclarant: boolean;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -621,6 +628,8 @@ export interface CreateSupplierPayload {
   phone?: string | null;
   email?: string | null;
   address?: string | null;
+  taxResponsibilities?: string[];
+  isIncomeTaxDeclarant?: boolean;
 }
 
 export interface UpdateSupplierPayload {
@@ -630,6 +639,8 @@ export interface UpdateSupplierPayload {
   phone?: string | null;
   email?: string | null;
   address?: string | null;
+  taxResponsibilities?: string[];
+  isIncomeTaxDeclarant?: boolean;
   isActive?: boolean;
 }
 
@@ -654,6 +665,8 @@ export interface PurchaseLineDto {
   quantityBaseUnits: number;
   unitCost: string;
   subtotal: string;
+  vatRate: string;
+  vatAmount: string;
   createdAt: string;
 }
 
@@ -666,7 +679,16 @@ export interface PurchaseDto {
   purchaseDate: string;
   dueDate?: string | null;
   paymentCondition?: string | null;
+  /** Total de la factura: subtotal + IVA */
   totalAmount: string;
+  /** F6: desglose tributario; subtotal NULL en compras anteriores al motor */
+  subtotal: string | null;
+  vatTotal: string;
+  withholdingIncome: string;
+  withholdingVat: string;
+  withholdingIca: string;
+  /** Lo que queda por pagar al proveedor: total menos retenciones */
+  payableAmount: string;
   status: string;
   notes?: string | null;
   receivedByUserId?: string | null;

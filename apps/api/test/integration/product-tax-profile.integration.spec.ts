@@ -70,8 +70,7 @@ describe('Product tax profiles 11.3a PostgreSQL', () => {
     return {
       productId,
       operation: 'SALE',
-      treatment: 'GRAVADO',
-      ratePct: '19.0000',
+      taxRuleCode: 'IVA_19',
       effectiveFrom: dayFromNow(10),
       effectiveTo: dayFromNow(20),
       documentReference: 'Validación tributaria del SKU',
@@ -88,7 +87,13 @@ describe('Product tax profiles 11.3a PostgreSQL', () => {
     const response = await create(draft());
     expect(response.status).toBe(201);
     expect(response.body.status).toBe('DRAFT');
-    expect(response.body.ratePct).toBe('19.0000');
+    // F6: tratamiento y tarifa se copian de la regla del catálogo normativo
+    expect(response.body).toMatchObject({
+      ratePct: '19.0000',
+      treatment: 'GRAVADO',
+      taxType: 'IVA',
+      taxRuleCode: 'IVA_19',
+    });
     const effective = await request(app.getHttpServer())
       .get(`${root}/effective`)
       .query({ productId, operation: 'SALE', date: dayFromNow(15) })
@@ -106,7 +111,10 @@ describe('Product tax profiles 11.3a PostgreSQL', () => {
   it('exige autorización, respaldo documental y valida tarifa y vigencia', async () => {
     expect((await create(draft(), cashierCookie)).status).toBe(403);
     expect((await request(app.getHttpServer()).get(root).query({ productId })).status).toBe(401);
-    expect((await create(draft({ treatment: 'EXCLUIDO', ratePct: '19.0000' }))).status).toBe(400);
+    expect((await create(draft({ taxRuleCode: 'NO_EXISTE' }))).status).toBe(400);
+    expect((await create(draft({ taxRuleCode: 'RETEIVA_15' }))).status).toBe(400);
+    expect((await create(draft({ ratePct: '19.0000' }))).status).toBe(400);
+    expect((await create(draft({ operation: 'PURCHASE', taxRuleCode: 'INC_8' }))).status).toBe(400);
     expect((await create(draft({ effectiveTo: dayFromNow(5) }))).status).toBe(400);
     const created = await create(draft({ documentReference: null }));
     expect(created.status).toBe(201);

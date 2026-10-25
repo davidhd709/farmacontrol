@@ -23,6 +23,15 @@ import {
 } from '../domain/purchase.exceptions';
 import { AuditService } from '../../audit/application/services/audit.service';
 import { AccountingEngineService } from '../../accounting/application/accounting-engine.service';
+import { companyTaxStatusAt, productTaxRulesAt } from '../../taxes/application/tax-context.reader';
+import {
+  uvtValueAt,
+  vatWithholdingRuleAt,
+  withholdingRulesAt,
+} from '../../taxes/application/tax-catalog.reader';
+import { partyTaxStatus, purchaseTaxes } from '../../taxes/domain/tax-engine';
+import { parseMoneyToCents } from '../../treasury/domain/treasury-rules';
+import { centsToMoneyString } from '../../cash/domain/cash-rules';
 
 export interface AuditContext {
   userId?: string | null;
@@ -247,6 +256,49 @@ export class PurchaseService {
       lines: purchaseLines,
     });
 
+    // 4.1. F6 (ADR-006): con perfil tributario de la empresa, el motor calcula el IVA y las
+    // retenciones de la factura a la fecha de compra; sin perfil, la compra sigue como antes
+    const taxDay = purchaseDate.toISOString().slice(0, 10);
+    const taxStatus = await companyTaxStatusAt(this.client, taxDay);
+    if (taxStatus) {
+      const taxLines = [];
+      for (const line of purchase.lines) {
+        const rules = await productTaxRulesAt(this.client, line.productId, 'PURCHASE', taxDay);
+        taxLines.push({
+          key: line.id,
+          productName: line.productName ?? line.productId,
+          subtotalCents: parseMoneyToCents(line.subtotal.toFixed(2), 'Subtotal de línea'),
+          // Los servicios no se reciben como inventario (F4): toda línea de compra es un bien
+          nature: 'GOODS' as const,
+          iva: rules.iva,
+        });
+      }
+      const result = purchaseTaxes({
+        day: taxDay,
+        lines: taxLines,
+        supplier: partyTaxStatus(supplier),
+        company: taxStatus,
+        withholdingRules: await withholdingRulesAt(this.client, taxDay),
+        vatWithholdingRule: await vatWithholdingRuleAt(this.client, taxDay),
+        uvtValue: await uvtValueAt(this.client, taxDay),
+      });
+      const byKey = new Map(result.lines.map((l) => [l.key, l]));
+      const toNumber = (cents: bigint) => Number(centsToMoneyString(cents));
+      for (const line of purchase.lines) {
+        const taxed = byKey.get(line.id)!;
+        line.applyTaxes(taxed.vatRate, toNumber(taxed.vatCents), taxed.snapshot);
+      }
+      purchase.applyTaxes({
+        subtotal: toNumber(result.subtotalCents),
+        vatTotal: toNumber(result.vatCents),
+        withholdingIncome: toNumber(result.withholdingIncomeCents),
+        withholdingVat: toNumber(result.withholdingVatCents),
+        withholdingIca: toNumber(result.withholdingIcaCents),
+        vatDeductible: result.vatDeductible,
+        withholdings: result.withholdings,
+      });
+    }
+
     // 5. Guardar transaccionalmente
     const locationId = input.lines[0]?.locationId || defaultLocation.id;
     const savedPurchase = await this.purchaseRepository.saveTransactional(
@@ -262,6 +314,16 @@ export class PurchaseService {
             totalAmount: p.totalAmount,
             purchaseDate: p.purchaseDate,
             receivedByUserId: p.receivedByUserId,
+            taxes: purchase.taxTotals
+              ? {
+                  subtotal: purchase.taxTotals.subtotal.toFixed(2),
+                  vat: purchase.taxTotals.vatTotal.toFixed(2),
+                  vatDeductible: purchase.taxTotals.vatDeductible !== false,
+                  withholdingIncome: purchase.taxTotals.withholdingIncome.toFixed(2),
+                  withholdingVat: purchase.taxTotals.withholdingVat.toFixed(2),
+                  withholdingIca: purchase.taxTotals.withholdingIca.toFixed(2),
+                }
+              : undefined,
           },
           tx,
         );

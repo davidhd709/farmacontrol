@@ -69,6 +69,16 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
             invoiceNumber: purchase.invoiceNumber,
             purchaseDate: purchase.purchaseDate,
             totalAmount: new Prisma.Decimal(purchase.totalAmount),
+            ...(purchase.taxTotals
+              ? {
+                  subtotal: new Prisma.Decimal(purchase.taxTotals.subtotal),
+                  vatTotal: new Prisma.Decimal(purchase.taxTotals.vatTotal),
+                  withholdingIncome: new Prisma.Decimal(purchase.taxTotals.withholdingIncome),
+                  withholdingVat: new Prisma.Decimal(purchase.taxTotals.withholdingVat),
+                  withholdingIca: new Prisma.Decimal(purchase.taxTotals.withholdingIca),
+                  taxSnapshot: (purchase.taxTotals.withholdings ?? []) as Prisma.InputJsonValue,
+                }
+              : {}),
             status: purchase.status,
             notes: purchase.notes,
             receivedByUserId: purchase.receivedByUserId,
@@ -84,7 +94,8 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
         await this.payablesLedger.openForPurchase(tx, {
           purchaseId: purchase.id,
           supplierId: purchase.supplierId,
-          totalAmount: purchase.totalAmount,
+          // F6: al proveedor se le debe el neto; las retenciones se le deben a la DIAN y al municipio
+          totalAmount: purchase.payableAmount,
           dueDate: payableDueDate,
           notes: purchase.notes,
         });
@@ -170,6 +181,11 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
               quantityBaseUnits: line.quantityBaseUnits,
               unitCost: new Prisma.Decimal(line.unitCost),
               subtotal: new Prisma.Decimal(line.subtotal),
+              vatRate: new Prisma.Decimal(line.vatRate),
+              vatAmount: new Prisma.Decimal(line.vatAmount),
+              ...(line.taxSnapshot
+                ? { taxSnapshot: line.taxSnapshot as Prisma.InputJsonValue }
+                : {}),
               lotNumber: line.lotNumber,
               expirationDate: line.expirationDate,
               createdAt: line.createdAt,
@@ -199,7 +215,13 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
           await this.inventoryLedger.valuation.receive(tx, {
             productId: line.productId,
             quantityBaseUnits: line.quantityBaseUnits,
-            valueCents: parseMoneyToCents(new Prisma.Decimal(line.subtotal).toFixed(2), 'Subtotal'),
+            // F6: si la empresa no es responsable de IVA, el IVA pagado es mayor costo
+            valueCents: parseMoneyToCents(
+              new Prisma.Decimal(line.subtotal)
+                .plus(purchase.taxTotals?.vatDeductible === false ? line.vatAmount : 0)
+                .toFixed(2),
+              'Costo de la línea',
+            ),
             movementType: 'PURCHASE',
             sourceType: 'PURCHASE',
             sourceId: purchase.id,
@@ -322,6 +344,9 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
         quantityBaseUnits: l.quantityBaseUnits,
         unitCost: Number(l.unitCost),
         subtotal: Number(l.subtotal),
+        vatRate: Number(l.vatRate ?? 0),
+        vatAmount: Number(l.vatAmount ?? 0),
+        taxSnapshot: l.taxSnapshot ?? null,
         createdAt: l.createdAt,
       }),
     );
@@ -358,6 +383,16 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
       dueDate,
       paymentCondition,
       totalAmount: Number(raw.totalAmount),
+      taxTotals:
+        raw.subtotal === null || raw.subtotal === undefined
+          ? null
+          : {
+              subtotal: Number(raw.subtotal),
+              vatTotal: Number(raw.vatTotal),
+              withholdingIncome: Number(raw.withholdingIncome),
+              withholdingVat: Number(raw.withholdingVat),
+              withholdingIca: Number(raw.withholdingIca),
+            },
       status: raw.status,
       notes: raw.notes,
       receivedByUserId: raw.receivedByUserId,

@@ -40,6 +40,8 @@ import { requirePaymentBankAccountId } from '../../treasury/application/payment-
 import { parseMoneyToCents } from '../../treasury/domain/treasury-rules';
 import { centsToMoneyString } from '../../cash/domain/cash-rules';
 import { AccountingEngineService } from '../../accounting/application/accounting-engine.service';
+import { companyTaxStatusAt, productTaxRulesAt } from '../../taxes/application/tax-context.reader';
+import { saleLineTaxes, type SaleLineTaxResult } from '../../taxes/domain/tax-engine';
 
 const SALE_CONFIRM_ENDPOINT = '/api/v1/sales/confirm';
 
@@ -405,6 +407,11 @@ export class SaleService {
           const saleLines: SaleLine[] = [];
           const allLotAllocations: SaleLotAllocation[] = [];
           let costOfSalesCents = 0n;
+          // F6 (ADR-006): con perfil tributario de la empresa, el motor calcula IVA e INC; sin
+          // perfil la venta sigue como antes del motor
+          const taxDay = businessToday();
+          const taxStatus = await companyTaxStatusAt(tx, taxDay);
+          const revenueCents = { taxed: 0n, exempt: 0n, excluded: 0n };
 
           for (const item of payload.items) {
             const { product, factor, presentationName, requiredBaseUnits, ...resolved } =
@@ -412,6 +419,28 @@ export class SaleService {
             let unitPrice = resolved.unitPrice;
             if (item.unitPriceOverride !== undefined) {
               unitPrice = item.unitPriceOverride;
+            }
+
+            // Impuestos antes de tocar inventario: una venta bloqueada por la norma falla aquí
+            let lineTaxes: SaleLineTaxResult | null = null;
+            if (taxStatus) {
+              const base = SaleLine.create({
+                saleId,
+                productId: product.id,
+                presentationFactorHistorical: factor,
+                quantityCommercial: item.quantityCommercial,
+                unitPrice,
+                discount: item.discount ?? 0,
+              });
+              const rules = await productTaxRulesAt(tx, product.id, 'SALE', taxDay);
+              lineTaxes = saleLineTaxes({
+                day: taxDay,
+                productName: product.name,
+                subtotalCents: parseMoneyToCents(base.subtotal.toFixed(2), 'Subtotal de línea'),
+                company: taxStatus,
+                iva: rules.iva,
+                inc: rules.inc,
+              });
             }
 
             const lineId = crypto.randomUUID();
@@ -550,8 +579,25 @@ export class SaleService {
                     ),
               costValue: centsToMoneyString(lineCostCents),
               lotAllocations: lineAllocations,
+              taxRate: lineTaxes?.ivaRate ?? 0,
+              incRate: lineTaxes?.incRate ?? 0,
+              taxSnapshot: lineTaxes?.snapshot ?? null,
             });
 
+            if (lineTaxes) {
+              // Ingreso bruto por tratamiento: el asiento lo separa en gravado, exento y excluido
+              const grossCents = parseMoneyToCents(
+                (saleLine.subtotal + saleLine.discount).toFixed(2),
+                'Valor bruto de línea',
+              );
+              const bucket =
+                lineTaxes.treatment === 'GRAVADO'
+                  ? 'taxed'
+                  : lineTaxes.treatment === 'EXENTO'
+                    ? 'exempt'
+                    : 'excluded';
+              revenueCents[bucket] += grossCents;
+            }
             saleLines.push(saleLine);
           }
 
@@ -631,8 +677,16 @@ export class SaleService {
               total: sale.total,
               subtotal: sale.subtotal,
               taxTotal: sale.taxTotal,
+              incTotal: sale.incTotal,
               discountTotal: sale.discountTotal,
               costOfSales: centsToMoneyString(costOfSalesCents),
+              revenue: taxStatus
+                ? {
+                    taxed: centsToMoneyString(revenueCents.taxed),
+                    exempt: centsToMoneyString(revenueCents.exempt),
+                    excluded: centsToMoneyString(revenueCents.excluded),
+                  }
+                : undefined,
               paymentMethod: sale.paymentMethod,
               bankAccountId: sale.bankAccountId ?? null,
               createdById: sale.createdById,

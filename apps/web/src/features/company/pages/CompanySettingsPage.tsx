@@ -44,6 +44,7 @@ import {
   type CompanySetupFormData,
   type PolicyFormData,
 } from '../validation/company.schema';
+import { CompanyTaxProfileSection } from '../../taxes/components/CompanyTaxProfileSection';
 
 const COSTING_LABELS: Record<CostingMethod, string> = {
   WEIGHTED_AVERAGE: 'Promedio ponderado móvil',
@@ -517,6 +518,8 @@ export const CompanySettingsPage = () => {
             </CardContent>
           </Card>
         )}
+
+        {company && <CompanyTaxProfileSection canManage={canManage} />}
 
         {policyHistory.length > 0 && (
           <Card variant="outlined">

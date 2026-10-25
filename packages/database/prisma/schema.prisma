@@ -21,6 +21,7 @@ model User {
   valuationMovements    InventoryValuationMovement[]
   accountingPolicies    CompanyAccountingPolicy[]
   costingConversions    InventoryCostingConversion[]
+  companyTaxProfiles    CompanyTaxProfile[]
   purchasesReceived     Purchase[]
   cashMovements         CashMovement[]
   salesCreated          Sale[]              @relation("SalesCreated")
@@ -412,6 +413,9 @@ model Supplier {
   phone       String?        @db.VarChar(50)
   email       String?        @db.VarChar(100)
   address     String?        @db.VarChar(255)
+  /// F6: responsabilidades del RUT (códigos DIAN) y si declara renta
+  taxResponsibilities  String[] @default([]) @map("tax_responsibilities") @db.VarChar(8)
+  isIncomeTaxDeclarant Boolean  @default(true) @map("is_income_tax_declarant")
   isActive    Boolean        @default(true) @map("is_active")
   createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamptz
   updatedAt   DateTime       @updatedAt @map("updated_at") @db.Timestamptz
@@ -433,6 +437,14 @@ model Purchase {
   invoiceNumber    String         @map("invoice_number") @db.VarChar(100)
   purchaseDate     DateTime       @map("purchase_date") @db.Date
   totalAmount      Decimal        @map("total_amount") @db.Decimal(12, 2)
+  /// F6: subtotal + IVA = total de la factura; NULL en compras anteriores al motor tributario
+  subtotal          Decimal?       @db.Decimal(12, 2)
+  vatTotal          Decimal        @default(0) @map("vat_total") @db.Decimal(12, 2)
+  withholdingIncome Decimal        @default(0) @map("withholding_income") @db.Decimal(12, 2)
+  withholdingVat    Decimal        @default(0) @map("withholding_vat") @db.Decimal(12, 2)
+  withholdingIca    Decimal        @default(0) @map("withholding_ica") @db.Decimal(12, 2)
+  /// F6: detalle de las retenciones practicadas
+  taxSnapshot       Json?          @map("tax_snapshot")
   status           String         @default("RECEIVED") @db.VarChar(50)
   notes            String?        @db.VarChar(500)
   receivedByUserId String?        @map("received_by_user_id") @db.Uuid
@@ -464,6 +476,9 @@ model PurchaseLine {
   quantityBaseUnits            Int                  @map("quantity_base_units")
   unitCost           Decimal              @map("unit_cost") @db.Decimal(12, 2)
   subtotal           Decimal              @map("subtotal") @db.Decimal(12, 2)
+  vatRate            Decimal              @default(0) @map("vat_rate") @db.Decimal(5, 2)
+  vatAmount          Decimal              @default(0) @map("vat_amount") @db.Decimal(12, 2)
+  taxSnapshot        Json?                @map("tax_snapshot")
   /// Lote recibido, si aplica al modo del producto.
   lotNumber          String?              @map("lot_number") @db.VarChar(100)
   /// Vencimiento recibido, si aplica al modo del producto.
@@ -539,6 +554,8 @@ model Sale {
   subtotal      Decimal  @db.Decimal(12, 2)
   taxTotal      Decimal  @default(0) @map("tax_total") @db.Decimal(12, 2)
   discountTotal Decimal  @default(0) @map("discount_total") @db.Decimal(12, 2)
+  /// F6: impuesto nacional al consumo; taxTotal es el IVA
+  incTotal      Decimal  @default(0) @map("inc_total") @db.Decimal(12, 2)
   total         Decimal  @db.Decimal(12, 2)
   amountPaid    Decimal  @default(0) @map("amount_paid") @db.Decimal(12, 2)
   changeGiven   Decimal  @default(0) @map("change_given") @db.Decimal(12, 2)
@@ -577,6 +594,10 @@ model SaleLine {
   subtotal                     Decimal  @db.Decimal(12, 2)
   taxRate                      Decimal  @default(0) @map("tax_rate") @db.Decimal(5, 2)
   taxAmount                    Decimal  @default(0) @map("tax_amount") @db.Decimal(12, 2)
+  incRate                      Decimal  @default(0) @map("inc_rate") @db.Decimal(5, 2)
+  incAmount                    Decimal  @default(0) @map("inc_amount") @db.Decimal(12, 2)
+  /// F6: reglas, bases, tarifas y valores aplicados por el motor tributario
+  taxSnapshot                  Json?    @map("tax_snapshot")
   total                        Decimal  @db.Decimal(12, 2)
   /// Costo por unidad base al confirmar la venta; NULL en ventas anteriores a su registro
   unitCostBase                 Decimal? @map("unit_cost_base") @db.Decimal(12, 2)
@@ -817,6 +838,12 @@ enum AccountingPurpose {
   ACCUMULATED_LOSSES
   /// Diferencias entre el costo de compra devuelto y el costo promedio (ADR-006)
   INVENTORY_COST_VARIANCE
+  /// F6: ventas exentas, INC por pagar y retenciones practicadas por pagar
+  SALES_EXEMPT
+  INC_PAYABLE
+  WITHHOLDING_INCOME_PAYABLE
+  WITHHOLDING_VAT_PAYABLE
+  WITHHOLDING_ICA_PAYABLE
 }
 
 enum AccountingMappingStatus {
@@ -892,6 +919,7 @@ model Company {
 
   branches           Branch[]
   accountingPolicies CompanyAccountingPolicy[]
+  taxProfiles        CompanyTaxProfile[]
 
   @@map("companies")
 }
@@ -1061,6 +1089,9 @@ model ProductTaxProfile {
   effectiveFrom     DateTime            @map("effective_from") @db.Date
   effectiveTo       DateTime?           @map("effective_to") @db.Date
   documentReference String?             @map("document_reference") @db.VarChar(500)
+  /// F6: IVA o INC; la tarifa y el tratamiento se copian de la regla del catálogo
+  taxType           String              @default("IVA") @map("tax_type") @db.VarChar(8)
+  taxRuleId         String?             @map("tax_rule_id") @db.Uuid
   activatedById     String?             @map("activated_by_id") @db.Uuid
   activatedAt       DateTime?           @map("activated_at") @db.Timestamptz
   createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz
@@ -1068,8 +1099,9 @@ model ProductTaxProfile {
 
   product           Product             @relation(fields: [productId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   activatedBy       User?               @relation("ProductTaxProfilesActivated", fields: [activatedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  taxRule           TaxRule?            @relation(fields: [taxRuleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
-  @@index([productId, operation, status, effectiveFrom])
+  @@index([productId, operation, taxType, status, effectiveFrom], map: "product_tax_profiles_product_operation_type_idx")
   @@index([activatedById])
   @@map("product_tax_profiles")
 }
@@ -1398,4 +1430,60 @@ model ThirdParty {
   @@map("third_parties")
 }
 
+/// Regla del catálogo normativo colombiano (ADR-006, F6). La mantiene el producto, se carga por
+/// migración y no se edita: un cambio normativo es una versión nueva con su vigencia.
+model TaxRule {
+  id             String    @id @default(uuid()) @db.Uuid
+  code           String    @db.VarChar(40)
+  taxType        String    @map("tax_type") @db.VarChar(16)
+  treatment      String?   @db.VarChar(16)
+  description    String    @db.VarChar(250)
+  ratePct        Decimal?  @map("rate_pct") @db.Decimal(7, 4)
+  rateMinPerMil  Decimal?  @map("rate_min_per_mil") @db.Decimal(7, 3)
+  rateMaxPerMil  Decimal?  @map("rate_max_per_mil") @db.Decimal(7, 3)
+  minBaseUvt     Decimal?  @map("min_base_uvt") @db.Decimal(10, 2)
+  appliesTo      String    @default("ANY") @map("applies_to") @db.VarChar(16)
+  payeeCondition String    @default("ANY") @map("payee_condition") @db.VarChar(20)
+  legalReference String    @map("legal_reference") @db.VarChar(300)
+  effectiveFrom  DateTime  @map("effective_from") @db.Date
+  effectiveTo    DateTime? @map("effective_to") @db.Date
+  reviewStatus   String    @default("PENDING_ADVISOR_REVIEW") @map("review_status") @db.VarChar(32)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
+  productTaxProfiles ProductTaxProfile[]
+
+  @@unique([code, effectiveFrom])
+  @@index([taxType, effectiveFrom])
+  @@map("tax_rules")
+}
+
+/// Valor de la UVT por año (catálogo normativo).
+model UvtValue {
+  year           Int      @id
+  value          Decimal  @db.Decimal(12, 2)
+  legalReference String   @map("legal_reference") @db.VarChar(300)
+  reviewStatus   String   @default("PENDING_ADVISOR_REVIEW") @map("review_status") @db.VarChar(32)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("uvt_values")
+}
+
+/// Perfil tributario de la empresa (F6): responsabilidades del RUT e ICA, por versiones.
+model CompanyTaxProfile {
+  id                  String   @id @default(uuid()) @db.Uuid
+  companyId           String   @map("company_id") @db.Uuid
+  effectiveFrom       DateTime @map("effective_from") @db.Date
+  responsibilities    String[] @db.VarChar(8)
+  icaActivity         String?  @map("ica_activity") @db.VarChar(16)
+  icaRatePerMil       Decimal? @map("ica_rate_per_mil") @db.Decimal(7, 3)
+  icaWithholdingAgent Boolean  @default(false) @map("ica_withholding_agent")
+  reason              String   @db.VarChar(500)
+  createdById         String?  @map("created_by_id") @db.Uuid
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  createdBy User?   @relation(fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([companyId, effectiveFrom])
+  @@map("company_tax_profiles")
+}

@@ -26,6 +26,7 @@ import MenuBookIcon from '@mui/icons-material/MenuBook';
 import BalanceIcon from '@mui/icons-material/Balance';
 import DateRangeIcon from '@mui/icons-material/DateRange';
 import HistoryIcon from '@mui/icons-material/History';
+import GavelIcon from '@mui/icons-material/Gavel';
 interface MenuItemConfig {
   title: string;
   path: string;
@@ -245,6 +246,12 @@ export const menuGroups: MenuGroupConfig[] = [
         path: '/company',
         icon: <BusinessIcon fontSize="small" />,
         permission: SYSTEM_PERMISSIONS.COMPANY_READ,
+      },
+      {
+        title: 'Catálogo Normativo Tributario',
+        path: '/tax-catalog',
+        icon: <GavelIcon fontSize="small" />,
+        permission: SYSTEM_PERMISSIONS.PRODUCTS_READ,
       },
       {
         title: 'Plan de Cuentas',

@@ -58,6 +58,8 @@ interface CartItem {
   unitPrice: number;
   discount: number;
   taxRate: number;
+  /** F6: impuesto nacional al consumo de la línea (porcentaje) */
+  incRate: number;
   subtotal: number;
   taxAmount: number;
   total: number;
@@ -148,6 +150,14 @@ export const PosPage: React.FC = () => {
   const handleAddToCart = (product: ProductDto, presentation?: ProductPresentationDto | null) => {
     setErrorMsg(null);
 
+    // F6: sin clasificación de IVA el backend rechaza la venta; se explica antes del cobro
+    if (product.saleTax?.missingClassification) {
+      const msg = `"${product.name}" no tiene clasificación de IVA para la venta. Clasifíquelo en el catálogo (Impuestos) antes de venderlo.`;
+      setErrorMsg(msg);
+      setSnackbar({ open: true, message: msg, severity: 'warning' });
+      return;
+    }
+
     // Validación P0: Prevenir agregar productos sin existencias vigentes
     if (product.availableStock !== undefined && product.availableStock <= 0) {
       const msg = `El producto "${product.name}" no tiene existencias disponibles o lotes vigentes para la venta.`;
@@ -198,6 +208,7 @@ export const PosPage: React.FC = () => {
           item.unitPrice,
           item.discount,
           item.taxRate,
+          item.incRate,
         );
         updated[existingIdx] = {
           ...item,
@@ -210,10 +221,10 @@ export const PosPage: React.FC = () => {
       }
 
       const qty = 1;
-      const subtotal = qty * price;
-      const taxRate = 0;
-      const taxAmount = 0;
-      const total = subtotal + taxAmount;
+      // F6: las tarifas vigentes del producto llegan del backend para calcular igual que él
+      const taxRate = Number(product.saleTax?.ivaRatePct ?? 0);
+      const incRate = Number(product.saleTax?.incRatePct ?? 0);
+      const { subtotal, taxAmount, total } = lineAmounts(qty, price, 0, taxRate, incRate);
 
       return [
         ...prev,
@@ -234,6 +245,7 @@ export const PosPage: React.FC = () => {
           unitPrice: price,
           discount: 0,
           taxRate,
+          incRate,
           subtotal,
           taxAmount,
           total,
@@ -266,6 +278,7 @@ export const PosPage: React.FC = () => {
         unitPrice,
         item.discount,
         item.taxRate,
+        item.incRate,
       );
 
       const updated = [...prev];
@@ -304,6 +317,7 @@ export const PosPage: React.FC = () => {
         item.unitPrice,
         item.discount,
         item.taxRate,
+        item.incRate,
       );
       updated[index] = {
         ...item,

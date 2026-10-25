@@ -1,4 +1,10 @@
-import { Injectable, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+  Optional,
+} from '@nestjs/common';
 import { prisma, PrismaClient, Prisma } from '@farmacia/database';
 import { CreditNoteDto, CreditNoteLineDto, CreateCreditNotePayload } from '@farmacia/contracts';
 import { AccountingEngineService } from '../../accounting/application/accounting-engine.service';
@@ -227,6 +233,13 @@ export class CreditNotesService {
                   creditedTaxCents += toCents(cnl.taxAmount, 'IVA acreditado');
                 }
               }
+            }
+
+            // F6: el INC de la línea todavía no se devuelve en notas crédito (llega con F8)
+            if (new Prisma.Decimal(line.incAmount).gt(0)) {
+              throw new ConflictException(
+                `La línea de ${line.product.name} tiene impuesto al consumo (INC): su devolución con nota crédito se habilita en F8.`,
+              );
             }
 
             const remainingBaseUnits = line.quantityBaseUnits - creditedBaseUnits;

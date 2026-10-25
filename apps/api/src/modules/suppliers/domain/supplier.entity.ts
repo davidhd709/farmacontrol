@@ -1,5 +1,5 @@
 import { DomainError } from '../../../common/domain-error';
-import { SupplierDto } from '@farmacia/contracts';
+import { RUT_RESPONSIBILITY_CODES, SupplierDto } from '@farmacia/contracts';
 
 export interface CreateSupplierProps {
   id?: string;
@@ -9,6 +9,8 @@ export interface CreateSupplierProps {
   phone?: string | null;
   email?: string | null;
   address?: string | null;
+  taxResponsibilities?: string[];
+  isIncomeTaxDeclarant?: boolean;
   isActive?: boolean;
   createdAt?: Date;
   updatedAt?: Date;
@@ -22,6 +24,8 @@ export interface ReconstituteSupplierProps {
   phone: string | null;
   email: string | null;
   address: string | null;
+  taxResponsibilities: string[];
+  isIncomeTaxDeclarant: boolean;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -34,6 +38,8 @@ export interface UpdateSupplierProps {
   phone?: string | null;
   email?: string | null;
   address?: string | null;
+  taxResponsibilities?: string[];
+  isIncomeTaxDeclarant?: boolean;
   isActive?: boolean;
 }
 
@@ -45,6 +51,8 @@ export class Supplier {
   private _phone: string | null;
   private _email: string | null;
   private _address: string | null;
+  private _taxResponsibilities: string[];
+  private _isIncomeTaxDeclarant: boolean;
   private _isActive: boolean;
   private readonly _createdAt: Date;
   private _updatedAt: Date;
@@ -57,6 +65,8 @@ export class Supplier {
     this._phone = props.phone;
     this._email = props.email;
     this._address = props.address;
+    this._taxResponsibilities = props.taxResponsibilities;
+    this._isIncomeTaxDeclarant = props.isIncomeTaxDeclarant;
     this._isActive = props.isActive;
     this._createdAt = props.createdAt;
     this._updatedAt = props.updatedAt;
@@ -79,6 +89,8 @@ export class Supplier {
       phone,
       email,
       address,
+      taxResponsibilities: Supplier.validateResponsibilities(props.taxResponsibilities ?? []),
+      isIncomeTaxDeclarant: props.isIncomeTaxDeclarant ?? true,
       isActive: props.isActive ?? true,
       createdAt: props.createdAt ?? now,
       updatedAt: props.updatedAt ?? now,
@@ -112,10 +124,43 @@ export class Supplier {
     if (props.address !== undefined) {
       this._address = Supplier.validateOptionalText(props.address, 255, 'Dirección');
     }
+    if (props.taxResponsibilities !== undefined) {
+      this._taxResponsibilities = Supplier.validateResponsibilities(props.taxResponsibilities);
+    }
+    if (props.isIncomeTaxDeclarant !== undefined) {
+      this._isIncomeTaxDeclarant = props.isIncomeTaxDeclarant;
+    }
     if (props.isActive !== undefined) {
       this._isActive = props.isActive;
     }
     this._updatedAt = new Date();
+  }
+
+  /** F6: códigos del RUT conocidos, sin repetir y sin ser responsable y no responsable a la vez */
+  private static validateResponsibilities(codes: string[]): string[] {
+    const unique = [...new Set(codes.map((code) => code.trim()))];
+    const unknown = unique.filter((code) => !RUT_RESPONSIBILITY_CODES.includes(code));
+    if (unknown.length > 0) {
+      throw new DomainError(
+        `Responsabilidades del RUT no reconocidas: ${unknown.join(', ')}.`,
+        'validation',
+      );
+    }
+    if (unique.includes('48') && unique.includes('49')) {
+      throw new DomainError(
+        'Un tercero no puede ser responsable y no responsable de IVA a la vez.',
+        'validation',
+      );
+    }
+    return unique.sort();
+  }
+
+  public get taxResponsibilities(): string[] {
+    return this._taxResponsibilities;
+  }
+
+  public get isIncomeTaxDeclarant(): boolean {
+    return this._isIncomeTaxDeclarant;
   }
 
   public activate(): void {
@@ -169,6 +214,8 @@ export class Supplier {
       phone: this._phone,
       email: this._email,
       address: this._address,
+      taxResponsibilities: this._taxResponsibilities,
+      isIncomeTaxDeclarant: this._isIncomeTaxDeclarant,
       isActive: this._isActive,
       createdAt: this._createdAt.toISOString(),
       updatedAt: this._updatedAt.toISOString(),

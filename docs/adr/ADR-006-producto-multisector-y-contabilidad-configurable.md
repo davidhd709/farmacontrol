@@ -234,6 +234,63 @@ Decisión de arquitectura del orquestador (2026-10-25), implementada el mismo d�
 - **Constancia:** cada conversión queda en `inventory_costing_conversions` (solo inserción): producto, método anterior y nuevo, cantidad, valor y política. Los movimientos pasados no se recalculan.
 - **Web:** la pantalla de política contable ofrece los tres métodos, explica el cambio y valida la fecha antes de enviar.
 
+## Implementación de F6 (catálogo normativo y motor tributario)
+
+Decisión de arquitectura del orquestador (2026-10-25), implementada el mismo día.
+
+### Catálogo normativo
+
+- **Contenido, mantenido por el producto y versionado por vigencia:**
+  - `tax_rules` reúne IVA, INC, retención en la fuente, ReteIVA y ReteICA, cada regla con tarifa, rango, base mínima en UVT, referencia legal, vigencia y estado de revisión;
+  - `uvt_values` guarda la UVT por año;
+  - las responsabilidades del RUT son los códigos DIAN, definidos en `packages/contracts`.
+- **Carga:** el contenido se carga por migración y no se edita desde la aplicación; un trigger impide modificarlo o borrarlo. Un cambio normativo es una versión nueva con su vigencia.
+- **Revisión:** todo el contenido inicial queda en `PENDING_ADVISOR_REVIEW`. La revisión del asesor es condición para usar el motor en producción, no para desarrollarlo. La pantalla del catálogo lo advierte.
+- **API:** `GET /tax-catalog`.
+
+### Configuración acotada a la norma
+
+- **Perfil tributario de la empresa**, versionado por vigencia y de solo inserción:
+  - responsabilidades del RUT;
+  - actividad de ICA, con su tarifa por mil dentro del rango del catálogo;
+  - si es agente de ReteICA en su municipio.
+- **Qué se deriva de las responsabilidades:**
+
+| La empresa…                       | Cuándo                                                        |
+| --------------------------------- | ------------------------------------------------------------- |
+| es responsable de IVA             | tiene `48`                                                    |
+| practica retención en la fuente   | no está en el régimen simple (`47`)                           |
+| practica ReteIVA                  | es gran contribuyente (`13`) o agente de retención de IVA (`23`) |
+| practica ReteICA                  | lo declara                                                    |
+
+- **Proveedor:** responsabilidades del RUT y si declara renta.
+- **Producto:** se clasifica eligiendo una regla del catálogo (perfil tributario de producto existente, ahora con `taxRuleId` y tipo de impuesto IVA o INC). La tarifa y el tratamiento se copian de la regla; ya no se escriben a mano.
+
+### Motor tributario
+
+El motor es dominio puro. Se activa cuando la empresa tiene un perfil tributario vigente; sin perfil, la operación sigue como antes de F6, para no romper instalaciones existentes.
+
+- **Venta:**
+  - **IVA:** solo si la empresa es responsable. En ese caso un producto sin clasificación de IVA activa bloquea la venta: no hay 0 % implícito.
+  - **INC:** si el producto tiene regla de INC.
+  - **Asiento:** el ingreso se separa en gravado, exento y excluido, e incluye el INC por pagar.
+- **Compra:**
+  - **IVA:** si el proveedor es responsable, según la clasificación de compra del producto. Es descontable si la empresa es responsable; si no lo es, el IVA es mayor costo del inventario.
+  - **Retención en la fuente:** compras o servicios según el modo del producto, con la tarifa de declarante o no declarante. Aplica si la base supera la base mínima en UVT y el proveedor no es autorretenedor.
+  - **ReteIVA:** 15 % del IVA, si la empresa es agente y el proveedor es responsable y no es gran contribuyente.
+  - **ReteICA:** la tarifa por mil de la empresa sobre la base, con la misma base mínima.
+  - **Cuenta por pagar:** queda por el neto, es decir, la factura menos las retenciones.
+- **Instantánea:** cada línea de venta y de compra guarda las reglas, bases, tarifas y valores aplicados (`tax_snapshot`), y el asiento usa propósitos contables nuevos: `SALES_EXEMPT`, `INC_PAYABLE`, `WITHHOLDING_INCOME_PAYABLE`, `WITHHOLDING_VAT_PAYABLE` y `WITHHOLDING_ICA_PAYABLE`.
+
+### Fuera de F6
+
+- Retenciones que los clientes le practican a la empresa.
+- Notas débito sobre compras con impuestos o retenciones, que se rechazan con un mensaje claro hasta F8.
+- Notas crédito sobre líneas de venta con INC (las de IVA sí funcionan): se rechazan con un mensaje claro hasta F8.
+- Los servicios no se compran por recepción de inventario (F4), así que la retención por servicios queda en el catálogo pero solo la usará el módulo de egresos.
+- Numeración autorizada y facturación electrónica (futuro).
+- Formularios 300, 350 y exógena (F8).
+
 ## Pendientes
 
 - Revisar los requerimientos multisector (POS, inventario y catálogo), que hoy solo están descritos para farmacia.

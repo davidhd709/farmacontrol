@@ -35,6 +35,7 @@ import { useProducts } from '../hooks/useProducts';
 import { ProductFormDialog } from '../components/ProductFormDialog';
 import { DeactivateProductDialog } from '../components/DeactivateProductDialog';
 import { ProductPresentationsDialog } from '../components/ProductPresentationsDialog';
+import { ProductTaxClassificationDialog } from '../../taxes/components/ProductTaxClassificationDialog';
 import { SweetModal } from '../../../components/SweetModal';
 import { inventoryControlModeLabel } from '../utils/inventory-control';
 
@@ -54,6 +55,7 @@ export function ProductsPage() {
   const [selectedProduct, setSelectedProduct] = useState<ProductDto | null>(null);
   const [productToDeactivate, setProductToDeactivate] = useState<ProductDto | null>(null);
   const [productForPresentations, setProductForPresentations] = useState<ProductDto | null>(null);
+  const [productForTaxes, setProductForTaxes] = useState<ProductDto | null>(null);
 
   // Notificación flotante (Snackbar)
   const [snackbar, setSnackbar] = useState<{
@@ -385,6 +387,18 @@ export function ProductsPage() {
                             >
                               Presentaciones
                             </Button>
+                            <PermissionGate permission={SYSTEM_PERMISSIONS.ACCOUNTING_MANAGE}>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                color="secondary"
+                                onClick={() => setProductForTaxes(product)}
+                                aria-label={`Clasificación tributaria de ${product.name}`}
+                                sx={{ textTransform: 'none', fontWeight: 600 }}
+                              >
+                                Impuestos
+                              </Button>
+                            </PermissionGate>
                             <Button
                               size="small"
                               variant="outlined"
@@ -472,6 +486,10 @@ export function ProductsPage() {
         }}
       />
 
+      <ProductTaxClassificationDialog
+        product={productForTaxes}
+        onClose={() => setProductForTaxes(null)}
+      />
       <ProductPresentationsDialog
         open={Boolean(productForPresentations)}
         onClose={() => setProductForPresentations(null)}

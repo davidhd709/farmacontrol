@@ -37,6 +37,9 @@ export interface ReconstitutePurchaseLineProps {
   quantityBaseUnits: number;
   unitCost: number;
   subtotal: number;
+  vatRate?: number;
+  vatAmount?: number;
+  taxSnapshot?: unknown;
   createdAt: Date;
 }
 
@@ -57,6 +60,9 @@ export class PurchaseLine {
   private readonly _quantityBaseUnits: number;
   private readonly _unitCost: number;
   private readonly _subtotal: number;
+  private _vatRate: number;
+  private _vatAmount: number;
+  private _taxSnapshot: unknown;
   private readonly _createdAt: Date;
 
   private constructor(props: ReconstitutePurchaseLineProps) {
@@ -76,6 +82,9 @@ export class PurchaseLine {
     this._quantityBaseUnits = props.quantityBaseUnits;
     this._unitCost = props.unitCost;
     this._subtotal = props.subtotal;
+    this._vatRate = props.vatRate ?? 0;
+    this._vatAmount = props.vatAmount ?? 0;
+    this._taxSnapshot = props.taxSnapshot ?? null;
     this._createdAt = props.createdAt;
   }
 
@@ -150,6 +159,22 @@ export class PurchaseLine {
     this._lotId = lotId;
   }
 
+  /** F6: IVA de la línea calculado por el motor tributario, con su instantánea */
+  public applyTaxes(vatRate: number, vatAmount: number, taxSnapshot: unknown): void {
+    this._vatRate = vatRate;
+    this._vatAmount = vatAmount;
+    this._taxSnapshot = taxSnapshot;
+  }
+  public get vatRate(): number {
+    return this._vatRate;
+  }
+  public get vatAmount(): number {
+    return this._vatAmount;
+  }
+  public get taxSnapshot(): unknown {
+    return this._taxSnapshot;
+  }
+
   public get id(): string {
     return this._id;
   }
@@ -217,9 +242,24 @@ export class PurchaseLine {
       quantityBaseUnits: this._quantityBaseUnits,
       unitCost: this._unitCost.toFixed(2),
       subtotal: this._subtotal.toFixed(2),
+      vatRate: this._vatRate.toFixed(2),
+      vatAmount: this._vatAmount.toFixed(2),
       createdAt: this._createdAt.toISOString(),
     };
   }
+}
+
+/** F6: desglose tributario de la factura de compra, en unidades monetarias con dos decimales */
+export interface PurchaseTaxTotals {
+  subtotal: number;
+  vatTotal: number;
+  withholdingIncome: number;
+  withholdingVat: number;
+  withholdingIca: number;
+  /** IVA descontable (empresa responsable) o mayor costo del inventario; solo al registrar */
+  vatDeductible?: boolean;
+  /** Detalle de las retenciones practicadas (instantánea del motor) */
+  withholdings?: unknown;
 }
 
 export interface CreatePurchaseProps {
@@ -250,6 +290,8 @@ export interface ReconstitutePurchaseProps {
   dueDate?: Date | null;
   paymentCondition?: string | null;
   totalAmount: number;
+  /** F6: null en compras registradas sin el motor tributario */
+  taxTotals?: PurchaseTaxTotals | null;
   status: string;
   notes: string | null;
   receivedByUserId: string | null;
@@ -268,7 +310,8 @@ export class Purchase {
   private readonly _purchaseDate: Date;
   private readonly _dueDate?: Date | null;
   private readonly _paymentCondition?: string | null;
-  private readonly _totalAmount: number;
+  private _totalAmount: number;
+  private _taxTotals: PurchaseTaxTotals | null;
   private readonly _status: string;
   private readonly _notes: string | null;
   private readonly _receivedByUserId: string | null;
@@ -287,6 +330,7 @@ export class Purchase {
     this._dueDate = props.dueDate;
     this._paymentCondition = props.paymentCondition;
     this._totalAmount = props.totalAmount;
+    this._taxTotals = props.taxTotals ?? null;
     this._status = props.status;
     this._notes = props.notes;
     this._receivedByUserId = props.receivedByUserId;
@@ -367,6 +411,25 @@ export class Purchase {
   public get totalAmount(): number {
     return this._totalAmount;
   }
+  public get taxTotals(): PurchaseTaxTotals | null {
+    return this._taxTotals;
+  }
+  /** Lo que se le debe al proveedor: total de la factura menos las retenciones practicadas */
+  public get payableAmount(): number {
+    const t = this._taxTotals;
+    if (!t) return this._totalAmount;
+    return (
+      Math.round(
+        (this._totalAmount - t.withholdingIncome - t.withholdingVat - t.withholdingIca) * 100,
+      ) / 100
+    );
+  }
+
+  /** F6: aplica el resultado del motor tributario; el total pasa a ser subtotal + IVA */
+  public applyTaxes(totals: PurchaseTaxTotals): void {
+    this._taxTotals = totals;
+    this._totalAmount = Math.round((totals.subtotal + totals.vatTotal) * 100) / 100;
+  }
   public get status(): string {
     return this._status;
   }
@@ -400,6 +463,12 @@ export class Purchase {
       dueDate: this._dueDate ? this._dueDate.toISOString().split('T')[0] : null,
       paymentCondition: this._paymentCondition ?? null,
       totalAmount: this._totalAmount.toFixed(2),
+      subtotal: this._taxTotals ? this._taxTotals.subtotal.toFixed(2) : null,
+      vatTotal: (this._taxTotals?.vatTotal ?? 0).toFixed(2),
+      withholdingIncome: (this._taxTotals?.withholdingIncome ?? 0).toFixed(2),
+      withholdingVat: (this._taxTotals?.withholdingVat ?? 0).toFixed(2),
+      withholdingIca: (this._taxTotals?.withholdingIca ?? 0).toFixed(2),
+      payableAmount: this.payableAmount.toFixed(2),
       status: this._status,
       notes: this._notes,
       receivedByUserId: this._receivedByUserId,

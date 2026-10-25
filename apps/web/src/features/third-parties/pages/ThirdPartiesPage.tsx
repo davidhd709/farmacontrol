@@ -42,6 +42,8 @@ import {
   activateThirdParty,
 } from '../api/third-parties.api';
 import { ThirdPartyFormDialog } from '../components/ThirdPartyFormDialog';
+import GavelIcon from '@mui/icons-material/Gavel';
+import { SupplierFiscalDialog } from '../../taxes/components/SupplierFiscalDialog';
 
 type RoleTab = 'ALL' | 'CUSTOMER' | 'SUPPLIER' | 'EMPLOYEE' | 'OTHER';
 
@@ -52,6 +54,7 @@ export const ThirdPartiesPage: React.FC = () => {
   // Estados de consulta y filtros
   const [activeTab, setActiveTab] = useState<RoleTab>('ALL');
   const [search, setSearch] = useState('');
+  const [fiscalSupplier, setFiscalSupplier] = useState<{ id: string; name: string } | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
 
@@ -207,7 +210,14 @@ export const ThirdPartiesPage: React.FC = () => {
         </Box>
 
         <CardContent sx={{ pb: 1 }}>
-          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2, alignItems: 'center' }}>
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: { xs: 'column', sm: 'row' },
+              gap: 2,
+              alignItems: 'center',
+            }}
+          >
             <TextField
               size="small"
               placeholder="Buscar por documento, nombre o razón social..."
@@ -243,7 +253,11 @@ export const ThirdPartiesPage: React.FC = () => {
                 <TableCell sx={{ fontWeight: 600 }}>Régimen Tributario</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Contacto / Ubicación</TableCell>
                 <TableCell sx={{ fontWeight: 600 }}>Estado</TableCell>
-                {canManage && <TableCell align="right" sx={{ fontWeight: 600 }}>Acciones</TableCell>}
+                {canManage && (
+                  <TableCell align="right" sx={{ fontWeight: 600 }}>
+                    Acciones
+                  </TableCell>
+                )}
               </TableRow>
             </TableHead>
             <TableBody>
@@ -285,12 +299,20 @@ export const ThirdPartiesPage: React.FC = () => {
                         {tp.name}
                       </Typography>
                       {tp.tradeName && (
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ display: 'block' }}
+                        >
                           Comercial: {tp.tradeName}
                         </Typography>
                       )}
                       {tp.contactName && (
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ display: 'block' }}
+                        >
                           Contacto: {tp.contactName}
                         </Typography>
                       )}
@@ -308,16 +330,36 @@ export const ThirdPartiesPage: React.FC = () => {
                     <TableCell>
                       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                         {tp.isCustomer && (
-                          <Chip label="Cliente" size="small" color="success" sx={{ fontSize: 11, height: 22 }} />
+                          <Chip
+                            label="Cliente"
+                            size="small"
+                            color="success"
+                            sx={{ fontSize: 11, height: 22 }}
+                          />
                         )}
                         {tp.isSupplier && (
-                          <Chip label="Proveedor" size="small" color="info" sx={{ fontSize: 11, height: 22 }} />
+                          <Chip
+                            label="Proveedor"
+                            size="small"
+                            color="info"
+                            sx={{ fontSize: 11, height: 22 }}
+                          />
                         )}
                         {tp.isEmployee && (
-                          <Chip label="Empleado" size="small" color="secondary" sx={{ fontSize: 11, height: 22 }} />
+                          <Chip
+                            label="Empleado"
+                            size="small"
+                            color="secondary"
+                            sx={{ fontSize: 11, height: 22 }}
+                          />
                         )}
                         {tp.isOther && (
-                          <Chip label="Otro" size="small" variant="outlined" sx={{ fontSize: 11, height: 22 }} />
+                          <Chip
+                            label="Otro"
+                            size="small"
+                            variant="outlined"
+                            sx={{ fontSize: 11, height: 22 }}
+                          />
                         )}
                       </Box>
                     </TableCell>
@@ -327,30 +369,39 @@ export const ThirdPartiesPage: React.FC = () => {
                         {tp.taxRegime === 'RESPONSABLE_IVA'
                           ? 'Resp. IVA'
                           : tp.taxRegime === 'NO_RESPONSABLE_IVA'
-                          ? 'No Resp. IVA'
-                          : tp.taxRegime === 'REGIMEN_SIMPLE'
-                          ? 'Simple (RST)'
-                          : tp.taxRegime === 'GRAN_CONTRIBUYENTE'
-                          ? 'Gran Contribuyente'
-                          : tp.taxRegime === 'AUTORRETENEDOR'
-                          ? 'Autorretenedor'
-                          : tp.taxRegime}
+                            ? 'No Resp. IVA'
+                            : tp.taxRegime === 'REGIMEN_SIMPLE'
+                              ? 'Simple (RST)'
+                              : tp.taxRegime === 'GRAN_CONTRIBUYENTE'
+                                ? 'Gran Contribuyente'
+                                : tp.taxRegime === 'AUTORRETENEDOR'
+                                  ? 'Autorretenedor'
+                                  : tp.taxRegime}
                       </Typography>
                     </TableCell>
 
                     <TableCell>
                       {tp.city && (
                         <Typography variant="caption" sx={{ display: 'block' }}>
-                          {tp.city}{tp.department ? `, ${tp.department}` : ''}
+                          {tp.city}
+                          {tp.department ? `, ${tp.department}` : ''}
                         </Typography>
                       )}
                       {tp.phone && (
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ display: 'block' }}
+                        >
                           Tel: {tp.phone}
                         </Typography>
                       )}
                       {tp.email && (
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ display: 'block' }}
+                        >
                           {tp.email}
                         </Typography>
                       )}
@@ -369,10 +420,27 @@ export const ThirdPartiesPage: React.FC = () => {
                       <TableCell align="right">
                         <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
                           <Tooltip title="Editar Tercero">
-                            <IconButton size="small" onClick={() => handleOpenEdit(tp)} color="primary">
+                            <IconButton
+                              size="small"
+                              onClick={() => handleOpenEdit(tp)}
+                              color="primary"
+                            >
                               <EditIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
+                          {tp.isSupplier && tp.supplierId && (
+                            <Tooltip title="Datos tributarios del proveedor">
+                              <IconButton
+                                size="small"
+                                onClick={() =>
+                                  setFiscalSupplier({ id: tp.supplierId!, name: tp.name })
+                                }
+                                aria-label={`Datos tributarios de ${tp.name}`}
+                              >
+                                <GavelIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
 
                           {tp.isActive ? (
                             <Tooltip title="Desactivar Tercero">
@@ -407,7 +475,15 @@ export const ThirdPartiesPage: React.FC = () => {
 
         {/* Paginación */}
         {totalPages > 1 && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', p: 2, borderTop: 1, borderColor: 'divider' }}>
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'center',
+              p: 2,
+              borderTop: 1,
+              borderColor: 'divider',
+            }}
+          >
             <Pagination
               count={totalPages}
               page={page}
@@ -433,7 +509,8 @@ export const ThirdPartiesPage: React.FC = () => {
         </DialogTitle>
         <DialogContent>
           <DialogContentText>
-            ¿Está seguro que desea {confirmDialog.action === 'deactivate' ? 'desactivar' : 'activar'} al tercero{' '}
+            ¿Está seguro que desea{' '}
+            {confirmDialog.action === 'deactivate' ? 'desactivar' : 'activar'} al tercero{' '}
             <strong>{confirmDialog.thirdParty?.name}</strong> (
             {confirmDialog.thirdParty?.documentType} {confirmDialog.thirdParty?.documentNumber})?
           </DialogContentText>
@@ -449,6 +526,11 @@ export const ThirdPartiesPage: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+      <SupplierFiscalDialog
+        supplierId={fiscalSupplier?.id ?? null}
+        supplierName={fiscalSupplier?.name ?? ''}
+        onClose={() => setFiscalSupplier(null)}
+      />
     </Box>
   );
 };

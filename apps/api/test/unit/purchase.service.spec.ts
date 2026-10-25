@@ -23,6 +23,8 @@ describe('PurchaseService & Purchase Entities (Unit)', () => {
     };
 
     mockPrisma = {
+      // F6: sin empresa configurada el motor tributario no se aplica
+      company: { findFirst: vi.fn(async () => null) },
       supplier: {
         findUnique: vi.fn(async () => ({
           id: 'sup-1',

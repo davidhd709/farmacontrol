@@ -1,4 +1,10 @@
-import { Injectable, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+  Optional,
+} from '@nestjs/common';
 import { prisma, PrismaClient, Prisma } from '@farmacia/database';
 import { DebitNoteDto, DebitNoteLineDto, CreateDebitNotePayload } from '@farmacia/contracts';
 import { AccountingEngineService } from '../../accounting/application/accounting-engine.service';
@@ -132,6 +138,17 @@ export class DebitNotesService {
 
           if (!purchase) {
             throw new NotFoundException(`Compra con id '${purchaseId}' no encontrada.`);
+          }
+          // F6: devolver una compra con IVA o retenciones exige revertirlos (llega con F8)
+          if (
+            purchase.vatTotal.gt(0) ||
+            purchase.withholdingIncome.gt(0) ||
+            purchase.withholdingVat.gt(0) ||
+            purchase.withholdingIca.gt(0)
+          ) {
+            throw new ConflictException(
+              'La compra tiene IVA o retenciones calculados por el motor tributario: las notas débito sobre ella se habilitan en F8.',
+            );
           }
 
           if (purchase.status !== 'RECEIVED') {

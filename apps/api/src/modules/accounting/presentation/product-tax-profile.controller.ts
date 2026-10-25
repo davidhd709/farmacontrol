@@ -54,8 +54,8 @@ export class ProductTaxProfileController {
       new RequestShapeValidationPipe({
         productId: 'uuid',
         operation: { values: ['SALE', 'PURCHASE'] },
-        treatment: { values: ['GRAVADO', 'EXENTO', 'EXCLUIDO', 'NO_APLICA'] },
-        ratePct: 'decimal?',
+        // F6: regla del catálogo normativo; tratamiento y tarifa se copian de ella
+        taxRuleCode: 'text',
         effectiveFrom: 'date',
         effectiveTo: 'date?',
         documentReference: 'text?',
@@ -104,8 +104,7 @@ export class ProductTaxProfileController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body(
       new RequestShapeValidationPipe({
-        treatment: { values: ['GRAVADO', 'EXENTO', 'EXCLUIDO', 'NO_APLICA'], optional: true },
-        ratePct: 'decimal?',
+        taxRuleCode: 'text?',
         effectiveFrom: 'date?',
         effectiveTo: 'date?',
         documentReference: 'text?',

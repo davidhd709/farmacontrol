@@ -99,6 +99,10 @@ export interface SaleLineProps {
   subtotal: number;
   taxRate: number;
   taxAmount: number;
+  /** F6: impuesto nacional al consumo y lo que aplicó el motor tributario */
+  incRate?: number;
+  incAmount?: number;
+  taxSnapshot?: unknown;
   total: number;
   /** Costo por unidad base al confirmar la venta (decimal en texto); null en ventas antiguas */
   unitCostBase?: string | null;
@@ -124,6 +128,8 @@ export class SaleLine {
     unitPrice: number;
     discount?: number;
     taxRate?: number;
+    incRate?: number;
+    taxSnapshot?: unknown;
     unitCostBase?: string | null;
     costValue?: string | null;
     lotAllocations?: SaleLotAllocation[];
@@ -144,6 +150,7 @@ export class SaleLine {
     const unitPriceCents = toHundredths(payload.unitPrice, 'El precio unitario');
     const discountCents = toHundredths(payload.discount ?? 0, 'El descuento');
     const taxRateBasisPoints = toHundredths(payload.taxRate ?? 0, 'La tarifa de IVA');
+    const incRateBasisPoints = toHundredths(payload.incRate ?? 0, 'La tarifa de INC');
 
     const grossCents = divideHalfUp(quantityHundredths * unitPriceCents, 100n);
     if (discountCents < 0n) {
@@ -156,12 +163,13 @@ export class SaleLine {
     }
     const subtotalCents = grossCents - discountCents;
     const taxCents = divideHalfUp(subtotalCents * taxRateBasisPoints, 10000n);
+    const incCents = divideHalfUp(subtotalCents * incRateBasisPoints, 10000n);
 
     const discount = centsToNumber(discountCents);
     const subtotal = centsToNumber(subtotalCents);
     const taxRate = payload.taxRate ?? 0;
     const taxAmount = centsToNumber(taxCents);
-    const total = centsToNumber(subtotalCents + taxCents);
+    const total = centsToNumber(subtotalCents + taxCents + incCents);
 
     return new SaleLine({
       id: payload.id ?? crypto.randomUUID(),
@@ -179,6 +187,9 @@ export class SaleLine {
       subtotal,
       taxRate,
       taxAmount,
+      incRate: payload.incRate ?? 0,
+      incAmount: centsToNumber(incCents),
+      taxSnapshot: payload.taxSnapshot ?? null,
       total,
       unitCostBase: payload.unitCostBase ?? null,
       costValue: payload.costValue ?? null,
@@ -244,6 +255,15 @@ export class SaleLine {
   public get taxAmount(): number {
     return this.props.taxAmount;
   }
+  public get incRate(): number {
+    return this.props.incRate ?? 0;
+  }
+  public get incAmount(): number {
+    return this.props.incAmount ?? 0;
+  }
+  public get taxSnapshot(): unknown {
+    return this.props.taxSnapshot ?? null;
+  }
   public get total(): number {
     return this.props.total;
   }
@@ -271,6 +291,8 @@ export class SaleLine {
       subtotal: this.props.subtotal,
       taxRate: this.props.taxRate,
       taxAmount: this.props.taxAmount,
+      incRate: this.props.incRate ?? 0,
+      incAmount: this.props.incAmount ?? 0,
       total: this.props.total,
       lotAllocations: this.props.lotAllocations?.map((a) => a.toDto()),
     };
@@ -288,6 +310,7 @@ export interface SaleProperties {
   bankAccountId?: string | null;
   subtotal: number;
   taxTotal: number;
+  incTotal?: number;
   discountTotal: number;
   total: number;
   amountPaid: number;
@@ -325,6 +348,7 @@ export class Sale {
       payload.lines.reduce((acc, l) => acc + toHundredths(pick(l), label), 0n);
     const subtotalCents = sumCents((l) => l.subtotal, 'Subtotal de línea');
     const taxTotalCents = sumCents((l) => l.taxAmount, 'IVA de línea');
+    const incTotalCents = sumCents((l) => l.incAmount, 'INC de línea');
     const discountTotalCents = sumCents((l) => l.discount, 'Descuento de línea');
     const totalCents = sumCents((l) => l.total, 'Total de línea');
 
@@ -344,6 +368,7 @@ export class Sale {
 
     const subtotal = centsToNumber(subtotalCents);
     const taxTotal = centsToNumber(taxTotalCents);
+    const incTotal = centsToNumber(incTotalCents);
     const discountTotal = centsToNumber(discountTotalCents);
     const total = centsToNumber(totalCents);
     const amountPaid = centsToNumber(amountPaidCents);
@@ -361,6 +386,7 @@ export class Sale {
       bankAccountId: payload.bankAccountId ?? null,
       subtotal,
       taxTotal,
+      incTotal,
       discountTotal,
       total,
       amountPaid,
@@ -407,6 +433,9 @@ export class Sale {
   }
   public get taxTotal(): number {
     return this.props.taxTotal;
+  }
+  public get incTotal(): number {
+    return this.props.incTotal ?? 0;
   }
   public get discountTotal(): number {
     return this.props.discountTotal;
@@ -459,6 +488,7 @@ export class Sale {
       bankAccountId: this.props.bankAccountId,
       subtotal: this.props.subtotal,
       taxTotal: this.props.taxTotal,
+      incTotal: this.props.incTotal ?? 0,
       discountTotal: this.props.discountTotal,
       total: this.props.total,
       amountPaid: this.props.amountPaid,

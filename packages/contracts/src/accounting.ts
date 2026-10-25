@@ -36,6 +36,12 @@ export const ACCOUNTING_PURPOSES = [
   'ACCUMULATED_LOSSES',
   // Diferencias de costo en devoluciones a proveedor (ADR-006, F3)
   'INVENTORY_COST_VARIANCE',
+  // Motor tributario (ADR-006, F6)
+  'SALES_EXEMPT',
+  'INC_PAYABLE',
+  'WITHHOLDING_INCOME_PAYABLE',
+  'WITHHOLDING_VAT_PAYABLE',
+  'WITHHOLDING_ICA_PAYABLE',
 ] as const;
 export type AccountingPurpose = (typeof ACCOUNTING_PURPOSES)[number];
 

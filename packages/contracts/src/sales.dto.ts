@@ -26,6 +26,9 @@ export interface SaleLineDto {
   subtotal: number;
   taxRate: number;
   taxAmount: number;
+  /** F6: impuesto nacional al consumo de la línea */
+  incRate: number;
+  incAmount: number;
   total: number;
   lotAllocations?: SaleLotAllocationDto[];
 }
@@ -41,6 +44,7 @@ export interface SaleDto {
   bankAccountId?: string | null;
   subtotal: number;
   taxTotal: number;
+  incTotal: number;
   discountTotal: number;
   total: number;
   amountPaid: number;

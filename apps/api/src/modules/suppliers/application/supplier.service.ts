@@ -49,6 +49,8 @@ export class SupplierService {
       phone: input.phone,
       email: input.email,
       address: input.address,
+      taxResponsibilities: input.taxResponsibilities,
+      isIncomeTaxDeclarant: input.isIncomeTaxDeclarant,
     });
 
     const persist = async (tx?: Prisma.TransactionClient) => {

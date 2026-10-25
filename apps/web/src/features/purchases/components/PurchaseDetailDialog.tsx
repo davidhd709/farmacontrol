@@ -233,9 +233,36 @@ export const PurchaseDetailDialog: React.FC<PurchaseDetailDialogProps> = ({
             borderRadius: 1,
           }}
         >
-          <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-            Total Factura: ${Number(purchase.totalAmount).toLocaleString()}
-          </Typography>
+          <Box sx={{ textAlign: 'right' }}>
+            {purchase.subtotal !== null && (
+              // F6: desglose del motor tributario; la cuenta por pagar queda por el neto
+              <Box component="dl" sx={{ m: 0, mb: 1, '& dd': { m: 0 } }}>
+                {(
+                  [
+                    ['Subtotal', purchase.subtotal],
+                    ['IVA', purchase.vatTotal],
+                    ['Retención en la fuente', `-${purchase.withholdingIncome}`],
+                    ['Retención de IVA', `-${purchase.withholdingVat}`],
+                    ['Retención de ICA', `-${purchase.withholdingIca}`],
+                  ] as const
+                )
+                  .filter(([, value]) => Number(value) !== 0)
+                  .map(([label, value]) => (
+                    <Typography key={label} variant="body2" color="text.secondary">
+                      {label}: ${Number(value).toLocaleString('es-CO')}
+                    </Typography>
+                  ))}
+              </Box>
+            )}
+            <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+              Total Factura: ${Number(purchase.totalAmount).toLocaleString()}
+            </Typography>
+            {purchase.subtotal !== null && purchase.payableAmount !== purchase.totalAmount && (
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                Por pagar al proveedor: ${Number(purchase.payableAmount).toLocaleString('es-CO')}
+              </Typography>
+            )}
+          </Box>
         </Box>
       </DialogContent>
 

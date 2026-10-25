@@ -8,6 +8,8 @@ export class CreateSupplierDto implements CreateSupplierPayload {
   phone?: string | null;
   email?: string | null;
   address?: string | null;
+  taxResponsibilities?: string[];
+  isIncomeTaxDeclarant?: boolean;
 }
 
 @Injectable()
@@ -20,7 +22,9 @@ export class CreateSupplierValidationPipe implements PipeTransform {
     const record = value as Record<string, unknown>;
 
     if (typeof record.taxId !== 'string') {
-      throw new BadRequestException('El campo "taxId" (NIT/identificación) es obligatorio y debe ser texto.');
+      throw new BadRequestException(
+        'El campo "taxId" (NIT/identificación) es obligatorio y debe ser texto.',
+      );
     }
     const trimmedTaxId = record.taxId.trim();
     if (trimmedTaxId.length < 3 || trimmedTaxId.length > 50) {
@@ -28,7 +32,9 @@ export class CreateSupplierValidationPipe implements PipeTransform {
     }
 
     if (typeof record.name !== 'string') {
-      throw new BadRequestException('El campo "name" (razón social) es obligatorio y debe ser texto.');
+      throw new BadRequestException(
+        'El campo "name" (razón social) es obligatorio y debe ser texto.',
+      );
     }
     const trimmedName = record.name.trim();
     if (trimmedName.length < 2 || trimmedName.length > 150) {
@@ -60,7 +66,9 @@ export class CreateSupplierValidationPipe implements PipeTransform {
       if (trimmedEmail.length > 0) {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(trimmedEmail)) {
-          throw new BadRequestException('El correo electrónico ingresado no tiene un formato válido.');
+          throw new BadRequestException(
+            'El correo electrónico ingresado no tiene un formato válido.',
+          );
         }
         email = trimmedEmail.toLowerCase();
       }
@@ -81,6 +89,33 @@ export class CreateSupplierValidationPipe implements PipeTransform {
       phone,
       email,
       address,
+      ...fiscalFields(record),
     };
   }
+}
+
+/** F6: responsabilidades del RUT (códigos) y si el proveedor declara renta. */
+function fiscalFields(record: Record<string, unknown>): {
+  taxResponsibilities?: string[];
+  isIncomeTaxDeclarant?: boolean;
+} {
+  const result: { taxResponsibilities?: string[]; isIncomeTaxDeclarant?: boolean } = {};
+  if (record.taxResponsibilities !== undefined) {
+    if (
+      !Array.isArray(record.taxResponsibilities) ||
+      record.taxResponsibilities.some((code) => typeof code !== 'string')
+    ) {
+      throw new BadRequestException(
+        'El campo "taxResponsibilities" debe ser una lista de códigos.',
+      );
+    }
+    result.taxResponsibilities = record.taxResponsibilities as string[];
+  }
+  if (record.isIncomeTaxDeclarant !== undefined) {
+    if (typeof record.isIncomeTaxDeclarant !== 'boolean') {
+      throw new BadRequestException('El campo "isIncomeTaxDeclarant" debe ser booleano.');
+    }
+    result.isIncomeTaxDeclarant = record.isIncomeTaxDeclarant;
+  }
+  return result;
 }

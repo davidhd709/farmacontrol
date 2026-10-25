@@ -27,6 +27,7 @@ import { prisma, Prisma } from '@farmacia/database';
 import { AuditService } from '../../../audit/application/services/audit.service';
 import type { AuditContext } from './category.service';
 import { sectorProfileRules } from '../../../company/application/sector-profile.reader';
+import { saleTaxRatesAt } from '../../../taxes/application/tax-context.reader';
 
 @Injectable()
 export class ProductService {
@@ -117,9 +118,13 @@ export class ProductService {
         AND current_quantity > 0
         AND (expiration_date IS NULL OR expiration_date >= ${businessToday()}::date)
     `;
+    const saleTax = (await saleTaxRatesAt(prisma, [id], businessToday()))?.get(id);
     // Un servicio no maneja existencias: no informa saldo para que el POS no lo trate como agotado
-    if (product.inventoryControlMode === 'SERVICE') return product.toDto();
-    return product.toDto(stockAgg[0]?.total_stock ?? 0);
+    const dto =
+      product.inventoryControlMode === 'SERVICE'
+        ? product.toDto()
+        : product.toDto(stockAgg[0]?.total_stock ?? 0);
+    return saleTax ? { ...dto, saleTax } : dto;
   }
 
   public async updateProduct(
@@ -262,10 +267,16 @@ export class ProductService {
       }
     }
 
+    // F6: tarifas de venta vigentes para que el POS calcule igual que el backend
+    const saleTaxes = await saleTaxRatesAt(prisma, productIds, businessToday());
+
     return {
-      items: items.map((p) =>
-        p.inventoryControlMode === 'SERVICE' ? p.toDto() : p.toDto(stockMap.get(p.id) ?? 0),
-      ),
+      items: items.map((p) => {
+        const dto =
+          p.inventoryControlMode === 'SERVICE' ? p.toDto() : p.toDto(stockMap.get(p.id) ?? 0);
+        const saleTax = saleTaxes?.get(p.id);
+        return saleTax ? { ...dto, saleTax } : dto;
+      }),
       total,
       page,
       pageSize,
