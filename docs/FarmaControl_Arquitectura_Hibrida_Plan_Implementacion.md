@@ -18,7 +18,7 @@ FarmaControl tendrá **un único código base y una única evolución del esquem
 
 La **empresa** es la entidad jurídica y frontera de datos. La **sucursal** pertenece a una empresa y puede tener caja, ubicación de inventario y numeraciones propias. Una sucursal nunca equivale a otro `companyId`.
 
-El alcance inicial sigue siendo el sector farmacéutico colombiano. La parametrización de la contabilidad no implica extender el POS, inventario o requisitos regulatorios a industrias ajenas al sector.
+**Actualización 2026-10-25 ([ADR-006](adr/ADR-006-producto-multisector-y-contabilidad-configurable.md)):** el producto pasa a ser **multisector** para Colombia. POS, inventario y catálogo dejan de suponer farmacia, la farmacia queda como un perfil sectorial y la contabilidad se configura por empresa. Las fases F3–F8 de la sección 5 se reorganizan según ADR-006.
 
 ## 2. Principios que no se negocian
 

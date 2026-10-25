@@ -10,6 +10,8 @@ Desarrollar un sistema web para la gestión operativa de una farmacia siguiendo 
 
 Estos documentos son la fuente principal del proyecto.
 
+**Desde el 2026-10-25 el producto es multisector para Colombia** y la contabilidad se configura por empresa ([ADR-006](docs/adr/ADR-006-producto-multisector-y-contabilidad-configurable.md)). Los tres documentos anteriores describen el perfil farmacia; donde contradigan ADR-006, prevalece ADR-006. Ninguna regla contable o fiscal se fija en el código: se configura por empresa.
+
 No asumir como confirmado algo que los documentos indiquen como:
 
 - pendiente;

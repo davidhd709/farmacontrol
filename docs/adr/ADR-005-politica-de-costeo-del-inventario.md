@@ -1,6 +1,6 @@
 # ADR-005: Política de costeo del inventario y del costo de ventas
 
-- **Estado:** Aprobado
+- **Estado:** Aprobado. Desde [ADR-006](ADR-006-producto-multisector-y-contabilidad-configurable.md), el promedio ponderado es el **método por defecto**: cada empresa puede elegir también PEPS o costo identificado por lote (F5)
 - **Fecha:** 2026-10-25
 - **Origen:** decisión explícita del propietario, que responde las preguntas 1, 2 y 4 sobre costos del cuestionario para la contadora (`docs/PREGUNTAS_CONTADORA.md`, que llega a `main` con el PR #15) y cierra la decisión 2 de la [línea base F0](../F0_linea_base_arquitectura_hibrida.md#9-decisiones-contables-y-de-producto-pendientes).
 - **Alcance:** método de valoración, apertura y devoluciones de clientes. No define impuestos (F3), ámbito multiempresa (F4) ni el asiento de los ajustes de inventario sin handler (F6).
