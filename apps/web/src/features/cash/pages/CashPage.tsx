@@ -100,7 +100,7 @@ export const CashPage: React.FC = () => {
       case 'INGRESO_VENTA':
         return <Chip label="Venta POS" color="success" size="small" variant="filled" />;
       case 'INGRESO_MANUAL':
-        return <Chip label="Ingreso Manual" color="success" size="small" variant="outlined" />;
+        return <Chip label="Recibo de caja" color="success" size="small" variant="outlined" />;
       case 'EGRESO_MANUAL':
         return <Chip label="Egreso Manual" color="error" size="small" variant="outlined" />;
       case 'EGRESO_PAGO_PROVEEDOR':
@@ -284,7 +284,7 @@ export const CashPage: React.FC = () => {
             >
               <MenuItem value="">Todos los tipos</MenuItem>
               <MenuItem value="INGRESO_VENTA">Venta POS (Ingreso)</MenuItem>
-              <MenuItem value="INGRESO_MANUAL">Ingreso Manual</MenuItem>
+              <MenuItem value="INGRESO_MANUAL">Recibo de caja</MenuItem>
               <MenuItem value="EGRESO_MANUAL">Egreso Manual</MenuItem>
               <MenuItem value="EGRESO_PAGO_PROVEEDOR">Pago a Proveedor (Egreso)</MenuItem>
             </Select>

@@ -53,16 +53,10 @@ const mockAuthContext: AuthContextValue = {
     username: 'cajero_1',
     isActive: true,
     roles: [SYSTEM_ROLES.CAJERO],
-    permissions: [
-      SYSTEM_PERMISSIONS.CASH_READ,
-      SYSTEM_PERMISSIONS.CASH_MOVEMENTS,
-    ],
+    permissions: [SYSTEM_PERMISSIONS.CASH_READ, SYSTEM_PERMISSIONS.CASH_MOVEMENTS],
   },
   roles: [SYSTEM_ROLES.CAJERO],
-  permissions: [
-    SYSTEM_PERMISSIONS.CASH_READ,
-    SYSTEM_PERMISSIONS.CASH_MOVEMENTS,
-  ],
+  permissions: [SYSTEM_PERMISSIONS.CASH_READ, SYSTEM_PERMISSIONS.CASH_MOVEMENTS],
   isAuthenticated: true,
   isLoading: false,
   error: null,
@@ -80,7 +74,7 @@ const renderWithProviders = (ui: React.ReactElement) => {
           <MemoryRouter>{ui}</MemoryRouter>
         </AuthContext.Provider>
       </QueryClientProvider>
-    </ThemeProvider>
+    </ThemeProvider>,
   );
 };
 
@@ -108,6 +102,7 @@ describe('Operación de Caja — Pantalla CashPage (UX-25)', () => {
       expect(screen.getAllByText(/-\$25[.,]000/)[0]).toBeInTheDocument();
       expect(screen.getByText('Pago de mensajería urgente')).toBeInTheDocument();
       expect(screen.getByText('Base de caja inicial de turno')).toBeInTheDocument();
+      expect(screen.getByText('Recibo de caja')).toBeInTheDocument();
     });
   });
 
@@ -115,7 +110,10 @@ describe('Operación de Caja — Pantalla CashPage (UX-25)', () => {
     renderWithProviders(<CashPage />);
     await waitFor(() => expect(screen.getByText('Pago de mensajería urgente')).toBeInTheDocument());
     expect(screen.queryByText(/Registrar Movimiento/i)).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Recibos de caja' })).toHaveAttribute('href', '/treasury/receipts');
+    expect(screen.getByRole('link', { name: 'Recibos de caja' })).toHaveAttribute(
+      'href',
+      '/treasury/receipts',
+    );
     expect(screen.getByRole('link', { name: 'Comprobantes de egreso' })).toHaveAttribute(
       'href',
       '/treasury/disbursements',
@@ -125,11 +123,15 @@ describe('Operación de Caja — Pantalla CashPage (UX-25)', () => {
   it('ordena los movimientos por fecha: más nuevo primero y, al alternar, más viejo primero', async () => {
     renderWithProviders(<CashPage />);
     await waitFor(() =>
-      expect(cashApi.fetchCashMovements).toHaveBeenCalledWith(expect.objectContaining({ sortOrder: 'desc' })),
+      expect(cashApi.fetchCashMovements).toHaveBeenCalledWith(
+        expect.objectContaining({ sortOrder: 'desc' }),
+      ),
     );
     fireEvent.click(screen.getByRole('button', { name: /Orden por fecha/ }));
     await waitFor(() =>
-      expect(cashApi.fetchCashMovements).toHaveBeenLastCalledWith(expect.objectContaining({ sortOrder: 'asc' })),
+      expect(cashApi.fetchCashMovements).toHaveBeenLastCalledWith(
+        expect.objectContaining({ sortOrder: 'asc' }),
+      ),
     );
     expect(screen.getByRole('button', { name: /más viejo primero/ })).toBeInTheDocument();
   });
