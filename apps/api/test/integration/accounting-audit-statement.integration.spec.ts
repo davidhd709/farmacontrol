@@ -115,6 +115,7 @@ describe('Auditoría contable y estado de cuenta por tercero', () => {
     await creditSaleAndReceipt();
     const clean = await audit('view=DESCUADRADOS').expect(200);
     expect(clean.body.items).toEqual([]);
+    expect(clean.body).toMatchObject({ truncated: false, maxRows: 500 });
     expect(clean.body.documentTypes).toEqual(expect.arrayContaining(['SALE', 'RECEIVABLE_PAYMENT']));
 
     // Un asiento histórico descuadrado (la base hoy lo rechaza al confirmar la transacción)

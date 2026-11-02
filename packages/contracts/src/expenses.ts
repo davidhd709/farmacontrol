@@ -83,8 +83,9 @@ export interface ExpenseDto {
 export interface CreateExpensePayload {
   categoryId: string;
   description: string;
-  /** Proveedor de la causación; si se indica, el beneficiario es su nombre */
-  supplierId?: string;
+  /** Proveedor de la causación (obligatorio): el beneficiario es su nombre */
+  supplierId: string;
+  /** Ignorado: se toma el nombre del proveedor */
   beneficiary?: string;
   documentNumber?: string;
   amount: string | number;

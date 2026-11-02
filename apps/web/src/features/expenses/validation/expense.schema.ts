@@ -22,7 +22,7 @@ const requiredText = (message: string) => z.string().refine((value) => !!value.t
 export const expenseSchema = z
   .object({
     categoryId: requiredText('Selecciona una categoría de gasto'),
-    beneficiary: requiredText('El beneficiario es obligatorio'),
+    beneficiary: requiredText('Selecciona el proveedor'),
     description: requiredText('La descripción es obligatoria'),
     documentNumber: z.string(),
     amount: moneySchema,

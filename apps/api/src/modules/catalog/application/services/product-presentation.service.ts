@@ -28,6 +28,15 @@ import {
 import { AuditService } from '../../../audit/application/services/audit.service';
 import type { AuditContext } from './category.service';
 
+/** Un código de barras no puede estar a la vez en un producto y en una presentación. */
+async function barcodeUsedByProduct(barcode: string): Promise<boolean> {
+  const found = await prisma.product.findFirst({
+    where: { barcode: { equals: barcode.trim(), mode: 'insensitive' } },
+    select: { id: true },
+  });
+  return Boolean(found);
+}
+
 @Injectable()
 export class ProductPresentationService {
   constructor(
@@ -73,7 +82,7 @@ export class ProductPresentationService {
 
     if (payload.barcode && payload.barcode.trim()) {
       const existingBarcode = await this.presentationRepository.findByBarcode(payload.barcode);
-      if (existingBarcode) {
+      if (existingBarcode || (await barcodeUsedByProduct(payload.barcode))) {
         throw new ProductPresentationBarcodeAlreadyExistsException(payload.barcode.trim());
       }
     }
@@ -200,7 +209,10 @@ export class ProductPresentationService {
       payload.barcode.trim().toLowerCase() !== (presentation.barcode?.toLowerCase() ?? '')
     ) {
       const existingBarcode = await this.presentationRepository.findByBarcode(payload.barcode);
-      if (existingBarcode && existingBarcode.id !== presentation.id) {
+      if (
+        (existingBarcode && existingBarcode.id !== presentation.id) ||
+        (await barcodeUsedByProduct(payload.barcode))
+      ) {
         throw new ProductPresentationBarcodeAlreadyExistsException(payload.barcode.trim());
       }
     }

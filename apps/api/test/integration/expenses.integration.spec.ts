@@ -17,6 +17,7 @@ import { ExpenseCategoriesService } from '../../src/modules/expenses/application
 import { SESSION_COOKIE_NAME } from '../../src/modules/identity/presentation/utils/session-cookie.util';
 
 describe('Expenses Module Integration (PostgreSQL)', () => {
+  let defaultSupplierId: string;
   let app: INestApplication;
   let cookie: string;
   let cashierCookie: string;
@@ -128,6 +129,15 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
       },
     });
 
+    // Toda causación nace con su proveedor (correcciones del cliente, 2026-11-01)
+    defaultSupplierId = (
+      await prisma.supplier.upsert({
+        where: { taxId: '800999001' },
+        update: {},
+        create: { taxId: '800999001', name: 'Proveedor de gastos' },
+      })
+    ).id;
+
     return { accounts: createdAccounts, bankAccount };
   }
 
@@ -201,6 +211,7 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
         categoryId: category.id,
         description: 'Compra de resmas de papel para caja',
         beneficiary: 'Papelería El Sol',
+        supplierId: defaultSupplierId,
         amount: '50000.00',
         expenseDate: '2026-10-01',
       };
@@ -281,6 +292,20 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
         expect.objectContaining({ type: 'CARGO', charge: '350000.00', balance: '350000.00' }),
       ]);
 
+      const withoutSupplier = await request(app.getHttpServer())
+        .post('/api/v1/expenses')
+        .set('Cookie', cookie)
+        .set('Idempotency-Key', randomUUID())
+        .send({
+          categoryId: category.id,
+          beneficiary: 'Texto libre sin proveedor',
+          description: 'Sin proveedor no hay estado de cuenta',
+          amount: '1000.00',
+          expenseDate: '2026-10-10',
+        });
+      expect(withoutSupplier.status).toBe(400);
+      expect(withoutSupplier.body.message).toMatch(/proveedor/);
+
       await request(app.getHttpServer())
         .post('/api/v1/expenses')
         .set('Cookie', cookie)
@@ -311,6 +336,7 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
           categoryId: category.id,
           description: 'Factura de acueducto con vencimiento a fin de mes',
           beneficiary: 'Empresa de Acueducto',
+          supplierId: defaultSupplierId,
           documentNumber: 'AC-3344',
           amount: '200000.00',
           expenseDate: '2026-10-01',
@@ -370,6 +396,7 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
             categoryId: category.id,
             description: 'Gasto para comprobar rollback',
             beneficiary: 'Proveedor de prueba',
+            supplierId: defaultSupplierId,
             documentNumber: 'EXP-F1-ROLLBACK',
             amount: '40000.00',
             expenseDate: '2026-10-01',
@@ -408,6 +435,7 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
           categoryId: category.id,
           description: 'Gasto pendiente para rollback de pago',
           beneficiary: 'Proveedor de prueba',
+          supplierId: defaultSupplierId,
           documentNumber: 'EXP-F1-PAY-ROLLBACK',
           amount: '80000.00',
           expenseDate: '2026-10-01',
@@ -486,6 +514,7 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
           categoryId: category.id,
           description: 'Factura Acueducto pendiente',
           beneficiary: 'Acueducto S.A.',
+          supplierId: defaultSupplierId,
           documentNumber: 'FAC-99',
           amount: '200000.00',
           expenseDate: '2026-10-01',
@@ -564,6 +593,7 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
           categoryId: category.id,
           description: 'Mantenimiento preventivo aire',
           beneficiary: 'Técnico Clima',
+          supplierId: defaultSupplierId,
           amount: '150000.00',
           expenseDate: '2026-10-01',
           dueDate: '2026-10-15',
@@ -628,6 +658,7 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
           categoryId: category.id,
           description: 'Compra de tintas',
           beneficiary: 'Suministros Tech',
+          supplierId: defaultSupplierId,
           amount: '80000.00',
           expenseDate: '2026-10-01',
         },
@@ -674,6 +705,7 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
         categoryId: category.id,
         description: 'Insumos de aseo',
         beneficiary: 'Distribuidora Limpia',
+        supplierId: defaultSupplierId,
         amount: '30000.00',
         expenseDate: '2026-10-01',
       };
@@ -726,6 +758,7 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
         categoryId: category.id,
         description: 'Plan de conectividad',
         beneficiary: 'Operador móvil',
+        supplierId: defaultSupplierId,
         amount: '25000.00',
         expenseDate: '2026-10-01',
       };
@@ -762,6 +795,7 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
         categoryId: category.id,
         description: 'Compra concurrente idempotente',
         beneficiary: 'Distribuidora Concurrente',
+        supplierId: defaultSupplierId,
         amount: '42000.00',
         expenseDate: '2026-10-01',
       };
@@ -854,6 +888,7 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
           categoryId: category.id,
           description: 'Mantenimiento preventivo',
           beneficiary: 'Soporte técnico',
+          supplierId: defaultSupplierId,
           amount: '90000.00',
           expenseDate: '2026-10-01',
           dueDate: '2026-10-25',
@@ -911,6 +946,7 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
           categoryId: category.id,
           description: 'Energía octubre',
           beneficiary: 'Electrificadora',
+          supplierId: defaultSupplierId,
           amount: '90000.00',
           expenseDate: '2026-10-01',
           dueDate: '2026-10-25',
@@ -960,6 +996,7 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
           categoryId: catLuz.id,
           description: 'Luz oficina',
           beneficiary: 'Enel',
+          supplierId: defaultSupplierId,
           amount: '100000.00',
           expenseDate: '2026-10-01',
         },
@@ -984,6 +1021,7 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
           categoryId: catAgua.id,
           description: 'Agua mensual',
           beneficiary: 'Acueducto',
+          supplierId: defaultSupplierId,
           amount: '50000.00',
           expenseDate: '2026-10-01',
           dueDate: '2026-10-25',
@@ -1014,6 +1052,7 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
           categoryId: '00000000-0000-0000-0000-000000000000',
           description: 'Test sin permisos',
           beneficiary: 'Tercero',
+          supplierId: defaultSupplierId,
           amount: '10000.00',
           paymentMethod: 'EFECTIVO',
         });

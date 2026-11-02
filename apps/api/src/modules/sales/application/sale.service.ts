@@ -345,6 +345,10 @@ export class SaleService {
       if (payload.bankAccountId) {
         throw new BadRequestException('bankAccountId no aplica para ventas a crédito.');
       }
+      // A crédito no se recibe dinero: lo pagado nace en cero y crece con los recibos de caja
+      if (payload.amountPaid !== undefined && Number(payload.amountPaid) !== 0) {
+        throw new BadRequestException('Una venta a crédito no registra monto recibido.');
+      }
     } else if (payload.paymentMethod !== 'EFECTIVO') {
       throw new BadRequestException(
         'El pago con tarjeta requiere una política de liquidación aprobada.',
@@ -621,7 +625,7 @@ export class SaleService {
             paymentMethod: payload.paymentMethod,
             bankAccountId: payload.paymentMethod === 'TRANSFERENCIA' ? payload.bankAccountId : null,
             lines: saleLines,
-            amountPaid: payload.amountPaid,
+            amountPaid: payload.paymentMethod === 'CREDITO' ? 0 : payload.amountPaid,
             notes: payload.notes,
             createdById: auditCtx.userId || '00000000-0000-0000-0000-000000000000',
           });

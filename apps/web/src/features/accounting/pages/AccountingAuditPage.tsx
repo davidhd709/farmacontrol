@@ -139,6 +139,12 @@ export function AccountingAuditPage() {
       </Paper>
 
       {isError && <Alert severity="error">{(error as Error).message}</Alert>}
+      {data?.truncated && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          Se muestran los primeros {data.maxRows} documentos: hay más. Acota el rango de fechas o el
+          tipo de documento para verlos todos.
+        </Alert>
+      )}
       {isLoading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
           <CircularProgress size={32} />

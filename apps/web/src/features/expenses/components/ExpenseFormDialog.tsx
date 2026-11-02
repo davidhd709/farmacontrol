@@ -58,7 +58,7 @@ export function ExpenseFormDialog({ categories, onClose, onSuccess }: Props) {
     const payload = {
       categoryId: data.categoryId,
       // Un proveedor del directorio queda vinculado: su estado de cuenta y el egreso que la paga
-      supplierId: thirdParty?.supplierId ?? undefined,
+      supplierId: thirdParty!.supplierId!,
       beneficiary: data.beneficiary.trim(),
       description: data.description.trim(),
       documentNumber: data.documentNumber.trim() || undefined,
@@ -132,22 +132,25 @@ export function ExpenseFormDialog({ categories, onClose, onSuccess }: Props) {
                 >
                   <ThirdPartyAutocomplete
                     value={thirdParty}
-                    onChange={(tp, raw) => {
+                    onChange={(tp) => {
                       setThirdParty(tp);
-                      if (tp) {
-                        field.onChange(tp.name);
-                        if (tp.documentNumber && !getValues('documentNumber'))
-                          setValue('documentNumber', tp.documentNumber);
-                      } else if (raw !== undefined) field.onChange(raw);
+                      // Solo un proveedor del directorio: la deuda queda en su estado de cuenta
+                      field.onChange(tp?.supplierId ? tp.name : '');
+                      if (tp?.documentNumber && !getValues('documentNumber'))
+                        setValue('documentNumber', tp.documentNumber);
                     }}
-                    label="Beneficiario / Tercero / Proveedor"
-                    placeholder="Buscar en el directorio o escribir nombre..."
+                    role="SUPPLIER"
+                    label="Proveedor"
+                    placeholder="Buscar proveedor en el directorio..."
                     required
-                    freeSolo
                     showQuickCreate
                     disabled={submitting}
-                    error={!!errors.beneficiary}
-                    helperText={errors.beneficiary?.message}
+                    error={!!errors.beneficiary || Boolean(thirdParty && !thirdParty.supplierId)}
+                    helperText={
+                      thirdParty && !thirdParty.supplierId
+                        ? 'El tercero elegido no está registrado como proveedor.'
+                        : errors.beneficiary?.message
+                    }
                   />
                 </Box>
               )}

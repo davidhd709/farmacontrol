@@ -16,6 +16,7 @@ import { SESSION_COOKIE_NAME } from '../../src/modules/identity/presentation/uti
 describe('Búsqueda por código de barras', () => {
   let app: INestApplication;
   let cookie: string;
+  let adminCookie: string;
   let productId: string;
   let boxId: string;
 
@@ -32,6 +33,10 @@ describe('Búsqueda por código de barras', () => {
     const role = await prisma.role.findUniqueOrThrow({ where: { name: 'cajero' } });
     await prisma.userRole.create({ data: { userId: cashier.id!, roleId: role.id } });
     cookie = `${SESSION_COOKIE_NAME}=${(await auth.login('cajero_scan', 'CajeroPassword#2026')).rawToken}`;
+    const admin = await prisma.user.create({ data: { username: 'admin_scan', passwordHash: cashier.passwordHash } });
+    const adminRole = await prisma.role.findUniqueOrThrow({ where: { name: 'admin' } });
+    await prisma.userRole.create({ data: { userId: admin.id, roleId: adminRole.id } });
+    adminCookie = `${SESSION_COOKIE_NAME}=${(await auth.login('admin_scan', 'CajeroPassword#2026')).rawToken}`;
 
     const category = await prisma.category.create({ data: { name: 'Analgésicos' } });
     productId = (
@@ -87,5 +92,35 @@ describe('Búsqueda por código de barras', () => {
     const missing = await lookup('7702001').expect(404);
     expect(missing.body.message).toMatch(/No existe un producto con el código "7702001"/);
     await lookup('9999999999999').expect(404);
+  });
+
+  it('un código de dos productos distintos se rechaza como ambiguo en vez de adivinar', async () => {
+    const category = await prisma.category.findFirstOrThrow();
+    const other = await prisma.product.create({
+      data: {
+        inventoryControlMode: 'LOT_EXPIRY',
+        categoryId: category.id,
+        code: 'MED-IBU-400',
+        name: 'Ibuprofeno 400mg',
+        baseUnit: 'TABLETA',
+        basePrice: new Prisma.Decimal('700.00'),
+        baseCost: new Prisma.Decimal('400.00'),
+      },
+    });
+    // Dato antiguo: la presentación de otro producto reutiliza el código del acetaminofén
+    await prisma.productPresentation.create({
+      data: { productId: other.id, name: 'Blíster', barcode: '7702001000017', conversionFactor: 10, price: new Prisma.Decimal('7000.00') },
+    });
+    const res = await lookup('7702001000017').expect(409);
+    expect(res.body.message).toMatch(/dos productos distintos/);
+  });
+
+  it('el catálogo no deja repetir un código de barras entre producto y presentación', async () => {
+    const res = await request(app.getHttpServer())
+      .post(`/api/v1/products/${productId}/presentations`)
+      .set('Cookie', adminCookie)
+      .send({ name: 'Display x 100', barcode: '7702001000017', conversionFactor: 100, price: '40000.00' });
+    expect(res.status).toBe(409);
+    expect(await prisma.productPresentation.count({ where: { name: 'Display x 100' } })).toBe(0);
   });
 });

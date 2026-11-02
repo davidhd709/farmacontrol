@@ -44,9 +44,16 @@ export class AccountingAuditService {
       `
     ).map((r) => r.source_type);
 
-    const items =
+    const rows =
       filters.view === 'DESCUADRADOS' ? await this.unbalanced(filters) : await this.cancelled(filters);
-    return { view: filters.view, items, documentTypes };
+    // Cada consulta trae una fila de más para saber si hay más de las que se muestran
+    return {
+      view: filters.view,
+      items: rows.slice(0, MAX_ROWS),
+      truncated: rows.length > MAX_ROWS,
+      maxRows: MAX_ROWS,
+      documentTypes,
+    };
   }
 
   private dateRange(column: Prisma.Sql, filters: AccountingAuditFilters) {
@@ -73,7 +80,7 @@ export class AccountingAuditService {
             GROUP BY je.id
             HAVING COALESCE(SUM(l.debit), 0) <> COALESCE(SUM(l.credit), 0) OR COUNT(l.id) < 2
             ORDER BY je.entry_date DESC, je.id
-            LIMIT ${MAX_ROWS}
+            LIMIT ${MAX_ROWS + 1}
           `;
 
     // Recibos y egresos registrados como documento: su valor debe ser lo que aplican a facturas
@@ -103,7 +110,7 @@ export class AccountingAuditService {
               ${this.dateRange(Prisma.sql`d.document_date`, filters)}
               AND d.amount <> COALESCE(rp.total, 0) + COALESCE(pp.total, 0) + COALESCE(ep.total, 0)
             ORDER BY d.document_date DESC
-            LIMIT ${MAX_ROWS}
+            LIMIT ${MAX_ROWS + 1}
           `;
 
     return [
@@ -141,7 +148,7 @@ export class AccountingAuditService {
         ${this.dateRange(Prisma.sql`rev.entry_date`, filters)}
       GROUP BY je.id, rev.id
       ORDER BY rev.entry_date DESC, je.id
-      LIMIT ${MAX_ROWS}
+      LIMIT ${MAX_ROWS + 1}
     `;
     return rows.map((row) => this.toItem(row));
   }

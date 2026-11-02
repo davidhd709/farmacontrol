@@ -115,7 +115,14 @@ describe('Ventas a crédito, devoluciones y cambio de producto', () => {
     const withoutCustomer = await sell({ paymentMethod: 'CREDITO' });
     expect(withoutCustomer.status).toBe(400);
     expect(withoutCustomer.body.message).toMatch(/cliente identificado/);
+    const withAmount = await sell({ paymentMethod: 'CREDITO', customerId, amountPaid: 10000 });
+    expect(withAmount.status).toBe(400);
     expect(await prisma.sale.count()).toBe(0);
+
+    // Sin monto recibido: lo pagado nace en cero y cuadra con la cartera
+    const ok = await sell({ paymentMethod: 'CREDITO', customerId });
+    expect(ok.status, JSON.stringify(ok.body)).toBe(201);
+    expect(ok.body.amountPaid).toBe(0);
   });
 
   it('crea la cartera sin ingreso de caja y "Ver abonos" refleja abonos, devoluciones y saldo', async () => {

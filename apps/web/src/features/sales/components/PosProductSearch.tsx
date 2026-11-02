@@ -3,6 +3,7 @@ import { Alert, Autocomplete, Box, Chip, TextField, Typography } from '@mui/mate
 import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ProductDto } from '@farmacia/contracts';
 import { fetchProducts, lookupProductByCode } from '../../catalog/api/products.api';
+import { ApiError } from '../../../api/http-client';
 import { inventoryControlModeLabel } from '../../catalog/utils/inventory-control';
 import { useDebouncedValue } from '../../../hooks/useDebouncedValue';
 import { formatMoney, toCents } from '../../../utils/money';
@@ -68,12 +69,19 @@ export function PosProductSearch({
       // Pistola lectora: la coincidencia exacta del código de barras o del código interno
       // gana; si no hay, el texto escrito a mano agrega el primer producto vendible
       const [scanned, result] = await Promise.all([
-        // Si la búsqueda exacta falla, el texto escrito sigue resolviendo la venta; un fallo de
-        // la búsqueda de texto sí se informa abajo
-        lookupProductByCode(exactTerm).catch(() => null),
+        // Un código asignado a dos productos (409) se informa; otro fallo de la búsqueda
+        // exacta deja que el texto escrito resuelva la venta
+        lookupProductByCode(exactTerm).catch((err: unknown) =>
+          err instanceof ApiError && err.status === 409 ? err : null,
+        ),
         queryClient.fetchQuery(productSearchOptions(exactTerm)),
       ]);
       if (!mounted.current || currentText.current !== exactTerm) return;
+      if (scanned instanceof ApiError) {
+        setError(scanned.message);
+        clearAndFocus();
+        return;
+      }
       if (scanned && isSellable(scanned.product)) {
         select(scanned.product, scanned.presentationId);
         return;

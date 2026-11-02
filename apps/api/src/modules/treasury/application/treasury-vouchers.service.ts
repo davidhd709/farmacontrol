@@ -27,7 +27,7 @@ import { PayablesService } from '../../payables/application/payables.service';
 import { ExpensesService } from '../../expenses/application/expenses.service';
 import { AccountingEngineService } from '../../accounting/application/accounting-engine.service';
 import { recordSourceBankMovement } from './record-source-bank-movement';
-import { requirePaymentBankAccountId } from './payment-validation';
+import { requirePaymentBankAccountId, requirePaymentMethodPermission } from './payment-validation';
 import { TreasuryDocumentsService } from './treasury-documents.service';
 import {
   centsToMoneyString,
@@ -56,6 +56,16 @@ interface Voucher {
   supplierId?: string;
   thirdPartyId?: string;
   counterpartAccountId?: string;
+}
+
+function isIdempotencyKeyCollision(error: unknown): boolean {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002')
+    return false;
+  const target = error.meta?.target;
+  return (
+    (Array.isArray(target) && target.some((field) => field === 'key')) ||
+    (typeof target === 'string' && /idempotency.*key|key.*idempotency/i.test(target))
+  );
 }
 
 const MAX_APPLICATIONS = 50;
@@ -149,10 +159,18 @@ export class TreasuryVouchersService {
         };
       });
       if (applications.some((a) => a.documentType === 'FACTURA_COMPRA')) {
-        this.requirePermission(user, SYSTEM_PERMISSIONS.PAYABLES_MANAGE, 'pagar facturas de compra');
+        this.requirePermission(
+          user,
+          SYSTEM_PERMISSIONS.PAYABLES_MANAGE,
+          'pagar facturas de compra',
+        );
       }
       if (applications.some((a) => a.documentType === 'CAUSACION_GASTO')) {
-        this.requirePermission(user, SYSTEM_PERMISSIONS.EXPENSES_MANAGE, 'pagar causaciones de gasto');
+        this.requirePermission(
+          user,
+          SYSTEM_PERMISSIONS.EXPENSES_MANAGE,
+          'pagar causaciones de gasto',
+        );
       }
       return this.run('/api/v1/treasury/disbursements', payload, user, idempotencyKey, {
         voucher: {
@@ -217,14 +235,13 @@ export class TreasuryVouchersService {
     if (method !== 'EFECTIVO' && method !== 'TRANSFERENCIA') {
       throw new BadRequestException('El medio de pago debe ser EFECTIVO o TRANSFERENCIA.');
     }
+    // Un abono o pago de facturas lo autoriza el permiso de cartera, cuentas por pagar o gastos
+    // (igual que sus rutas propias); un movimiento manual exige el del auxiliar que mueve
+    if (payload.kind === 'MANUAL') requirePaymentMethodPermission(user.permissions, method);
     if (method === 'TRANSFERENCIA') {
       requirePaymentBankAccountId(payload.bankAccountId);
-      this.requirePermission(user, SYSTEM_PERMISSIONS.TREASURY_MANAGE, 'mover dinero en bancos');
-    } else {
-      if (payload.bankAccountId) {
-        throw new BadRequestException('Una cuenta bancaria solo corresponde a TRANSFERENCIA.');
-      }
-      this.requirePermission(user, SYSTEM_PERMISSIONS.CASH_MOVEMENTS, 'mover dinero en caja');
+    } else if (payload.bankAccountId) {
+      throw new BadRequestException('Una cuenta bancaria solo corresponde a TRANSFERENCIA.');
     }
     const concept = typeof payload.concept === 'string' ? payload.concept.trim() : '';
     if (concept.length < 3 || concept.length > 255) {
@@ -246,7 +263,9 @@ export class TreasuryVouchersService {
   ) {
     const counterpartAccountId = this.uuid(payload.counterpartAccountId, 'Cuenta de contrapartida');
     const thirdPartyId =
-      payload.thirdPartyId === undefined || payload.thirdPartyId === null || payload.thirdPartyId === ''
+      payload.thirdPartyId === undefined ||
+      payload.thirdPartyId === null ||
+      payload.thirdPartyId === ''
         ? undefined
         : this.uuid(payload.thirdPartyId, 'Tercero');
     if (payload.applications?.length) {
@@ -285,21 +304,29 @@ export class TreasuryVouchersService {
     idempotencyKey: string | undefined,
     plan: {
       voucher: Voucher;
-      apply: (tx: Tx, documentId: string, movement: { source: 'CAJA' | 'BANCO'; id: string }) => Promise<void>;
+      apply: (
+        tx: Tx,
+        documentId: string,
+        movement: { source: 'CAJA' | 'BANCO'; id: string },
+      ) => Promise<void>;
     },
   ): Promise<TreasuryDocumentDto> {
     // Todo documento mueve dinero: un reintento sin clave lo duplicaría (AGENTS.md §6)
     const key = idempotencyKey?.trim();
-    if (!key) throw new BadRequestException('Idempotency-Key es obligatorio para registrar el documento.');
-    if (key.length > 100) throw new BadRequestException('Idempotency-Key debe tener entre 1 y 100 caracteres.');
+    if (!key)
+      throw new BadRequestException('Idempotency-Key es obligatorio para registrar el documento.');
+    if (key.length > 100)
+      throw new BadRequestException('Idempotency-Key debe tener entre 1 y 100 caracteres.');
     const { voucher } = plan;
     if (voucher.amountCents <= 0n) {
       throw new BadRequestException('El valor del documento debe ser mayor a cero.');
     }
     const requestHash = this.idempotency.computeHash(endpoint, user.id, payload);
 
-    try {
-      return await this.idempotency.retryOnSerialization(() =>
+    // Dos solicitudes simultáneas con la misma clave: la que pierde el insert de la clave se
+    // reintenta en una transacción nueva, que lee y devuelve la respuesta de la ganadora
+    const attempt = () =>
+      this.idempotency.retryOnSerialization(() =>
         prisma.$transaction(
           async (tx) => {
             const cached = await this.idempotency.getRecord(key, requestHash, tx, 'http');
@@ -368,8 +395,20 @@ export class TreasuryVouchersService {
           { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
         ),
       );
+
+    try {
+      for (let retry = 0; ; retry++) {
+        try {
+          return await attempt();
+        } catch (error) {
+          if (!isIdempotencyKeyCollision(error) || retry >= 2) throw error;
+        }
+      }
     } catch (error) {
-      if (error instanceof InsufficientCashBalanceException || error instanceof InvalidCashAmountException) {
+      if (
+        error instanceof InsufficientCashBalanceException ||
+        error instanceof InvalidCashAmountException
+      ) {
         throw new BadRequestException(error.message);
       }
       if (error instanceof TreasuryConflictError) throw new ConflictException(error.message);
@@ -410,12 +449,17 @@ export class TreasuryVouchersService {
     return { source: 'CAJA', id };
   }
 
-  private applications<T, R extends { id: string }>(items: T[] | undefined, parse: (item: T) => R): R[] {
+  private applications<T, R extends { id: string }>(
+    items: T[] | undefined,
+    parse: (item: T) => R,
+  ): R[] {
     if (!Array.isArray(items) || items.length === 0) {
       throw new BadRequestException('Selecciona al menos una factura.');
     }
     if (items.length > MAX_APPLICATIONS) {
-      throw new BadRequestException(`Un documento aplica como máximo ${MAX_APPLICATIONS} facturas.`);
+      throw new BadRequestException(
+        `Un documento aplica como máximo ${MAX_APPLICATIONS} facturas.`,
+      );
     }
     const parsed = items.map(parse);
     if (new Set(parsed.map((a) => a.id)).size !== parsed.length) {

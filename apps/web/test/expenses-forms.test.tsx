@@ -84,9 +84,9 @@ describe('Causación de gastos', () => {
     const spy = vi.spyOn(api, 'createExpense');
     form();
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar Gasto' }));
-    expect(await screen.findByText('El beneficiario es obligatorio')).toBeInTheDocument();
+    expect(await screen.findByText('Selecciona el proveedor')).toBeInTheDocument();
     expect(screen.getByText('La descripción es obligatoria')).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByLabelText(/Beneficiario \/ Tercero/)).toHaveFocus());
+    await waitFor(() => expect(screen.getByRole('combobox', { name: /Proveedor/ })).toHaveFocus());
     expect(spy).not.toHaveBeenCalled();
   });
 
@@ -102,7 +102,17 @@ describe('Causación de gastos', () => {
           }),
       );
     form();
-    change(/Beneficiario \/ Tercero/, ' Proveedor ');
+    vi.mocked(parties.fetchThirdParties).mockResolvedValue({
+      items: [
+        { id: 'tp-1', documentType: 'NIT', documentNumber: '', name: 'Proveedor', supplierId: 'sup-1' } as never,
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+      totalPages: 1,
+    });
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: /Proveedor/ }));
+    fireEvent.click(await screen.findByRole('option', { name: /Proveedor/ }));
     change(/Concepto \/ Descripción/, ' Servicio ');
     change(/Valor Total/, '0.30');
     change(/Nº Factura/, ' DOC-1 ');
@@ -118,7 +128,7 @@ describe('Causación de gastos', () => {
     expect(await screen.findByText('Sin conexión')).toBeInTheDocument();
     const expected = {
       categoryId: 'category',
-      supplierId: undefined,
+      supplierId: 'sup-1',
       beneficiary: 'Proveedor',
       description: 'Servicio',
       documentNumber: 'DOC-1',

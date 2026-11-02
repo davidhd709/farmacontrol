@@ -30,6 +30,18 @@ import type { AuditContext } from './category.service';
 import { sectorProfileRules } from '../../../company/application/sector-profile.reader';
 import { saleTaxRatesAt } from '../../../taxes/application/tax-context.reader';
 
+/**
+ * El lector de código de barras no distingue tablas: un código no puede estar a la vez en un
+ * producto y en una presentación.
+ */
+async function barcodeUsedByPresentation(barcode: string): Promise<boolean> {
+  const found = await prisma.productPresentation.findFirst({
+    where: { barcode: { equals: barcode.trim(), mode: 'insensitive' } },
+    select: { id: true },
+  });
+  return Boolean(found);
+}
+
 @Injectable()
 export class ProductService {
   constructor(
@@ -57,7 +69,7 @@ export class ProductService {
 
     if (input.barcode && input.barcode.trim()) {
       const existingBarcode = await this.productRepository.findByBarcode(input.barcode);
-      if (existingBarcode) {
+      if (existingBarcode || (await barcodeUsedByPresentation(input.barcode))) {
         throw new ProductBarcodeAlreadyExistsException(input.barcode.trim());
       }
     }
@@ -167,7 +179,10 @@ export class ProductService {
       input.barcode.trim().toLowerCase() !== (product.barcode?.toLowerCase() ?? '')
     ) {
       const existingBarcode = await this.productRepository.findByBarcode(input.barcode);
-      if (existingBarcode && existingBarcode.id !== product.id) {
+      if (
+        (existingBarcode && existingBarcode.id !== product.id) ||
+        (await barcodeUsedByPresentation(input.barcode))
+      ) {
         throw new ProductBarcodeAlreadyExistsException(input.barcode.trim());
       }
     }
@@ -247,11 +262,17 @@ export class ProductService {
     const term = code.trim();
     if (!term) throw new ProductNotFoundException(code);
     const byBarcode = await this.productRepository.findByBarcode(term);
-    if (byBarcode) return { product: await this.getProductDtoById(byBarcode.id), presentationId: null };
     const presentation = await prisma.productPresentation.findFirst({
       where: { barcode: { equals: term, mode: 'insensitive' } },
       select: { id: true, productId: true },
     });
+    // Datos anteriores a la validación cruzada: un código en dos productos no se adivina
+    if (byBarcode && presentation && presentation.productId !== byBarcode.id) {
+      throw new ConflictException(
+        `El código "${term}" está asignado a dos productos distintos; corríjalo en el catálogo.`,
+      );
+    }
+    if (byBarcode) return { product: await this.getProductDtoById(byBarcode.id), presentationId: null };
     if (presentation) {
       return {
         product: await this.getProductDtoById(presentation.productId),

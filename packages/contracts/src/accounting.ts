@@ -586,6 +586,9 @@ export interface AccountingAuditItemDto {
 export interface AccountingAuditDto {
   view: AccountingAuditView;
   items: AccountingAuditItemDto[];
+  /** Hay más resultados que el máximo mostrado: acotar fechas o tipo */
+  truncated: boolean;
+  maxRows: number;
   /** Tipos de documento con asientos, para el filtro */
   documentTypes: string[];
 }

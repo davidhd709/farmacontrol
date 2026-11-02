@@ -142,10 +142,13 @@ export class ExpensesService {
       throw new BadRequestException('La descripción del gasto es obligatoria.');
     }
 
-    if (payload.supplierId !== undefined) validateUuid(payload.supplierId, 'ID de proveedor');
-    if (!payload.supplierId && !payload.beneficiary?.trim()) {
-      throw new BadRequestException('El proveedor o tercero beneficiario es obligatorio.');
+    // La deuda nace con su proveedor: así aparece en su estado de cuenta y se paga con egreso
+    if (!payload.supplierId) {
+      throw new BadRequestException(
+        'Selecciona el proveedor de la causación: la cuenta por pagar se paga con un comprobante de egreso a su nombre.',
+      );
     }
+    validateUuid(payload.supplierId, 'ID de proveedor');
 
     const amountCents = validateExpenseAmount(payload.amount);
     const amountStr = centsToMoneyString(amountCents);
@@ -186,13 +189,14 @@ export class ExpensesService {
       if (!category.isActive) {
         throw new BadRequestException('La categoría de gasto seleccionada está inactiva.');
       }
-      const supplier = payload.supplierId
-        ? await tx.supplier.findUnique({ where: { id: payload.supplierId }, select: { name: true } })
-        : null;
-      if (payload.supplierId && !supplier) {
+      const supplier = await tx.supplier.findUnique({
+        where: { id: payload.supplierId },
+        select: { name: true },
+      });
+      if (!supplier) {
         throw new NotFoundException('El proveedor de la causación no existe.');
       }
-      const beneficiary = supplier?.name ?? payload.beneficiary!.trim();
+      const beneficiary = supplier.name;
 
       const expense = await tx.expense.create({
         data: {
@@ -207,7 +211,7 @@ export class ExpensesService {
           dueDate,
           paymentMethod: method,
           status,
-          supplierId: payload.supplierId ?? null,
+          supplierId: payload.supplierId,
           bankAccountId: null,
           notes: payload.notes?.trim() || null,
           supportDocUrl: payload.supportDocUrl?.trim() || null,
