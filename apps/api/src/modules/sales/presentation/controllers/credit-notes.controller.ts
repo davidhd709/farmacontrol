@@ -1,4 +1,7 @@
-import { QueryFieldValidationPipe } from '../../../../common/pagination/request-shape.pipe';
+import {
+  QueryFieldValidationPipe,
+  RequestShapeValidationPipe,
+} from '../../../../common/pagination/request-shape.pipe';
 import {
   Controller,
   Get,
@@ -10,9 +13,16 @@ import {
   Headers,
   ParseUUIDPipe,
   ConflictException,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import { CreditNotesService } from '../../application/credit-notes.service';
-import { CreateCreditNotePayload, CreditNoteDto, SYSTEM_PERMISSIONS } from '@farmacia/contracts';
+import {
+  CancelCreditNotePayload,
+  CreateCreditNotePayload,
+  CreditNoteDto,
+  SYSTEM_PERMISSIONS,
+} from '@farmacia/contracts';
 import {
   SessionAuthGuard,
   AuthenticatedUserContext,
@@ -69,5 +79,20 @@ export class CreditNotesController {
   @RequirePermissions(SYSTEM_PERMISSIONS.SALES_READ)
   async getById(@Param('id', ParseUUIDPipe) id: string): Promise<CreditNoteDto> {
     return this.creditNotesService.getCreditNoteById(id);
+  }
+
+  /**
+   * Anula la devolución: la mercancía vuelve a salir, el reembolso se deshace y se reversa el
+   * asiento (correcciones del cliente, 2026-11-02). Mismo permiso que anular una venta.
+   */
+  @Post('credit-notes/:id/cancel')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions(SYSTEM_PERMISSIONS.SALES_CANCEL)
+  async cancel(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new RequestShapeValidationPipe({ reason: 'text' })) payload: CancelCreditNotePayload,
+    @CurrentUser() user: AuthenticatedUserContext,
+  ): Promise<CreditNoteDto> {
+    return this.creditNotesService.cancelCreditNote(id, payload, user.id);
   }
 }

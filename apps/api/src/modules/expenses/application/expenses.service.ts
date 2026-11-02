@@ -486,46 +486,65 @@ export class ExpensesService {
     validateUuid(paymentId, 'ID de pago de gasto');
     const reason = validateReversalReason(payload.reversalReason);
 
-    let expenseId = '';
+    const expenseId = await prisma.$transaction(
+      (tx) => this.reversePaymentInTransaction(tx, { paymentId, reason, userId, moveMoney: true }),
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
 
-    await prisma.$transaction(async (tx) => {
-      const payment = await tx.expensePayment.findUnique({
-        where: { id: paymentId },
-        include: { expense: true },
-      });
-      if (!payment) throw new NotFoundException(`Pago de gasto con ID "${paymentId}" no encontrado.`);
-      if (payment.isReversed) throw new BadRequestException('Este pago ya fue revertido previamente.');
+    return this.findById(expenseId);
+  }
 
-      expenseId = payment.expenseId;
+  /**
+   * Reversa un pago de causación dentro de la transacción del llamador: saldo, estado, asiento y
+   * auditoría. Con moveMoney devuelve el dinero con su propio movimiento; la anulación de un
+   * comprobante de egreso lo devuelve con un único movimiento por el documento.
+   */
+  async reversePaymentInTransaction(
+    tx: Prisma.TransactionClient,
+    input: { paymentId: string; reason: string; userId: string; moveMoney: boolean },
+  ): Promise<string> {
+    const { paymentId, reason, userId, moveMoney } = input;
+    const found = await tx.expensePayment.findUnique({ where: { id: paymentId }, select: { expenseId: true } });
+    if (!found) throw new NotFoundException(`Pago de gasto con ID "${paymentId}" no encontrado.`);
+    // Bloquea la causación: serializa con otros pagos y reversiones sobre su saldo
+    await tx.$queryRaw`SELECT id FROM expenses WHERE id = ${found.expenseId}::uuid FOR UPDATE`;
+    const payment = await tx.expensePayment.findUniqueOrThrow({
+      where: { id: paymentId },
+      include: { expense: true },
+    });
+    if (payment.isReversed) throw new BadRequestException('Este pago ya fue revertido previamente.');
 
-      await tx.expensePayment.update({
-        where: { id: paymentId },
-        data: {
-          isReversed: true,
-          reversedAt: new Date(),
-          reversalReason: reason,
-          reversedById: userId,
-        },
-      });
+    const expenseId = payment.expenseId;
 
-      // Restituir saldo en el gasto
-      const payCents = parseMoneyToCents(payment.amount.toString(), 'Monto a revertir');
-      const currentBalanceCents = parseMoneyToCents(payment.expense.balance.toString(), 'Saldo actual');
-      const currentPaidCents = parseMoneyToCents(payment.expense.amountPaid.toString(), 'Monto pagado actual');
+    await tx.expensePayment.update({
+      where: { id: paymentId },
+      data: {
+        isReversed: true,
+        reversedAt: new Date(),
+        reversalReason: reason,
+        reversedById: userId,
+      },
+    });
 
-      const newBalanceCents = currentBalanceCents + payCents;
-      const newPaidCents = currentPaidCents - payCents;
+    // Restituir saldo en el gasto
+    const payCents = parseMoneyToCents(payment.amount.toString(), 'Monto a revertir');
+    const currentBalanceCents = parseMoneyToCents(payment.expense.balance.toString(), 'Saldo actual');
+    const currentPaidCents = parseMoneyToCents(payment.expense.amountPaid.toString(), 'Monto pagado actual');
 
-      await tx.expense.update({
-        where: { id: expenseId },
-        data: {
-          balance: new Prisma.Decimal(centsToMoneyString(newBalanceCents)),
-          amountPaid: new Prisma.Decimal(centsToMoneyString(newPaidCents)),
-          status: 'PENDIENTE',
-        },
-      });
+    const newBalanceCents = currentBalanceCents + payCents;
+    const newPaidCents = currentPaidCents - payCents;
 
-      // Devolver fondos a tesorería
+    await tx.expense.update({
+      where: { id: expenseId },
+      data: {
+        balance: new Prisma.Decimal(centsToMoneyString(newBalanceCents)),
+        amountPaid: new Prisma.Decimal(centsToMoneyString(newPaidCents)),
+        status: 'PENDIENTE',
+      },
+    });
+
+    // Devolver fondos a tesorería (al anular el comprobante va en un solo movimiento)
+    if (moveMoney) {
       if (payment.paymentMethod === 'EFECTIVO') {
         await this.cashService.recordMovementInTransaction(tx, {
           movementType: 'INGRESO_MANUAL',
@@ -547,28 +566,25 @@ export class ExpensesService {
           createdById: userId,
         });
       }
+    }
 
-      // Reversar asiento contable del pago
-      await this.accountingEngine.handleExpensePaymentReversed(paymentId, reason, userId, tx);
-      await tx.auditEvent.create({
-        data: {
-          userId,
-          action: 'expenses:expense_payment_reversed',
-          entity: 'ExpensePayment',
-          entityId: paymentId,
-          details: {
-            expenseId,
-            amount: payment.amount.toFixed(2),
-            paymentMethod: payment.paymentMethod,
-            reason,
-          },
+    // Reversar asiento contable del pago
+    await this.accountingEngine.handleExpensePaymentReversed(paymentId, reason, userId, tx);
+    await tx.auditEvent.create({
+      data: {
+        userId,
+        action: 'expenses:expense_payment_reversed',
+        entity: 'ExpensePayment',
+        entityId: paymentId,
+        details: {
+          expenseId,
+          amount: payment.amount.toFixed(2),
+          paymentMethod: payment.paymentMethod,
+          reason,
         },
-      });
-    }, {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      },
     });
-
-    return this.findById(expenseId);
+    return expenseId;
   }
 
   /**

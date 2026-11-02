@@ -154,7 +154,15 @@ export class ReceivablesService {
             createdAt: true,
             creditNotes: {
               where: { refundMethod: 'CREDITO_CARTERA' },
-              select: { creditNoteNumber: true, total: true, reason: true, createdAt: true },
+              select: {
+                creditNoteNumber: true,
+                total: true,
+                reason: true,
+                createdAt: true,
+                status: true,
+                cancelledAt: true,
+                cancellationReason: true,
+              },
             },
           },
         },
@@ -167,8 +175,10 @@ export class ReceivablesService {
     const toCents = (value: Prisma.Decimal) => parseMoneyToCents(value.toFixed(2), 'Valor');
     const notes = row.sale?.creditNotes ?? [];
     // La nota crédito a cartera baja el total y el saldo: el cargo original es la suma de ambos
+    // (una nota anulada ya devolvió su valor al total)
     const originalCents =
-      toCents(row.totalAmount) + notes.reduce((acc, n) => acc + toCents(n.total), 0n);
+      toCents(row.totalAmount) +
+      notes.filter((n) => n.status === 'CONFIRMADA').reduce((acc, n) => acc + toCents(n.total), 0n);
     const raw: RawDocumentMovement[] = [
       {
         at: row.sale?.createdAt ?? row.createdAt,
@@ -206,8 +216,18 @@ export class ReceivablesService {
         type: 'NOTA_CREDITO',
         documentNumber: note.creditNoteNumber,
         description: `Devolución: ${note.reason}`,
+        isReversed: note.status === 'ANULADA',
         deltaCents: -toCents(note.total),
       });
+      if (note.status === 'ANULADA' && note.cancelledAt) {
+        raw.push({
+          at: note.cancelledAt,
+          type: 'ANULACION_NOTA_CREDITO',
+          documentNumber: note.creditNoteNumber,
+          description: `Anulación de la devolución: ${note.cancellationReason ?? ''}`.trim(),
+          deltaCents: toCents(note.total),
+        });
+      }
     }
     // La anulación de la venta cancela lo que quedaba pendiente
     const pendingCents = raw.reduce((acc, m) => acc + m.deltaCents, 0n);
@@ -366,158 +386,179 @@ export class ReceivablesService {
     }
 
     return prisma.$transaction(
-      async (tx: any) => {
-        // 1. Bloqueo pesimista del receivable
-        const rows = await tx.$queryRaw<any[]>`
-        SELECT
-          id,
-          sale_id    AS "saleId",
-          customer_id AS "customerId",
-          total_amount AS "totalAmount",
-          amount_paid  AS "amountPaid",
-          balance,
-          status,
-          due_date    AS "dueDate",
-          notes
-        FROM receivables
-        WHERE id = ${receivableId}::uuid
-        FOR UPDATE
-      `;
-
-        if (!rows.length) {
-          throw new NotFoundException(`Cuenta por cobrar "${receivableId}" no encontrada`);
-        }
-
-        const raw = rows[0];
-
-        // Una cuenta de una venta anulada no debe volver a quedar pendiente de cobro
-        if (raw.status === ('ANULADA' satisfies ReceivableStatus)) {
-          throw new ConflictException(
-            'No se puede revertir un abono de una cuenta por cobrar ANULADA.',
-          );
-        }
-
-        // 2. Buscar el abono a revertir
-        const payment = await tx.receivablePayment.findUnique({
-          where: { id: paymentId },
-        });
-
-        if (!payment || payment.receivableId !== receivableId) {
-          throw new NotFoundException(
-            `Abono "${paymentId}" no encontrado en esta cuenta por cobrar`,
-          );
-        }
-
-        if (payment.isReversed) {
-          throw new BadRequestException('Este abono ya fue revertido previamente.');
-        }
-
-        const paymentAmountCents = parseMoneyToCents(
-          payment.amount.toString(),
-          'Monto del abono a revertir',
-        );
-        const balanceCents = parseMoneyToCents(raw.balance.toString(), 'Saldo pendiente');
-        const amountPaidCents = parseMoneyToCents(raw.amountPaid.toString(), 'Total abonado');
-
-        const newBalanceCents = balanceCents + paymentAmountCents;
-        const newAmountPaidCents = amountPaidCents - paymentAmountCents;
-
-        if (newAmountPaidCents < 0n) {
-          throw new BadRequestException('El monto del reverso excede el total abonado registrado.');
-        }
-
-        // 3. Marcar abono como revertido
-        await tx.receivablePayment.update({
-          where: { id: paymentId },
-          data: {
-            isReversed: true,
-            reversedAt: new Date(),
-            reversalReason: trimmedReason,
-            reversedByUserId: userId,
-          },
-        });
-
-        // 4. Actualizar estado y saldos del receivable
-        const updated = await tx.receivable.update({
-          where: { id: receivableId },
-          data: {
-            balance: new Prisma.Decimal(centsToMoneyString(newBalanceCents)),
-            amountPaid: new Prisma.Decimal(centsToMoneyString(newAmountPaidCents)),
-            status: 'PENDIENTE' satisfies ReceivableStatus,
-          },
-          include: {
-            customer: { select: { name: true } },
-            sale: { select: { invoiceNumber: true } },
-          },
-        });
-
-        // 5. Compensación financiera
-        const amountStr = centsToMoneyString(paymentAmountCents);
-        if (payment.paymentMethod === 'TRANSFERENCIA') {
-          if (!payment.bankAccountId) {
-            throw new BadRequestException(
-              'El abono por transferencia no tiene cuenta bancaria asociada.',
-            );
-          }
-          await recordSourceBankMovement(tx, {
-            bankAccountId: payment.bankAccountId,
-            movementType: 'WITHDRAWAL',
-            amount: amountStr,
-            concept: `Reversión abono cartera - Factura ${updated.sale?.invoiceNumber ?? receivableId}: ${trimmedReason}`,
-            referenceDocumentType: 'RECEIVABLE_PAYMENT_REVERSAL',
-            referenceDocumentId: payment.id,
-            createdById: userId,
-          });
-        } else {
-          await this.cashService.recordMovementInTransaction(tx, {
-            movementType: 'EGRESO_MANUAL',
-            amount: amountStr,
-            paymentMethod: 'EFECTIVO',
-            reason: `Reversión abono cartera - Factura ${updated.sale?.invoiceNumber ?? receivableId}: ${trimmedReason}`,
-            referenceDocumentType: 'RECEIVABLE_PAYMENT_REVERSAL',
-            referenceDocumentId: payment.id,
-            createdByUserId: userId,
-          });
-        }
-
-        // Reversión contable automática
-        await this.accountingEngine.handleCustomerPaymentReversed(
-          payment.id,
-          trimmedReason,
+      async (tx: any) =>
+        this.reversePaymentInTransaction(tx, {
+          receivableId,
+          paymentId,
+          reason: trimmedReason,
           userId,
-          tx,
-        );
-
-        // 6. Auditoría
-        await tx.auditEvent.create({
-          data: {
-            userId,
-            action: 'REVERSE_RECEIVABLE_PAYMENT',
-            entity: 'receivable_payments',
-            entityId: paymentId,
-            details: {
-              receivableId,
-              paymentId,
-              amount: amountStr,
-              paymentMethod: payment.paymentMethod,
-              bankAccountId: payment.bankAccountId,
-              reason: trimmedReason,
-              balanceBefore: centsToMoneyString(balanceCents),
-              balanceAfter: centsToMoneyString(newBalanceCents),
-            } as unknown as Prisma.InputJsonValue,
-          },
-        });
-
-        const payments = await tx.receivablePayment.findMany({
-          where: { receivableId },
-          orderBy: { createdAt: 'asc' },
-        });
-
-        return this.toDto(updated, payments);
-      },
+          moveMoney: true,
+        }),
       {
         isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
       },
     );
+  }
+
+  /**
+   * Reversa un pago dentro de la transacción del llamador: saldo de la factura, estado, asiento
+   * y auditoría. Con moveMoney devuelve el dinero con su propio movimiento; la anulación de un
+   * recibo de caja lo devuelve con un único movimiento por el documento.
+   */
+  async reversePaymentInTransaction(
+    tx: any,
+    input: { receivableId: string; paymentId: string; reason: string; userId: string; moveMoney: boolean },
+  ) {
+    const { receivableId, paymentId, userId, moveMoney } = input;
+    const trimmedReason = input.reason;
+    // 1. Bloqueo pesimista del receivable
+    const rows = await tx.$queryRaw<any[]>`
+    SELECT
+      id,
+      sale_id    AS "saleId",
+      customer_id AS "customerId",
+      total_amount AS "totalAmount",
+      amount_paid  AS "amountPaid",
+      balance,
+      status,
+      due_date    AS "dueDate",
+      notes
+    FROM receivables
+    WHERE id = ${receivableId}::uuid
+    FOR UPDATE
+  `;
+
+    if (!rows.length) {
+      throw new NotFoundException(`Cuenta por cobrar "${receivableId}" no encontrada`);
+    }
+
+    const raw = rows[0];
+
+    // Una cuenta de una venta anulada no debe volver a quedar pendiente de cobro
+    if (raw.status === ('ANULADA' satisfies ReceivableStatus)) {
+      throw new ConflictException(
+        'No se puede revertir un abono de una cuenta por cobrar ANULADA.',
+      );
+    }
+
+    // 2. Buscar el abono a revertir
+    const payment = await tx.receivablePayment.findUnique({
+      where: { id: paymentId },
+    });
+
+    if (!payment || payment.receivableId !== receivableId) {
+      throw new NotFoundException(
+        `Abono "${paymentId}" no encontrado en esta cuenta por cobrar`,
+      );
+    }
+
+    if (payment.isReversed) {
+      throw new BadRequestException('Este abono ya fue revertido previamente.');
+    }
+
+    const paymentAmountCents = parseMoneyToCents(
+      payment.amount.toString(),
+      'Monto del abono a revertir',
+    );
+    const balanceCents = parseMoneyToCents(raw.balance.toString(), 'Saldo pendiente');
+    const amountPaidCents = parseMoneyToCents(raw.amountPaid.toString(), 'Total abonado');
+
+    const newBalanceCents = balanceCents + paymentAmountCents;
+    const newAmountPaidCents = amountPaidCents - paymentAmountCents;
+
+    if (newAmountPaidCents < 0n) {
+      throw new BadRequestException('El monto del reverso excede el total abonado registrado.');
+    }
+
+    // 3. Marcar abono como revertido
+    await tx.receivablePayment.update({
+      where: { id: paymentId },
+      data: {
+        isReversed: true,
+        reversedAt: new Date(),
+        reversalReason: trimmedReason,
+        reversedByUserId: userId,
+      },
+    });
+
+    // 4. Actualizar estado y saldos del receivable
+    const updated = await tx.receivable.update({
+      where: { id: receivableId },
+      data: {
+        balance: new Prisma.Decimal(centsToMoneyString(newBalanceCents)),
+        amountPaid: new Prisma.Decimal(centsToMoneyString(newAmountPaidCents)),
+        status: 'PENDIENTE' satisfies ReceivableStatus,
+      },
+      include: {
+        customer: { select: { name: true } },
+        sale: { select: { invoiceNumber: true } },
+      },
+    });
+
+    const amountStr = centsToMoneyString(paymentAmountCents);
+    // 5. Compensación financiera (al anular el documento de tesorería va en un solo movimiento)
+    if (moveMoney) {
+      if (payment.paymentMethod === 'TRANSFERENCIA') {
+        if (!payment.bankAccountId) {
+          throw new BadRequestException(
+            'El abono por transferencia no tiene cuenta bancaria asociada.',
+          );
+        }
+        await recordSourceBankMovement(tx, {
+          bankAccountId: payment.bankAccountId,
+          movementType: 'WITHDRAWAL',
+          amount: amountStr,
+          concept: `Reversión abono cartera - Factura ${updated.sale?.invoiceNumber ?? receivableId}: ${trimmedReason}`,
+          referenceDocumentType: 'RECEIVABLE_PAYMENT_REVERSAL',
+          referenceDocumentId: payment.id,
+          createdById: userId,
+        });
+      } else {
+        await this.cashService.recordMovementInTransaction(tx, {
+          movementType: 'EGRESO_MANUAL',
+          amount: amountStr,
+          paymentMethod: 'EFECTIVO',
+          reason: `Reversión abono cartera - Factura ${updated.sale?.invoiceNumber ?? receivableId}: ${trimmedReason}`,
+          referenceDocumentType: 'RECEIVABLE_PAYMENT_REVERSAL',
+          referenceDocumentId: payment.id,
+          createdByUserId: userId,
+        });
+      }
+    }
+
+    // Reversión contable automática
+    await this.accountingEngine.handleCustomerPaymentReversed(
+      payment.id,
+      trimmedReason,
+      userId,
+      tx,
+    );
+
+    // 6. Auditoría
+    await tx.auditEvent.create({
+      data: {
+        userId,
+        action: 'REVERSE_RECEIVABLE_PAYMENT',
+        entity: 'receivable_payments',
+        entityId: paymentId,
+        details: {
+          receivableId,
+          paymentId,
+          amount: amountStr,
+          paymentMethod: payment.paymentMethod,
+          bankAccountId: payment.bankAccountId,
+          reason: trimmedReason,
+          balanceBefore: centsToMoneyString(balanceCents),
+          balanceAfter: centsToMoneyString(newBalanceCents),
+        } as unknown as Prisma.InputJsonValue,
+      },
+    });
+
+    const payments = await tx.receivablePayment.findMany({
+      where: { receivableId },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    return this.toDto(updated, payments);
   }
 }

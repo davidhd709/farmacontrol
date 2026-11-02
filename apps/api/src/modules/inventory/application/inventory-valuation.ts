@@ -27,6 +27,7 @@ export type ValuationMovementType =
   | 'SALE'
   | 'SALE_CANCELLATION'
   | 'SALE_RETURN'
+  | 'SALE_RETURN_CANCELLATION'
   | 'PURCHASE_RETURN'
   | 'ADJUSTMENT_IN'
   | 'ADJUSTMENT_OUT';

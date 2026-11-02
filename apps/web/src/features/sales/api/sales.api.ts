@@ -5,6 +5,7 @@ import type {
   ConfirmSalePayload,
   SaleQueryFilters,
   PaginatedResponse,
+  CreditNoteDto,
 } from '@farmacia/contracts';
 import { apiRequest } from '../../../api/http-client';
 
@@ -62,5 +63,17 @@ export function fetchFefoPreview(
     method: 'POST',
     body: JSON.stringify(payload),
     signal,
+  });
+}
+
+export async function fetchSaleCreditNotes(saleId: string): Promise<CreditNoteDto[]> {
+  return apiRequest<CreditNoteDto[]>(`sales/${encodeURIComponent(saleId)}/credit-notes`);
+}
+
+/** Anula la devolución: la mercancía vuelve a salir, el reembolso se deshace y se reversa el asiento. */
+export async function cancelCreditNote(id: string, reason: string): Promise<CreditNoteDto> {
+  return apiRequest<CreditNoteDto>(`credit-notes/${encodeURIComponent(id)}/cancel`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
   });
 }

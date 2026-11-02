@@ -40,7 +40,7 @@ export function queryTopProducts(
     ), returned AS (
       SELECT l.product_id, SUM(l.quantity_base_units) AS units, SUM(l.total) AS value
       FROM credit_note_lines l JOIN credit_notes n ON n.id = l.credit_note_id
-      WHERE TRUE
+      WHERE n.status = 'CONFIRMADA'
         ${from ? Prisma.sql`AND n.created_at >= ${from}` : Prisma.empty}
         ${to ? Prisma.sql`AND n.created_at <= ${to}` : Prisma.empty}
       GROUP BY l.product_id

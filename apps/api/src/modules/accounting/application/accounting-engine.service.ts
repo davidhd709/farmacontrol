@@ -918,6 +918,57 @@ export class AccountingEngineService {
   }
 
   /**
+   * Anulación de una nota crédito: reversa su asiento exacto (devolución, impuestos, dinero o
+   * cartera y costo) y, si la mercancía vuelve a salir del inventario a un costo distinto del
+   * que entró (promedio o capas cambiaron), registra la diferencia entre inventario y costo de
+   * ventas para que el mayor siga igual al submayor.
+   */
+  async handleCreditNoteCancelled(
+    note: {
+      id: string;
+      creditNoteNumber: string;
+      reason: string;
+      userId: string;
+      restockCostCents: bigint;
+      issuedCostCents: bigint;
+    },
+    tx: Tx,
+  ) {
+    const reversed = await this.reverseSourceEntry('CREDIT_NOTE', note.id, note.reason, note.userId, tx);
+    if (!reversed) {
+      throw new AccountingValidationError(
+        `La nota crédito ${note.creditNoteNumber} no tiene un asiento publicado para reversar; la anulación fue detenida.`,
+      );
+    }
+    const deltaCents = note.issuedCostCents - note.restockCostCents;
+    if (deltaCents === 0n) return reversed;
+    const amount = centsToMoneyString(deltaCents > 0n ? deltaCents : -deltaCents);
+    // Sale más costo del que entró: el exceso es costo de ventas; sale menos: vuelve a inventario
+    const lines: JournalLineInput[] =
+      deltaCents > 0n
+        ? [
+            { purpose: 'COST_OF_SALES', debit: amount, credit: '0.00', description: `Diferencia de costo al anular NC ${note.creditNoteNumber}` },
+            { purpose: 'INVENTORY', debit: '0.00', credit: amount, description: `Salida de inventario por anulación NC ${note.creditNoteNumber}` },
+          ]
+        : [
+            { purpose: 'INVENTORY', debit: amount, credit: '0.00', description: `Diferencia de costo al anular NC ${note.creditNoteNumber}` },
+            { purpose: 'COST_OF_SALES', debit: '0.00', credit: amount, description: `Diferencia de costo al anular NC ${note.creditNoteNumber}` },
+          ];
+    await this.journalService.post(
+      {
+        entryDate: businessToday(),
+        description: `Ajuste de costo por anulación de la Nota Crédito ${note.creditNoteNumber}`,
+        sourceType: 'CREDIT_NOTE_CANCEL',
+        sourceId: note.id,
+        createdById: note.userId,
+        lines,
+      },
+      tx,
+    );
+    return reversed;
+  }
+
+  /**
    * Genera el asiento contable automático al confirmar una Nota Débito a proveedor en compras (RF-033).
    * Partida doble balanceada:
    * Débito: PROVEEDORES (2205) por el total

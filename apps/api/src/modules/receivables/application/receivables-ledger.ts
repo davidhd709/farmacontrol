@@ -102,4 +102,45 @@ export class ReceivablesLedger {
       },
     });
   }
+
+  /**
+   * Anulación de una nota crédito a cartera: total y saldo vuelven a subir juntos y la factura
+   * queda pendiente. Una cuenta ANULADA no se reabre.
+   */
+  async revertCreditNote(
+    tx: Tx,
+    params: { saleId: string; invoiceNumber: string; creditNoteNumber: string; amountCents: bigint },
+  ): Promise<void> {
+    const rows = await tx.$queryRaw<
+      Array<{ id: string; total_amount: Prisma.Decimal; balance: Prisma.Decimal; status: string; notes: string | null }>
+    >`
+      SELECT id, total_amount, balance, status, notes
+      FROM receivables
+      WHERE sale_id = ${params.saleId}::uuid
+      FOR UPDATE
+    `;
+    if (!rows.length) {
+      throw new BadRequestException(
+        `La venta ${params.invoiceNumber} no tiene cuenta por cobrar asociada.`,
+      );
+    }
+    const receivable = rows[0];
+    if (receivable.status === ('ANULADA' satisfies ReceivableStatus)) {
+      throw new ConflictException(
+        `La cuenta por cobrar de la venta ${params.invoiceNumber} está ANULADA.`,
+      );
+    }
+    const totalCents = toCents(receivable.total_amount, 'Total de cartera') + params.amountCents;
+    const balanceCents = toCents(receivable.balance, 'Saldo de cartera') + params.amountCents;
+    await tx.receivable.update({
+      where: { id: receivable.id },
+      data: {
+        totalAmount: new Prisma.Decimal(centsToMoneyString(totalCents)),
+        balance: new Prisma.Decimal(centsToMoneyString(balanceCents)),
+        status: 'PENDIENTE' satisfies ReceivableStatus,
+        notes:
+          `${receivable.notes || ''} [Anulación Nota Crédito ${params.creditNoteNumber}: +${centsToMoneyString(params.amountCents)}]`.trim(),
+      },
+    });
+  }
 }

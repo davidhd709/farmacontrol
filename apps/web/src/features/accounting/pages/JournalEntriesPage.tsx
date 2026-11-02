@@ -32,7 +32,7 @@ import { usePermissions } from '../../auth/hooks/usePermissions';
 import {
   fetchJournalEntries,
   fetchJournalEntryById,
-  reverseJournalEntry,
+  annulJournalEntry,
 } from '../api/accounting.api';
 import { ManualNoteDialog } from '../components/ManualNoteDialog';
 import { QuickDateRange, localIsoDate } from '../../../components/QuickDateRange';
@@ -49,6 +49,12 @@ const sourceTypeLabels: Record<
   MANUAL_NOTE: { label: 'Nota contable', color: 'default' },
 };
 
+/**
+ * Asientos que se anulan desde su detalle (no nacen de un documento). Los de ventas,
+ * devoluciones, recibos, egresos y causaciones se corrigen anulando el documento de origen.
+ */
+const ANNULLABLE_SOURCES = ['MANUAL_NOTE', 'OPENING_BALANCE', 'ANNUAL_CLOSING'];
+
 export const JournalEntriesPage = () => {
   const { hasPermission } = usePermissions();
   const queryClient = useQueryClient();
@@ -62,11 +68,11 @@ export const JournalEntriesPage = () => {
 
   // Modales
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
-  const [reversingEntry, setReversingEntry] = useState<JournalEntryDto | null>(null);
-  const [reversalReason, setReversalReason] = useState('');
+  const [annullingEntry, setAnnullingEntry] = useState<JournalEntryDto | null>(null);
+  const [annulReason, setAnnulReason] = useState('');
   const [noteOpen, setNoteOpen] = useState(false);
   const [createdNote, setCreatedNote] = useState<string | null>(null);
-  const [reversalDate, setReversalDate] = useState(localIsoDate(new Date()));
+  const [annulDate, setAnnulDate] = useState(localIsoDate(new Date()));
   const [actionError, setActionError] = useState<string | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
@@ -88,21 +94,21 @@ export const JournalEntriesPage = () => {
     enabled: Boolean(selectedEntryId),
   });
 
-  const reverseMutation = useMutation({
+  const annulMutation = useMutation({
     mutationFn: ({ id, reason, date }: { id: string; reason: string; date: string }) =>
-      reverseJournalEntry(id, { reason, entryDate: date }),
+      annulJournalEntry(id, { reason, entryDate: date }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['journal-entries'] });
       queryClient.invalidateQueries({ queryKey: ['trial-balance'] });
-      setReversingEntry(null);
-      setReversalReason('');
+      setAnnullingEntry(null);
+      setAnnulReason('');
       setActionError(null);
       if (selectedEntryId) {
         queryClient.invalidateQueries({ queryKey: ['journal-entry-detail', selectedEntryId] });
       }
     },
     onError: (err: any) => {
-      setActionError(err.message || 'Error al reversar el comprobante.');
+      setActionError(err.message || 'No se pudo anular el asiento.');
     },
   });
 
@@ -114,25 +120,31 @@ export const JournalEntriesPage = () => {
     );
   }
 
-  const handleOpenReverse = (entry: JournalEntryDto) => {
-    setReversingEntry(entry);
-    setReversalDate(localIsoDate(new Date()));
-    setReversalReason('');
+  const handleOpenAnnul = (entry: JournalEntryDto) => {
+    setAnnullingEntry(entry);
+    setAnnulDate(localIsoDate(new Date()));
+    setAnnulReason('');
     setActionError(null);
   };
 
-  const handleConfirmReverse = () => {
-    if (!reversingEntry) return;
-    if (!reversalReason.trim()) {
-      setActionError('El motivo de la reversión es obligatorio.');
+  const handleConfirmAnnul = () => {
+    if (!annullingEntry) return;
+    if (!annulReason.trim()) {
+      setActionError('El motivo de la anulación es obligatorio.');
       return;
     }
-    reverseMutation.mutate({
-      id: reversingEntry.id,
-      reason: reversalReason.trim(),
-      date: reversalDate,
+    annulMutation.mutate({
+      id: annullingEntry.id,
+      reason: annulReason.trim(),
+      date: annulDate,
     });
   };
+
+  const canAnnul = (entry: JournalEntryDto) =>
+    hasPermission(SYSTEM_PERMISSIONS.ACCOUNTING_MANAGE) &&
+    ANNULLABLE_SOURCES.includes(entry.sourceType) &&
+    !entry.reversalOfId &&
+    !entry.reversedByEntryId;
 
   return (
     <Container component="main" maxWidth="xl" sx={{ py: 4 }}>
@@ -331,27 +343,13 @@ export const JournalEntriesPage = () => {
                               />
                             </TableCell>
                             <TableCell align="center">
-                              <Stack direction="row" spacing={1} sx={{ justifyContent: 'center' }}>
-                                <Button
-                                  size="small"
-                                  variant="outlined"
-                                  onClick={() => setSelectedEntryId(entry.id)}
-                                >
-                                  Detalle
-                                </Button>
-                                {hasPermission(SYSTEM_PERMISSIONS.ACCOUNTING_MANAGE) &&
-                                  !isReversal &&
-                                  entry.sourceType !== 'REVERSAL' && (
-                                    <Button
-                                      size="small"
-                                      variant="outlined"
-                                      color="warning"
-                                      onClick={() => handleOpenReverse(entry)}
-                                    >
-                                      Reversar
-                                    </Button>
-                                  )}
-                              </Stack>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={() => setSelectedEntryId(entry.id)}
+                              >
+                                Detalle
+                              </Button>
                             </TableCell>
                           </TableRow>
                         );
@@ -495,57 +493,61 @@ export const JournalEntriesPage = () => {
           )}
         </DialogContent>
         <DialogActions>
+          {entryDetail && canAnnul(entryDetail) && (
+            <Button color="warning" variant="outlined" onClick={() => handleOpenAnnul(entryDetail)}>
+              Anular
+            </Button>
+          )}
           <Button onClick={() => setSelectedEntryId(null)}>Cerrar</Button>
         </DialogActions>
       </Dialog>
 
-      {/* Modal de Confirmación de Reversión */}
+      {/* Anulación de una nota contable, un saldo inicial o un cierre anual */}
       <Dialog
-        open={Boolean(reversingEntry)}
-        onClose={() => setReversingEntry(null)}
+        open={Boolean(annullingEntry)}
+        onClose={() => setAnnullingEntry(null)}
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle sx={{ fontWeight: 700 }}>Reversar Comprobante Contable</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 700 }}>Anular asiento</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2}>
             <Alert severity="warning">
-              Se creará un asiento de compensación inmutable invirtiendo exactamente los débitos y
-              créditos del asiento original. Esta acción no se puede deshacer.
+              Se registrará un asiento que invierte exactamente los débitos y créditos de este
+              asiento. El original se conserva. Esta acción no se puede deshacer.
             </Alert>
             {actionError && <Alert severity="error">{actionError}</Alert>}
             <TextField
-              label="Fecha de la Reversión"
+              label="Fecha de la anulación"
               type="date"
               size="small"
-              value={reversalDate}
-              onChange={(e) => setReversalDate(e.target.value)}
+              value={annulDate}
+              onChange={(e) => setAnnulDate(e.target.value)}
               slotProps={{ inputLabel: { shrink: true } }}
               fullWidth
             />
             <TextField
-              label="Motivo obligatorio de la reversión"
+              label="Motivo de la anulación"
               multiline
               rows={3}
-              value={reversalReason}
-              onChange={(e) => setReversalReason(e.target.value)}
+              value={annulReason}
+              onChange={(e) => setAnnulReason(e.target.value)}
               fullWidth
               required
-              placeholder="Explica la razón contable o administrativa de la reversión..."
             />
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setReversingEntry(null)} disabled={reverseMutation.isPending}>
+          <Button onClick={() => setAnnullingEntry(null)} disabled={annulMutation.isPending}>
             Cancelar
           </Button>
           <Button
-            onClick={handleConfirmReverse}
+            onClick={handleConfirmAnnul}
             variant="contained"
             color="warning"
-            disabled={reverseMutation.isPending}
+            disabled={annulMutation.isPending}
           >
-            {reverseMutation.isPending ? 'Reversando...' : 'Confirmar Reversión'}
+            {annulMutation.isPending ? 'Anulando…' : 'Confirmar anulación'}
           </Button>
         </DialogActions>
       </Dialog>

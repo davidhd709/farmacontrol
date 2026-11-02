@@ -146,9 +146,11 @@ Cada documento tiene su permiso. El asiento automático que genera no exige el p
 - En la web, cartera registra el recibo desde **Cuentas por cobrar → "Nuevo recibo de caja"** (solo abono a cartera; elige el cliente del maestro de clientes, sin acceso a terceros). En Recibos de Caja y Comprobantes de Egreso cada modo se ofrece según estos permisos.
 - Pruebas por rol (`treasury-vouchers`, "permisos por documento"): cartera y admin abonan (201) aunque cartera no tenga permiso contable, y se publica el asiento cuadrado; cajero, compras, supervisor e inventario reciben 403; cartera no registra recibos manuales ni egresos; solo admin paga proveedores; un egreso manual sin permiso contable se rechaza.
 
-## 3.5 Anulación propia por tipo de documento (verificación 2026-11-02, sin cambios)
+## 3.5 Anulación propia por tipo de documento (verificación 2026-11-02)
 
-El botón **"Reversar"** del Libro Diario se mantiene mientras el cliente decide. Verificación en el código y con PostgreSQL real:
+> Resuelto en la sección 3.8: el cliente decidió retirar "Reversar" y se implementaron las anulaciones que faltaban.
+
+Estado al momento de la verificación: Verificación en el código y con PostgreSQL real:
 
 | Documento | ¿Anulación propia? | Ruta y permiso | Reverso contable | Dinero, inventario y saldos | En la web |
 |---|---|---|---|---|---|
@@ -207,6 +209,27 @@ La base y el servidor corren en UTC; desde las 19:00 de Colombia la fecha UTC ya
 | Web: recibo de caja, fecha de la factura a abonar | `createdAt.slice(0, 10)` (UTC) | Día de Bogotá |
 
 Pruebas cerca de medianoche: `business-date-midnight` (integración con PostgreSQL: `business_date()` a las 23:59 y 00:00, triggers sin `CURRENT_DATE`, reverso a las 23:30, filtro "hasta", estado de cuenta de una factura de las 23:30), `business-date.spec` y `aging.spec` (23:59/00:00, cambio de año, edad a uno y otro lado de la medianoche) y `quick-date-range.test` en la web (último y primer minuto del mes, 31 de diciembre, febrero bisiesto; pasa con `TZ=Asia/Tokyo` y `TZ=America/Bogota`).
+
+## 3.8 Sin "Reversar" en el Libro Diario: cada documento se anula (decisión del cliente, 2026-11-02)
+
+El botón **"Reversar"** salió de la tabla del Libro Diario (queda solo **"Detalle"**) y la ruta `POST /journal-entries/:id/reverse` responde **410** en el backend. Las correcciones se hacen anulando el documento de origen. Antes de retirarlo se implementaron las anulaciones que faltaban (sección 3.5):
+
+| Documento | Anulación | Ruta y permiso | Qué hace, en una transacción |
+|---|---|---|---|
+| Venta | ya existía | `POST /sales/:id/cancel` (`sales:cancel`) | Sin cambios. Ahora solo la bloquean las notas crédito **vigentes** |
+| **Nota crédito (devolución)** | **nueva** | `POST /credit-notes/:id/cancel` (`sales:cancel`) | La mercancía reintegrada vuelve a salir de los mismos lotes (kardex `SALIDA_ANULACION_DEVOLUCION`, submayor `SALE_RETURN_CANCELLATION`); el reembolso vuelve a caja o banco, o la factura vuelve a deberse en cartera; se reversa el asiento y, si la mercancía sale a un costo distinto del que entró, se registra la diferencia entre inventario y costo de ventas (mayor = submayor). Se rechaza si el lote ya no tiene las unidades o si la devolución entregó un cambio vigente (primero se anula esa venta). En la web: Historial de ventas → **Notas crédito** → Anular |
+| **Recibo de caja de abono** | **nueva** | `POST /treasury/cash-receipts/collections/:id/cancel` (`recibo_caja.crear_abono`) | Reversa cada abono vigente con su asiento y saca de caja o banco, en **un solo movimiento**, lo que seguía aplicado (los abonos revertidos antes uno a uno no se tocan) |
+| **Recibo de caja manual** | **nueva** | `POST /treasury/cash-receipts/:id/cancel` (`accounting:read` + permiso del medio) | Reversa el asiento contra la contrapartida y saca el dinero |
+| **Comprobante de egreso** (proveedor o manual) | **nueva** | `POST /treasury/disbursements/:id/cancel` (`comprobante_egreso.crear`; el manual además `accounting:read` + medio) | Reversa cada pago vigente (facturas de compra y causaciones) o el asiento manual y devuelve el dinero en un solo movimiento |
+| Causación | ya existía | `POST /expenses/:id/cancel` (`expenses:manage`) | Sin cambios |
+| **Nota contable manual**, saldos iniciales y cierre anual | **nueva ruta** | `POST /journal-entries/:id/annul` (`accounting:manage`) | Desde el **detalle** del asiento en el Libro Diario → Anular. Rechaza (409) cualquier asiento generado por un documento |
+
+- Un documento de tesorería anulado queda `ANULADO` con usuario, fecha y motivo. El trigger de inmutabilidad solo permite ese cambio (VIGENTE → ANULADO, una vez); ningún otro campo se modifica y nunca se borra. Las notas crédito tienen `CONFIRMADA`/`ANULADA` con los mismos datos.
+- El movimiento contrario de una anulación de tesorería (`TREASURY_DOCUMENT_CANCEL`) no genera otro recibo o egreso automático: pertenece al documento anulado.
+- Los documentos automáticos (los recibos y egresos que generan ventas, devoluciones y anulaciones) no se anulan desde Tesorería (409): se anula su documento de origen.
+- Una nota anulada deja de contar en los reportes tributarios, el top de productos y el saldo por devolver de la venta; en "Ver abonos" aparece la nota y su anulación.
+- Migraciones: `20261102130000_document_annulments` (estados, trigger, tipo del submayor) y `20261102130100_credit_note_annulment_kardex_type` (tipo del kardex). Solo agregan columnas y reglas; los datos existentes quedan CONFIRMADA / VIGENTE.
+- Pruebas: `document-annulments` (integración con PostgreSQL: devolución de contado y a cartera, bloqueos por lote y por cambio, recibo de abono con un abono ya revertido, egreso con factura y causación, recibo manual, documento automático, inmutabilidad, permisos), `accounting-engine-reports` (410 y 409 desde el libro, anulación de nota manual con y sin permiso) y en la web `journal-entries`, `document-annulments`.
 
 ## 4. Pendientes y dudas abiertas
 

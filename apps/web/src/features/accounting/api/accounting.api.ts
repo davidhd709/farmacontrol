@@ -172,8 +172,10 @@ export const fetchJournalEntries = (filters: JournalEntryQueryFilters = {}) => {
 export const fetchJournalEntryById = (id: string) =>
   apiRequest<JournalEntryDto>(`journal-entries/${encodeURIComponent(id)}`);
 
-export const reverseJournalEntry = (id: string, payload: ReverseJournalEntryPayload) =>
-  apiRequest<JournalEntryDto>(`journal-entries/${encodeURIComponent(id)}/reverse`, {
+/** Anula una nota contable manual, un saldo inicial o un cierre anual (los demás asientos se
+ * corrigen anulando su documento de origen). */
+export const annulJournalEntry = (id: string, payload: ReverseJournalEntryPayload) =>
+  apiRequest<JournalEntryDto>(`journal-entries/${encodeURIComponent(id)}/annul`, {
     method: 'POST',
     body: JSON.stringify(payload),
   });

@@ -4,6 +4,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  NotFoundException,
 } from '@nestjs/common';
 import { prisma, Prisma } from '@farmacia/database';
 import {
@@ -207,6 +208,182 @@ export class TreasuryVouchersService {
       origin: 'MANUAL',
       cashMovementType: 'EGRESO_MANUAL',
     });
+  }
+
+  /**
+   * Anula un recibo de caja o un comprobante de egreso registrado como documento (correcciones
+   * del cliente, 2026-11-02). En una transacción: reversa cada abono o pago vigente con su
+   * asiento (los que ya se revirtieron uno a uno no se tocan), devuelve el dinero con un solo
+   * movimiento contrario por lo que quedaba aplicado y, si es manual, reversa su asiento contra
+   * la contrapartida. El documento queda ANULADO con usuario, fecha y motivo; nunca se borra.
+   * Los documentos automáticos (ventas, notas crédito, anulaciones) se anulan desde su origen.
+   */
+  async cancelDocument(
+    id: string,
+    reasonInput: unknown,
+    user: VoucherUser,
+    expected: { documentType: TreasuryDocumentType; origins: Array<'CARTERA' | 'PROVEEDOR' | 'MANUAL'> },
+  ): Promise<TreasuryDocumentDto> {
+    const reason = typeof reasonInput === 'string' ? reasonInput.trim() : '';
+    if (reason.length < 3 || reason.length > 500) {
+      throw new BadRequestException('El motivo de la anulación es obligatorio (entre 3 y 500 caracteres).');
+    }
+    try {
+      return await this.idempotency.retryOnSerialization(() =>
+        prisma.$transaction(
+          async (tx) => {
+            const locked = await tx.$queryRaw<Array<{ id: string }>>`
+              SELECT id FROM treasury_documents WHERE id = ${id}::uuid FOR UPDATE
+            `;
+            if (!locked.length) throw new NotFoundException('Documento no encontrado.');
+            const doc = await tx.treasuryDocument.findUniqueOrThrow({
+              where: { id },
+              include: {
+                receivablePayments: { select: { id: true, receivableId: true, amount: true, isReversed: true } },
+                payablePayments: { select: { id: true, payableId: true, amount: true, isReversed: true } },
+                expensePayments: { select: { id: true, amount: true, isReversed: true } },
+              },
+            });
+            if (doc.documentType !== expected.documentType) {
+              throw new NotFoundException('Documento no encontrado.');
+            }
+            if (doc.status === 'ANULADO') {
+              throw new ConflictException(`El documento ${doc.documentNumber} ya está anulado.`);
+            }
+            if (doc.origin === 'AUTOMATICO') {
+              throw new ConflictException(
+                `${doc.documentNumber} lo generó otro documento (${doc.referenceDocumentType ?? 'origen'}): anúlelo desde el documento de origen.`,
+              );
+            }
+            const origin = doc.origin as 'CARTERA' | 'PROVEEDOR' | 'MANUAL';
+            if (!expected.origins.includes(origin)) {
+              throw new BadRequestException(
+                origin === 'CARTERA'
+                  ? 'El abono a cartera se anula en POST /api/v1/treasury/cash-receipts/collections/:id/cancel.'
+                  : 'El recibo manual se anula en POST /api/v1/treasury/cash-receipts/:id/cancel.',
+              );
+            }
+            if (origin === 'MANUAL') {
+              this.requirePermission(
+                user,
+                SYSTEM_PERMISSIONS.ACCOUNTING_READ,
+                'anular documentos manuales contra una contrapartida contable',
+              );
+              requirePaymentMethodPermission(user.permissions, doc.paymentMethod);
+            }
+
+            // 1. Cada abono o pago vigente se reversa con su asiento, sin mover dinero todavía
+            const label = `Anulación ${doc.documentNumber}: ${reason}`;
+            let pendingCents = 0n;
+            for (const payment of doc.receivablePayments.filter((p) => !p.isReversed)) {
+              await this.receivablesService.reversePaymentInTransaction(tx, {
+                receivableId: payment.receivableId,
+                paymentId: payment.id,
+                reason: label,
+                userId: user.id,
+                moveMoney: false,
+              });
+              pendingCents += parseMoneyToCents(payment.amount.toFixed(2), 'Abono');
+            }
+            for (const payment of doc.payablePayments.filter((p) => !p.isReversed)) {
+              await this.payablesService.reversePaymentInTransaction(tx, {
+                payableId: payment.payableId,
+                paymentId: payment.id,
+                reason: label,
+                userId: user.id,
+                moveMoney: false,
+              });
+              pendingCents += parseMoneyToCents(payment.amount.toFixed(2), 'Pago');
+            }
+            for (const payment of doc.expensePayments.filter((p) => !p.isReversed)) {
+              await this.expensesService.reversePaymentInTransaction(tx, {
+                paymentId: payment.id,
+                reason: label,
+                userId: user.id,
+                moveMoney: false,
+              });
+              pendingCents += parseMoneyToCents(payment.amount.toFixed(2), 'Pago');
+            }
+            if (origin === 'MANUAL') {
+              pendingCents = parseMoneyToCents(doc.amount.toFixed(2), 'Valor del documento');
+              const movementId = doc.cashMovementId ?? doc.bankMovementId;
+              const reversed = await this.accountingEngine.reverseSourceEntry(
+                doc.cashMovementId ? 'CASH_MOVEMENT' : 'BANK_MOVEMENT',
+                movementId!,
+                label,
+                user.id,
+                tx,
+              );
+              if (!reversed) {
+                throw new ConflictException(
+                  `${doc.documentNumber} no tiene un asiento publicado para reversar; la anulación fue detenida.`,
+                );
+              }
+            }
+
+            // 2. Un solo movimiento contrario por lo que seguía aplicado
+            if (pendingCents > 0n) {
+              const isReceipt = doc.documentType === 'RECIBO_CAJA';
+              const amount = centsToMoneyString(pendingCents);
+              if (doc.bankMovementId) {
+                await recordSourceBankMovement(tx, {
+                  bankAccountId: doc.bankAccountId!,
+                  movementType: isReceipt ? 'WITHDRAWAL' : 'DEPOSIT',
+                  amount,
+                  concept: label,
+                  referenceDocumentType: 'TREASURY_DOCUMENT_CANCEL',
+                  referenceDocumentId: doc.id,
+                  createdById: user.id,
+                });
+              } else {
+                await this.cashService.recordMovementInTransaction(tx, {
+                  movementType: isReceipt ? 'EGRESO_MANUAL' : 'INGRESO_MANUAL',
+                  amount,
+                  paymentMethod: 'EFECTIVO',
+                  reason: label,
+                  referenceDocumentType: 'TREASURY_DOCUMENT_CANCEL',
+                  referenceDocumentId: doc.id,
+                  createdByUserId: user.id,
+                });
+              }
+            }
+
+            // 3. Estado del documento y auditoría
+            await tx.treasuryDocument.update({
+              where: { id: doc.id },
+              data: { status: 'ANULADO', cancelledAt: new Date(), cancelledById: user.id, cancellationReason: reason },
+            });
+            await tx.auditEvent.create({
+              data: {
+                userId: user.id,
+                action: 'treasury:document_cancelled',
+                entity: 'TreasuryDocument',
+                entityId: doc.id,
+                details: {
+                  documentNumber: doc.documentNumber,
+                  origin,
+                  amount: doc.amount.toFixed(2),
+                  returnedAmount: centsToMoneyString(pendingCents),
+                  reason,
+                },
+              },
+            });
+            return this.documentsService.getById(doc.id, tx);
+          },
+          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+        ),
+      );
+    } catch (error) {
+      if (
+        error instanceof InsufficientCashBalanceException ||
+        error instanceof InvalidCashAmountException
+      ) {
+        throw new BadRequestException(error.message);
+      }
+      if (error instanceof TreasuryConflictError) throw new ConflictException(error.message);
+      if (error instanceof TreasuryValidationError) throw new BadRequestException(error.message);
+      throw error;
+    }
   }
 
   // ------------------------------------------------------------------ //

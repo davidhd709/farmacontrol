@@ -6,6 +6,7 @@ import type {
   TreasuryDocumentDto,
   TreasuryDocumentOrigin,
   TreasuryDocumentFilters,
+  TreasuryDocumentStatus,
   TreasuryDocumentType,
 } from '@farmacia/contracts';
 import { TreasuryNotFoundError, TreasuryValidationError, validateUuid } from '../domain/treasury-rules';
@@ -16,6 +17,7 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const include = {
   bankAccount: { select: { name: true, bankName: true } },
   createdBy: { select: { username: true } },
+  cancelledBy: { select: { username: true } },
   customer: { select: { name: true } },
   supplier: { select: { name: true } },
   thirdParty: { select: { name: true } },
@@ -121,6 +123,10 @@ export class TreasuryDocumentsService {
         ? `${record.counterpartAccount.code} - ${record.counterpartAccount.name}`
         : null,
       applications: this.applicationsOf(record),
+      status: record.status as TreasuryDocumentStatus,
+      cancelledAt: record.cancelledAt ? record.cancelledAt.toISOString() : null,
+      cancelledByName: record.cancelledBy?.username ?? null,
+      cancellationReason: record.cancellationReason,
       createdByName: record.createdBy?.username ?? null,
       createdAt: record.createdAt.toISOString(),
     };

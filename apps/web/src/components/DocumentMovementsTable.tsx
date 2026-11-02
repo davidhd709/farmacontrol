@@ -15,6 +15,7 @@ const TYPE_LABELS: Record<DocumentMovementType, string> = {
   CARGO: 'Factura',
   ABONO: 'Abono',
   REVERSION_ABONO: 'Reversión de abono',
+  ANULACION_NOTA_CREDITO: 'Anulación de nota crédito',
   NOTA_CREDITO: 'Nota crédito',
   NOTA_DEBITO: 'Nota débito',
   ANULACION: 'Anulación',

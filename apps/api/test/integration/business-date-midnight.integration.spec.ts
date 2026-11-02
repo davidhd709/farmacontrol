@@ -53,11 +53,11 @@ describe('Fechas de negocio cerca de la medianoche de Bogotá', () => {
     await cleanTestDatabase();
   });
 
-  const entry = (entryDate: string, sourceId: string) =>
+  const entry = (entryDate: string, sourceId: string, sourceType = 'SALE') =>
     journal.post({
       entryDate,
       description: `Asiento ${sourceId}`,
-      sourceType: 'SALE',
+      sourceType,
       sourceId,
       createdById: adminId,
       lines: [
@@ -92,10 +92,10 @@ describe('Fechas de negocio cerca de la medianoche de Bogotá', () => {
     }
   });
 
-  it('a las 23:30 de Bogotá el reverso sin fecha queda en el mismo día, no en el UTC siguiente', async () => {
-    const original = await entry('2026-11-01', `midnight-${randomUUID()}`);
+  it('a las 23:30 de Bogotá la anulación sin fecha queda en el mismo día, no en el UTC siguiente', async () => {
+    const original = await entry('2026-11-01', `midnight-${randomUUID()}`, 'MANUAL_NOTE');
     vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-02T23:30:00-05:00') });
-    const reversed = await controller.reverse(
+    const reversed = await controller.annul(
       original.id,
       { reason: 'Reverso de noche' } as never,
       { id: adminId } as AuthenticatedUserContext,

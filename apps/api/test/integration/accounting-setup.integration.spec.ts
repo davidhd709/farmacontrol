@@ -310,7 +310,7 @@ describe('Asistente de configuración contable', () => {
 
     // Reversado el asiento, se pueden registrar otros saldos
     const reversed = await api()
-      .post(`/api/v1/journal-entries/${created.body.journalEntryId}/reverse`)
+      .post(`/api/v1/journal-entries/${created.body.journalEntryId}/annul`)
       .set('Cookie', cookie)
       .send({ reason: 'Corrección de saldos de apertura', entryDate: businessToday() });
     expect([200, 201]).toContain(reversed.status);

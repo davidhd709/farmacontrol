@@ -141,7 +141,7 @@ describe('Notas contables manuales', () => {
     await send(note(), randomUUID(), cashierCookie).expect(403);
     const created = await send(note()).expect(201);
     await request(app.getHttpServer())
-      .post(`/api/v1/journal-entries/${created.body.journalEntryId}/reverse`)
+      .post(`/api/v1/journal-entries/${created.body.journalEntryId}/annul`)
       .set('Cookie', adminCookie)
       .send({ entryDate: '2026-08-05', reason: 'Valor errado' })
       .expect(201);

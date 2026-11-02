@@ -523,7 +523,8 @@ export type InventoryMovementType =
   | 'TRASLADO_ENTRADA'
   | 'TRASLADO_SALIDA'
   | 'ENTRADA_DEVOLUCION_VENTA'
-  | 'SALIDA_DEVOLUCION_COMPRA';
+  | 'SALIDA_DEVOLUCION_COMPRA'
+  | 'SALIDA_ANULACION_DEVOLUCION';
 
 export interface InventoryMovementDto {
   id: string;
@@ -850,7 +851,8 @@ export type DocumentMovementType =
   | 'REVERSION_ABONO'
   | 'NOTA_CREDITO'
   | 'NOTA_DEBITO'
-  | 'ANULACION';
+  | 'ANULACION'
+  | 'ANULACION_NOTA_CREDITO';
 
 export interface DocumentMovementDto {
   date: string;

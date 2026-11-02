@@ -6,7 +6,12 @@ import {
   Optional,
 } from '@nestjs/common';
 import { prisma, PrismaClient, Prisma } from '@farmacia/database';
-import { CreditNoteDto, CreditNoteLineDto, CreateCreditNotePayload } from '@farmacia/contracts';
+import {
+  CancelCreditNotePayload,
+  CreditNoteDto,
+  CreditNoteLineDto,
+  CreateCreditNotePayload,
+} from '@farmacia/contracts';
 import { AccountingEngineService } from '../../accounting/application/accounting-engine.service';
 import { AuditService } from '../../audit/application/services/audit.service';
 import { IdempotencyService } from '../../../common/idempotency/idempotency.service';
@@ -143,7 +148,9 @@ export class CreditNotesService {
                   },
                 },
               },
+              // Una nota anulada ya devolvió lo acreditado: no cuenta para el saldo por devolver
               creditNotes: {
+                where: { status: 'CONFIRMADA' },
                 include: { lines: true },
               },
             },
@@ -505,6 +512,168 @@ export class CreditNotesService {
     });
   }
 
+  /**
+   * Anula una nota crédito confirmada (correcciones del cliente, 2026-11-02): la corrección se
+   * hace sobre el documento, no reversando su asiento en el Libro Diario. En una transacción:
+   * la mercancía reintegrada vuelve a salir de los mismos lotes, el reembolso vuelve a caja o
+   * banco (o la factura vuelve a deberse en cartera), se reversa el asiento y queda auditoría.
+   * Si la devolución entregó un cambio, primero hay que anular esa venta.
+   */
+  async cancelCreditNote(
+    id: string,
+    payload: CancelCreditNotePayload,
+    userId: string,
+  ): Promise<CreditNoteDto> {
+    const reason = typeof payload?.reason === 'string' ? payload.reason.trim() : '';
+    if (reason.length < 3 || reason.length > 500) {
+      throw new BadRequestException('El motivo de la anulación es obligatorio (entre 3 y 500 caracteres).');
+    }
+
+    await executeWithRetry(() =>
+      this.client.$transaction(
+        async (tx) => {
+          const locked = await tx.$queryRaw<Array<{ sale_id: string }>>`
+            SELECT sale_id FROM credit_notes WHERE id = ${id}::uuid FOR UPDATE
+          `;
+          if (!locked.length) {
+            throw new NotFoundException(`Nota Crédito con id '${id}' no encontrada.`);
+          }
+          // Mismo orden de bloqueo que la emisión: serializa con otras notas de la venta
+          await tx.$queryRaw`SELECT id FROM sales WHERE id = ${locked[0].sale_id}::uuid FOR UPDATE`;
+          const note = await tx.creditNote.findUniqueOrThrow({
+            where: { id },
+            include: {
+              sale: { select: { invoiceNumber: true, bankAccountId: true } },
+              exchangeSale: { select: { invoiceNumber: true, status: true } },
+              lines: { include: { saleLine: { select: { presentationId: true, presentationFactorHistorical: true } } } },
+            },
+          });
+          if (note.status === 'ANULADA') {
+            throw new ConflictException(`La nota crédito ${note.creditNoteNumber} ya está anulada.`);
+          }
+          if (note.exchangeSale && note.exchangeSale.status !== 'CANCELLED') {
+            throw new ConflictException(
+              `La nota crédito ${note.creditNoteNumber} entregó un cambio en la venta ${note.exchangeSale.invoiceNumber}: anule primero esa venta.`,
+            );
+          }
+
+          // 1. La mercancía reintegrada vuelve a salir de los mismos lotes
+          let restockCostCents = 0n;
+          let issuedCostCents = 0n;
+          if (note.restock) {
+            const byProduct = new Map<string, Array<{ lotId: string; quantityBaseUnits: number }>>();
+            for (const line of note.lines) {
+              if (!line.lotId) continue;
+              const lot = await this.inventoryLedger.lockLot(tx, line.lotId);
+              if (!lot || lot.current_quantity < line.quantityBaseUnits) {
+                throw new ConflictException(
+                  `El lote ${lot?.lot_number ?? line.lotId} ya no tiene las ${line.quantityBaseUnits} unidades devueltas en la nota crédito ${note.creditNoteNumber}; no se puede anular.`,
+                );
+              }
+              await this.inventoryLedger.changeLotQuantity(tx, line.lotId, -line.quantityBaseUnits, {
+                movementType: 'SALIDA_ANULACION_DEVOLUCION',
+                productId: line.productId,
+                presentationId: line.saleLine?.presentationId || null,
+                quantityBaseUnits: line.quantityBaseUnits,
+                presentationFactorHistorical: line.saleLine?.presentationFactorHistorical ?? 1,
+                referenceDocumentType: 'CREDIT_NOTE_CANCEL',
+                referenceDocumentId: note.creditNoteNumber,
+                notes: `Anulación de la devolución ${note.creditNoteNumber} (${reason})`,
+                createdByUserId: userId,
+              });
+              const lots = byProduct.get(line.productId) ?? [];
+              lots.push({ lotId: line.lotId, quantityBaseUnits: line.quantityBaseUnits });
+              byProduct.set(line.productId, lots);
+            }
+            for (const [productId, lots] of byProduct) {
+              issuedCostCents += await this.inventoryLedger.valuation.issue(tx, {
+                productId,
+                quantityBaseUnits: lots.reduce((acc, lot) => acc + lot.quantityBaseUnits, 0),
+                movementType: 'SALE_RETURN_CANCELLATION',
+                sourceType: 'CREDIT_NOTE_CANCEL',
+                sourceId: note.creditNoteNumber,
+                userId,
+                lots,
+              });
+            }
+            const restocked = await tx.inventoryValuationMovement.aggregate({
+              where: { sourceType: 'CREDIT_NOTE', sourceId: note.creditNoteNumber, direction: 'IN' },
+              _sum: { value: true },
+            });
+            restockCostCents = toCents(restocked._sum.value ?? 0, 'Costo reintegrado');
+          }
+
+          // 2. El reembolso se deshace por el mismo medio
+          const totalCents = toCents(note.total, 'Total de la nota crédito');
+          const concept = `Anulación de la Nota Crédito ${note.creditNoteNumber} de venta ${note.sale.invoiceNumber}`;
+          if (note.refundMethod === 'CREDITO_CARTERA') {
+            await this.receivablesLedger.revertCreditNote(tx, {
+              saleId: note.saleId,
+              invoiceNumber: note.sale.invoiceNumber,
+              creditNoteNumber: note.creditNoteNumber,
+              amountCents: totalCents,
+            });
+          } else if (note.refundMethod === 'TRANSFERENCIA') {
+            await recordSourceBankMovement(tx, {
+              bankAccountId: note.sale.bankAccountId!,
+              movementType: 'DEPOSIT',
+              amount: centsToMoneyString(totalCents),
+              concept,
+              referenceDocumentType: 'CREDIT_NOTE_CANCEL',
+              referenceDocumentId: note.creditNoteNumber,
+              createdById: userId,
+            });
+          } else {
+            await this.cashService.recordMovementInTransaction(tx, {
+              movementType: 'INGRESO_MANUAL',
+              amount: centsToMoneyString(totalCents),
+              paymentMethod: 'EFECTIVO',
+              reason: concept,
+              referenceDocumentType: 'CREDIT_NOTE_CANCEL',
+              referenceDocumentId: note.creditNoteNumber,
+              createdByUserId: userId,
+            });
+          }
+
+          // 3. Estado del documento, reverso contable y auditoría
+          await tx.creditNote.update({
+            where: { id },
+            data: { status: 'ANULADA', cancelledAt: new Date(), cancelledById: userId, cancellationReason: reason },
+          });
+          await this.accountingEngine.handleCreditNoteCancelled(
+            {
+              id: note.id,
+              creditNoteNumber: note.creditNoteNumber,
+              reason: `Anulación NC ${note.creditNoteNumber}: ${reason}`,
+              userId,
+              restockCostCents,
+              issuedCostCents,
+            },
+            tx,
+          );
+          await tx.auditEvent.create({
+            data: {
+              userId,
+              action: 'sales:credit_note_cancelled',
+              entity: 'CreditNote',
+              entityId: note.id,
+              details: {
+                creditNoteNumber: note.creditNoteNumber,
+                saleId: note.saleId,
+                total: note.total,
+                refundMethod: note.refundMethod,
+                restock: note.restock,
+                reason,
+              },
+            },
+          });
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      ),
+    );
+    return this.getCreditNoteById(id);
+  }
+
   async listCreditNotes(saleId?: string): Promise<CreditNoteDto[]> {
     const where: Prisma.CreditNoteWhereInput = {};
     if (saleId) where.saleId = saleId;
@@ -516,6 +685,7 @@ export class CreditNotesService {
         sale: true,
         exchangeSale: { select: { invoiceNumber: true } },
         createdByUser: { select: { id: true, username: true } },
+        cancelledBy: { select: { username: true } },
         lines: {
           include: { product: true, lot: true },
         },
@@ -534,6 +704,7 @@ export class CreditNotesService {
         sale: true,
         exchangeSale: { select: { invoiceNumber: true } },
         createdByUser: { select: { id: true, username: true } },
+        cancelledBy: { select: { username: true } },
         lines: {
           include: { product: true, lot: true },
         },
@@ -564,6 +735,10 @@ export class CreditNotesService {
       restock: raw.restock,
       exchangeSaleId: raw.exchangeSaleId ?? null,
       exchangeSaleInvoiceNumber: raw.exchangeSale?.invoiceNumber ?? null,
+      status: raw.status,
+      cancelledAt: raw.cancelledAt ? raw.cancelledAt.toISOString() : null,
+      cancelledByName: raw.cancelledBy?.username ?? null,
+      cancellationReason: raw.cancellationReason ?? null,
       createdById: raw.createdById,
       createdByName: raw.createdByUser?.username,
       createdAt: raw.createdAt.toISOString(),

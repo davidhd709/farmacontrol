@@ -122,3 +122,24 @@ export async function createDisbursement(
     body: JSON.stringify(payload),
   });
 }
+
+/**
+ * Anula un recibo de caja o un comprobante de egreso registrado como documento: reversa sus
+ * abonos o pagos (o su asiento manual) y devuelve el dinero. Cada tipo tiene su ruta y permiso.
+ */
+export async function cancelTreasuryDocument(
+  document: Pick<TreasuryDocumentDto, 'id' | 'documentType' | 'origin'>,
+  reason: string,
+): Promise<TreasuryDocumentDto> {
+  const id = encodeURIComponent(document.id);
+  const path =
+    document.documentType === 'COMPROBANTE_EGRESO'
+      ? `treasury/disbursements/${id}/cancel`
+      : document.origin === 'CARTERA'
+        ? `treasury/cash-receipts/collections/${id}/cancel`
+        : `treasury/cash-receipts/${id}/cancel`;
+  return apiRequest<TreasuryDocumentDto>(path, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+}

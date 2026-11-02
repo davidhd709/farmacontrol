@@ -44,6 +44,7 @@ const fullJournalInclude = {
   createdBy: {
     select: { id: true, username: true },
   },
+  reversal: { select: { id: true, entryDate: true } },
 } as const;
 
 type FullJournalEntry = Prisma.JournalEntryGetPayload<{ include: typeof fullJournalInclude }>;
@@ -84,6 +85,7 @@ function toJournalEntryDto(entry: FullJournalEntry): JournalEntryDto {
     postedAt: entry.postedAt?.toISOString() || null,
     reversalOfId: entry.reversalOfId,
     reversalReason: entry.reversalReason,
+    reversedByEntryId: entry.reversal?.id ?? null,
     lines,
     totalDebit: `${totalDebitCents / 100n}.${(totalDebitCents % 100n).toString().padStart(2, '0')}`,
     totalCredit: `${totalCreditCents / 100n}.${(totalCreditCents % 100n).toString().padStart(2, '0')}`,
@@ -144,6 +146,9 @@ function sameReverse(
 function isCode(error: unknown, code: string): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === code;
 }
+
+/** Asientos que se anulan desde el Libro Diario porque no tienen un documento de origen. */
+export const ANNULLABLE_JOURNAL_SOURCES: readonly string[] = ['MANUAL_NOTE', 'OPENING_BALANCE', 'ANNUAL_CLOSING'];
 
 @Injectable()
 export class JournalService {
@@ -353,6 +358,36 @@ export class JournalService {
       data: { status: 'POSTED', postedAt: new Date() },
       include: journalInclude,
     });
+  }
+
+  /**
+   * Anulación desde el Libro Diario (correcciones del cliente, 2026-11-02): solo para asientos que
+   * no nacen de un documento operativo (notas contables manuales, saldos iniciales y cierre
+   * anual, o la reversión de uno de ellos). Los asientos de ventas, devoluciones, recibos,
+   * egresos, causaciones, compras e inventario se corrigen anulando su documento de origen.
+   */
+  async annul(input: JournalReverseInput): Promise<PostedEntry> {
+    if (!input || typeof input.entryId !== 'string' || !/^[0-9a-f-]{36}$/i.test(input.entryId))
+      throw new AccountingValidationError('Asiento a anular inválido.');
+    const entry = await prisma.journalEntry.findUnique({
+      where: { id: input.entryId },
+      select: { sourceType: true, reversalOfId: true },
+    });
+    if (!entry) throw new AccountingNotFoundError('Asiento publicado inexistente.');
+    let origin = entry.sourceType;
+    if (origin === 'REVERSAL' && entry.reversalOfId) {
+      const original = await prisma.journalEntry.findUnique({
+        where: { id: entry.reversalOfId },
+        select: { sourceType: true },
+      });
+      origin = original?.sourceType ?? origin;
+    }
+    if (!ANNULLABLE_JOURNAL_SOURCES.includes(origin)) {
+      throw new AccountingConflictError(
+        'Este asiento lo generó un documento del sistema: corríjalo anulando el documento de origen (venta, devolución, recibo de caja, comprobante de egreso o causación).',
+      );
+    }
+    return this.reverse(input);
   }
 
   async reverse(input: JournalReverseInput, tx?: Tx): Promise<PostedEntry> {

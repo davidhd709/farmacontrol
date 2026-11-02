@@ -40,11 +40,13 @@ model User {
   fiscalPeriodsClosed   FiscalPeriod[]      @relation("FiscalPeriodsClosed")
   fiscalPeriodsReopened FiscalPeriod[]      @relation("FiscalPeriodsReopened")
   creditNotesCreated    CreditNote[]        @relation("CreditNotesCreated")
+  creditNotesCancelled  CreditNote[]        @relation("CreditNotesCancelled")
   debitNotesCreated     DebitNote[]         @relation("DebitNotesCreated")
 
   @@map("users")
   documentLocksCreated DocumentLock[] @relation("DocumentLocksCreated")
   treasuryDocumentsCreated TreasuryDocument[] @relation("TreasuryDocumentsCreated")
+  treasuryDocumentsCancelled TreasuryDocument[] @relation("TreasuryDocumentsCancelled")
 }
 
 model Role {
@@ -1205,6 +1207,11 @@ model TreasuryDocument {
   supplierId            String?       @map("supplier_id") @db.Uuid
   thirdPartyId          String?       @map("third_party_id") @db.Uuid
   counterpartAccountId  String?       @map("counterpart_account_id") @db.Uuid
+  /// VIGENTE o ANULADO (única modificación permitida por el trigger de inmutabilidad)
+  status                String        @default("VIGENTE") @db.VarChar(20)
+  cancelledAt           DateTime?     @map("cancelled_at") @db.Timestamptz
+  cancelledById         String?       @map("cancelled_by_id") @db.Uuid
+  cancellationReason    String?       @map("cancellation_reason") @db.VarChar(500)
   createdById           String        @map("created_by_id") @db.Uuid
   createdAt             DateTime      @default(now()) @map("created_at") @db.Timestamptz
 
@@ -1219,6 +1226,7 @@ model TreasuryDocument {
   bankMovement          BankMovement? @relation(fields: [bankMovementId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   bankAccount           BankAccount?  @relation(fields: [bankAccountId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   createdBy             User          @relation("TreasuryDocumentsCreated", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  cancelledBy           User?         @relation("TreasuryDocumentsCancelled", fields: [cancelledById], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
   @@index([documentType, documentDate], map: "treasury_documents_type_date_idx")
   @@index([referenceDocumentType, referenceDocumentId], map: "treasury_documents_reference_idx")
@@ -1342,6 +1350,11 @@ model CreditNote {
   restock          Boolean          @default(true)
   /// Venta nueva que entrega el producto de reemplazo cuando la devolución es un cambio
   exchangeSaleId   String?          @unique @map("exchange_sale_id") @db.Uuid
+  /// CONFIRMADA o ANULADA (la anulación reversa inventario, dinero, cartera y asiento)
+  status             String         @default("CONFIRMADA") @db.VarChar(20)
+  cancelledAt        DateTime?      @map("cancelled_at") @db.Timestamptz
+  cancelledById      String?        @map("cancelled_by_id") @db.Uuid
+  cancellationReason String?        @map("cancellation_reason") @db.VarChar(500)
   createdById      String           @map("created_by_id") @db.Uuid
   createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz
   updatedAt        DateTime         @updatedAt @map("updated_at") @db.Timestamptz
@@ -1350,6 +1363,7 @@ model CreditNote {
   exchangeSale     Sale?            @relation("CreditNoteExchangeSale", fields: [exchangeSaleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   customer         Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   createdByUser    User             @relation("CreditNotesCreated", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  cancelledBy      User?            @relation("CreditNotesCancelled", fields: [cancelledById], references: [id], onDelete: Restrict, onUpdate: Cascade)
   lines            CreditNoteLine[]
 
   @@index([saleId])

@@ -81,7 +81,7 @@ export class TaxReportsService {
       }
     }
     const creditLines = await prisma.creditNoteLine.aggregate({
-      where: { creditNote: { createdAt: { gte: start, lte: end } } },
+      where: { creditNote: { status: 'CONFIRMADA', createdAt: { gte: start, lte: end } } },
       _sum: { subtotal: true, taxAmount: true, incAmount: true },
     });
     const purchaseLines = await prisma.purchaseLine.findMany({
@@ -207,7 +207,7 @@ export class TaxReportsService {
       _sum: { subtotal: true },
     });
     const returns = await prisma.creditNote.aggregate({
-      where: { createdAt: { gte: start, lte: end } },
+      where: { status: 'CONFIRMADA', createdAt: { gte: start, lte: end } },
       _sum: { subtotal: true },
     });
     const withheld = await this.withholdings(from, to);

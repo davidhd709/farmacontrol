@@ -31,6 +31,7 @@ import { HomeBackButton } from '../../../components/HomeBackButton';
 import { PermissionGate } from '../../auth/components/PermissionGate';
 import { SweetModal } from '../../../components/SweetModal';
 import { CreditNoteDialog } from '../components/CreditNoteDialog';
+import { SaleCreditNotesDialog } from '../components/SaleCreditNotesDialog';
 import { businessDayEnd, businessDayStart } from '../../../utils/business-date';
 
 export const SalesHistoryPage: React.FC = () => {
@@ -60,6 +61,7 @@ export const SalesHistoryPage: React.FC = () => {
 
   // Nota Crédito (devolución parcial)
   const [saleForCreditNote, setSaleForCreditNote] = useState<SaleDto | null>(null);
+  const [saleForNotes, setSaleForNotes] = useState<SaleDto | null>(null);
 
   const loadSales = useCallback(async () => {
     setLoading(true);
@@ -358,6 +360,17 @@ export const SalesHistoryPage: React.FC = () => {
                         </PermissionGate>
                       )}
 
+                      <Tooltip title="Notas crédito de la venta y su anulación">
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          onClick={() => setSaleForNotes(sale)}
+                          data-testid={`credit-notes-btn-${sale.id}`}
+                        >
+                          Notas crédito
+                        </Button>
+                      </Tooltip>
+
                       {sale.status === 'COMPLETED' && (
                         <PermissionGate permission={SYSTEM_PERMISSIONS.SALES_CANCEL}>
                           <Tooltip title="Anular venta y restituir lotes">
@@ -468,6 +481,18 @@ export const SalesHistoryPage: React.FC = () => {
           void loadSales();
         }}
       />
+
+      {/* Devoluciones de la venta y su anulación */}
+      {saleForNotes && (
+        <SaleCreditNotesDialog
+          sale={saleForNotes}
+          onClose={() => setSaleForNotes(null)}
+          onCancelled={(note) => {
+            setToastMsg(`Nota crédito ${note.creditNoteNumber} anulada.`);
+            void loadSales();
+          }}
+        />
+      )}
 
       {/* Notificación modal estilo SweetAlert2 */}
       <SweetModal

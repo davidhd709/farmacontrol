@@ -35,6 +35,7 @@ import { RequirePermissions } from '../../identity/presentation/decorators/requi
 import { CurrentUser } from '../../identity/presentation/decorators/current-user.decorator';
 import type { AuthenticatedUserContext } from '../../identity/presentation/guards/session-auth.guard';
 import { businessToday } from '../../../common/utils/business-date';
+import { retiredRoute } from '../../../common/http/retired-route';
 
 function handleHttpError(error: unknown): never {
   if (error instanceof AccountingNotFoundError) throw new NotFoundException(error.message);
@@ -80,18 +81,29 @@ export class JournalController {
     }
   }
 
+  /** Retirada: las correcciones se hacen anulando el documento de origen. */
   @Post(':id/reverse')
   @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_MANAGE)
-  async reverse(
+  reverse(): never {
+    return retiredRoute(
+      'POST /api/v1/journal-entries/:id/reverse',
+      'Anule el documento de origen; las notas contables manuales, los saldos iniciales y el cierre anual se anulan con POST /api/v1/journal-entries/:id/annul.',
+    );
+  }
+
+  /** Anula una nota contable manual, un saldo inicial o un cierre anual (con permiso contable). */
+  @Post(':id/annul')
+  @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_MANAGE)
+  async annul(
     @Param('id', ParseUUIDPipe) id: string,
     @Body(new RequestShapeValidationPipe({ entryDate: 'date?', reason: 'text' }))
     body: ReverseJournalEntryPayload,
     @CurrentUser() user: AuthenticatedUserContext,
   ): Promise<JournalEntryDto> {
     try {
-      // Sin fecha, el reverso queda con el día de Bogotá (de noche la fecha UTC ya es mañana)
+      // Sin fecha, la anulación queda con el día de Bogotá (de noche la fecha UTC ya es mañana)
       const entryDate = body.entryDate || businessToday();
-      const reversed = await this.journalService.reverse({
+      const reversed = await this.journalService.annul({
         entryId: id,
         entryDate,
         reason: body.reason,

@@ -29,6 +29,7 @@ export function buildDocumentMovements(raw: RawDocumentMovement[]): DocumentMove
     ABONO: 2,
     NOTA_CREDITO: 3,
     REVERSION_ABONO: 4,
+    ANULACION_NOTA_CREDITO: 4,
     ANULACION: 5,
   };
   let balance = 0n;

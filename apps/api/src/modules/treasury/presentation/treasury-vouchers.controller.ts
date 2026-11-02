@@ -5,12 +5,15 @@ import {
   Headers,
   HttpCode,
   HttpStatus,
+  Param,
+  ParseUUIDPipe,
   Post,
   UseGuards,
 } from '@nestjs/common';
 import {
   SYSTEM_PERMISSIONS,
   type CreateCashReceiptPayload,
+  type CancelTreasuryDocumentPayload,
   type CreateDisbursementPayload,
   type TreasuryDocumentDto,
 } from '@farmacia/contracts';
@@ -73,5 +76,50 @@ export class TreasuryVouchersController {
     @CurrentUser() user: AuthenticatedUserContext,
   ): Promise<TreasuryDocumentDto> {
     return this.vouchers.createDisbursement(payload, user, idempotencyKey);
+  }
+
+  /** Anula un recibo de abono a cartera: reversa sus abonos y saca el dinero recibido. */
+  @Post('cash-receipts/collections/:id/cancel')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions(SYSTEM_PERMISSIONS.CASH_RECEIPTS_COLLECT)
+  cancelCollectionReceipt(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() payload: CancelTreasuryDocumentPayload,
+    @CurrentUser() user: AuthenticatedUserContext,
+  ): Promise<TreasuryDocumentDto> {
+    return this.vouchers.cancelDocument(id, payload?.reason, user, {
+      documentType: 'RECIBO_CAJA',
+      origins: ['CARTERA'],
+    });
+  }
+
+  /** Anula un recibo manual: reversa su asiento y saca el dinero recibido. */
+  @Post('cash-receipts/:id/cancel')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_READ)
+  cancelCashReceipt(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() payload: CancelTreasuryDocumentPayload,
+    @CurrentUser() user: AuthenticatedUserContext,
+  ): Promise<TreasuryDocumentDto> {
+    return this.vouchers.cancelDocument(id, payload?.reason, user, {
+      documentType: 'RECIBO_CAJA',
+      origins: ['MANUAL'],
+    });
+  }
+
+  /** Anula un comprobante de egreso: reversa sus pagos (o su asiento manual) y devuelve el dinero. */
+  @Post('disbursements/:id/cancel')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions(SYSTEM_PERMISSIONS.DISBURSEMENTS_CREATE)
+  cancelDisbursement(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() payload: CancelTreasuryDocumentPayload,
+    @CurrentUser() user: AuthenticatedUserContext,
+  ): Promise<TreasuryDocumentDto> {
+    return this.vouchers.cancelDocument(id, payload?.reason, user, {
+      documentType: 'COMPROBANTE_EGRESO',
+      origins: ['PROVEEDOR', 'MANUAL'],
+    });
   }
 }

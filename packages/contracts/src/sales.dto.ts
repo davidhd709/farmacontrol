@@ -163,6 +163,12 @@ export interface CreditNoteLineDto {
   createdAt: string;
 }
 
+export type CreditNoteStatus = 'CONFIRMADA' | 'ANULADA';
+
+export interface CancelCreditNotePayload {
+  reason: string;
+}
+
 export interface CreditNoteDto {
   id: string;
   creditNoteNumber: string;
@@ -180,6 +186,11 @@ export interface CreditNoteDto {
   /** Venta de reemplazo cuando la devolución fue un cambio de producto */
   exchangeSaleId?: string | null;
   exchangeSaleInvoiceNumber?: string | null;
+  /** CONFIRMADA o ANULADA */
+  status: CreditNoteStatus;
+  cancelledAt?: string | null;
+  cancelledByName?: string | null;
+  cancellationReason?: string | null;
   createdById: string;
   createdByName?: string | null;
   createdAt: string;

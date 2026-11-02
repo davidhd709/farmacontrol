@@ -173,8 +173,19 @@ export interface TreasuryDocumentDto {
   counterpartAccount: string | null;
   /** Facturas abonadas o pagadas por el documento */
   applications: TreasuryDocumentApplicationDto[];
+  /** VIGENTE o ANULADO */
+  status: TreasuryDocumentStatus;
+  cancelledAt: string | null;
+  cancelledByName: string | null;
+  cancellationReason: string | null;
   createdByName: string | null;
   createdAt: string;
+}
+
+export type TreasuryDocumentStatus = 'VIGENTE' | 'ANULADO';
+
+export interface CancelTreasuryDocumentPayload {
+  reason: string;
 }
 
 export interface TreasuryDocumentFilters {

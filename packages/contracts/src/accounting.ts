@@ -138,6 +138,8 @@ export interface JournalEntryDto {
   postedAt?: string | null;
   reversalOfId?: string | null;
   reversalReason?: string | null;
+  /** Asiento que lo anuló (reversó), si existe */
+  reversedByEntryId?: string | null;
   lines: JournalEntryLineDto[];
   totalDebit: string;
   totalCredit: string;

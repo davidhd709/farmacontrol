@@ -372,149 +372,170 @@ export class PayablesService {
     }
 
     return prisma.$transaction(
-      async (tx: any) => {
-        // 1. Bloqueo pesimista del payable
-        const rows = await tx.$queryRaw<any[]>`
-        SELECT
-          id,
-          purchase_id  AS "purchaseId",
-          supplier_id  AS "supplierId",
-          total_amount AS "totalAmount",
-          amount_paid  AS "amountPaid",
-          balance,
-          status,
-          due_date     AS "dueDate",
-          notes
-        FROM payables
-        WHERE id = ${payableId}::uuid
-        FOR UPDATE
-      `;
-
-        if (!rows.length) {
-          throw new NotFoundException(`Cuenta por pagar "${payableId}" no encontrada`);
-        }
-
-        const raw = rows[0];
-
-        // 2. Buscar el pago a revertir
-        const payment = await tx.payablePayment.findUnique({
-          where: { id: paymentId },
-        });
-
-        if (!payment || payment.payableId !== payableId) {
-          throw new NotFoundException(`Pago "${paymentId}" no encontrado en esta cuenta por pagar`);
-        }
-
-        if (payment.isReversed) {
-          throw new BadRequestException('Este pago ya fue revertido previamente.');
-        }
-
-        const paymentAmountCents = parseMoneyToCents(
-          payment.amount.toString(),
-          'Monto del pago a revertir',
-        );
-        const balanceCents = parseMoneyToCents(raw.balance.toString(), 'Saldo pendiente');
-        const amountPaidCents = parseMoneyToCents(raw.amountPaid.toString(), 'Total pagado');
-
-        const newBalanceCents = balanceCents + paymentAmountCents;
-        const newAmountPaidCents = amountPaidCents - paymentAmountCents;
-
-        if (newAmountPaidCents < 0n) {
-          throw new BadRequestException('El monto del reverso excede el total pagado registrado.');
-        }
-
-        // 3. Marcar pago como revertido
-        await tx.payablePayment.update({
-          where: { id: paymentId },
-          data: {
-            isReversed: true,
-            reversedAt: new Date(),
-            reversalReason: trimmedReason,
-            reversedByUserId: userId,
-          },
-        });
-
-        // 4. Actualizar estado y saldos del payable
-        const updated = await tx.payable.update({
-          where: { id: payableId },
-          data: {
-            balance: new Prisma.Decimal(centsToMoneyString(newBalanceCents)),
-            amountPaid: new Prisma.Decimal(centsToMoneyString(newAmountPaidCents)),
-            status: 'PENDIENTE',
-          },
-          include: {
-            supplier: { select: { name: true } },
-            purchase: { select: { invoiceNumber: true, notes: true, purchaseDate: true } },
-          },
-        });
-
-        // 5. Compensación financiera
-        const amountStr = centsToMoneyString(paymentAmountCents);
-        if (payment.paymentMethod === 'TRANSFERENCIA') {
-          if (!payment.bankAccountId) {
-            throw new BadRequestException(
-              'El pago por transferencia no tiene cuenta bancaria asociada.',
-            );
-          }
-          await recordSourceBankMovement(tx, {
-            bankAccountId: payment.bankAccountId,
-            movementType: 'DEPOSIT',
-            amount: amountStr,
-            concept: `Reversión pago proveedor - Factura ${updated.purchase?.invoiceNumber ?? payableId}: ${trimmedReason}`,
-            referenceDocumentType: 'PAYABLE_PAYMENT_REVERSAL',
-            referenceDocumentId: payment.id,
-            createdById: userId,
-          });
-        } else {
-          await this.cashService.recordMovementInTransaction(tx, {
-            movementType: 'INGRESO_MANUAL',
-            amount: amountStr,
-            paymentMethod: 'EFECTIVO',
-            reason: `Reversión pago proveedor - Factura ${updated.purchase?.invoiceNumber ?? payableId}: ${trimmedReason}`,
-            referenceDocumentType: 'PAYABLE_PAYMENT_REVERSAL',
-            referenceDocumentId: payment.id,
-            createdByUserId: userId,
-          });
-        }
-
-        // Reversión contable automática
-        await this.accountingEngine.handleSupplierPaymentReversed(
-          payment.id,
-          trimmedReason,
+      async (tx: any) =>
+        this.reversePaymentInTransaction(tx, {
+          payableId,
+          paymentId,
+          reason: trimmedReason,
           userId,
-          tx,
-        );
-
-        // 6. Auditoría
-        await tx.auditEvent.create({
-          data: {
-            userId,
-            action: 'REVERSE_PAYABLE_PAYMENT',
-            entity: 'payable_payments',
-            entityId: paymentId,
-            details: {
-              payableId,
-              paymentId,
-              amount: amountStr,
-              paymentMethod: payment.paymentMethod,
-              bankAccountId: payment.bankAccountId,
-              reason: trimmedReason,
-              balanceBefore: centsToMoneyString(balanceCents),
-              balanceAfter: centsToMoneyString(newBalanceCents),
-            } as unknown as Prisma.InputJsonValue,
-          },
-        });
-
-        const payments = await tx.payablePayment.findMany({
-          where: { payableId },
-          orderBy: { createdAt: 'asc' },
-        });
-
-        return this.toDto(updated, payments);
-      },
+          moveMoney: true,
+        }),
       {
         isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
       },
     );
+  }
+
+  /**
+   * Reversa un pago dentro de la transacción del llamador: saldo de la factura, estado, asiento
+   * y auditoría. Con moveMoney devuelve el dinero con su propio movimiento; la anulación de un
+   * comprobante de egreso lo devuelve con un único movimiento por el documento.
+   */
+  async reversePaymentInTransaction(
+    tx: any,
+    input: { payableId: string; paymentId: string; reason: string; userId: string; moveMoney: boolean },
+  ) {
+    const { payableId, paymentId, userId, moveMoney } = input;
+    const trimmedReason = input.reason;
+    // 1. Bloqueo pesimista del payable
+    const rows = await tx.$queryRaw<any[]>`
+    SELECT
+      id,
+      purchase_id  AS "purchaseId",
+      supplier_id  AS "supplierId",
+      total_amount AS "totalAmount",
+      amount_paid  AS "amountPaid",
+      balance,
+      status,
+      due_date     AS "dueDate",
+      notes
+    FROM payables
+    WHERE id = ${payableId}::uuid
+    FOR UPDATE
+  `;
+
+    if (!rows.length) {
+      throw new NotFoundException(`Cuenta por pagar "${payableId}" no encontrada`);
+    }
+
+    const raw = rows[0];
+
+    // 2. Buscar el pago a revertir
+    const payment = await tx.payablePayment.findUnique({
+      where: { id: paymentId },
+    });
+
+    if (!payment || payment.payableId !== payableId) {
+      throw new NotFoundException(`Pago "${paymentId}" no encontrado en esta cuenta por pagar`);
+    }
+
+    if (payment.isReversed) {
+      throw new BadRequestException('Este pago ya fue revertido previamente.');
+    }
+
+    const paymentAmountCents = parseMoneyToCents(
+      payment.amount.toString(),
+      'Monto del pago a revertir',
+    );
+    const balanceCents = parseMoneyToCents(raw.balance.toString(), 'Saldo pendiente');
+    const amountPaidCents = parseMoneyToCents(raw.amountPaid.toString(), 'Total pagado');
+
+    const newBalanceCents = balanceCents + paymentAmountCents;
+    const newAmountPaidCents = amountPaidCents - paymentAmountCents;
+
+    if (newAmountPaidCents < 0n) {
+      throw new BadRequestException('El monto del reverso excede el total pagado registrado.');
+    }
+
+    // 3. Marcar pago como revertido
+    await tx.payablePayment.update({
+      where: { id: paymentId },
+      data: {
+        isReversed: true,
+        reversedAt: new Date(),
+        reversalReason: trimmedReason,
+        reversedByUserId: userId,
+      },
+    });
+
+    // 4. Actualizar estado y saldos del payable
+    const updated = await tx.payable.update({
+      where: { id: payableId },
+      data: {
+        balance: new Prisma.Decimal(centsToMoneyString(newBalanceCents)),
+        amountPaid: new Prisma.Decimal(centsToMoneyString(newAmountPaidCents)),
+        status: 'PENDIENTE',
+      },
+      include: {
+        supplier: { select: { name: true } },
+        purchase: { select: { invoiceNumber: true, notes: true, purchaseDate: true } },
+      },
+    });
+
+    const amountStr = centsToMoneyString(paymentAmountCents);
+    // 5. Compensación financiera (al anular el documento de tesorería va en un solo movimiento)
+    if (moveMoney) {
+      if (payment.paymentMethod === 'TRANSFERENCIA') {
+        if (!payment.bankAccountId) {
+          throw new BadRequestException(
+            'El pago por transferencia no tiene cuenta bancaria asociada.',
+          );
+        }
+        await recordSourceBankMovement(tx, {
+          bankAccountId: payment.bankAccountId,
+          movementType: 'DEPOSIT',
+          amount: amountStr,
+          concept: `Reversión pago proveedor - Factura ${updated.purchase?.invoiceNumber ?? payableId}: ${trimmedReason}`,
+          referenceDocumentType: 'PAYABLE_PAYMENT_REVERSAL',
+          referenceDocumentId: payment.id,
+          createdById: userId,
+        });
+      } else {
+        await this.cashService.recordMovementInTransaction(tx, {
+          movementType: 'INGRESO_MANUAL',
+          amount: amountStr,
+          paymentMethod: 'EFECTIVO',
+          reason: `Reversión pago proveedor - Factura ${updated.purchase?.invoiceNumber ?? payableId}: ${trimmedReason}`,
+          referenceDocumentType: 'PAYABLE_PAYMENT_REVERSAL',
+          referenceDocumentId: payment.id,
+          createdByUserId: userId,
+        });
+      }
+    }
+
+    // Reversión contable automática
+    await this.accountingEngine.handleSupplierPaymentReversed(
+      payment.id,
+      trimmedReason,
+      userId,
+      tx,
+    );
+
+    // 6. Auditoría
+    await tx.auditEvent.create({
+      data: {
+        userId,
+        action: 'REVERSE_PAYABLE_PAYMENT',
+        entity: 'payable_payments',
+        entityId: paymentId,
+        details: {
+          payableId,
+          paymentId,
+          amount: amountStr,
+          paymentMethod: payment.paymentMethod,
+          bankAccountId: payment.bankAccountId,
+          reason: trimmedReason,
+          balanceBefore: centsToMoneyString(balanceCents),
+          balanceAfter: centsToMoneyString(newBalanceCents),
+        } as unknown as Prisma.InputJsonValue,
+      },
+    });
+
+    const payments = await tx.payablePayment.findMany({
+      where: { payableId },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    return this.toDto(updated, payments);
   }
 }

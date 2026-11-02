@@ -22,14 +22,14 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   SYSTEM_PERMISSIONS,
   type TreasuryDocumentApplicationDto,
   type TreasuryDocumentDto,
   type TreasuryDocumentType,
 } from '@farmacia/contracts';
-import { getTreasuryDocuments } from '../api/treasury.api';
+import { cancelTreasuryDocument, getTreasuryDocuments } from '../api/treasury.api';
 import { QuickDateRange } from '../../../components/QuickDateRange';
 import { HomeBackButton } from '../../../components/HomeBackButton';
 import { SweetModal } from '../../../components/SweetModal';
@@ -114,6 +114,11 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
   const [selected, setSelected] = useState<TreasuryDocumentDto | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [annulReason, setAnnulReason] = useState('');
+  const [annulOpen, setAnnulOpen] = useState(false);
+  const [annulError, setAnnulError] = useState<string | null>(null);
+  const [annulling, setAnnulling] = useState(false);
+  const queryClient = useQueryClient();
   const { hasPermission, hasAnyPermission } = usePermissions();
   // El recibo se registra con abono a cartera o manual (permiso contable); el egreso con su permiso
   const canCreate =
@@ -136,6 +141,43 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
         pageSize,
       }),
   });
+
+  // Se anula con el mismo permiso con que se registra; los automáticos, desde su documento
+  const canAnnul = (doc: TreasuryDocumentDto) =>
+    doc.status === 'VIGENTE' &&
+    doc.origin !== 'AUTOMATICO' &&
+    (doc.documentType === 'COMPROBANTE_EGRESO'
+      ? hasPermission(SYSTEM_PERMISSIONS.DISBURSEMENTS_CREATE) &&
+        (doc.origin !== 'MANUAL' || hasPermission(SYSTEM_PERMISSIONS.ACCOUNTING_READ))
+      : doc.origin === 'CARTERA'
+        ? hasPermission(SYSTEM_PERMISSIONS.CASH_RECEIPTS_COLLECT)
+        : hasPermission(SYSTEM_PERMISSIONS.ACCOUNTING_READ));
+
+  const annul = async () => {
+    if (!selected) return;
+    setAnnulling(true);
+    setAnnulError(null);
+    try {
+      const updated = await cancelTreasuryDocument(selected, annulReason.trim());
+      setSelected(updated);
+      setAnnulOpen(false);
+      setAnnulReason('');
+      setToast(`${labels.singular} ${updated.documentNumber} anulado.`);
+      for (const key of [
+        'treasury-documents',
+        'receivables',
+        'payables-statement',
+        'expenses',
+        'cash',
+      ]) {
+        void queryClient.invalidateQueries({ queryKey: [key] });
+      }
+    } catch (e) {
+      setAnnulError(e instanceof Error ? e.message : 'No se pudo anular el documento.');
+    } finally {
+      setAnnulling(false);
+    }
+  };
 
   return (
     <Container component="main" maxWidth="xl" sx={{ py: 4 }}>
@@ -270,7 +312,12 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
                         label={doc.source === 'CAJA' ? 'Caja' : (doc.bankAccountName ?? 'Banco')}
                       />
                     </TableCell>
-                    <TableCell>{originOf(doc)}</TableCell>
+                    <TableCell>
+                      {originOf(doc)}
+                      {doc.status === 'ANULADO' && (
+                        <Chip size="small" variant="outlined" label="Anulado" sx={{ ml: 1 }} />
+                      )}
+                    </TableCell>
                     <TableCell align="right" sx={{ fontWeight: 700 }}>
                       {money(doc.amount)}
                     </TableCell>
@@ -364,11 +411,62 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
                 <Typography>
                   <strong>Elaborado por:</strong> {selected.createdByName ?? '—'}
                 </Typography>
+                {selected.status === 'ANULADO' && (
+                  <Alert severity="warning">
+                    Anulado {selected.cancelledByName ? `por ${selected.cancelledByName}` : ''}
+                    {selected.cancellationReason ? `. Motivo: ${selected.cancellationReason}` : ''}
+                  </Alert>
+                )}
+                {annulOpen && (
+                  <Stack spacing={1.5} className="no-print">
+                    <Alert severity="warning">
+                      {selected.origin === 'MANUAL'
+                        ? 'Se reversa el asiento contra la contrapartida y '
+                        : 'Se reversan los abonos o pagos que sigan vigentes y '}
+                      {selected.documentType === 'RECIBO_CAJA'
+                        ? 'el dinero recibido sale de '
+                        : 'el dinero pagado vuelve a '}
+                      {selected.source === 'CAJA' ? 'caja' : 'la cuenta bancaria'}. El documento
+                      queda anulado y no se borra.
+                    </Alert>
+                    {annulError && <Alert severity="error">{annulError}</Alert>}
+                    <TextField
+                      label="Motivo de la anulación"
+                      value={annulReason}
+                      onChange={(e) => setAnnulReason(e.target.value)}
+                      required
+                      multiline
+                      minRows={2}
+                    />
+                  </Stack>
+                )}
               </Stack>
             </DialogContent>
             <DialogActions className="no-print">
+              {canAnnul(selected) &&
+                (annulOpen ? (
+                  <Button
+                    color="error"
+                    variant="contained"
+                    disabled={annulling || annulReason.trim().length < 3}
+                    onClick={() => void annul()}
+                  >
+                    {annulling ? 'Anulando…' : 'Confirmar anulación'}
+                  </Button>
+                ) : (
+                  <Button color="error" variant="outlined" onClick={() => setAnnulOpen(true)}>
+                    Anular
+                  </Button>
+                ))}
               <Button onClick={() => window.print()}>Imprimir</Button>
-              <Button variant="contained" onClick={() => setSelected(null)}>
+              <Button
+                variant="contained"
+                onClick={() => {
+                  setSelected(null);
+                  setAnnulOpen(false);
+                  setAnnulError(null);
+                }}
+              >
                 Cerrar
               </Button>
             </DialogActions>

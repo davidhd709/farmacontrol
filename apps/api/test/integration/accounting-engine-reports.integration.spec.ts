@@ -518,7 +518,7 @@ describe('Accounting Engine, Double-Entry, Journal & Reports Integration (Postgr
   });
 
   describe('Controladores HTTP y Autorización RBAC', () => {
-    it('consulta Libro Diario y revierte asiento por HTTP con permisos', async () => {
+    it('consulta Libro Diario y anula solo asientos sin documento de origen, con permisos', async () => {
       await setupStandardPucAndMappings();
 
       const posted = await journalService.post({
@@ -551,20 +551,44 @@ describe('Accounting Engine, Double-Entry, Journal & Reports Integration (Postgr
       expect(single.status).toBe(200);
       expect(single.body.id).toBe(posted.id);
 
-      // 4. Cajero sin permiso de gestión intenta revertir -> 403
-      const forbiddenRev = await request(app.getHttpServer())
-        .post(`/api/v1/journal-entries/${posted.id}/reverse`)
-        .set('Cookie', cashierCookie)
-        .send({ reason: 'Reversión no autorizada' });
-      expect(forbiddenRev.status).toBe(403);
-
-      // 5. Administrador revierte con éxito -> 201
-      const successRev = await request(app.getHttpServer())
+      // 4. La reversión desde el Libro Diario se retiró (correcciones del cliente, 2026-11-02)
+      const retired = await request(app.getHttpServer())
         .post(`/api/v1/journal-entries/${posted.id}/reverse`)
         .set('Cookie', cookie)
-        .send({ reason: 'Anulación autorizada por auditoría' });
-      expect(successRev.status).toBe(201);
-      expect(successRev.body.reversalOfId).toBe(posted.id);
+        .send({ reason: 'Reversión desde el libro' });
+      expect(retired.status).toBe(410);
+
+      // 5. Un asiento de venta no se anula desde el libro: se anula la venta
+      const fromDocument = await request(app.getHttpServer())
+        .post(`/api/v1/journal-entries/${posted.id}/annul`)
+        .set('Cookie', cookie)
+        .send({ reason: 'Anulación desde el libro' });
+      expect(fromDocument.status).toBe(409);
+      expect(fromDocument.body.message).toMatch(/anulando el documento de origen/);
+      expect(await prisma.journalEntry.count({ where: { reversalOfId: posted.id } })).toBe(0);
+
+      // 6. Una nota contable manual sí: el cajero sin permiso contable no puede (403), el admin sí
+      const manual = await journalService.post({
+        entryDate: '2026-10-02',
+        description: 'Nota contable manual',
+        sourceType: 'MANUAL_NOTE',
+        sourceId: 'NCM-API-1',
+        lines: [
+          { purpose: 'CASH', debit: '1000.00', credit: '0.00' },
+          { purpose: 'SALES_EXCLUDED', debit: '0.00', credit: '1000.00' },
+        ],
+      });
+      const forbidden = await request(app.getHttpServer())
+        .post(`/api/v1/journal-entries/${manual.id}/annul`)
+        .set('Cookie', cashierCookie)
+        .send({ reason: 'Anulación no autorizada' });
+      expect(forbidden.status).toBe(403);
+      const annulled = await request(app.getHttpServer())
+        .post(`/api/v1/journal-entries/${manual.id}/annul`)
+        .set('Cookie', cookie)
+        .send({ reason: 'Nota registrada por error' });
+      expect(annulled.status).toBe(201);
+      expect(annulled.body.reversalOfId).toBe(manual.id);
     });
 
     it('consulta Balance de Comprobación y Libro Mayor por HTTP', async () => {

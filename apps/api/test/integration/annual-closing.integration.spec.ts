@@ -203,7 +203,7 @@ describe('Cierre anual', () => {
     expect((await preview(2025).expect(200)).body.existingEntryId).toBe(first.body.journalEntryId);
 
     await request(app.getHttpServer())
-      .post(`/api/v1/journal-entries/${first.body.journalEntryId}/reverse`)
+      .post(`/api/v1/journal-entries/${first.body.journalEntryId}/annul`)
       .set('Cookie', adminCookie)
       .send({ entryDate: '2025-12-31', reason: 'Faltaban facturas por causar' })
       .expect(201);
@@ -675,7 +675,7 @@ describe('Cierre anual', () => {
         reason: 'Reversión',
       });
       const res = await request(app.getHttpServer())
-        .post(`/api/v1/journal-entries/${undone.id}/reverse`)
+        .post(`/api/v1/journal-entries/${undone.id}/annul`)
         .set('Cookie', adminCookie)
         .send({ entryDate: '2025-12-31', reason: 'Se restablece el cierre' })
         .expect(409);
@@ -729,7 +729,7 @@ describe('Cierre anual', () => {
       const first = await close(2025).expect(201);
       const reverseAnnual = (entryDate: string) =>
         request(app.getHttpServer())
-          .post(`/api/v1/journal-entries/${first.body.journalEntryId}/reverse`)
+          .post(`/api/v1/journal-entries/${first.body.journalEntryId}/annul`)
           .set('Cookie', adminCookie)
           .send({ entryDate, reason: 'Faltaba una venta de diciembre' });
 
