@@ -16,6 +16,7 @@ import { AppModule } from '../../src/app.module';
 import { UserProvisioningService } from '../../src/modules/identity/application/services/user-provisioning.service';
 import { AuthService } from '../../src/modules/identity/application/services/auth.service';
 import { SESSION_COOKIE_NAME } from '../../src/modules/identity/presentation/utils/session-cookie.util';
+import { voucherPayment } from './support/voucher-payments';
 
 describe('Idempotencia concurrente de pagos (Integration)', () => {
   let app: INestApplication;
@@ -163,16 +164,14 @@ describe('Idempotencia concurrente de pagos (Integration)', () => {
   }
 
   function payReceivable(id: string, key: string, cookie = adminCookie) {
-    return request(app.getHttpServer())
-      .post(`/api/v1/receivables/${id}/payments`)
+    return voucherPayment(app.getHttpServer(), 'RECEIVABLE', id)
       .set('Cookie', cookie)
       .set('Idempotency-Key', key)
       .send({ amount: '10000.00', paymentMethod: 'EFECTIVO' });
   }
 
   function payPayable(id: string, key: string, cookie = adminCookie) {
-    return request(app.getHttpServer())
-      .post(`/api/v1/payables/${id}/payments`)
+    return voucherPayment(app.getHttpServer(), 'PAYABLE', id)
       .set('Cookie', cookie)
       .set('Idempotency-Key', key)
       .send({ amount: '50000.00', paymentMethod: 'EFECTIVO' });
@@ -195,9 +194,11 @@ describe('Idempotencia concurrente de pagos (Integration)', () => {
       expect(await prisma.payablePayment.count({ where: { payableId: payable.id } })).toBe(1);
       const updated = await prisma.payable.findUniqueOrThrow({ where: { id: payable.id } });
       expect(updated.balance.toString()).toBe('150000');
+      // Un solo comprobante de egreso y un solo movimiento de caja
+      const payment = await prisma.payablePayment.findFirstOrThrow({ where: { payableId: payable.id } });
       expect(
         await prisma.cashMovement.count({
-          where: { referenceDocumentType: 'PAYABLE', referenceDocumentId: payable.id },
+          where: { referenceDocumentType: 'TREASURY_DOCUMENT', referenceDocumentId: payment.treasuryDocumentId! },
         }),
       ).toBe(1);
     },
@@ -265,8 +266,7 @@ describe('Idempotencia concurrente de pagos (Integration)', () => {
 
   it('rechaza con 400 un abono en efectivo sin Idempotency-Key, sin registrar el pago', async () => {
     const receivable = await createReceivable('INV-NO-KEY');
-    const res = await request(app.getHttpServer())
-      .post(`/api/v1/receivables/${receivable.id}/payments`)
+    const res = await voucherPayment(app.getHttpServer(), 'RECEIVABLE', receivable.id)
       .set('Cookie', adminCookie)
       .send({ amount: '10000.00', paymentMethod: 'EFECTIVO' });
     expect(res.status).toBe(400);

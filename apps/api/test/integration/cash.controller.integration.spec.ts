@@ -8,12 +8,15 @@ import { UserProvisioningService } from '../../src/modules/identity/application/
 import { AuthService } from '../../src/modules/identity/application/services/auth.service';
 import { SESSION_COOKIE_NAME } from '../../src/modules/identity/presentation/utils/session-cookie.util';
 import { seedPurposeMappings } from './support/accounting-fixtures';
+import { CashService } from '../../src/modules/cash/application/cash.service';
 
 describe('CashController (Integration with PostgreSQL & RBAC)', () => {
   let counterpartAccountId: string;
   let app: INestApplication;
   let provisioningService: UserProvisioningService;
   let authService: AuthService;
+  let cashService: CashService;
+  let cajeroId: string;
 
   let cajeroCookie: string;
   let unauthorizedCookie: string;
@@ -31,6 +34,7 @@ describe('CashController (Integration with PostgreSQL & RBAC)', () => {
 
     provisioningService = moduleFixture.get(UserProvisioningService);
     authService = moduleFixture.get(AuthService);
+    cashService = moduleFixture.get(CashService);
   }, 30000);
 
   beforeEach(async () => {
@@ -67,6 +71,7 @@ describe('CashController (Integration with PostgreSQL & RBAC)', () => {
       username: 'cajero_operativo',
       password: 'CajeroPassword#2026',
     });
+    cajeroId = cajeroUser.id!;
     await prisma.userRole.create({
       data: {
         userId: cajeroUser.id!,
@@ -97,137 +102,66 @@ describe('CashController (Integration with PostgreSQL & RBAC)', () => {
     await cleanTestDatabase();
   });
 
-  it('permite registrar ingresos y egresos manteniendo el cálculo exacto de saldo en caja', async () => {
-    // 1. Ingreso de base de efectivo por $100.000
-    const resIngreso = await request(app.getHttpServer())
-      .post('/api/v1/cash-movements')
-      .set('Cookie', cajeroCookie)
-      .send({
-        movementType: 'INGRESO_MANUAL',
-        counterpartAccountId,
-        amount: 100000,
-        paymentMethod: 'EFECTIVO',
-        reason: 'Base de caja inicial de apertura',
-      })
-      .expect(201);
+  // Los movimientos de caja nacen de ventas, recibos de caja y comprobantes de egreso, que
+  // los registran con este servicio dentro de su transacción
+  const record = (movementType: string, amount: number, reason: string, paymentMethod?: string) =>
+    prisma.$transaction((tx) =>
+      cashService.recordMovementInTransaction(tx, {
+        movementType,
+        amount,
+        paymentMethod,
+        reason,
+        createdByUserId: cajeroId,
+      }),
+    );
 
-    expect(resIngreso.body.id).toBeDefined();
-    expect(resIngreso.body.amount).toBe(100000);
-    expect(resIngreso.body.balanceAfter).toBe(100000);
-    expect(resIngreso.body.movementType).toBe('INGRESO_MANUAL');
+  it('consulta el saldo exacto, los movimientos y su orden por fecha', async () => {
+    const ingreso = await record('INGRESO_MANUAL', 100000, 'Base de caja inicial de apertura');
+    const egreso = await record('EGRESO_MANUAL', 30000, 'Pago de domicilio urgente');
 
-    // 2. Egreso por pago menor de mensajería por $30.000
-    const resEgreso = await request(app.getHttpServer())
-      .post('/api/v1/cash-movements')
-      .set('Cookie', cajeroCookie)
-      .send({
-        movementType: 'EGRESO_MANUAL',
-        counterpartAccountId,
-        amount: 30000,
-        paymentMethod: 'EFECTIVO',
-        reason: 'Pago de domicilio urgente',
-      })
-      .expect(201);
-
-    expect(resEgreso.body.id).toBeDefined();
-    expect(resEgreso.body.amount).toBe(30000);
-    expect(resEgreso.body.balanceAfter).toBe(70000);
-
-    // 3. Consultar balance
     const resBalance = await request(app.getHttpServer())
       .get('/api/v1/cash-movements/balance')
       .set('Cookie', cajeroCookie)
       .expect(200);
-
     expect(resBalance.body.currentBalance).toBe(70000);
     expect(resBalance.body.totalIncomeToday).toBe(100000);
     expect(resBalance.body.totalExpenseToday).toBe(30000);
     expect(resBalance.body.movementsCountToday).toBe(2);
 
-    // 4. Consultar listado de movimientos
     const resList = await request(app.getHttpServer())
       .get('/api/v1/cash-movements')
       .set('Cookie', cajeroCookie)
       .expect(200);
-
-    expect(resList.body.items).toHaveLength(2);
     expect(resList.body.total).toBe(2);
-    expect(resList.body.items[0].id).toBe(resEgreso.body.id); // Más reciente primero
+    expect(resList.body.items[0].id).toBe(egreso); // Más reciente primero
+    expect(resList.body.items[0].balanceAfter).toBe(70000);
 
-    // 5. Orden por fecha ascendente (más viejo primero) y valor inválido
     const resAsc = await request(app.getHttpServer())
       .get('/api/v1/cash-movements?sortOrder=asc')
       .set('Cookie', cajeroCookie)
       .expect(200);
-    expect(resAsc.body.items.map((m: { id: string }) => m.id)).toEqual([
-      resIngreso.body.id,
-      resEgreso.body.id,
-    ]);
+    expect(resAsc.body.items.map((m: { id: string }) => m.id)).toEqual([ingreso, egreso]);
     await request(app.getHttpServer())
       .get('/api/v1/cash-movements?sortOrder=fecha')
       .set('Cookie', cajeroCookie)
       .expect(400);
   });
 
-  it('rechaza un egreso si supera el saldo disponible en caja física', async () => {
-    // Caja inicia en $0
-    const res = await request(app.getHttpServer())
-      .post('/api/v1/cash-movements')
-      .set('Cookie', cajeroCookie)
-      .send({
-        movementType: 'EGRESO_MANUAL',
-        counterpartAccountId,
-        amount: 50000,
-        paymentMethod: 'EFECTIVO',
-        reason: 'Egreso sin saldo',
-      })
-      .expect(409);
-
-    expect(res.body.message).toContain('Saldo insuficiente en caja');
+  it('un egreso que supera el saldo de caja física se rechaza y no deja movimiento', async () => {
+    await expect(record('EGRESO_MANUAL', 50000, 'Egreso sin saldo')).rejects.toThrow(/Saldo insuficiente en caja/);
+    expect(await prisma.cashMovement.count()).toBe(0);
   });
 
-  it.each([
-    'TRANSFERENCIA',
-    'TARJETA_DEBITO',
-    'TARJETA_CREDITO',
-    null,
-    123,
-    '',
-  ])('rechaza el medio no efectivo o mal formado %s sin alterar Caja', async (paymentMethod) => {
-    const response = await request(app.getHttpServer())
-      .post('/api/v1/cash-movements')
-      .set('Cookie', cajeroCookie)
-      .send({
-        movementType: 'INGRESO_MANUAL',
-        counterpartAccountId,
-        amount: 10000,
-        paymentMethod,
-        reason: 'Intento de movimiento no efectivo',
-      })
-      .expect(400);
-
-    expect(response.body.message).toContain('Caja solo admite movimientos en efectivo');
-    expect(await prisma.cashMovement.count()).toBe(0);
-
-    const balance = await request(app.getHttpServer())
-      .get('/api/v1/cash-movements/balance')
+  it('caja solo admite efectivo y conserva la lectura de históricos no efectivos', async () => {
+    await expect(record('INGRESO_MANUAL', 10000, 'Intento no efectivo', 'TRANSFERENCIA')).rejects.toThrow(
+      /efectivo/i,
+    );
+    const id = await record('INGRESO_MANUAL', 10000, 'Ingreso físico sin medio explícito');
+    const created = await request(app.getHttpServer())
+      .get(`/api/v1/cash-movements/${id}`)
       .set('Cookie', cajeroCookie)
       .expect(200);
-    expect(balance.body.currentBalance).toBe(0);
-  });
-
-  it('acepta un medio omitido como EFECTIVO y no cambia la lectura de históricos no efectivos', async () => {
-    const response = await request(app.getHttpServer())
-      .post('/api/v1/cash-movements')
-      .set('Cookie', cajeroCookie)
-      .send({
-        movementType: 'INGRESO_MANUAL',
-        counterpartAccountId,
-        amount: 10000,
-        reason: 'Ingreso físico sin medio explícito',
-      })
-      .expect(201);
-    expect(response.body.paymentMethod).toBe('EFECTIVO');
+    expect(created.body.paymentMethod).toBe('EFECTIVO');
 
     const historical = await prisma.cashMovement.create({
       data: {
@@ -236,7 +170,7 @@ describe('CashController (Integration with PostgreSQL & RBAC)', () => {
         paymentMethod: 'TRANSFERENCIA',
         reason: 'Histórico anterior a la separación Caja/Bancos',
         balanceAfter: '11000.00',
-        createdByUserId: response.body.createdByUserId,
+        createdByUserId: cajeroId,
       },
     });
     const read = await request(app.getHttpServer())
@@ -246,18 +180,20 @@ describe('CashController (Integration with PostgreSQL & RBAC)', () => {
     expect(read.body.paymentMethod).toBe('TRANSFERENCIA');
   });
 
-  it('rechaza con 403 Forbidden a usuarios que no poseen el permiso requerido', async () => {
+  it('caja es de solo consulta: crear un movimiento manual responde 410 y exige permiso', async () => {
+    const retired = await request(app.getHttpServer())
+      .post('/api/v1/cash-movements')
+      .set('Cookie', cajeroCookie)
+      .send({ movementType: 'INGRESO_MANUAL', counterpartAccountId, amount: 50000, reason: 'Ingreso manual' })
+      .expect(410);
+    expect(retired.body.message).toMatch(/fue retirada/);
+    expect(await prisma.cashMovement.count()).toBe(0);
+
     await request(app.getHttpServer())
       .post('/api/v1/cash-movements')
       .set('Cookie', unauthorizedCookie)
-      .send({
-        movementType: 'INGRESO_MANUAL',
-        counterpartAccountId,
-        amount: 50000,
-        reason: 'Intento no autorizado',
-      })
+      .send({ movementType: 'INGRESO_MANUAL', counterpartAccountId, amount: 50000, reason: 'Intento' })
       .expect(403);
-
     await request(app.getHttpServer())
       .get('/api/v1/cash-movements/balance')
       .set('Cookie', unauthorizedCookie)

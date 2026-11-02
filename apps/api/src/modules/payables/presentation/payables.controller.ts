@@ -1,5 +1,4 @@
 import {
-  RequestShapeValidationPipe,
   RequestFieldValidationPipe,
   QueryShapeValidationPipe,
 } from '../../../common/pagination/request-shape.pipe';
@@ -10,7 +9,6 @@ import {
   Post,
   Param,
   Body,
-  Headers,
   Query,
   ParseUUIDPipe,
   HttpCode,
@@ -20,7 +18,6 @@ import {
 import { PayablesService } from '../application/payables.service';
 import { PayablesStatementService } from '../application/payables-statement.service';
 import {
-  RegisterPayablePaymentPayload,
   ApiResponse,
   PayableMovementsDto,
   PayableStatementDto,
@@ -33,6 +30,7 @@ import {
 import { CurrentUser } from '../../identity/presentation/decorators/current-user.decorator';
 import { PermissionsGuard } from '../../identity/presentation/guards/permissions.guard';
 import { RequirePermissions } from '../../identity/presentation/decorators/require-permissions.decorator';
+import { retiredRoute, DISBURSEMENT_REPLACEMENT } from '../../../common/http/retired-route';
 
 @Controller('payables')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
@@ -131,30 +129,11 @@ export class PayablesController {
     return { success: true, data };
   }
 
-  /**
-   * POST /api/v1/payables/:id/payments
-   * Registra un pago a la cuenta por pagar.
-   * HU-021 CA-2
-   */
+  /** Retirada: el pago de una factura se registra con un recibo de caja o comprobante de egreso. */
   @Post(':id/payments')
   @RequirePermissions(SYSTEM_PERMISSIONS.PAYABLES_MANAGE)
-  @HttpCode(HttpStatus.CREATED)
-  async registerPayment(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body(
-      new RequestShapeValidationPipe({
-        amount: 'decimal',
-        paymentMethod: 'text?',
-        bankAccountId: 'uuid?',
-        notes: 'text?',
-      }),
-    )
-    payload: RegisterPayablePaymentPayload,
-    @Headers('idempotency-key') idempotencyKey: string | undefined,
-    @CurrentUser() user: AuthenticatedUserContext,
-  ): Promise<ApiResponse<any>> {
-    const data = await this.svc.registerPayment(id, payload, user.id, idempotencyKey);
-    return { success: true, data };
+  registerPayment(): never {
+    return retiredRoute('POST /api/v1/payables/:id/payments', DISBURSEMENT_REPLACEMENT);
   }
 
   /**

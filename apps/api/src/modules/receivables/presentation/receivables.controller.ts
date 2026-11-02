@@ -1,5 +1,4 @@
 import {
-  RequestShapeValidationPipe,
   RequestFieldValidationPipe,
   QueryShapeValidationPipe,
 } from '../../../common/pagination/request-shape.pipe';
@@ -10,7 +9,6 @@ import {
   Post,
   Param,
   Body,
-  Headers,
   Query,
   ParseUUIDPipe,
   HttpCode,
@@ -19,7 +17,6 @@ import {
 } from '@nestjs/common';
 import { ReceivablesService } from '../application/receivables.service';
 import {
-  RegisterReceivablePaymentPayload,
   ApiResponse,
   SYSTEM_PERMISSIONS,
   RECEIVABLE_STATUSES,
@@ -32,6 +29,7 @@ import {
 import { CurrentUser } from '../../identity/presentation/decorators/current-user.decorator';
 import { PermissionsGuard } from '../../identity/presentation/guards/permissions.guard';
 import { RequirePermissions } from '../../identity/presentation/decorators/require-permissions.decorator';
+import { retiredRoute, CASH_RECEIPT_REPLACEMENT } from '../../../common/http/retired-route';
 
 @Controller('receivables')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
@@ -102,30 +100,11 @@ export class ReceivablesController {
     return { success: true, data };
   }
 
-  /**
-   * POST /api/v1/receivables/:id/payments
-   * Registra un abono a la cuenta por cobrar.
-   * HU-020 CA-2
-   */
+  /** Retirada: el pago de una factura se registra con un recibo de caja o comprobante de egreso. */
   @Post(':id/payments')
   @RequirePermissions(SYSTEM_PERMISSIONS.RECEIVABLES_MANAGE)
-  @HttpCode(HttpStatus.CREATED)
-  async registerPayment(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body(
-      new RequestShapeValidationPipe({
-        amount: 'decimal',
-        paymentMethod: 'text?',
-        bankAccountId: 'uuid?',
-        notes: 'text?',
-      }),
-    )
-    payload: RegisterReceivablePaymentPayload,
-    @Headers('idempotency-key') idempotencyKey: string | undefined,
-    @CurrentUser() user: AuthenticatedUserContext,
-  ): Promise<ApiResponse<any>> {
-    const data = await this.svc.registerPayment(id, payload, user.id, idempotencyKey);
-    return { success: true, data };
+  registerPayment(): never {
+    return retiredRoute('POST /api/v1/receivables/:id/payments', CASH_RECEIPT_REPLACEMENT);
   }
 
   /**

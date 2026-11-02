@@ -3,54 +3,38 @@ import {
   Controller,
   Get,
   Post,
-  Body,
   Param,
   Query,
-  Req,
   UseGuards,
-  HttpCode,
-  HttpStatus,
   ParseUUIDPipe,
 } from '@nestjs/common';
-import type { Request } from 'express';
 import {
   SYSTEM_PERMISSIONS,
   CashMovementDto,
   CashBalanceDto,
   PaginatedResponse,
 } from '@farmacia/contracts';
+import { ApiResponse } from '@nestjs/swagger';
 import { CashService } from '../../application/cash.service';
-import {
-  CreateCashMovementDto,
-  CreateCashMovementValidationPipe,
-} from '../dtos/create-cash-movement.dto';
+import { retiredRoute, VOUCHER_REPLACEMENT } from '../../../../common/http/retired-route';
 import { CashMovementQueryDto, CashMovementQueryValidationPipe } from '../dtos/cash-query.dto';
 import {
   SessionAuthGuard,
-  AuthenticatedUserContext,
 } from '../../../identity/presentation/guards/session-auth.guard';
 import { PermissionsGuard } from '../../../identity/presentation/guards/permissions.guard';
 import { RequirePermissions } from '../../../identity/presentation/decorators/require-permissions.decorator';
-import { CurrentUser } from '../../../identity/presentation/decorators/current-user.decorator';
 
 @Controller('cash-movements')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 export class CashController {
   constructor(private readonly cashService: CashService) {}
 
+  /** Retirada: el efectivo entra y sale con recibos de caja y comprobantes de egreso. */
   @Post()
-  @HttpCode(HttpStatus.CREATED)
+  @ApiResponse({ status: 410, description: 'Ruta retirada: use recibos de caja o comprobantes de egreso.' })
   @RequirePermissions(SYSTEM_PERMISSIONS.CASH_MOVEMENTS)
-  public async create(
-    @Body(CreateCashMovementValidationPipe) dto: CreateCashMovementDto,
-    @CurrentUser() user: AuthenticatedUserContext,
-    @Req() req: Request,
-  ): Promise<CashMovementDto> {
-    return this.cashService.registerMovement(dto, {
-      userId: user.id,
-      ipAddress: req.ip,
-      correlationId: req.headers['x-correlation-id'] as string | undefined,
-    });
+  public create(): never {
+    return retiredRoute('POST /api/v1/cash-movements', VOUCHER_REPLACEMENT);
   }
 
   @Get('balance')

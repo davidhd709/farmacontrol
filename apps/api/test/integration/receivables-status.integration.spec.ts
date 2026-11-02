@@ -9,6 +9,7 @@ import { AppModule } from '../../src/app.module';
 import { UserProvisioningService } from '../../src/modules/identity/application/services/user-provisioning.service';
 import { AuthService } from '../../src/modules/identity/application/services/auth.service';
 import { SESSION_COOKIE_NAME } from '../../src/modules/identity/presentation/utils/session-cookie.util';
+import { voucherPayment } from './support/voucher-payments';
 
 /**
  * FARM-AUD-003: la anulación de una venta a crédito debe dejar su cuenta por cobrar en el estado
@@ -169,8 +170,7 @@ describe('Estados de cuentas por cobrar tras anular ventas a crédito (FARM-AUD-
   }
 
   function pay(receivableId: string, amount: number) {
-    return request(app.getHttpServer())
-      .post(`/api/v1/receivables/${receivableId}/payments`)
+    return voucherPayment(app.getHttpServer(), 'RECEIVABLE', receivableId)
       .set('Cookie', adminCookie)
       .set('Idempotency-Key', randomUUID())
       .send({ amount, paymentMethod: 'EFECTIVO' });
@@ -344,9 +344,14 @@ describe('Estados de cuentas por cobrar tras anular ventas a crédito (FARM-AUD-
       expect(full.body.data.balance).toBe('0');
       expect(full.body.data.amountPaid).toBe('10000');
       expect(await prisma.receivablePayment.count({ where: { receivableId } })).toBe(2);
+      // Cada abono es un recibo de caja con su propio movimiento de caja
+      const payments = await prisma.receivablePayment.findMany({ where: { receivableId } });
       expect(
         await prisma.cashMovement.count({
-          where: { referenceDocumentType: 'RECEIVABLE', referenceDocumentId: receivableId },
+          where: {
+            referenceDocumentType: 'TREASURY_DOCUMENT',
+            referenceDocumentId: { in: payments.map((p) => p.treasuryDocumentId!) },
+          },
         }),
       ).toBe(2);
     });

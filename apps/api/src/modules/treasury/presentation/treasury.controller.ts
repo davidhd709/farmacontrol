@@ -1,7 +1,6 @@
 import { ApiResponse } from '@nestjs/swagger';
 import {
   RequestShapeValidationPipe,
-  RequestFieldValidationPipe,
   QueryFieldValidationPipe,
 } from '../../../common/pagination/request-shape.pipe';
 import { parsePaginationValue } from '../../../common/pagination/pagination';
@@ -28,7 +27,6 @@ import type {
   BankAccountsSummaryDto,
   BankMovementDto,
   CreateBankAccountDto,
-  CreateBankMovementDto,
   UpdateBankAccountDto,
 } from '@farmacia/contracts';
 import {
@@ -44,6 +42,7 @@ import {
   TreasuryNotFoundError,
   TreasuryValidationError,
 } from '../domain/treasury-rules';
+import { retiredRoute, VOUCHER_REPLACEMENT } from '../../../common/http/retired-route';
 
 function toHttpException(error: unknown): never {
   if (error instanceof TreasuryValidationError) {
@@ -180,54 +179,22 @@ export class TreasuryController {
     }
   }
 
+  /** Retirada: los movimientos bancarios nacen de recibos de caja y comprobantes de egreso. */
   @Post('bank-accounts/:id/movements')
-  @ApiResponse({
-    status: 409,
-    description: 'Saldo insuficiente o conflicto con el estado de la operación.',
-  })
-  @ApiResponse({ status: 500, description: 'Fallo interno; el movimiento se revierte.' })
+  @ApiResponse({ status: 410, description: 'Ruta retirada: use recibos de caja o comprobantes de egreso.' })
   @RequirePermissions(SYSTEM_PERMISSIONS.TREASURY_MANAGE)
-  @HttpCode(HttpStatus.CREATED)
-  async createMovement(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body(
-      new RequestShapeValidationPipe({
-        movementType: 'text',
-        amount: 'decimal',
-        concept: 'text',
-        externalReference: 'text?',
-        referenceDocumentType: 'text?',
-        referenceDocumentId: 'text?',
-        movementDate: 'date?',
-        counterpartAccountId: 'uuid',
-      }),
-    )
-    dto: CreateBankMovementDto,
-    @CurrentUser() user: AuthenticatedUserContext,
-  ): Promise<BankMovementDto> {
-    try {
-      return await this.treasuryService.createMovement(id, dto, user.id);
-    } catch (error) {
-      toHttpException(error);
-    }
+  createMovement(): never {
+    return retiredRoute('POST /api/v1/treasury/bank-accounts/:id/movements', VOUCHER_REPLACEMENT);
   }
 
+  /** Retirada: una corrección se registra con el recibo o egreso contrario. */
   @Post('bank-accounts/:id/movements/:movementId/reverse')
+  @ApiResponse({ status: 410, description: 'Ruta retirada: use recibos de caja o comprobantes de egreso.' })
   @RequirePermissions(SYSTEM_PERMISSIONS.TREASURY_MANAGE)
-  @HttpCode(HttpStatus.OK)
-  async revertMovement(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Param('movementId', ParseUUIDPipe) movementId: string,
-    @Body('reason', new RequestFieldValidationPipe('reason', 'text')) reason: string,
-    @CurrentUser() user: AuthenticatedUserContext,
-  ): Promise<BankMovementDto> {
-    try {
-      if (!reason || typeof reason !== 'string' || !reason.trim()) {
-        throw new BadRequestException('El motivo de la reversión es obligatorio.');
-      }
-      return await this.treasuryService.revertMovement(id, movementId, reason.trim(), user.id);
-    } catch (error) {
-      toHttpException(error);
-    }
+  revertMovement(): never {
+    return retiredRoute(
+      'POST /api/v1/treasury/bank-accounts/:id/movements/:movementId/reverse',
+      VOUCHER_REPLACEMENT,
+    );
   }
 }

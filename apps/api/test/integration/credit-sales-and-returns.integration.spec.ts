@@ -9,6 +9,7 @@ import { UserProvisioningService } from '../../src/modules/identity/application/
 import { AuthService } from '../../src/modules/identity/application/services/auth.service';
 import { SESSION_COOKIE_NAME } from '../../src/modules/identity/presentation/utils/session-cookie.util';
 import { seedPurposeMappings } from './support/accounting-fixtures';
+import { voucherPayment } from './support/voucher-payments';
 
 /**
  * Correcciones del cliente, fase 2: la venta a crédito abre la cartera sin mover caja, la
@@ -169,8 +170,7 @@ describe('Ventas a crédito, devoluciones y cambio de producto', () => {
     const receivable = await prisma.receivable.findUniqueOrThrow({ where: { saleId: sale.body.id } });
     expect(receivable.balance.toFixed(2)).toBe('10000.00');
 
-    await request(app.getHttpServer())
-      .post(`/api/v1/receivables/${receivable.id}/payments`)
+    await voucherPayment(app.getHttpServer(), 'RECEIVABLE', receivable.id)
       .set('Cookie', adminCookie)
       .set('Idempotency-Key', randomUUID())
       .send({ amount: 4000, paymentMethod: 'EFECTIVO' })

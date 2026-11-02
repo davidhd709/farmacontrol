@@ -21,6 +21,7 @@ import { AppModule } from '../../src/app.module';
 import { UserProvisioningService } from '../../src/modules/identity/application/services/user-provisioning.service';
 import { AuthService } from '../../src/modules/identity/application/services/auth.service';
 import { SESSION_COOKIE_NAME } from '../../src/modules/identity/presentation/utils/session-cookie.util';
+import { voucherPayment } from './support/voucher-payments';
 
 describe('ReceivablesController & PayablesController (Integration)', () => {
   let app: INestApplication;
@@ -287,9 +288,8 @@ describe('ReceivablesController & PayablesController (Integration)', () => {
         },
       });
       const send = () =>
-        request(app.getHttpServer())
-          .post(`/api/v1/receivables/${receivable.id}/payments`)
-          .set('Cookie', carteraCookie)
+        voucherPayment(app.getHttpServer(), 'RECEIVABLE', receivable.id)
+          .set('Cookie', adminCookie)
           .set('Idempotency-Key', 'concurrent-receivable-payment')
           .send({ amount: '10000.00', paymentMethod: 'EFECTIVO' });
 
@@ -344,9 +344,8 @@ describe('ReceivablesController & PayablesController (Integration)', () => {
         },
       });
 
-      const res = await request(app.getHttpServer())
-        .post(`/api/v1/receivables/${receivable.id}/payments`)
-        .set('Cookie', carteraCookie)
+      const res = await voucherPayment(app.getHttpServer(), 'RECEIVABLE', receivable.id)
+        .set('Cookie', adminCookie)
         .set('Idempotency-Key', randomUUID())
         .send({ amount: 40000, paymentMethod: 'EFECTIVO' });
 
@@ -401,9 +400,8 @@ describe('ReceivablesController & PayablesController (Integration)', () => {
         },
       });
 
-      const res = await request(app.getHttpServer())
-        .post(`/api/v1/receivables/${receivable.id}/payments`)
-        .set('Cookie', carteraCookie)
+      const res = await voucherPayment(app.getHttpServer(), 'RECEIVABLE', receivable.id)
+        .set('Cookie', adminCookie)
         .set('Idempotency-Key', 'cartera-transfer-001')
         .send({ amount: '20000.00', paymentMethod: 'TRANSFERENCIA', bankAccountId: bank.id });
 
@@ -413,8 +411,8 @@ describe('ReceivablesController & PayablesController (Integration)', () => {
       expect(res.body.data.payments[0].bankAccountId).toBe(bank.id);
       const movement = await prisma.bankMovement.findFirst({
         where: {
-          referenceDocumentType: 'RECEIVABLE_PAYMENT',
-          referenceDocumentId: res.body.data.payments[0].id,
+          referenceDocumentType: 'TREASURY_DOCUMENT',
+          referenceDocumentId: res.document.id,
         },
       });
       expect(movement?.amount.toString()).toBe('20000');
@@ -423,9 +421,8 @@ describe('ReceivablesController & PayablesController (Integration)', () => {
           await prisma.bankAccount.findUniqueOrThrow({ where: { id: bank.id } })
         ).currentBalance.toString(),
       ).toBe('20000');
-      const retry = await request(app.getHttpServer())
-        .post(`/api/v1/receivables/${receivable.id}/payments`)
-        .set('Cookie', carteraCookie)
+      const retry = await voucherPayment(app.getHttpServer(), 'RECEIVABLE', receivable.id)
+        .set('Cookie', adminCookie)
         .set('Idempotency-Key', 'cartera-transfer-001')
         .send({ amount: '20000.00', paymentMethod: 'TRANSFERENCIA', bankAccountId: bank.id });
       expect(retry.status).toBe(201);
@@ -457,9 +454,8 @@ describe('ReceivablesController & PayablesController (Integration)', () => {
         },
       });
 
-      const res = await request(app.getHttpServer())
-        .post(`/api/v1/receivables/${receivable.id}/payments`)
-        .set('Cookie', carteraCookie)
+      const res = await voucherPayment(app.getHttpServer(), 'RECEIVABLE', receivable.id)
+        .set('Cookie', adminCookie)
         .set('Idempotency-Key', randomUUID())
         .send({ amount: 99999 });
 
@@ -553,8 +549,7 @@ describe('ReceivablesController & PayablesController (Integration)', () => {
         },
       });
 
-      const res = await request(app.getHttpServer())
-        .post(`/api/v1/payables/${payable.id}/payments`)
+      const res = await voucherPayment(app.getHttpServer(), 'PAYABLE', payable.id)
         .set('Cookie', adminCookie)
         .set('Idempotency-Key', 'proveedores-transfer-001')
         .send({ amount: '80000.00', paymentMethod: 'TRANSFERENCIA', bankAccountId: bank.id });
@@ -566,14 +561,13 @@ describe('ReceivablesController & PayablesController (Integration)', () => {
       expect(res.body.data.payments[0].bankAccountId).toBe(bank.id);
       const movement = await prisma.bankMovement.findFirst({
         where: {
-          referenceDocumentType: 'PAYABLE_PAYMENT',
-          referenceDocumentId: res.body.data.payments[0].id,
+          referenceDocumentType: 'TREASURY_DOCUMENT',
+          referenceDocumentId: res.document.id,
         },
       });
       expect(movement?.amount.toString()).toBe('80000');
       expect(movement?.balanceAfter.toString()).toBe('20000');
-      const retry = await request(app.getHttpServer())
-        .post(`/api/v1/payables/${payable.id}/payments`)
+      const retry = await voucherPayment(app.getHttpServer(), 'PAYABLE', payable.id)
         .set('Cookie', adminCookie)
         .set('Idempotency-Key', 'proveedores-transfer-001')
         .send({ amount: '80000.00', paymentMethod: 'TRANSFERENCIA', bankAccountId: bank.id });
@@ -617,8 +611,7 @@ describe('ReceivablesController & PayablesController (Integration)', () => {
         },
       });
 
-      const res = await request(app.getHttpServer())
-        .post(`/api/v1/payables/${payable.id}/payments`)
+      const res = await voucherPayment(app.getHttpServer(), 'PAYABLE', payable.id)
         .set('Cookie', adminCookie)
         .set('Idempotency-Key', randomUUID())
         .send({ amount: 50000 });
@@ -629,7 +622,7 @@ describe('ReceivablesController & PayablesController (Integration)', () => {
 
       // Verificar que se generó egreso de caja
       const cashMovements = await prisma.cashMovement.findMany({
-        where: { referenceDocumentType: 'PAYABLE', referenceDocumentId: payable.id },
+        where: { referenceDocumentType: 'TREASURY_DOCUMENT', referenceDocumentId: res.document.id },
       });
       expect(cashMovements).toHaveLength(1);
       expect(Number(cashMovements[0].amount)).toBeCloseTo(50000, 0);
@@ -660,8 +653,7 @@ describe('ReceivablesController & PayablesController (Integration)', () => {
         },
       });
 
-      const res = await request(app.getHttpServer())
-        .post(`/api/v1/payables/${payable.id}/payments`)
+      const res = await voucherPayment(app.getHttpServer(), 'PAYABLE', payable.id)
         .set('Cookie', adminCookie)
         .set('Idempotency-Key', randomUUID())
         .send({ amount: 99999 });

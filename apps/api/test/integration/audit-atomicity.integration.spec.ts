@@ -25,8 +25,6 @@ import { SessionService } from '../../src/modules/identity/application/services/
 import { PrismaSessionRepository } from '../../src/modules/identity/infrastructure/adapters/prisma-session.repository';
 import { CryptoSessionTokenAdapter } from '../../src/modules/identity/infrastructure/adapters/crypto-session-token.adapter';
 import { PrismaUserRepository } from '../../src/modules/identity/infrastructure/adapters/prisma-user.repository';
-import { CashService } from '../../src/modules/cash/application/cash.service';
-import { PrismaCashMovementRepository } from '../../src/modules/cash/infrastructure/prisma-cash-movement.repository';
 import { TreasuryService } from '../../src/modules/treasury/application/treasury.service';
 import { seedPurposeMappings } from './support/accounting-fixtures';
 
@@ -271,26 +269,6 @@ describe('Auditoría atómica con PostgreSQL real', () => {
     expect(
       (await prisma.session.findUniqueOrThrow({ where: { id: session.id } })).revokedAt,
     ).toBeNull();
-    expect(await prisma.auditEvent.count()).toBe(0);
-  });
-
-  it('el movimiento manual de caja revierte junto con auditoría', async () => {
-    const user = await prisma.user.create({
-      data: { username: 'atomic_cash', passwordHash: 'hash' },
-    });
-    failAfterAudit();
-    await expect(
-      new CashService(new PrismaCashMovementRepository(), audit).registerMovement(
-        {
-          movementType: 'INGRESO_MANUAL',
-          amount: 10,
-          reason: 'Apertura',
-          paymentMethod: 'EFECTIVO',
-        },
-        { userId: user.id },
-      ),
-    ).rejects.toThrow('Fallo inducido');
-    expect(await prisma.cashMovement.count()).toBe(0);
     expect(await prisma.auditEvent.count()).toBe(0);
   });
 

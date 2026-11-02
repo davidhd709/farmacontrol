@@ -9,6 +9,7 @@ import { AppModule } from '../../src/app.module';
 import { UserProvisioningService } from '../../src/modules/identity/application/services/user-provisioning.service';
 import { AuthService } from '../../src/modules/identity/application/services/auth.service';
 import { SESSION_COOKIE_NAME } from '../../src/modules/identity/presentation/utils/session-cookie.util';
+import { voucherPayment } from './support/voucher-payments';
 
 describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () => {
   let app: INestApplication;
@@ -1018,8 +1019,7 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
       const receivable = await prisma.receivable.findUniqueOrThrow({
         where: { saleId: saleRes.body.id },
       });
-      await request(app.getHttpServer())
-        .post(`/api/v1/receivables/${receivable.id}/payments`)
+      await voucherPayment(app.getHttpServer(), 'RECEIVABLE', receivable.id)
         .set('Cookie', supervisorCookie)
         .set('Idempotency-Key', randomUUID())
         .send({ amount: 2000, paymentMethod: 'EFECTIVO' })
@@ -1097,8 +1097,7 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
             .post(`/api/v1/sales/${saleId}/cancel`)
             .set('Cookie', supervisorCookie)
             .send({ reason: 'Anulación concurrente' }),
-          request(app.getHttpServer())
-            .post(`/api/v1/receivables/${receivable.id}/payments`)
+          voucherPayment(app.getHttpServer(), 'RECEIVABLE', receivable.id)
             .set('Cookie', supervisorCookie)
             .set('Idempotency-Key', randomUUID())
             .send({ amount: 100, paymentMethod: 'EFECTIVO' }),

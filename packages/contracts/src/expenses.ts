@@ -98,14 +98,6 @@ export interface CreateExpensePayload {
   supportDocUrl?: string;
 }
 
-export interface CreateExpensePaymentPayload {
-  amount: string | number;
-  paymentDate: string;
-  paymentMethod: 'EFECTIVO' | 'TRANSFERENCIA';
-  bankAccountId?: string;
-  notes?: string;
-}
-
 export interface ReverseExpensePaymentPayload {
   reversalReason: string;
 }

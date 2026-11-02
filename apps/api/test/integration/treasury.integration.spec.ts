@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { Test } from '@nestjs/testing';
 import type { INestApplication } from '@nestjs/common';
@@ -84,6 +85,39 @@ describe('Treasury & Bank Accounts (Slice 11.4 Integration with PostgreSQL)', ()
     });
     return account.id;
   }
+
+  // Los movimientos bancarios nacen de recibos de caja y comprobantes de egreso manuales
+  // (correcciones del cliente, 2026-11-02): devuelve el movimiento que respalda al documento
+  const bankMove = async (
+    bankAccountId: string,
+    body: { movementType: string; amount: string; concept: string; counterpartAccountId: string; externalReference?: string },
+  ) => {
+    const inflow = body.movementType !== 'WITHDRAWAL' && body.movementType !== 'FEE' && body.movementType !== 'TRANSFER_OUT';
+    const res = await request(app.getHttpServer())
+      .post(`/api/v1/treasury/${inflow ? 'cash-receipts' : 'disbursements'}`)
+      .set('Cookie', adminCookie)
+      .set('Idempotency-Key', randomUUID())
+      .send({
+        kind: 'MANUAL',
+        paymentMethod: 'TRANSFERENCIA',
+        bankAccountId,
+        amount: body.amount,
+        concept: body.concept,
+        counterpartAccountId: body.counterpartAccountId,
+      });
+    if (res.status !== 201) return { status: res.status, body: res.body };
+    const movement = await prisma.bankMovement.findFirstOrThrow({
+      where: { referenceDocumentType: 'TREASURY_DOCUMENT', referenceDocumentId: res.body.id },
+    });
+    return {
+      status: 201,
+      body: {
+        ...res.body,
+        balanceBefore: movement.balanceBefore.toFixed(2),
+        balanceAfter: movement.balanceAfter.toFixed(2),
+      },
+    };
+  };
 
   it('permite al cajero seleccionar cuentas activas sin exponer saldo ni número completo', async () => {
     const created = await request(app.getHttpServer())
@@ -234,10 +268,7 @@ describe('Treasury & Bank Accounts (Slice 11.4 Integration with PostgreSQL)', ()
     const accountId = acc.body.id;
 
     // 2. Registrar depósito por transferencia de cliente (+50.000)
-    const dep = await request(app.getHttpServer())
-      .post(`${root}/${accountId}/movements`)
-      .set('Cookie', adminCookie)
-      .send({
+    const dep = await bankMove(accountId, {
         movementType: 'TRANSFER_IN',
         counterpartAccountId,
         amount: '50000.00',
@@ -249,10 +280,7 @@ describe('Treasury & Bank Accounts (Slice 11.4 Integration with PostgreSQL)', ()
     expect(dep.body.balanceAfter).toBe('150000.00');
 
     // 3. Registrar retiro autorizado (-30.000)
-    const withdr = await request(app.getHttpServer())
-      .post(`${root}/${accountId}/movements`)
-      .set('Cookie', adminCookie)
-      .send({
+    const withdr = await bankMove(accountId, {
         movementType: 'WITHDRAWAL',
         counterpartAccountId,
         amount: '30000.00',
@@ -263,10 +291,7 @@ describe('Treasury & Bank Accounts (Slice 11.4 Integration with PostgreSQL)', ()
     expect(withdr.body.balanceAfter).toBe('120000.00');
 
     // 4. Intentar retiro que supere el saldo disponible (150.000 > 120.000)
-    const overdraft = await request(app.getHttpServer())
-      .post(`${root}/${accountId}/movements`)
-      .set('Cookie', adminCookie)
-      .send({
+    const overdraft = await bankMove(accountId, {
         movementType: 'WITHDRAWAL',
         counterpartAccountId,
         amount: '150000.00',
@@ -324,10 +349,7 @@ describe('Treasury & Bank Accounts (Slice 11.4 Integration with PostgreSQL)', ()
 
     // Disparamos 5 depósitos simultáneos de 10.000 cada uno
     const promises = Array.from({ length: 5 }).map((_, i) =>
-      request(app.getHttpServer())
-        .post(`${root}/${accountId}/movements`)
-        .set('Cookie', adminCookie)
-        .send({
+      bankMove(accountId, {
           movementType: 'DEPOSIT',
           counterpartAccountId,
           amount: '10000.00',
@@ -362,10 +384,7 @@ describe('Treasury & Bank Accounts (Slice 11.4 Integration with PostgreSQL)', ()
       });
     expect(account.status).toBe(201);
 
-    const movement = await request(app.getHttpServer())
-      .post(`${root}/${account.body.id}/movements`)
-      .set('Cookie', adminCookie)
-      .send({
+    const movement = await bankMove(account.body.id, {
         movementType: 'DEPOSIT',
         counterpartAccountId,
         amount: '0.01',

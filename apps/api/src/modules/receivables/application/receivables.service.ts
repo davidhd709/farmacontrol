@@ -15,7 +15,6 @@ import { CashService } from '../../cash/application/cash.service';
 import {
   ReceivableDto,
   ReceivableQueryFilters,
-  RegisterReceivablePaymentPayload,
   PaginatedResponse,
   AgingBreakdownDto,
   ReceivableStatus,
@@ -24,10 +23,6 @@ import {
 import { buildDocumentMovements, RawDocumentMovement } from '../../../common/utils/document-movements';
 import { centsToMoneyString, parseMoneyToCents } from '../../treasury/domain/treasury-rules';
 import { recordSourceBankMovement } from '../../treasury/application/record-source-bank-movement';
-import {
-  parsePaymentAmount,
-  requirePaymentBankAccountId,
-} from '../../treasury/application/payment-validation';
 import { agingBreakdown, agingBucketOf, daysOverdue } from '../../../common/utils/aging';
 import { IdempotencyService } from '../../../common/idempotency/idempotency.service';
 import { AccountingEngineService } from '../../accounting/application/accounting-engine.service';
@@ -240,126 +235,6 @@ export class ReceivablesService {
   // ------------------------------------------------------------------ //
   //  Commands
   // ------------------------------------------------------------------ //
-
-  /**
-   * Registra un abono a una cuenta por cobrar.
-   * HU-020 CA-2: POST /api/v1/receivables/:id/payments
-   * - Bloqueo pesimista con SELECT FOR UPDATE
-   * - Actualiza saldo y estado en la misma transacción
-   * - Genera ingreso en caja
-   */
-  async registerPayment(
-    receivableId: string,
-    payload: RegisterReceivablePaymentPayload,
-    userId: string,
-    idempotencyKey?: string,
-  ): Promise<ReceivableDto> {
-    const amountCents = parsePaymentAmount(payload.amount, 'Monto del abono');
-    if (amountCents <= 0n) {
-      throw new BadRequestException('El monto del abono debe ser mayor a cero');
-    }
-    const method = payload.paymentMethod ?? 'EFECTIVO';
-    if (method !== 'EFECTIVO' && method !== 'TRANSFERENCIA') {
-      throw new BadRequestException(
-        'El pago con tarjeta requiere una política de liquidación aprobada; use EFECTIVO o TRANSFERENCIA.',
-      );
-    }
-    // Todo pago mueve dinero: un reintento sin clave lo duplicaría (AGENTS.md §6).
-    if (!idempotencyKey?.trim())
-      throw new BadRequestException('Idempotency-Key es obligatorio para registrar un pago.');
-    if (method === 'TRANSFERENCIA') {
-      requirePaymentBankAccountId(payload.bankAccountId);
-    } else if (payload.bankAccountId) {
-      throw new BadRequestException('Una cuenta bancaria solo corresponde a TRANSFERENCIA.');
-    }
-    const endpoint = `/api/v1/receivables/${receivableId}/payments`;
-    const requestHash = this.idempotencyService.computeHash(endpoint, userId, payload);
-
-    return this.idempotencyService.retryOnSerialization(() =>
-      prisma.$transaction(
-        async (tx: any) => {
-          const cached = idempotencyKey
-            ? await this.idempotencyService.getRecord(idempotencyKey, requestHash, tx, 'http')
-            : null;
-          if (cached) return cached.responseBody as ReceivableDto;
-          const applied = await this.applyPaymentInTransaction(tx, {
-            receivableId,
-            amountCents,
-            paymentMethod: method,
-            bankAccountId: method === 'TRANSFERENCIA' ? payload.bankAccountId! : null,
-            notes: payload.notes ?? null,
-            userId,
-          });
-          const concept = `Abono cartera - Factura ${applied.invoiceNumber ?? receivableId}`;
-          const amount = centsToMoneyString(amountCents);
-
-          // Ingreso a caja o banco (dentro de la misma transacción); el trigger emite su recibo
-          let document: { id: string } | null;
-          if (method === 'TRANSFERENCIA') {
-            const movementId = await recordSourceBankMovement(tx, {
-              bankAccountId: payload.bankAccountId!,
-              movementType: 'DEPOSIT',
-              amount,
-              concept,
-              referenceDocumentType: 'RECEIVABLE_PAYMENT',
-              referenceDocumentId: applied.paymentId,
-              createdById: userId,
-            });
-            document = await tx.treasuryDocument.findUnique({ where: { bankMovementId: movementId } });
-          } else {
-            const movementId = await this.cashService.recordMovementInTransaction(tx, {
-              movementType: 'INGRESO_MANUAL',
-              amount,
-              paymentMethod: 'EFECTIVO',
-              reason: concept,
-              referenceDocumentType: 'RECEIVABLE',
-              referenceDocumentId: receivableId,
-              createdByUserId: userId,
-            });
-            document = await tx.treasuryDocument.findUnique({ where: { cashMovementId: movementId } });
-          }
-          if (document) {
-            await tx.receivablePayment.update({
-              where: { id: applied.paymentId },
-              data: { treasuryDocumentId: document.id },
-            });
-          }
-          const updated = await tx.receivable.findUniqueOrThrow({
-            where: { id: receivableId },
-            include: {
-              customer: { select: { name: true } },
-              sale: { select: { invoiceNumber: true } },
-            },
-          });
-
-          // Leer los pagos actualizados para devolver
-          const payments = await (tx as any).receivablePayment.findMany({
-            where: { receivableId },
-            orderBy: { createdAt: 'asc' },
-          });
-
-          const result = this.toDto(updated, payments);
-          if (idempotencyKey) {
-            await this.idempotencyService.saveRecord(
-              {
-                key: idempotencyKey,
-                endpoint,
-                requestHash,
-                userId,
-                responseStatus: 201,
-                responseBody: result,
-              },
-              tx,
-            );
-          }
-          return result;
-        },
-        {
-          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-        },
-      ),
-    );
-  }
 
   /**
    * Aplica un abono a una factura en cartera dentro de la transacción del llamador: bloquea la

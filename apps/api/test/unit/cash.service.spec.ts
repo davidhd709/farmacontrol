@@ -138,61 +138,7 @@ describe('CashService & Cash Entities (Unit)', () => {
     });
   });
 
-  describe('CashService.registerMovement', () => {
-    it('registra un movimiento de ingreso y emite evento de auditoría', async () => {
-      const result = await service.registerMovement(
-        {
-          movementType: 'INGRESO_MANUAL',
-          amount: 100000,
-          paymentMethod: 'EFECTIVO',
-          reason: 'Base de caja turno mañana',
-        },
-        { userId: 'user-cajero', ipAddress: '127.0.0.1', correlationId: 'corr-123' }
-      );
-
-      expect(result.id).toBe('mov-1');
-      expect(repository.saveTransactional).toHaveBeenCalledTimes(1);
-      expect(mockAuditService.recordEvent).toHaveBeenCalledWith(
-        expect.objectContaining({
-          action: 'cash:movement_created',
-          entity: 'CashMovement',
-          userId: 'user-cajero',
-          correlationId: 'corr-123',
-        }),
-        // La auditoría se registra con la misma transacción del movimiento
-        expect.anything(),
-      );
-    });
-
-    it('falla con BadRequestException si no se provee el usuario actor', async () => {
-      await expect(
-        service.registerMovement({
-          movementType: 'INGRESO_MANUAL',
-          amount: 50000,
-          reason: 'Sin usuario',
-        })
-      ).rejects.toThrow(BadRequestException);
-    });
-
-    it('propaga InsufficientCashBalanceException como conflicto de dominio (409)', async () => {
-      vi.spyOn(repository, 'saveTransactional').mockRejectedValueOnce(
-        new InsufficientCashBalanceException(20000, 50000)
-      );
-
-      await expect(
-        service.registerMovement(
-          {
-            movementType: 'EGRESO_MANUAL',
-            amount: 50000,
-            reason: 'Retiro excesivo',
-          },
-          { userId: 'user-1' }
-        )
-      ).rejects.toMatchObject({ kind: 'conflict', message: expect.stringContaining('Saldo insuficiente') });
-    });
-  });
-
-  describe('CashService.getBalance & listMovements', () => {
+  describe('CashService (consultas)', () => {
     it('obtiene el balance actual y métricas de caja', async () => {
       const balance = await service.getBalance();
 

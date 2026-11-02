@@ -17,6 +17,7 @@ import { CreditNotesService } from '../../src/modules/sales/application/credit-n
 import { DebitNotesService } from '../../src/modules/purchases/application/debit-notes.service';
 import { JournalService } from '../../src/modules/accounting/application/journal.service';
 import { SESSION_COOKIE_NAME } from '../../src/modules/identity/presentation/utils/session-cookie.util';
+import { voucherPayment } from './support/voucher-payments';
 
 describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)', () => {
   let app: INestApplication;
@@ -714,8 +715,7 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
         items: [{ productId, presentationId, quantityCommercial: 2 }],
       });
       const receivable = await prisma.receivable.findUniqueOrThrow({ where: { saleId } });
-      await request(app.getHttpServer())
-        .post(`/api/v1/receivables/${receivable.id}/payments`)
+      await voucherPayment(app.getHttpServer(), 'RECEIVABLE', receivable.id)
         .set('Cookie', cookie)
         .set('Idempotency-Key', randomUUID())
         .send({ amount: 5000, paymentMethod: 'EFECTIVO' })
@@ -873,8 +873,7 @@ describe('Credit and Debit Notes & Third-Party Reports Integration (PostgreSQL)'
         items: [{ productId, presentationId, quantityCommercial: 2 }],
       });
       const receivable = await prisma.receivable.findUniqueOrThrow({ where: { saleId } });
-      await request(app.getHttpServer())
-        .post(`/api/v1/receivables/${receivable.id}/payments`)
+      await voucherPayment(app.getHttpServer(), 'RECEIVABLE', receivable.id)
         .set('Cookie', cookie)
         .set('Idempotency-Key', randomUUID())
         .send({ amount: 15000, paymentMethod: 'EFECTIVO' })

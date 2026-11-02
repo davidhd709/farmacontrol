@@ -1,4 +1,3 @@
-import { prisma, Prisma } from '@farmacia/database';
 import {
   Inject,
   Injectable,
@@ -9,7 +8,6 @@ import {
 import {
   CashMovementDto,
   CashBalanceDto,
-  CreateCashMovementPayload,
   CashMovementQueryFilters,
   PaginatedResponse,
 } from '@farmacia/contracts';
@@ -19,14 +17,9 @@ import {
 } from '../domain/cash-movement.repository';
 import { CashMovement } from '../domain/cash-movement.entity';
 import {
-  InvalidCashAmountException,
-  InvalidCashMovementTypeException,
   InvalidCashPaymentMethodException,
-  InsufficientCashBalanceException,
-  CashMovementNotFoundException,
 } from '../domain/cash.exceptions';
 import { AuditService } from '../../audit/application/services/audit.service';
-import { serializableTransaction } from '../../../common/utils/serializable-transaction';
 import { AccountingEngineService } from '../../accounting/application/accounting-engine.service';
 
 export interface AuditContext {
@@ -45,96 +38,6 @@ export class CashService {
     @Optional()
     private readonly accountingEngine?: AccountingEngineService,
   ) {}
-
-  async registerMovement(
-    payload: CreateCashMovementPayload,
-    auditCtx: AuditContext = {},
-  ): Promise<CashMovementDto> {
-    const userId = auditCtx.userId;
-    if (!userId) {
-      throw new BadRequestException('El usuario que registra el movimiento es requerido');
-    }
-
-    const paymentMethod = payload.paymentMethod === undefined ? 'EFECTIVO' : payload.paymentMethod;
-    if (paymentMethod !== 'EFECTIVO') {
-      throw new BadRequestException(new InvalidCashPaymentMethodException().message);
-    }
-
-    try {
-      const persist = async (tx?: Prisma.TransactionClient) => {
-        const savedMovement = await this.cashRepository.saveTransactional(
-          {
-            movementType: payload.movementType,
-            amount: payload.amount,
-            paymentMethod,
-            reason: payload.reason,
-            referenceDocumentType: payload.referenceDocumentType,
-            referenceDocumentId: payload.referenceDocumentId,
-            createdByUserId: userId,
-          },
-          tx,
-        );
-
-        // Auditoría
-        if (this.auditService) {
-          await this.auditService.recordEvent(
-            {
-              action: 'cash:movement_created',
-              entity: 'CashMovement',
-              entityId: savedMovement.id,
-              userId,
-              ipAddress: auditCtx.ipAddress || null,
-              correlationId: auditCtx.correlationId || null,
-              details: {
-                movementType: savedMovement.movementType,
-                amount: savedMovement.amount,
-                paymentMethod: savedMovement.paymentMethod,
-                reason: savedMovement.reason,
-                balanceAfter: savedMovement.balanceAfter,
-                referenceDocumentType: savedMovement.referenceDocumentType,
-                referenceDocumentId: savedMovement.referenceDocumentId,
-              },
-            },
-            tx,
-          );
-        }
-
-        // F8: el movimiento manual se contabiliza contra la contrapartida que eligió el usuario
-        if (this.accountingEngine) {
-          if (!payload.counterpartAccountId) {
-            throw new BadRequestException(
-              'El movimiento manual de caja requiere la cuenta de contrapartida del asiento.',
-            );
-          }
-          await this.accountingEngine.handleManualTreasuryMovement(
-            {
-              sourceType: 'CASH_MOVEMENT',
-              sourceId: savedMovement.id,
-              direction: savedMovement.movementType.startsWith('INGRESO') ? 'IN' : 'OUT',
-              amount: Number(savedMovement.amount).toFixed(2),
-              counterpartAccountId: payload.counterpartAccountId,
-              description: `Movimiento de caja: ${savedMovement.reason}`,
-              createdById: userId,
-            },
-            tx!,
-          );
-        }
-
-        return this.toDto(savedMovement);
-      };
-      if (this.accountingEngine) return serializableTransaction(persist);
-      return this.auditService ? prisma.$transaction(persist) : persist();
-    } catch (err: any) {
-      if (
-        err instanceof InvalidCashAmountException ||
-        err instanceof InvalidCashMovementTypeException ||
-        err instanceof InsufficientCashBalanceException
-      ) {
-        throw new BadRequestException(err.message);
-      }
-      throw err;
-    }
-  }
 
   async getBalance(): Promise<CashBalanceDto> {
     return this.cashRepository.getCurrentBalance();

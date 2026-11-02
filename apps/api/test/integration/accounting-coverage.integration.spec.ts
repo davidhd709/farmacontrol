@@ -308,7 +308,7 @@ describe('Cobertura contable completa y reportes', () => {
     });
   });
 
-  it('exige contrapartida en caja y bancos manuales y reversa el asiento bancario', async () => {
+  it('el recibo y el egreso manuales exigen contrapartida y una corrección es el documento contrario', async () => {
     const expense = await prisma.account.create({
       data: {
         code: '519595',
@@ -318,10 +318,15 @@ describe('Cobertura contable completa y reportes', () => {
         allowsMovement: true,
       },
     });
-    const noCounterpart = await api()
-      .post('/api/v1/cash-movements')
-      .set('Cookie', cookie)
-      .send({ movementType: 'INGRESO_MANUAL', amount: 50000, reason: 'Base de caja' });
+    // El recibo o egreso manual nace como documento y su movimiento referencia al documento
+    const voucher = (path: 'cash-receipts' | 'disbursements', body: Record<string, unknown>) =>
+      api().post(`/api/v1/treasury/${path}`).set('Cookie', cookie).set('Idempotency-Key', randomUUID()).send({ kind: 'MANUAL', ...body });
+    const movementOf = async (documentId: string, source: 'cash' | 'bank') =>
+      source === 'cash'
+        ? (await prisma.cashMovement.findFirstOrThrow({ where: { referenceDocumentType: 'TREASURY_DOCUMENT', referenceDocumentId: documentId } })).id
+        : (await prisma.bankMovement.findFirstOrThrow({ where: { referenceDocumentType: 'TREASURY_DOCUMENT', referenceDocumentId: documentId } })).id;
+
+    const noCounterpart = await voucher('cash-receipts', { paymentMethod: 'EFECTIVO', amount: '50000.00', concept: 'Base de caja' });
     expect(noCounterpart.status).toBe(400);
 
     const capital = (
@@ -329,18 +334,19 @@ describe('Cobertura contable completa y reportes', () => {
         data: { code: '310505', name: 'Capital', type: 'EQUITY', level: 1, allowsMovement: true },
       })
     ).id;
-    const cashIn = await api().post('/api/v1/cash-movements').set('Cookie', cookie).send({
-      movementType: 'INGRESO_MANUAL',
-      amount: 50000,
-      reason: 'Base de caja',
+    const cashIn = await voucher('cash-receipts', {
+      paymentMethod: 'EFECTIVO',
+      amount: '50000.00',
+      concept: 'Base de caja',
       counterpartAccountId: capital,
     });
     expect(cashIn.status, JSON.stringify(cashIn.body)).toBe(201);
-    expect(await journal('CASH_MOVEMENT', cashIn.body.id)).toEqual({ CASH: '50000.00' });
+    const cashMovementId = await movementOf(cashIn.body.id, 'cash');
+    expect(await journal('CASH_MOVEMENT', cashMovementId)).toEqual({ CASH: '50000.00' });
     const capitalLine = await prisma.journalEntryLine.findFirstOrThrow({
       where: {
         accountId: capital,
-        journalEntry: { sourceType: 'CASH_MOVEMENT', sourceId: cashIn.body.id },
+        journalEntry: { sourceType: 'CASH_MOVEMENT', sourceId: cashMovementId },
       },
     });
     expect(capitalLine.credit.toFixed(2)).toBe('50000.00');
@@ -354,38 +360,33 @@ describe('Cobertura contable completa y reportes', () => {
         createdById: adminId,
       },
     });
-    const bankOut = await api()
-      .post(`/api/v1/treasury/bank-accounts/${bank.id}/movements`)
-      .set('Cookie', cookie)
-      .send({
-        movementType: 'DEPOSIT',
-        amount: '80000.00',
-        concept: 'Aporte',
-        counterpartAccountId: capital,
-      });
-    expect(bankOut.status, JSON.stringify(bankOut.body)).toBe(201);
-    const fee = await api()
-      .post(`/api/v1/treasury/bank-accounts/${bank.id}/movements`)
-      .set('Cookie', cookie)
-      .send({
-        movementType: 'FEE',
-        amount: '3000.00',
-        concept: 'Comisión',
-        counterpartAccountId: expense.id,
-      });
-    expect(fee.status).toBe(201);
-    expect(await journal('BANK_MOVEMENT', fee.body.id)).toMatchObject({ BANK: '-3000.00' });
-
-    const reverse = await api()
-      .post(`/api/v1/treasury/bank-accounts/${bank.id}/movements/${fee.body.id}/reverse`)
-      .set('Cookie', cookie)
-      .send({ reason: 'Comisión cobrada por error' });
-    expect(reverse.status, JSON.stringify(reverse.body)).toBe(200);
-    const original = await prisma.journalEntry.findFirstOrThrow({
-      where: { sourceType: 'BANK_MOVEMENT', sourceId: fee.body.id },
-      include: { reversal: true },
+    const bankIn = await voucher('cash-receipts', {
+      paymentMethod: 'TRANSFERENCIA',
+      bankAccountId: bank.id,
+      amount: '80000.00',
+      concept: 'Aporte',
+      counterpartAccountId: capital,
     });
-    expect(original.reversal).not.toBeNull();
+    expect(bankIn.status, JSON.stringify(bankIn.body)).toBe(201);
+    const fee = await voucher('disbursements', {
+      paymentMethod: 'TRANSFERENCIA',
+      bankAccountId: bank.id,
+      amount: '3000.00',
+      concept: 'Comisión',
+      counterpartAccountId: expense.id,
+    });
+    expect(fee.status, JSON.stringify(fee.body)).toBe(201);
+    expect(await journal('BANK_MOVEMENT', await movementOf(fee.body.id, 'bank'))).toMatchObject({ BANK: '-3000.00' });
+
+    // La comisión cobrada por error se corrige con el recibo contrario, no revirtiendo el movimiento
+    const correction = await voucher('cash-receipts', {
+      paymentMethod: 'TRANSFERENCIA',
+      bankAccountId: bank.id,
+      amount: '3000.00',
+      concept: 'Devolución de comisión cobrada por error',
+      counterpartAccountId: expense.id,
+    });
+    expect(correction.status, JSON.stringify(correction.body)).toBe(201);
 
     const rec = await api().get('/api/v1/accounting/reconciliation').set('Cookie', cookie);
     expect(rec.body.items.find((i: { key: string }) => i.key === 'BANK')).toMatchObject({

@@ -95,9 +95,23 @@ Cada flujo (venta, abono, pago a proveedor, gasto, nota crédito, movimiento man
 4. **Edades de cartera y cuentas por pagar.** Días vencidos desde la fecha de vencimiento: Corriente (no vencida o hasta 30 días), 31–60, 61–90, más de 90. Las causaciones sin vencimiento se miden desde su fecha.
 5. **Cambio de producto.** La devolución reembolsa por el medio original (o reduce la cartera si fue a crédito) y la venta nueva se cobra normalmente, quedando vinculada a la nota crédito. El efecto neto en caja es la diferencia.
 
+## 3.1 Rutas retiradas (2026-11-02)
+
+Todo ingreso o egreso de dinero nace en un recibo de caja o un comprobante de egreso. Estas rutas responden **410 Gone** con la ruta que las reemplaza; los registros históricos siguen consultables por sus `GET`:
+
+| Ruta retirada | Reemplazo |
+|---|---|
+| `POST /cash-movements` | `POST /treasury/cash-receipts` o `POST /treasury/disbursements` (tipo `MANUAL`, efectivo) |
+| `POST /treasury/bank-accounts/:id/movements` | Recibo o egreso `MANUAL` por transferencia |
+| `POST /treasury/bank-accounts/:id/movements/:movementId/reverse` | El documento contrario (recibo o egreso manual) |
+| `POST /receivables/:id/payments` | `POST /treasury/cash-receipts` (tipo `CARTERA`) |
+| `POST /payables/:id/payments` | `POST /treasury/disbursements` (tipo `PROVEEDOR`, `FACTURA_COMPRA`) |
+| `POST /expenses/:id/payments` | `POST /treasury/disbursements` (tipo `PROVEEDOR`, `CAUSACION_GASTO`) |
+
+Siguen activas las reversiones de abonos y pagos (`.../payments/:paymentId/reverse`), que son anulaciones con su propio movimiento y asiento. Consecuencia para los roles: cartera y compras ya no registran abonos ni pagos por API (en la interfaz ya no podían desde la fase 3); los recibos y egresos exigen el permiso contable. Queda pendiente la decisión del cliente sobre los permisos del rol cartera.
+
 ## 4. Pendientes y dudas abiertas
 
-- Los endpoints antiguos de pago por factura (`POST /receivables/:id/payments`, `POST /payables/:id/payments`, `POST /expenses/:id/payments`) y los de movimientos manuales (`POST /cash-movements`, `POST /treasury/bank-accounts/:id/movements`) siguen en la API por compatibilidad: la interfaz ya no los usa y cada uno sigue emitiendo su RC/CE por el trigger. Retirarlos es una decisión aparte (rompe integraciones o scripts que los usen).
 - `accounting-coverage` ("nota crédito devuelve el INC…") falla de noche, entre las 19:00 y las 24:00 de Bogotá, cuando la fecha UTC ya cambió: es preexistente. La prueba de `full-system-lifecycle` que dependía de octubre de 2026 se corrigió para usar la fecha de negocio de la corrida.
 
 - ⚠️ Pantalla del botón "Reservar" (sección 2, fase 1).

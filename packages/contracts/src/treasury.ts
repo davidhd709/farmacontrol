@@ -88,18 +88,6 @@ export interface BankMovementDto {
   createdAt: string;
 }
 
-export interface CreateBankMovementDto {
-  movementType: BankMovementType;
-  amount: string;
-  concept: string;
-  externalReference?: string | null;
-  referenceDocumentType?: string | null;
-  referenceDocumentId?: string | null;
-  movementDate?: string;
-  /** F8: cuenta imputable de contrapartida del asiento (obligatoria) */
-  counterpartAccountId?: string;
-}
-
 export interface BankAccountsSummaryDto {
   totalBalance: string;
   activeAccountsCount: number;

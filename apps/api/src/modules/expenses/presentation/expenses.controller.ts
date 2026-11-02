@@ -19,7 +19,6 @@ import {
   ExpenseDto,
   ExpenseMovementsDto,
   CreateExpensePayload,
-  CreateExpensePaymentPayload,
   CancelExpensePayload,
   ReverseExpensePaymentPayload,
   ExpenseQueryFilters,
@@ -34,6 +33,7 @@ import {
 import { PermissionsGuard } from '../../identity/presentation/guards/permissions.guard';
 import { RequirePermissions } from '../../identity/presentation/decorators/require-permissions.decorator';
 import { CurrentUser } from '../../identity/presentation/decorators/current-user.decorator';
+import { retiredRoute, DISBURSEMENT_REPLACEMENT } from '../../../common/http/retired-route';
 
 @Controller('expenses')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
@@ -117,24 +117,11 @@ export class ExpensesController {
     return this.service.createExpense(payload, user.id, idempotencyKey);
   }
 
+  /** Retirada: el pago de una factura se registra con un recibo de caja o comprobante de egreso. */
   @Post(':id/payments')
   @RequirePermissions(SYSTEM_PERMISSIONS.EXPENSES_MANAGE)
-  async pay(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body(
-      new RequestShapeValidationPipe({
-        amount: 'decimal',
-        paymentDate: 'date',
-        paymentMethod: { values: ['EFECTIVO', 'TRANSFERENCIA'] },
-        bankAccountId: 'uuid?',
-        notes: 'text?',
-      }),
-    )
-    payload: CreateExpensePaymentPayload,
-    @CurrentUser() user: AuthenticatedUserContext,
-    @Headers('idempotency-key') idempotencyKey: string | undefined,
-  ): Promise<ExpenseDto> {
-    return this.service.payExpense(id, payload, user.id, idempotencyKey);
+  registerPayment(): never {
+    return retiredRoute('POST /api/v1/expenses/:id/payments', DISBURSEMENT_REPLACEMENT);
   }
 
   @Post(':id/cancel')

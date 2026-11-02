@@ -15,6 +15,7 @@ import { AuthService } from '../../src/modules/identity/application/services/aut
 import { ExpensesService } from '../../src/modules/expenses/application/expenses.service';
 import { ExpenseCategoriesService } from '../../src/modules/expenses/application/expense-categories.service';
 import { SESSION_COOKIE_NAME } from '../../src/modules/identity/presentation/utils/session-cookie.util';
+import { voucherPayment } from './support/voucher-payments';
 
 describe('Expenses Module Integration (PostgreSQL)', () => {
   let defaultSupplierId: string;
@@ -465,8 +466,7 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
       `);
 
       try {
-        const res = await request(app.getHttpServer())
-          .post(`/api/v1/expenses/${expense.id}/payments`)
+        const res = await voucherPayment(app.getHttpServer(), 'EXPENSE', expense.id)
           .set('Cookie', cookie)
           .set('Idempotency-Key', key)
           .send({
@@ -526,8 +526,7 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
       );
 
       // Abono parcial de $120.000 en efectivo
-      const payRes = await request(app.getHttpServer())
-        .post(`/api/v1/expenses/${expense.id}/payments`)
+      const payRes = await voucherPayment(app.getHttpServer(), 'EXPENSE', expense.id)
         .set('Cookie', cookie)
         .set('Idempotency-Key', randomUUID())
         .send({
@@ -565,8 +564,7 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
       expect(creditLine?.credit.toFixed(2)).toBe('120000.00');
 
       // Segundo pago por saldo restante ($80.000)
-      const payFinal = await request(app.getHttpServer())
-        .post(`/api/v1/expenses/${expense.id}/payments`)
+      const payFinal = await voucherPayment(app.getHttpServer(), 'EXPENSE', expense.id)
         .set('Cookie', cookie)
         .set('Idempotency-Key', randomUUID())
         .send({
@@ -603,16 +601,17 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
         randomUUID(),
       );
 
-      const paidExpense = await expensesService.payExpense(
-        expense.id,
-        {
+      const paidExpense = (
+        await voucherPayment(app.getHttpServer(), 'EXPENSE', expense.id)
+        .set('Cookie', cookie)
+        .set('Idempotency-Key', randomUUID())
+        .send({
           amount: '150000.00',
           paymentDate: '2026-10-05',
           paymentMethod: 'EFECTIVO',
-        },
-        adminUserId,
-        randomUUID(),
-      );
+        })
+        .expect(201)
+      ).body;
 
       expect(paidExpense.status).toBe('PAGADO');
       const paymentId = paidExpense.payments[0].id;
@@ -903,32 +902,30 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
         paymentDate: '2026-10-05',
         paymentMethod: 'EFECTIVO',
       };
-      const first = await request(app.getHttpServer())
-        .post(`/api/v1/expenses/${expense.id}/payments`)
+      const first = await voucherPayment(app.getHttpServer(), 'EXPENSE', expense.id)
         .set('Cookie', cookie)
         .set('Idempotency-Key', firstKey)
         .send(firstPayload)
         .expect(201);
 
-      await request(app.getHttpServer())
-        .post(`/api/v1/expenses/${expense.id}/payments`)
+      await voucherPayment(app.getHttpServer(), 'EXPENSE', expense.id)
         .set('Cookie', cookie)
         .set('Idempotency-Key', randomUUID())
         .send({ amount: '50000.00', paymentDate: '2026-10-06', paymentMethod: 'EFECTIVO' })
         .expect(201);
 
-      const retry = await request(app.getHttpServer())
-        .post(`/api/v1/expenses/${expense.id}/payments`)
+      const retry = await voucherPayment(app.getHttpServer(), 'EXPENSE', expense.id)
         .set('Cookie', cookie)
         .set('Idempotency-Key', firstKey)
         .send(firstPayload)
         .expect(201);
-      expect(retry.body).toEqual(first.body);
-      expect(retry.body.balance).toBe('50000.00');
+      // El reintento devuelve el mismo comprobante de egreso; el gasto ya refleja ambos pagos
+      expect(retry.document).toEqual(first.document);
+      expect(first.body.balance).toBe('50000.00');
+      expect(retry.body.balance).toBe('0.00');
       expect(await prisma.expensePayment.count({ where: { expenseId: expense.id } })).toBe(2);
 
-      await request(app.getHttpServer())
-        .post(`/api/v1/expenses/${expense.id}/payments`)
+      await voucherPayment(app.getHttpServer(), 'EXPENSE', expense.id)
         .set('Cookie', cookie)
         .set('Idempotency-Key', firstKey)
         .send({ ...firstPayload, amount: '30000.00' })
@@ -958,8 +955,7 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
 
       const key = randomUUID();
       const pay = () =>
-        request(app.getHttpServer())
-          .post(`/api/v1/expenses/${expense.id}/payments`)
+        voucherPayment(app.getHttpServer(), 'EXPENSE', expense.id)
           .set('Cookie', cookie)
           .set('Idempotency-Key', key)
           .send({ amount: '40000.00', paymentDate: '2026-10-05', paymentMethod: 'EFECTIVO' });
@@ -970,8 +966,7 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
       const stored = await prisma.expense.findUniqueOrThrow({ where: { id: expense.id } });
       expect(stored.balance.toFixed(2)).toBe('50000.00');
 
-      await request(app.getHttpServer())
-        .post(`/api/v1/expenses/${expense.id}/payments`)
+      await voucherPayment(app.getHttpServer(), 'EXPENSE', expense.id)
         .set('Cookie', cookie)
         .send({ amount: '10000.00', paymentDate: '2026-10-06', paymentMethod: 'EFECTIVO' })
         .expect(400);
@@ -1003,17 +998,16 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
         adminUserId,
         randomUUID(),
       );
-      await expensesService.payExpense(
-        paid.id,
-        {
+      await voucherPayment(app.getHttpServer(), 'EXPENSE', paid.id)
+        .set('Cookie', cookie)
+        .set('Idempotency-Key', randomUUID())
+        .send({
           amount: '100000.00',
           paymentDate: '2026-10-02',
           paymentMethod: 'TRANSFERENCIA',
           bankAccountId: bankAccount.id,
-        },
-        adminUserId,
-        randomUUID(),
-      );
+        })
+        .expect(201);
 
       // 1 pendiente
       await expensesService.createExpense(

@@ -902,13 +902,6 @@ export interface ExpenseMovementsDto {
   movements: DocumentMovementDto[];
 }
 
-export interface RegisterReceivablePaymentPayload {
-  amount: number | string;
-  paymentMethod?: string;
-  bankAccountId?: string;
-  notes?: string | null;
-}
-
 export interface ReceivableQueryFilters {
   customerId?: string;
   status?: ReceivableStatus;
@@ -953,13 +946,6 @@ export interface PayableDto {
   createdAt: string;
   updatedAt: string;
   payments?: PayablePaymentDto[];
-}
-
-export interface RegisterPayablePaymentPayload {
-  amount: number | string;
-  paymentMethod?: string;
-  bankAccountId?: string;
-  notes?: string | null;
 }
 
 export interface ReversePaymentPayload {

@@ -20,7 +20,6 @@ describe('Recibos de caja y comprobantes de egreso como documento de origen', ()
   let app: INestApplication;
   let adminCookie: string;
   let cashierCookie: string;
-  let collectorCookie: string;
   let adminId: string;
   let customerId: string;
   let supplierId: string;
@@ -47,11 +46,6 @@ describe('Recibos de caja y comprobantes de egreso como documento de origen', ()
     const cashierRole = await prisma.role.findUniqueOrThrow({ where: { name: 'cajero' } });
     await prisma.userRole.create({ data: { userId: cashier.id, roleId: cashierRole.id } });
     cashierCookie = `${SESSION_COOKIE_NAME}=${(await auth.login('tesoreria_cajero', 'AdminPassword#2026')).rawToken}`;
-    // Rol cartera: gestiona cuentas por cobrar pero no mueve caja ni bancos
-    const collector = await prisma.user.create({ data: { username: 'tesoreria_cartera', passwordHash: admin.passwordHash } });
-    const collectorRole = await prisma.role.findUniqueOrThrow({ where: { name: 'cartera' } });
-    await prisma.userRole.create({ data: { userId: collector.id, roleId: collectorRole.id } });
-    collectorCookie = `${SESSION_COOKIE_NAME}=${(await auth.login('tesoreria_cartera', 'AdminPassword#2026')).rawToken}`;
   }, 45000);
 
   beforeEach(async () => {
@@ -368,15 +362,31 @@ describe('Recibos de caja y comprobantes de egreso como documento de origen', ()
     await post('treasury/cash-receipts', { kind: 'MANUAL', paymentMethod: 'EFECTIVO', concept: 'x', amount: '1' }, adminCookie, '').expect(400);
   });
 
-  it('ruta antigua y recibo aplican la misma regla: el permiso de cartera autoriza el abono, no el ingreso manual', async () => {
+  it('las rutas antiguas para crear pagos y movimientos manuales responden 410 sin mover dinero', async () => {
     const receivable = await creditSale(2);
-    const abono = await request(app.getHttpServer())
-      .post(`/api/v1/receivables/${receivable.id}/payments`)
-      .set('Cookie', collectorCookie)
-      .set('Idempotency-Key', randomUUID())
-      .send({ amount: 1000, paymentMethod: 'EFECTIVO' });
-    expect(abono.status, JSON.stringify(abono.body)).toBe(201);
-    expect((await prisma.receivable.findUniqueOrThrow({ where: { id: receivable.id } })).balance.toFixed(2)).toBe('1000.00');
+    const invoice = await payable('FC-OLD', '1000.00');
+    const expense = await causation('1000.00');
+    const retired: Array<[string, Record<string, unknown>]> = [
+      [`receivables/${receivable.id}/payments`, { amount: 1000, paymentMethod: 'EFECTIVO' }],
+      [`payables/${invoice.id}/payments`, { amount: 1000, paymentMethod: 'EFECTIVO' }],
+      [`expenses/${expense.id}/payments`, { amount: '1000.00', paymentDate: '2026-10-05', paymentMethod: 'EFECTIVO' }],
+      ['cash-movements', { movementType: 'INGRESO_MANUAL', amount: 1000, reason: 'Ingreso', counterpartAccountId: capitalAccountId }],
+      [`treasury/bank-accounts/${bankId}/movements`, { movementType: 'DEPOSIT', amount: '1000.00', concept: 'Depósito', counterpartAccountId: capitalAccountId }],
+      [`treasury/bank-accounts/${bankId}/movements/${randomUUID()}/reverse`, { reason: 'Corrección' }],
+    ];
+    for (const [path, body] of retired) {
+      const res = await post(path, body);
+      expect(res.status, path).toBe(410);
+      expect(res.body.message).toMatch(/fue retirada.*(cash-receipts|disbursements)/);
+    }
+    expect(await prisma.cashMovement.count()).toBe(0);
+    expect(await prisma.bankMovement.count()).toBe(0);
+    expect(await prisma.treasuryDocument.count()).toBe(0);
+    expect((await prisma.receivable.findUniqueOrThrow({ where: { id: receivable.id } })).balance.toFixed(2)).toBe('2000.00');
+
+    // Los registros siguen consultables
+    await request(app.getHttpServer()).get('/api/v1/cash-movements').set('Cookie', adminCookie).expect(200);
+    await request(app.getHttpServer()).get(`/api/v1/treasury/bank-accounts/${bankId}/movements`).set('Cookie', adminCookie).expect(200);
 
     // El cajero mueve caja pero no bancos: un egreso manual por transferencia se rechaza
     const manual = await post(

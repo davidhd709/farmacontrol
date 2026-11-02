@@ -17,6 +17,7 @@ import { JournalService } from '../../src/modules/accounting/application/journal
 import { AccountingReportsService } from '../../src/modules/accounting/application/reports.service';
 import { ExpenseCategoriesService } from '../../src/modules/expenses/application/expense-categories.service';
 import { SESSION_COOKIE_NAME } from '../../src/modules/identity/presentation/utils/session-cookie.util';
+import { voucherPayment } from './support/voucher-payments';
 
 /**
  * FASE 6 — SIMULACIÓN INTEGRAL MULTIDÍA DE EXTREMO A EXTREMO (E2E / SLICE 11.9)
@@ -660,9 +661,8 @@ describe('Full System Multi-day Lifecycle Simulation (PostgreSQL Real)', () => {
   // =========================================================================
   describe('Día 4: Cobro de Cartera, Pago a Proveedor, Gastos Operativos y Anulación', () => {
     it('Cobro de Cartera: Don Carlos abona $100.000 en efectivo a su deuda de $150.000', async () => {
-      const res = await request(app.getHttpServer())
-        .post(`/api/v1/receivables/${receivableId}/payments`)
-        .set('Cookie', carteraCookie)
+      const res = await voucherPayment(app.getHttpServer(), 'RECEIVABLE', receivableId)
+        .set('Cookie', adminCookie)
         .set('Idempotency-Key', 'idem-cxc-payment-1')
         .send({
           amount: '100000.00',
@@ -683,8 +683,7 @@ describe('Full System Multi-day Lifecycle Simulation (PostgreSQL Real)', () => {
     });
 
     it('Pago a Proveedor: Se transfiere $1.000.000 por banco a la factura de compra de $1.740.000', async () => {
-      const res = await request(app.getHttpServer())
-        .post(`/api/v1/payables/${payableId}/payments`)
+      const res = await voucherPayment(app.getHttpServer(), 'PAYABLE', payableId)
         .set('Cookie', adminCookie)
         .set('Idempotency-Key', 'idem-cxp-payment-1')
         .send({

@@ -40,10 +40,10 @@ describe('OpenAPI', () => {
         expect(responses[status], `${path}: ${status}`).toBeDefined();
       }
     }
+    // Ruta retirada: documenta su 410 y la que la reemplaza
     const bankResponses =
       response.body.paths['/api/v1/treasury/bank-accounts/{id}/movements'].post.responses;
-    expect(bankResponses['409']).toBeDefined();
-    expect(bankResponses['500']).toBeDefined();
+    expect(bankResponses['410']).toBeDefined();
   });
 
   it('serves the Swagger UI', async () => {

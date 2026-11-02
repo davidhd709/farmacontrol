@@ -9,7 +9,6 @@ import {
   ExpenseDto,
   ExpensePaymentDto,
   CreateExpensePayload,
-  CreateExpensePaymentPayload,
   CancelExpensePayload,
   ReverseExpensePaymentPayload,
   ExpenseQueryFilters,
@@ -290,101 +289,6 @@ export class ExpensesService {
       }
     }
 
-  }
-
-  async payExpense(
-    expenseId: string,
-    payload: CreateExpensePaymentPayload,
-    userId: string,
-    idempotencyKey?: string,
-  ): Promise<ExpenseDto> {
-    validateUuid(expenseId, 'ID de gasto');
-    if (!idempotencyKey?.trim()) {
-      throw new BadRequestException('Idempotency-Key es obligatorio para registrar un pago.');
-    }
-    const payCents = validateExpenseAmount(payload.amount);
-    const payStr = centsToMoneyString(payCents);
-
-    const method = payload.paymentMethod?.toUpperCase();
-    if (method !== 'EFECTIVO' && method !== 'TRANSFERENCIA') {
-      throw new BadRequestException('El método de pago debe ser EFECTIVO o TRANSFERENCIA.');
-    }
-
-    if (method === 'TRANSFERENCIA') {
-      if (!payload.bankAccountId) {
-        throw new BadRequestException('Debe seleccionar una cuenta bancaria para pago por transferencia.');
-      }
-      validateUuid(payload.bankAccountId, 'ID de cuenta bancaria');
-    }
-
-    const paymentDate = new Date(payload.paymentDate || businessToday());
-
-    const endpoint = `/api/v1/expenses/${expenseId}/payments`;
-    const requestHash = this.idempotencyService.computeHash(endpoint, userId, payload);
-    const key = idempotencyKey!;
-
-    return this.idempotencyService.retryOnSerialization(() => prisma.$transaction(async (tx) => {
-      const cached = await this.idempotencyService.getRecord(key, requestHash, tx, 'http');
-      if (cached) return cached.responseBody as ExpenseDto;
-
-      const applied = await this.applyPaymentInTransaction(tx, {
-        expenseId,
-        amountCents: payCents,
-        paymentMethod: method,
-        bankAccountId: method === 'TRANSFERENCIA' ? payload.bankAccountId! : null,
-        paymentDate,
-        notes: payload.notes?.trim() || null,
-        userId,
-      });
-      const concept = `Abono gasto: ${applied.description} (${applied.beneficiary})`;
-
-      // Movimiento de tesorería; el trigger emite su comprobante de egreso
-      let document: { id: string } | null;
-      if (method === 'EFECTIVO') {
-        const movementId = await this.cashService.recordMovementInTransaction(tx, {
-          movementType: 'EGRESO_MANUAL',
-          amount: payStr,
-          paymentMethod: 'EFECTIVO',
-          reason: concept,
-          referenceDocumentType: 'EXPENSE_PAYMENT',
-          referenceDocumentId: applied.paymentId,
-          createdByUserId: userId,
-        });
-        document = await tx.treasuryDocument.findUnique({ where: { cashMovementId: movementId } });
-      } else {
-        const movementId = await recordSourceBankMovement(tx, {
-          bankAccountId: payload.bankAccountId!,
-          movementType: 'WITHDRAWAL',
-          amount: payStr,
-          concept,
-          referenceDocumentType: 'EXPENSE_PAYMENT',
-          referenceDocumentId: applied.paymentId,
-          createdById: userId,
-        });
-        document = await tx.treasuryDocument.findUnique({ where: { bankMovementId: movementId } });
-      }
-      if (document) {
-        await tx.expensePayment.update({
-          where: { id: applied.paymentId },
-          data: { treasuryDocumentId: document.id },
-        });
-      }
-
-      const record = await tx.expense.findUnique({
-        where: { id: expenseId },
-        include: fullExpenseInclude,
-      });
-      if (!record) throw new Error('No fue posible recuperar el gasto después de registrar el pago.');
-      const response = this.toDto(record);
-
-      await this.idempotencyService.saveRecord(
-        { key, endpoint, requestHash, userId, responseStatus: 201, responseBody: response },
-        tx,
-      );
-      return response;
-    }, {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-    }));
   }
 
   /**
