@@ -301,6 +301,16 @@ export interface UnitOfMeasureQueryFilters {
   pageSize?: number;
 }
 
+/**
+ * Producto encontrado por lector de código de barras: coincidencia exacta con el código de
+ * barras del producto o de una presentación, o con el código interno del producto.
+ */
+export interface ProductBarcodeLookupDto {
+  product: ProductDto;
+  /** Presentación cuyo código de barras se leyó; null si el código es del producto */
+  presentationId: string | null;
+}
+
 export interface ProductDto {
   id: string;
   categoryId: string;

@@ -23,6 +23,7 @@ import {
   INVENTORY_CONTROL_MODES,
   type InventoryControlMode,
   type PaginatedResponse,
+  type ProductBarcodeLookupDto,
   type ProductDto,
   type ProductSettingsDto,
   SYSTEM_PERMISSIONS,
@@ -134,6 +135,27 @@ export class ProductController {
   @ApiOkResponse({ description: 'Perfil sectorial y modos de control permitidos.' })
   public async getSettings(): Promise<ProductSettingsDto> {
     return this.productService.getProductSettings();
+  }
+
+  /**
+   * GET /api/v1/products/barcode/:code
+   * Lector de código de barras: coincidencia exacta con el código de barras del producto o de
+   * una presentación, o con el código interno. 404 si no existe.
+   */
+  @Get('barcode/:code')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions(SYSTEM_PERMISSIONS.PRODUCTS_READ)
+  @ApiOperation({ summary: 'Busca un producto por código de barras o código interno' })
+  public async lookupByCode(@Param('code') code: string): Promise<ProductBarcodeLookupDto> {
+    if (code.length > 100) throw new BadRequestException('El código leído es demasiado largo.');
+    try {
+      return await this.productService.lookupByCode(code);
+    } catch (err) {
+      if (err instanceof ProductNotFoundException) {
+        throw new NotFoundException(`No existe un producto con el código "${code.trim()}".`);
+      }
+      throw err;
+    }
   }
 
   /**

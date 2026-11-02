@@ -389,6 +389,56 @@ describe('PosPage (Frontend POS UX-03 / HU-017)', () => {
     expect(productsApi.fetchProducts).toHaveBeenCalledTimes(2);
   });
 
+  it('la pistola lectora agrega la presentación exacta, limpia el campo y vuelve a enfocarlo', async () => {
+    const box = {
+      id: 'pres-box',
+      productId: mockProduct.id,
+      name: 'Caja x 10',
+      conversionFactor: 10,
+      price: '4500.00',
+      cost: '0',
+      isActive: true,
+      isDefault: false,
+      saleEnabled: true,
+    };
+    const scanned = {
+      ...mockProduct,
+      availableStock: 100,
+      presentations: [box],
+    } as typeof mockProduct;
+    vi.spyOn(productsApi, 'lookupProductByCode').mockResolvedValue({
+      product: scanned,
+      presentationId: 'pres-box',
+    });
+    renderComponent();
+    const input = screen.getByLabelText(/Buscar producto por nombre/i);
+    fireEvent.change(input, { target: { value: '7702001000024' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(await screen.findByText(/Caja x 10/)).toBeInTheDocument();
+    expect(productsApi.lookupProductByCode).toHaveBeenCalledWith('7702001000024');
+    expect(input).toHaveValue('');
+    expect(input).toHaveFocus();
+  });
+
+  it('un código inexistente avisa sin bloquear y deja el campo listo para el siguiente escaneo', async () => {
+    vi.spyOn(productsApi, 'lookupProductByCode').mockResolvedValue(null);
+    vi.mocked(productsApi.fetchProducts).mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 10,
+      totalPages: 0,
+    });
+    renderComponent();
+    const input = screen.getByLabelText(/Buscar producto por nombre/i);
+    fireEvent.change(input, { target: { value: '0000000000000' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(await screen.findByText(/"0000000000000" no existe/)).toBeInTheDocument();
+    expect(input).toHaveValue('');
+    expect(input).toHaveFocus();
+    expect(input).toBeEnabled();
+  });
+
   it('Enter agrega la opción marcada con las flechas, no el primer resultado', async () => {
     vi.mocked(productsApi.fetchProducts).mockResolvedValue({
       items: [mockProduct, { ...mockProduct, id: 'prod-second', name: 'Segundo producto' }],

@@ -254,6 +254,32 @@ describe('Purchases Frontend (UX-15 & UX-16)', () => {
     expect(screen.getByRole('button', { name: 'Procesando Transacción...' })).toBeDisabled();
   });
 
+  it('la pistola lectora llena la primera línea, suma unidades al repetir y avisa códigos inexistentes', async () => {
+    const lookup = vi.spyOn(productsApi, 'lookupProductByCode').mockImplementation(async (code) =>
+      code === '7700000000001' ? { product: mockProducts[0], presentationId: null } : null,
+    );
+    render(
+      <MemoryRouter>
+        <ReceivePurchasePage />
+      </MemoryRouter>,
+    );
+    await screen.findByRole('button', { name: 'Confirmar Recepción de Compra' });
+    const scan = screen.getByLabelText('Escanear código de barras');
+    for (const code of ['7700000000001', '7700000000001']) {
+      fireEvent.change(scan, { target: { value: code } });
+      fireEvent.keyDown(scan, { key: 'Enter' });
+      await waitFor(() => expect(lookup).toHaveBeenCalledWith(code));
+    }
+    await waitFor(() => expect(screen.getByLabelText(/Costo por/)).toHaveValue(800));
+    await waitFor(() => expect(screen.getByLabelText(/Cantidad/)).toHaveValue(2));
+    expect(screen.getAllByLabelText(/Costo por/)).toHaveLength(1);
+
+    fireEvent.change(scan, { target: { value: '123' } });
+    fireEvent.keyDown(scan, { key: 'Enter' });
+    expect(await screen.findByText('El código "123" no existe en el catálogo.')).toBeInTheDocument();
+    expect(scan).toHaveValue('');
+  });
+
   it('las líneas dinámicas conservan sus valores al eliminar otra y cambiar de vista', async () => {
     render(
       <MemoryRouter>

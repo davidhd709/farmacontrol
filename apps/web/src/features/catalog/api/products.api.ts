@@ -1,13 +1,14 @@
 import type {
   CreateProductPayload,
   PaginatedResponse,
+  ProductBarcodeLookupDto,
   ProductDto,
   ProductPresentationDto,
   ProductQueryFilters,
   ProductSettingsDto,
   UpdateProductPayload,
 } from '@farmacia/contracts';
-import { apiRequest } from '../../../api/http-client';
+import { ApiError, apiRequest } from '../../../api/http-client';
 
 export async function fetchProducts(
   filters: ProductQueryFilters = {},
@@ -88,4 +89,23 @@ export async function fetchProductPresentations(
   return apiRequest<ProductPresentationDto[]>(`products/${productId}/presentations`, {
     method: 'GET',
   });
+}
+
+/**
+ * Lector de código de barras: producto cuyo código de barras (del producto o de una
+ * presentación) o código interno coincide exactamente. null si no existe.
+ */
+export async function lookupProductByCode(
+  code: string,
+  signal?: AbortSignal,
+): Promise<ProductBarcodeLookupDto | null> {
+  try {
+    return await apiRequest<ProductBarcodeLookupDto>(
+      `products/barcode/${encodeURIComponent(code.trim())}`,
+      { method: 'GET', signal },
+    );
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) return null;
+    throw error;
+  }
 }

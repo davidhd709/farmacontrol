@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type RefObject } from 'react';
 import { Alert, Autocomplete, Box, Chip, TextField, Typography } from '@mui/material';
 import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ProductDto } from '@farmacia/contracts';
-import { fetchProducts } from '../../catalog/api/products.api';
+import { fetchProducts, lookupProductByCode } from '../../catalog/api/products.api';
 import { inventoryControlModeLabel } from '../../catalog/utils/inventory-control';
 import { useDebouncedValue } from '../../../hooks/useDebouncedValue';
 import { formatMoney, toCents } from '../../../utils/money';
@@ -22,7 +22,8 @@ export function PosProductSearch({
   onSelect,
   inputRef,
 }: {
-  onSelect: (product: ProductDto) => void;
+  /** presentationId llega cuando el código leído es el de una presentación */
+  onSelect: (product: ProductDto, presentationId?: string | null) => void;
   inputRef: RefObject<HTMLInputElement | null>;
 }) {
   const [text, setText] = useState('');
@@ -46,10 +47,15 @@ export function PosProductSearch({
     ...productSearchOptions(term),
     enabled: term.length >= 2 && debounced === term,
   });
-  const select = (product: ProductDto) => {
-    onSelect(product);
+  const clearAndFocus = () => {
     currentText.current = '';
     setText('');
+    // La pistola escribe el siguiente código sin que el cajero toque la pantalla
+    inputRef.current?.focus();
+  };
+  const select = (product: ProductDto, presentationId: string | null = null) => {
+    onSelect(product, presentationId);
+    clearAndFocus();
     setError(null);
   };
   const scan = async () => {
@@ -59,11 +65,29 @@ export function PosProductSearch({
     setScanning(true);
     setError(null);
     try {
-      const result = await queryClient.fetchQuery(productSearchOptions(exactTerm));
+      // Pistola lectora: la coincidencia exacta del código de barras o del código interno
+      // gana; si no hay, el texto escrito a mano agrega el primer producto vendible
+      const [scanned, result] = await Promise.all([
+        // Si la búsqueda exacta falla, el texto escrito sigue resolviendo la venta; un fallo de
+        // la búsqueda de texto sí se informa abajo
+        lookupProductByCode(exactTerm).catch(() => null),
+        queryClient.fetchQuery(productSearchOptions(exactTerm)),
+      ]);
       if (!mounted.current || currentText.current !== exactTerm) return;
-      const product = result.items.find(isSellable);
+      if (scanned && isSellable(scanned.product)) {
+        select(scanned.product, scanned.presentationId);
+        return;
+      }
+      const product = scanned ? undefined : result.items.find(isSellable);
       if (product) select(product);
-      else setError('No hay productos vendibles para esta búsqueda.');
+      else {
+        setError(
+          scanned
+            ? `"${scanned.product.name}" no tiene existencias disponibles para la venta.`
+            : `El código o producto "${exactTerm}" no existe o no tiene existencias para la venta.`,
+        );
+        clearAndFocus();
+      }
     } catch {
       if (mounted.current && currentText.current === exactTerm)
         setError('No se pudieron buscar los productos. Intenta nuevamente.');

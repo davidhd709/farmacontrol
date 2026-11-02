@@ -7,6 +7,7 @@ import type {
   ProductQueryFilters,
   ProductSettingsDto,
   UpdateProductPayload,
+  ProductBarcodeLookupDto,
 } from '@farmacia/contracts';
 import {
   PRODUCT_REPOSITORY_PORT,
@@ -236,6 +237,30 @@ export class ProductService {
       return updated;
     };
     return this.auditService ? prisma.$transaction(persist) : persist();
+  }
+
+  /**
+   * Búsqueda exacta para el lector de código de barras (la pistola envía el código y Enter):
+   * código de barras del producto, de una presentación o código interno del producto.
+   */
+  public async lookupByCode(code: string): Promise<ProductBarcodeLookupDto> {
+    const term = code.trim();
+    if (!term) throw new ProductNotFoundException(code);
+    const byBarcode = await this.productRepository.findByBarcode(term);
+    if (byBarcode) return { product: await this.getProductDtoById(byBarcode.id), presentationId: null };
+    const presentation = await prisma.productPresentation.findFirst({
+      where: { barcode: { equals: term, mode: 'insensitive' } },
+      select: { id: true, productId: true },
+    });
+    if (presentation) {
+      return {
+        product: await this.getProductDtoById(presentation.productId),
+        presentationId: presentation.id,
+      };
+    }
+    const byCode = await this.productRepository.findByCode(term);
+    if (byCode) return { product: await this.getProductDtoById(byCode.id), presentationId: null };
+    throw new ProductNotFoundException(term);
   }
 
   public async listProducts(

@@ -44,7 +44,8 @@ import AddIcon from '@mui/icons-material/Add';
 import Inventory2Icon from '@mui/icons-material/Inventory2';
 import type { SupplierDto, ProductDto, ReceivePurchasePayload } from '@farmacia/contracts';
 import { fetchSuppliers } from '../../suppliers/api/suppliers.api';
-import { fetchProducts } from '../../catalog/api/products.api';
+import { fetchProducts, lookupProductByCode } from '../../catalog/api/products.api';
+import { BarcodeScanField } from '../../../components/BarcodeScanField';
 import { receivePurchase } from '../api/purchases.api';
 import { inventoryControlModeLabel } from '../../catalog/utils/inventory-control';
 import { addDaysToDate, businessToday } from '../../../utils/business-date';
@@ -108,6 +109,53 @@ export const ReceivePurchasePage: React.FC = () => {
   }, []);
 
   const handleAddLine = () => append(emptyPurchaseLine());
+
+  // Pistola lectora: suma una unidad a la línea del mismo producto y presentación sin lote
+  // capturado, o lo agrega en una línea nueva (o en la primera vacía)
+  const handleScan = async (code: string): Promise<string | null> => {
+    const found = await lookupProductByCode(code);
+    if (!found) return `El código "${code}" no existe en el catálogo.`;
+    const { product, presentationId } = found;
+    if (product.inventoryControlMode === 'SERVICE') {
+      return `"${product.name}" es un servicio: no se recibe como inventario.`;
+    }
+    if (!products.some((p) => p.id === product.id)) setProducts((prev) => [...prev, product]);
+    const current = getValues('lines');
+    const sameIdx = current.findIndex(
+      (l) =>
+        l.productId === product.id &&
+        (!presentationId || l.presentationId === presentationId) &&
+        !l.lotNumber &&
+        !l.serialNumbers,
+    );
+    if (sameIdx >= 0) {
+      const quantity = Number(current[sameIdx].quantityCommercial) || 0;
+      handleLineChange(sameIdx, 'quantityCommercial', String(quantity + 1));
+      return null;
+    }
+    const presentation = presentationId
+      ? product.presentations?.find((pr) => pr.id === presentationId)
+      : product.presentations?.find(
+          (pr) =>
+            pr.isActive && (pr.purchaseEnabled ?? true) && (pr.isDefaultPurchase || pr.isDefault),
+        );
+    const cost =
+      presentation && parseFloat(presentation.cost) > 0
+        ? String(presentation.cost)
+        : parseFloat(product.baseCost) > 0
+          ? String(product.baseCost)
+          : '0';
+    const line = {
+      ...emptyPurchaseLine(),
+      productId: product.id,
+      presentationId: presentation?.id ?? '',
+      unitCost: cost,
+    };
+    const emptyIdx = current.findIndex((l) => !l.productId);
+    if (emptyIdx >= 0) setValue(`lines.${emptyIdx}`, line, { shouldDirty: true });
+    else append(line);
+    return null;
+  };
   const handleRemoveLine = (index: number) => {
     if (lines.length > 1) remove(index);
   };
@@ -444,6 +492,8 @@ export const ReceivePurchasePage: React.FC = () => {
               </Button>
             </Box>
           </Box>
+
+          <BarcodeScanField onScan={handleScan} />
 
           {errors.lines?.root?.message && (
             <Alert severity="error">{errors.lines.root.message}</Alert>

@@ -523,7 +523,14 @@ export const PosPage: React.FC = () => {
           <Paper sx={{ p: 2, mb: 2 }} elevation={1}>
             <PosProductSearch
               inputRef={searchInputRef}
-              onSelect={(product) => handleAddToCart(product, null)}
+              onSelect={(product, presentationId) =>
+                handleAddToCart(
+                  product,
+                  presentationId
+                    ? (product.presentations?.find((p) => p.id === presentationId) ?? null)
+                    : null,
+                )
+              }
             />
           </Paper>
 
