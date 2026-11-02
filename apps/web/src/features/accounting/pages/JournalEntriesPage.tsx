@@ -37,7 +37,10 @@ import {
 import { ManualNoteDialog } from '../components/ManualNoteDialog';
 import { QuickDateRange, localIsoDate } from '../../../components/QuickDateRange';
 
-const sourceTypeLabels: Record<string, { label: string; color: 'primary' | 'secondary' | 'success' | 'warning' | 'info' | 'default' }> = {
+const sourceTypeLabels: Record<
+  string,
+  { label: string; color: 'primary' | 'secondary' | 'success' | 'warning' | 'info' | 'default' }
+> = {
   SALE: { label: 'Venta', color: 'success' },
   PURCHASE: { label: 'Compra', color: 'primary' },
   RECEIVABLE_PAYMENT: { label: 'Cobro Cartera', color: 'info' },
@@ -135,7 +138,15 @@ export const JournalEntriesPage = () => {
     <Container component="main" maxWidth="xl" sx={{ py: 4 }}>
       <Stack spacing={3}>
         {/* Cabecera */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
+            flexWrap: 'wrap',
+            gap: 2,
+          }}
+        >
           <Box>
             <Typography component="h1" variant="h4" sx={{ fontWeight: 700 }}>
               Libro Diario
@@ -291,16 +302,26 @@ export const JournalEntriesPage = () => {
                                 {entry.description}
                               </Typography>
                               {entry.reversalReason && (
-                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                  sx={{ display: 'block' }}
+                                >
                                   Motivo: {entry.reversalReason}
                                 </Typography>
                               )}
                             </TableCell>
                             <TableCell align="right" sx={{ fontWeight: 600 }}>
-                              ${Number(entry.totalDebit).toLocaleString('es-CO', { minimumFractionDigits: 2 })}
+                              $
+                              {Number(entry.totalDebit).toLocaleString('es-CO', {
+                                minimumFractionDigits: 2,
+                              })}
                             </TableCell>
                             <TableCell align="right" sx={{ fontWeight: 600 }}>
-                              ${Number(entry.totalCredit).toLocaleString('es-CO', { minimumFractionDigits: 2 })}
+                              $
+                              {Number(entry.totalCredit).toLocaleString('es-CO', {
+                                minimumFractionDigits: 2,
+                              })}
                             </TableCell>
                             <TableCell align="center">
                               <Chip
@@ -370,9 +391,7 @@ export const JournalEntriesPage = () => {
         maxWidth="md"
         fullWidth
       >
-        <DialogTitle sx={{ fontWeight: 700 }}>
-          Detalle del Comprobante Contable
-        </DialogTitle>
+        <DialogTitle sx={{ fontWeight: 700 }}>Detalle del Comprobante Contable</DialogTitle>
         <DialogContent dividers>
           {isLoadingDetail ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
@@ -400,7 +419,8 @@ export const JournalEntriesPage = () => {
                 </Stack>
                 {entryDetail.reversalOfId && (
                   <Alert severity="info" sx={{ mt: 1 }}>
-                    Este asiento es una reversión del comprobante <code>{entryDetail.reversalOfId}</code>.
+                    Este asiento es una reversión del comprobante{' '}
+                    <code>{entryDetail.reversalOfId}</code>.
                     {entryDetail.reversalReason && ` Motivo: ${entryDetail.reversalReason}`}
                   </Alert>
                 )}
@@ -435,10 +455,16 @@ export const JournalEntriesPage = () => {
                           )}
                         </TableCell>
                         <TableCell>{l.description || '-'}</TableCell>
-                        <TableCell align="right" sx={{ fontWeight: Number(l.debit) > 0 ? 600 : 400 }}>
+                        <TableCell
+                          align="right"
+                          sx={{ fontWeight: Number(l.debit) > 0 ? 600 : 400 }}
+                        >
                           ${Number(l.debit).toLocaleString('es-CO', { minimumFractionDigits: 2 })}
                         </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: Number(l.credit) > 0 ? 600 : 400 }}>
+                        <TableCell
+                          align="right"
+                          sx={{ fontWeight: Number(l.credit) > 0 ? 600 : 400 }}
+                        >
                           ${Number(l.credit).toLocaleString('es-CO', { minimumFractionDigits: 2 })}
                         </TableCell>
                       </TableRow>
@@ -448,10 +474,16 @@ export const JournalEntriesPage = () => {
                         TOTALES:
                       </TableCell>
                       <TableCell align="right" sx={{ fontWeight: 700, color: 'primary.main' }}>
-                        ${Number(entryDetail.totalDebit).toLocaleString('es-CO', { minimumFractionDigits: 2 })}
+                        $
+                        {Number(entryDetail.totalDebit).toLocaleString('es-CO', {
+                          minimumFractionDigits: 2,
+                        })}
                       </TableCell>
                       <TableCell align="right" sx={{ fontWeight: 700, color: 'primary.main' }}>
-                        ${Number(entryDetail.totalCredit).toLocaleString('es-CO', { minimumFractionDigits: 2 })}
+                        $
+                        {Number(entryDetail.totalCredit).toLocaleString('es-CO', {
+                          minimumFractionDigits: 2,
+                        })}
                       </TableCell>
                     </TableRow>
                   </TableBody>
@@ -474,13 +506,12 @@ export const JournalEntriesPage = () => {
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle sx={{ fontWeight: 700 }}>
-          Reversar Comprobante Contable
-        </DialogTitle>
+        <DialogTitle sx={{ fontWeight: 700 }}>Reversar Comprobante Contable</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2}>
             <Alert severity="warning">
-              Se creará un asiento de compensación inmutable invirtiendo exactamente los débitos y créditos del asiento original. Esta acción no se puede deshacer.
+              Se creará un asiento de compensación inmutable invirtiendo exactamente los débitos y
+              créditos del asiento original. Esta acción no se puede deshacer.
             </Alert>
             {actionError && <Alert severity="error">{actionError}</Alert>}
             <TextField

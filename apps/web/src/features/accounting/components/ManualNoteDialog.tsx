@@ -91,7 +91,7 @@ export function ManualNoteDialog({
   const totalCredit = lines.reduce((acc, l) => acc + toCents(l.credit), 0n);
   const difference = totalDebit - totalCredit;
   const completeLines = lines.filter(
-    (l) => l.accountId && (toCents(l.debit) > 0n) !== (toCents(l.credit) > 0n),
+    (l) => l.accountId && toCents(l.debit) > 0n !== toCents(l.credit) > 0n,
   );
   const canSubmit =
     !!entryDate &&
@@ -173,7 +173,9 @@ export function ManualNoteDialog({
                     <Autocomplete<AccountDto>
                       options={postable}
                       value={line.accountId ? (byId.get(line.accountId) ?? null) : null}
-                      onChange={(_, value) => updateLine(line.key, { accountId: value?.id ?? null })}
+                      onChange={(_, value) =>
+                        updateLine(line.key, { accountId: value?.id ?? null })
+                      }
                       getOptionLabel={(a) => `${a.code} — ${a.name}`}
                       isOptionEqualToValue={(a, b) => a.id === b.id}
                       renderInput={(params) => (
@@ -205,7 +207,9 @@ export function ManualNoteDialog({
                     <IconButton
                       aria-label={`Quitar línea ${index + 1}`}
                       disabled={lines.length <= 2}
-                      onClick={() => setLines((current) => current.filter((l) => l.key !== line.key))}
+                      onClick={() =>
+                        setLines((current) => current.filter((l) => l.key !== line.key))
+                      }
                     >
                       <DeleteIcon />
                     </IconButton>
@@ -216,12 +220,20 @@ export function ManualNoteDialog({
             <TableFooter>
               <TableRow>
                 <TableCell>
-                  <Button onClick={() => setLines((current) => [...current, emptyLine(nextKey.current++)])}>
+                  <Button
+                    onClick={() =>
+                      setLines((current) => [...current, emptyLine(nextKey.current++)])
+                    }
+                  >
                     Agregar línea
                   </Button>
                 </TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>{formatCents(totalDebit)}</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>{formatCents(totalCredit)}</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>
+                  {formatCents(totalDebit)}
+                </TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>
+                  {formatCents(totalCredit)}
+                </TableCell>
                 <TableCell />
               </TableRow>
             </TableFooter>
@@ -229,7 +241,9 @@ export function ManualNoteDialog({
 
           <Box>
             {difference === 0n ? (
-              totalDebit > 0n && <Typography color="success.main">✓ Débitos y créditos cuadran.</Typography>
+              totalDebit > 0n && (
+                <Typography color="success.main">✓ Débitos y créditos cuadran.</Typography>
+              )
             ) : (
               <Typography color="error">
                 Diferencia: {formatCents(difference)}. Débitos y créditos deben ser iguales.

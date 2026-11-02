@@ -179,9 +179,7 @@ export const TrialBalancePage = () => {
                               label={accountTypeNames[row.accountType] || row.accountType}
                             />
                           </TableCell>
-                          <TableCell align="right">
-                            {formatMoney(row.initialBalance)}
-                          </TableCell>
+                          <TableCell align="right">{formatMoney(row.initialBalance)}</TableCell>
                           <TableCell align="right" sx={{ fontWeight: 600 }}>
                             {formatMoney(row.totalDebit)}
                           </TableCell>
@@ -237,9 +235,7 @@ export const TrialBalancePage = () => {
         maxWidth="lg"
         fullWidth
       >
-        <DialogTitle sx={{ fontWeight: 700 }}>
-          Libro Mayor y Auxiliar de Cuenta
-        </DialogTitle>
+        <DialogTitle sx={{ fontWeight: 700 }}>Libro Mayor y Auxiliar de Cuenta</DialogTitle>
         <DialogContent dividers>
           {isLoadingLedger ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
@@ -332,10 +328,16 @@ export const TrialBalancePage = () => {
                             {m.sourceId ? m.sourceId.slice(0, 16) : '-'}
                           </TableCell>
                           <TableCell>{m.description}</TableCell>
-                          <TableCell align="right" sx={{ fontWeight: Number(m.debit) > 0 ? 600 : 400 }}>
+                          <TableCell
+                            align="right"
+                            sx={{ fontWeight: Number(m.debit) > 0 ? 600 : 400 }}
+                          >
                             {formatMoney(m.debit)}
                           </TableCell>
-                          <TableCell align="right" sx={{ fontWeight: Number(m.credit) > 0 ? 600 : 400 }}>
+                          <TableCell
+                            align="right"
+                            sx={{ fontWeight: Number(m.credit) > 0 ? 600 : 400 }}
+                          >
                             {formatMoney(m.credit)}
                           </TableCell>
                           <TableCell align="right" sx={{ fontWeight: 700 }}>

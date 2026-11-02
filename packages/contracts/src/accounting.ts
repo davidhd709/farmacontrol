@@ -557,3 +557,42 @@ export interface ReconciliationDto {
   totalDebit: string;
   totalCredit: string;
 }
+
+// ===== AUDITORÍA CONTABLE (correcciones del cliente, 2026-11-01) =====
+
+/** DESCUADRADOS: asientos con débitos ≠ créditos o documentos que no cuadran con lo aplicado. */
+export type AccountingAuditView = 'DESCUADRADOS' | 'ANULADOS';
+
+export interface AccountingAuditItemDto {
+  /** Asiento del documento; null cuando el descuadre es del documento de tesorería */
+  journalEntryId: string | null;
+  date: string;
+  /** Tipo de documento de origen (sourceType del asiento o TREASURY_DOCUMENT) */
+  documentType: string;
+  documentId: string;
+  documentNumber: string | null;
+  description: string;
+  totalDebit: string;
+  totalCredit: string;
+  /** Débitos − créditos del asiento, o valor del documento − valor aplicado */
+  difference: string;
+  lineCount: number;
+  /** Anulación: asiento de reversión, su fecha y su motivo */
+  reversalEntryId: string | null;
+  reversalDate: string | null;
+  reversalReason: string | null;
+}
+
+export interface AccountingAuditDto {
+  view: AccountingAuditView;
+  items: AccountingAuditItemDto[];
+  /** Tipos de documento con asientos, para el filtro */
+  documentTypes: string[];
+}
+
+export interface AccountingAuditFilters {
+  view: AccountingAuditView;
+  fromDate?: string;
+  toDate?: string;
+  documentType?: string;
+}

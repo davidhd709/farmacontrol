@@ -124,7 +124,15 @@ export const BalanceSheetPage = () => {
     <Container component="main" maxWidth="xl" sx={{ py: 4 }}>
       <Stack spacing={3}>
         {/* Cabecera y Título */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
+            flexWrap: 'wrap',
+            gap: 2,
+          }}
+        >
           <Box>
             <Typography component="h1" variant="h4" sx={{ fontWeight: 700 }}>
               Estado de Situación Financiera (Balance General)
@@ -147,7 +155,11 @@ export const BalanceSheetPage = () => {
 
         {/* Filtro de Fecha de Corte */}
         <Paper sx={{ p: 2 }}>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={2}
+            sx={{ alignItems: 'center', justifyContent: 'space-between' }}
+          >
             <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
               <TextField
                 label="Fecha de Corte"
@@ -193,11 +205,16 @@ export const BalanceSheetPage = () => {
             {/* Banner de Verificación de Ecuación Contable */}
             {data.isBalanced ? (
               <Alert severity="success" sx={{ fontSize: '0.95rem', fontWeight: 600 }}>
-                Ecuación Contable Cuadrada: Total Activo ({formatMoney(data.assets.totalAssets)}) = Total Pasivo + Patrimonio ({formatMoney(data.totalLiabilitiesAndEquity)}) | Diferencia: $0.00
+                Ecuación Contable Cuadrada: Total Activo ({formatMoney(data.assets.totalAssets)}) =
+                Total Pasivo + Patrimonio ({formatMoney(data.totalLiabilitiesAndEquity)}) |
+                Diferencia: $0.00
               </Alert>
             ) : (
               <Alert severity="error" sx={{ fontSize: '0.95rem', fontWeight: 600 }}>
-                ¡Atención! Desbalance Contable Detectado: Total Activo ({formatMoney(data.assets.totalAssets)}) ≠ Total Pasivo + Patrimonio ({formatMoney(data.totalLiabilitiesAndEquity)}) | Diferencia: {formatMoney(data.difference)}
+                ¡Atención! Desbalance Contable Detectado: Total Activo (
+                {formatMoney(data.assets.totalAssets)}) ≠ Total Pasivo + Patrimonio (
+                {formatMoney(data.totalLiabilitiesAndEquity)}) | Diferencia:{' '}
+                {formatMoney(data.difference)}
               </Alert>
             )}
 
@@ -206,7 +223,11 @@ export const BalanceSheetPage = () => {
               <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                 <Card variant="outlined">
                   <CardContent>
-                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase' }}>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ fontWeight: 600, textTransform: 'uppercase' }}
+                    >
                       Total Activos
                     </Typography>
                     <Typography variant="h5" sx={{ fontWeight: 700, mt: 1, color: 'primary.main' }}>
@@ -222,7 +243,11 @@ export const BalanceSheetPage = () => {
               <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                 <Card variant="outlined">
                   <CardContent>
-                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase' }}>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ fontWeight: 600, textTransform: 'uppercase' }}
+                    >
                       Total Pasivos
                     </Typography>
                     <Typography variant="h5" sx={{ fontWeight: 700, mt: 1, color: 'warning.main' }}>
@@ -238,7 +263,11 @@ export const BalanceSheetPage = () => {
               <Grid size={{ xs: 12, sm: 6, md: 3 }}>
                 <Card variant="outlined">
                   <CardContent>
-                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase' }}>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ fontWeight: 600, textTransform: 'uppercase' }}
+                    >
                       Total Patrimonio
                     </Typography>
                     <Typography variant="h5" sx={{ fontWeight: 700, mt: 1, color: 'info.main' }}>
@@ -252,16 +281,36 @@ export const BalanceSheetPage = () => {
               </Grid>
 
               <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                <Card variant="outlined" sx={{ bgcolor: data.isBalanced ? 'success.50' : 'error.50' }}>
+                <Card
+                  variant="outlined"
+                  sx={{ bgcolor: data.isBalanced ? 'success.50' : 'error.50' }}
+                >
                   <CardContent>
-                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase' }}>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ fontWeight: 600, textTransform: 'uppercase' }}
+                    >
                       Pasivo + Patrimonio
                     </Typography>
-                    <Typography variant="h5" sx={{ fontWeight: 700, mt: 1, color: data.isBalanced ? 'success.dark' : 'error.dark' }}>
+                    <Typography
+                      variant="h5"
+                      sx={{
+                        fontWeight: 700,
+                        mt: 1,
+                        color: data.isBalanced ? 'success.dark' : 'error.dark',
+                      }}
+                    >
                       {formatMoney(data.totalLiabilitiesAndEquity)}
                     </Typography>
-                    <Typography variant="caption" color={data.isBalanced ? 'success.dark' : 'error.dark'} sx={{ fontWeight: 600 }}>
-                      {data.isBalanced ? 'Cuadrado (100%)' : `Diferencia: ${formatMoney(data.difference)}`}
+                    <Typography
+                      variant="caption"
+                      color={data.isBalanced ? 'success.dark' : 'error.dark'}
+                      sx={{ fontWeight: 600 }}
+                    >
+                      {data.isBalanced
+                        ? 'Cuadrado (100%)'
+                        : `Diferencia: ${formatMoney(data.difference)}`}
                     </Typography>
                   </CardContent>
                 </Card>
@@ -277,7 +326,10 @@ export const BalanceSheetPage = () => {
                     1. ACTIVOS
                   </Typography>
 
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'primary.dark', mb: 1 }}>
+                  <Typography
+                    variant="subtitle2"
+                    sx={{ fontWeight: 700, color: 'primary.dark', mb: 1 }}
+                  >
                     1.1 ACTIVO CORRIENTE
                   </Typography>
                   <CategoryGroupTable group={data.assets.current.cashAndBanks} />
@@ -285,7 +337,16 @@ export const BalanceSheetPage = () => {
                   <CategoryGroupTable group={data.assets.current.inventory} />
                   <CategoryGroupTable group={data.assets.current.otherCurrent} />
 
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', p: 1, bgcolor: 'grey.100', borderRadius: 1, mb: 3 }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      p: 1,
+                      bgcolor: 'grey.100',
+                      borderRadius: 1,
+                      mb: 3,
+                    }}
+                  >
                     <Typography variant="body2" sx={{ fontWeight: 700 }}>
                       Total Activo Corriente
                     </Typography>
@@ -294,13 +355,25 @@ export const BalanceSheetPage = () => {
                     </Typography>
                   </Box>
 
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'primary.dark', mb: 1 }}>
+                  <Typography
+                    variant="subtitle2"
+                    sx={{ fontWeight: 700, color: 'primary.dark', mb: 1 }}
+                  >
                     1.2 ACTIVO NO CORRIENTE
                   </Typography>
                   <CategoryGroupTable group={data.assets.nonCurrent.propertyPlantEquipment} />
                   <CategoryGroupTable group={data.assets.nonCurrent.otherNonCurrent} />
 
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', p: 1, bgcolor: 'grey.100', borderRadius: 1, mb: 3 }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      p: 1,
+                      bgcolor: 'grey.100',
+                      borderRadius: 1,
+                      mb: 3,
+                    }}
+                  >
                     <Typography variant="body2" sx={{ fontWeight: 700 }}>
                       Total Activo No Corriente
                     </Typography>
@@ -311,7 +384,16 @@ export const BalanceSheetPage = () => {
 
                   <Divider sx={{ my: 2 }} />
 
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1.5, bgcolor: 'primary.50', borderRadius: 1 }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      p: 1.5,
+                      bgcolor: 'primary.50',
+                      borderRadius: 1,
+                    }}
+                  >
                     <Typography variant="subtitle1" sx={{ fontWeight: 800, color: 'primary.dark' }}>
                       TOTAL ACTIVOS
                     </Typography>
@@ -330,14 +412,26 @@ export const BalanceSheetPage = () => {
                     2. PASIVOS
                   </Typography>
 
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'warning.dark', mb: 1 }}>
+                  <Typography
+                    variant="subtitle2"
+                    sx={{ fontWeight: 700, color: 'warning.dark', mb: 1 }}
+                  >
                     2.1 PASIVO CORRIENTE
                   </Typography>
                   <CategoryGroupTable group={data.liabilities.current.suppliers} />
                   <CategoryGroupTable group={data.liabilities.current.taxes} />
                   <CategoryGroupTable group={data.liabilities.current.otherPayables} />
 
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', p: 1, bgcolor: 'grey.100', borderRadius: 1, mb: 3 }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      p: 1,
+                      bgcolor: 'grey.100',
+                      borderRadius: 1,
+                      mb: 3,
+                    }}
+                  >
                     <Typography variant="body2" sx={{ fontWeight: 700 }}>
                       Total Pasivo Corriente
                     </Typography>
@@ -346,12 +440,24 @@ export const BalanceSheetPage = () => {
                     </Typography>
                   </Box>
 
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'warning.dark', mb: 1 }}>
+                  <Typography
+                    variant="subtitle2"
+                    sx={{ fontWeight: 700, color: 'warning.dark', mb: 1 }}
+                  >
                     2.2 PASIVO NO CORRIENTE
                   </Typography>
                   <CategoryGroupTable group={data.liabilities.nonCurrent.longTermPayables} />
 
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', p: 1, bgcolor: 'grey.100', borderRadius: 1, mb: 3 }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      p: 1,
+                      bgcolor: 'grey.100',
+                      borderRadius: 1,
+                      mb: 3,
+                    }}
+                  >
                     <Typography variant="body2" sx={{ fontWeight: 700 }}>
                       Total Pasivo No Corriente
                     </Typography>
@@ -360,7 +466,17 @@ export const BalanceSheetPage = () => {
                     </Typography>
                   </Box>
 
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1.5, bgcolor: 'warning.50', borderRadius: 1, mb: 3 }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      p: 1.5,
+                      bgcolor: 'warning.50',
+                      borderRadius: 1,
+                      mb: 3,
+                    }}
+                  >
                     <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'warning.dark' }}>
                       TOTAL PASIVOS
                     </Typography>
@@ -382,13 +498,18 @@ export const BalanceSheetPage = () => {
                     <Table size="small">
                       <TableBody>
                         <TableRow sx={{ bgcolor: 'info.50' }}>
-                          <TableCell sx={{ fontFamily: 'monospace', fontWeight: 700, width: 90, py: 0.5 }}>
+                          <TableCell
+                            sx={{ fontFamily: 'monospace', fontWeight: 700, width: 90, py: 0.5 }}
+                          >
                             3605
                           </TableCell>
                           <TableCell sx={{ fontWeight: 700, color: 'info.dark', py: 0.5 }}>
                             Resultado del Ejercicio (Ganancia / Pérdida del Periodo)
                           </TableCell>
-                          <TableCell align="right" sx={{ fontWeight: 700, color: 'info.dark', width: 130, py: 0.5 }}>
+                          <TableCell
+                            align="right"
+                            sx={{ fontWeight: 700, color: 'info.dark', width: 130, py: 0.5 }}
+                          >
                             {formatMoney(data.equity.currentPeriodResult)}
                           </TableCell>
                         </TableRow>
@@ -396,7 +517,16 @@ export const BalanceSheetPage = () => {
                     </Table>
                   </TableContainer>
 
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', p: 1, bgcolor: 'grey.100', borderRadius: 1, mb: 3 }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      p: 1,
+                      bgcolor: 'grey.100',
+                      borderRadius: 1,
+                      mb: 3,
+                    }}
+                  >
                     <Typography variant="body2" sx={{ fontWeight: 700 }}>
                       Total Patrimonio
                     </Typography>
@@ -418,10 +548,22 @@ export const BalanceSheetPage = () => {
                       borderRadius: 1,
                     }}
                   >
-                    <Typography variant="subtitle1" sx={{ fontWeight: 800, color: data.isBalanced ? 'success.dark' : 'error.dark' }}>
+                    <Typography
+                      variant="subtitle1"
+                      sx={{
+                        fontWeight: 800,
+                        color: data.isBalanced ? 'success.dark' : 'error.dark',
+                      }}
+                    >
                       TOTAL PASIVO Y PATRIMONIO
                     </Typography>
-                    <Typography variant="h6" sx={{ fontWeight: 800, color: data.isBalanced ? 'success.dark' : 'error.dark' }}>
+                    <Typography
+                      variant="h6"
+                      sx={{
+                        fontWeight: 800,
+                        color: data.isBalanced ? 'success.dark' : 'error.dark',
+                      }}
+                    >
                       {formatMoney(data.totalLiabilitiesAndEquity)}
                     </Typography>
                   </Box>

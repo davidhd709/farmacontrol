@@ -4,10 +4,13 @@ import { ThirdPartyService, THIRD_PARTY_REPOSITORY } from './application/third-p
 import { PrismaThirdPartyRepository } from './infrastructure/prisma-third-party.repository';
 import { AuditModule } from '../audit/audit.module';
 import { IdentityModule } from '../identity/identity.module';
+import { PayablesModule } from '../payables/payables.module';
+import { ThirdPartyStatementService } from './application/third-party-statement.service';
+import { ThirdPartyStatementController } from './presentation/controllers/third-party-statement.controller';
 
 @Module({
-  imports: [AuditModule, IdentityModule],
-  controllers: [ThirdPartyController],
+  imports: [AuditModule, IdentityModule, PayablesModule],
+  controllers: [ThirdPartyController, ThirdPartyStatementController],
   providers: [
     ThirdPartyService,
     {
@@ -15,6 +18,7 @@ import { IdentityModule } from '../identity/identity.module';
       useClass: PrismaThirdPartyRepository,
     },
     PrismaThirdPartyRepository,
+    ThirdPartyStatementService,
   ],
   exports: [ThirdPartyService, THIRD_PARTY_REPOSITORY],
 })

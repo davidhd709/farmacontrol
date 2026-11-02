@@ -1010,6 +1010,38 @@ export interface PayableStatementFilters {
   includePaid?: boolean;
 }
 
+/** Factura a crédito pendiente en el estado de cuenta de un cliente. */
+export interface ReceivableStatementItemDto {
+  receivableId: string;
+  invoiceNumber: string | null;
+  documentDate: string;
+  dueDate: string;
+  totalAmount: string;
+  amountPaid: string;
+  balance: string;
+  daysOverdue: number;
+  agingBucket: AgingBucket;
+}
+
+/**
+ * Estado de cuenta automático de un tercero: lo que nos debe (cartera, si es cliente) y lo
+ * que le debemos (facturas de compra y causaciones, si es proveedor).
+ */
+export interface ThirdPartyStatementDto {
+  thirdPartyId: string;
+  name: string;
+  documentType: string;
+  documentNumber: string;
+  isCustomer: boolean;
+  isSupplier: boolean;
+  receivables: { items: ReceivableStatementItemDto[]; aging: AgingBreakdownDto } | null;
+  payables: PayableStatementDto | null;
+  totalOwedToUs: string;
+  totalWeOwe: string;
+  /** Lo que nos debe menos lo que le debemos */
+  netBalance: string;
+}
+
 export interface PayableQueryFilters {
   supplierId?: string;
   status?: PayableStatus;

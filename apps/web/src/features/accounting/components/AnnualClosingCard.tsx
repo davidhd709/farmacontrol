@@ -40,11 +40,14 @@ export function AnnualClosingCard({ canManage }: { canManage: boolean }) {
   const mutation = useMutation({
     mutationFn: (target: number) => {
       // La misma clave para reintentos del mismo año: el cierre no se duplica
-      if (keyRef.current?.year !== target) keyRef.current = { year: target, key: crypto.randomUUID() };
+      if (keyRef.current?.year !== target)
+        keyRef.current = { year: target, key: crypto.randomUUID() };
       return closeYear(target, keyRef.current.key);
     },
     onSuccess: (result) => {
-      setDone(`Cierre ${result.year} registrado. Resultado trasladado: ${money(result.netResult)}.`);
+      setDone(
+        `Cierre ${result.year} registrado. Resultado trasladado: ${money(result.netResult)}.`,
+      );
       queryClient.invalidateQueries({ queryKey: ['annual-closing-preview'] });
       queryClient.invalidateQueries({ queryKey: ['journal-entries'] });
     },
@@ -57,16 +60,25 @@ export function AnnualClosingCard({ canManage }: { canManage: boolean }) {
     <Paper sx={{ p: 2 }} component="section" aria-labelledby="annual-closing-title">
       <Stack spacing={2}>
         <Box>
-          <Typography id="annual-closing-title" variant="h6" component="h2" sx={{ fontWeight: 700 }}>
+          <Typography
+            id="annual-closing-title"
+            variant="h6"
+            component="h2"
+            sx={{ fontWeight: 700 }}
+          >
             Cierre anual
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Cancela ingresos, costos, gastos y el resultado del ejercicio al 31 de diciembre y traslada
-            el neto a utilidades acumuladas (3705) o pérdidas acumuladas (3710). Hágalo cuando el año
-            esté revisado y cuadrado.
+            Cancela ingresos, costos, gastos y el resultado del ejercicio al 31 de diciembre y
+            traslada el neto a utilidades acumuladas (3705) o pérdidas acumuladas (3710). Hágalo
+            cuando el año esté revisado y cuadrado.
           </Typography>
         </Box>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: { sm: 'center' } }}>
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={2}
+          sx={{ alignItems: { sm: 'center' } }}
+        >
           <TextField
             label="Año a cerrar"
             type="number"
@@ -92,7 +104,9 @@ export function AnnualClosingCard({ canManage }: { canManage: boolean }) {
             {data.existingEntryId ? (
               <Alert severity="info">El año {data.year} ya tiene un cierre vigente.</Alert>
             ) : data.lines.length === 0 ? (
-              <Alert severity="info">El año {data.year} no tiene saldos de resultado para cerrar.</Alert>
+              <Alert severity="info">
+                El año {data.year} no tiene saldos de resultado para cerrar.
+              </Alert>
             ) : (
               <Alert severity={net >= 0 ? 'success' : 'warning'}>
                 {net >= 0 ? 'Utilidad' : 'Pérdida'} del ejercicio {data.year}:{' '}
@@ -118,8 +132,12 @@ export function AnnualClosingCard({ canManage }: { canManage: boolean }) {
                       <TableCell>
                         {line.accountCode} {line.accountName}
                       </TableCell>
-                      <TableCell align="right">{Number(line.debit) ? money(line.debit) : ''}</TableCell>
-                      <TableCell align="right">{Number(line.credit) ? money(line.credit) : ''}</TableCell>
+                      <TableCell align="right">
+                        {Number(line.debit) ? money(line.debit) : ''}
+                      </TableCell>
+                      <TableCell align="right">
+                        {Number(line.credit) ? money(line.credit) : ''}
+                      </TableCell>
                     </TableRow>
                   ))}
                   {net !== 0 && (
@@ -140,7 +158,9 @@ export function AnnualClosingCard({ canManage }: { canManage: boolean }) {
                 </TableBody>
               </Table>
             )}
-            {mutation.isError && <Alert severity="error">{(mutation.error as Error).message}</Alert>}
+            {mutation.isError && (
+              <Alert severity="error">{(mutation.error as Error).message}</Alert>
+            )}
             {canManage && !data.existingEntryId && data.lines.length > 0 && (
               <Box>
                 <Button

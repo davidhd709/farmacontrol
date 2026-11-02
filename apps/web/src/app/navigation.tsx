@@ -174,6 +174,18 @@ export const menuGroups: MenuGroupConfig[] = [
         permission: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
       },
       {
+        title: 'Cuentas y Terceros',
+        path: '/accounting/lookup',
+        icon: <PeopleAltIcon fontSize="small" />,
+        permission: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
+      },
+      {
+        title: 'Auditoría Contable',
+        path: '/accounting/audit',
+        icon: <RuleIcon fontSize="small" />,
+        permission: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
+      },
+      {
         title: 'Balance de Comprobación',
         path: '/accounting/trial-balance',
         icon: <BalanceIcon fontSize="small" />,

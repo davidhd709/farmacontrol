@@ -322,7 +322,9 @@ export function AccountsPage() {
                         <TableCell>
                           {accountTypeLabels[account.type as AccountType] ?? account.type}
                         </TableCell>
-                        <TableCell>{accountNatureLabels[account.nature] ?? account.nature}</TableCell>
+                        <TableCell>
+                          {accountNatureLabels[account.nature] ?? account.nature}
+                        </TableCell>
                         <TableCell>{account.allowsMovement ? 'Sí' : 'Agrupadora'}</TableCell>
                         <TableCell>
                           <Chip

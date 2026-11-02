@@ -26,6 +26,8 @@ import { AccountingSetupService } from './application/accounting-setup.service';
 import { AccountingSetupController } from './presentation/accounting-setup.controller';
 import { AccountingBooksService } from './application/accounting-books.service';
 import { AccountingBooksController } from './presentation/accounting-books.controller';
+import { AccountingAuditService } from './application/accounting-audit.service';
+import { AccountingAuditController } from './presentation/accounting-audit.controller';
 
 @Module({
   imports: [IdempotencyModule, IdentityModule],
@@ -41,6 +43,7 @@ import { AccountingBooksController } from './presentation/accounting-books.contr
     AnnualClosingController,
     AccountingSetupController,
     AccountingBooksController,
+    AccountingAuditController,
   ],
   providers: [
     AccountingService,
@@ -55,6 +58,7 @@ import { AccountingBooksController } from './presentation/accounting-books.contr
     DocumentLockService,
     ManualNotesService,
     AnnualClosingService,
+    AccountingAuditService,
   ],
   exports: [
     AccountingService,

@@ -72,7 +72,12 @@ export const FiscalPeriodsPage = () => {
     null,
   );
 
-  const { data: periods = [], isLoading, isError, refetch } = useQuery({
+  const {
+    data: periods = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery({
     queryKey: ['fiscal-periods', selectedYear, statusFilter],
     queryFn: () =>
       fetchFiscalPeriods(
@@ -85,7 +90,10 @@ export const FiscalPeriodsPage = () => {
     mutationFn: () => generateFiscalPeriods({ year: selectedYear }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['fiscal-periods'] });
-      setFeedback({ type: 'success', message: `Períodos del año ${selectedYear} generados correctamente.` });
+      setFeedback({
+        type: 'success',
+        message: `Períodos del año ${selectedYear} generados correctamente.`,
+      });
     },
     onError: (err: any) => {
       setFeedback({ type: 'error', message: err.message || 'Error al generar períodos fiscales.' });
@@ -93,8 +101,13 @@ export const FiscalPeriodsPage = () => {
   });
 
   const closeMutation = useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: { generateClosingEntry?: boolean; notes?: string } }) =>
-      closeFiscalPeriod(id, payload),
+    mutationFn: ({
+      id,
+      payload,
+    }: {
+      id: string;
+      payload: { generateClosingEntry?: boolean; notes?: string };
+    }) => closeFiscalPeriod(id, payload),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['fiscal-periods'] });
       setClosingPeriod(null);
@@ -140,13 +153,22 @@ export const FiscalPeriodsPage = () => {
     <Container component="main" maxWidth="xl" sx={{ py: 4 }}>
       <Stack spacing={3}>
         {/* Cabecera */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
+            flexWrap: 'wrap',
+            gap: 2,
+          }}
+        >
           <Box>
             <Typography component="h1" variant="h4" sx={{ fontWeight: 700 }}>
               Períodos Contables y Cierre Fiscal
             </Typography>
             <Typography color="text.secondary">
-              Control mensual de períodos contables, bloqueo histórico contra modificaciones y generación de asientos de cierre del ejercicio.
+              Control mensual de períodos contables, bloqueo histórico contra modificaciones y
+              generación de asientos de cierre del ejercicio.
             </Typography>
           </Box>
           {canManage && (
@@ -327,7 +349,8 @@ export const FiscalPeriodsPage = () => {
                         {isClosed ? (
                           <Box>
                             <Typography variant="caption" component="div" color="text.secondary">
-                              Cerrado el {period.closedAt?.slice(0, 10)} por <b>{period.closedByName || 'Sistema'}</b>
+                              Cerrado el {period.closedAt?.slice(0, 10)} por{' '}
+                              <b>{period.closedByName || 'Sistema'}</b>
                             </Typography>
                             {period.closingEntryId && (
                               <Typography variant="caption" component="div" color="primary.main">
@@ -335,7 +358,11 @@ export const FiscalPeriodsPage = () => {
                               </Typography>
                             )}
                             {period.notes && (
-                              <Typography variant="caption" component="div" sx={{ fontStyle: 'italic' }}>
+                              <Typography
+                                variant="caption"
+                                component="div"
+                                sx={{ fontStyle: 'italic' }}
+                              >
                                 &quot;{period.notes}&quot;
                               </Typography>
                             )}
@@ -343,9 +370,14 @@ export const FiscalPeriodsPage = () => {
                         ) : period.reopenedAt ? (
                           <Box>
                             <Typography variant="caption" component="div" color="warning.main">
-                              Reabierto el {period.reopenedAt?.slice(0, 10)} por <b>{period.reopenedByName || 'Admin'}</b>
+                              Reabierto el {period.reopenedAt?.slice(0, 10)} por{' '}
+                              <b>{period.reopenedByName || 'Admin'}</b>
                             </Typography>
-                            <Typography variant="caption" component="div" sx={{ fontStyle: 'italic' }}>
+                            <Typography
+                              variant="caption"
+                              component="div"
+                              sx={{ fontStyle: 'italic' }}
+                            >
                               Motivo: &quot;{period.reopenReason}&quot;
                             </Typography>
                           </Box>
@@ -356,8 +388,8 @@ export const FiscalPeriodsPage = () => {
                         )}
                       </TableCell>
                       <TableCell align="center">
-                        {canManage && (
-                          isClosed ? (
+                        {canManage &&
+                          (isClosed ? (
                             <Button
                               variant="outlined"
                               color="warning"
@@ -382,8 +414,7 @@ export const FiscalPeriodsPage = () => {
                             >
                               Cerrar
                             </Button>
-                          )
-                        )}
+                          ))}
                       </TableCell>
                     </TableRow>
                   );
@@ -425,8 +456,8 @@ export const FiscalPeriodsPage = () => {
                     Generar asiento contable de cierre del ejercicio
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    Cancela los saldos de cuentas de Ingresos (4), Gastos (5) y Costos (6) trasladando
-                    el resultado neto a la cuenta 3605 - Resultado del Ejercicio.
+                    Cancela los saldos de cuentas de Ingresos (4), Gastos (5) y Costos (6)
+                    trasladando el resultado neto a la cuenta 3605 - Resultado del Ejercicio.
                   </Typography>
                 </Box>
               }
@@ -482,8 +513,8 @@ export const FiscalPeriodsPage = () => {
           <Stack spacing={2.5}>
             <Alert severity="error">
               <b>Acción delicada de auditoría:</b> Reabrir un período permite nuevamente registrar y
-              reversar asientos en fechas históricas. Si el período tiene un asiento de cierre fiscal
-              asociado, este será <b>revertido automáticamente</b>.
+              reversar asientos en fechas históricas. Si el período tiene un asiento de cierre
+              fiscal asociado, este será <b>revertido automáticamente</b>.
             </Alert>
 
             <TextField

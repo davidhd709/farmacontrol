@@ -61,7 +61,8 @@ export function DocumentLockCard({ canManage }: { canManage: boolean }) {
           </Typography>
           <Typography variant="body2" color="text.secondary">
             Impide registrar o reversar movimientos con fecha igual o anterior al corte, aunque el
-            período siga abierto. Las compras o gastos pendientes se registran en el período siguiente.
+            período siga abierto. Las compras o gastos pendientes se registran en el período
+            siguiente.
           </Typography>
         </Box>
 
@@ -71,7 +72,9 @@ export function DocumentLockCard({ canManage }: { canManage: boolean }) {
             {data?.current?.reason}
           </Alert>
         ) : (
-          <Alert severity="info">Sin bloqueo vigente: se aceptan movimientos de cualquier fecha abierta.</Alert>
+          <Alert severity="info">
+            Sin bloqueo vigente: se aceptan movimientos de cualquier fecha abierta.
+          </Alert>
         )}
 
         {canManage && (
@@ -135,7 +138,9 @@ export function DocumentLockCard({ canManage }: { canManage: boolean }) {
               {data.history.map((lock) => (
                 <TableRow key={lock.id}>
                   <TableCell>{new Date(lock.createdAt).toLocaleString('es-CO')}</TableCell>
-                  <TableCell>{lock.lockedThrough ? formatDate(lock.lockedThrough) : 'Sin bloqueo'}</TableCell>
+                  <TableCell>
+                    {lock.lockedThrough ? formatDate(lock.lockedThrough) : 'Sin bloqueo'}
+                  </TableCell>
                   <TableCell>{lock.reason}</TableCell>
                   <TableCell>{lock.createdByName ?? '—'}</TableCell>
                 </TableRow>

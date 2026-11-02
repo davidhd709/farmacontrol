@@ -76,13 +76,22 @@ export const IncomeStatementPage = () => {
     <Container component="main" maxWidth="xl" sx={{ py: 4 }}>
       <Stack spacing={3}>
         {/* Cabecera y Título */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
+            flexWrap: 'wrap',
+            gap: 2,
+          }}
+        >
           <Box>
             <Typography component="h1" variant="h4" sx={{ fontWeight: 700 }}>
               Estado de Resultados (PyG)
             </Typography>
             <Typography color="text.secondary">
-              Rendimiento financiero operativo: ingresos por ventas, costos FEFO reales y gastos operacionales.
+              Rendimiento financiero operativo: ingresos por ventas, costos FEFO reales y gastos
+              operacionales.
             </Typography>
           </Box>
           <Button
@@ -99,8 +108,16 @@ export const IncomeStatementPage = () => {
 
         {/* Barra de Filtros y Atajos */}
         <Paper sx={{ p: 2 }}>
-          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ alignItems: { md: 'center' }, justifyContent: 'space-between' }}>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: 'center' }}>
+          <Stack
+            direction={{ xs: 'column', md: 'row' }}
+            spacing={2}
+            sx={{ alignItems: { md: 'center' }, justifyContent: 'space-between' }}
+          >
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={2}
+              sx={{ alignItems: 'center' }}
+            >
               <TextField
                 label="Fecha Desde"
                 type="date"
@@ -150,7 +167,11 @@ export const IncomeStatementPage = () => {
               <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
                 <Card variant="outlined">
                   <CardContent>
-                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase' }}>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ fontWeight: 600, textTransform: 'uppercase' }}
+                    >
                       Ventas Netas
                     </Typography>
                     <Typography variant="h5" sx={{ fontWeight: 700, mt: 1 }}>
@@ -166,7 +187,11 @@ export const IncomeStatementPage = () => {
               <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
                 <Card variant="outlined">
                   <CardContent>
-                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase' }}>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ fontWeight: 600, textTransform: 'uppercase' }}
+                    >
                       Costo de Ventas
                     </Typography>
                     <Typography variant="h5" sx={{ fontWeight: 700, mt: 1, color: 'text.primary' }}>
@@ -182,7 +207,11 @@ export const IncomeStatementPage = () => {
               <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
                 <Card variant="outlined">
                   <CardContent>
-                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase' }}>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ fontWeight: 600, textTransform: 'uppercase' }}
+                    >
                       Utilidad Bruta
                     </Typography>
                     <Typography variant="h5" sx={{ fontWeight: 700, mt: 1, color: 'success.main' }}>
@@ -202,7 +231,11 @@ export const IncomeStatementPage = () => {
               <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
                 <Card variant="outlined">
                   <CardContent>
-                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase' }}>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ fontWeight: 600, textTransform: 'uppercase' }}
+                    >
                       Gastos Operativos
                     </Typography>
                     <Typography variant="h5" sx={{ fontWeight: 700, mt: 1, color: 'warning.main' }}>
@@ -216,9 +249,16 @@ export const IncomeStatementPage = () => {
               </Grid>
 
               <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
-                <Card variant="outlined" sx={{ bgcolor: isNetIncomePositive ? 'success.50' : 'error.50' }}>
+                <Card
+                  variant="outlined"
+                  sx={{ bgcolor: isNetIncomePositive ? 'success.50' : 'error.50' }}
+                >
                   <CardContent>
-                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase' }}>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ fontWeight: 600, textTransform: 'uppercase' }}
+                    >
                       Resultado Neto
                     </Typography>
                     <Typography
@@ -254,8 +294,12 @@ export const IncomeStatementPage = () => {
                   <TableHead>
                     <TableRow sx={{ bgcolor: 'action.hover' }}>
                       <TableCell sx={{ fontWeight: 700 }}>Concepto Contable</TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 700 }}>Valor Parcial</TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 700 }}>Total Rubro</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 700 }}>
+                        Valor Parcial
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 700 }}>
+                        Total Rubro
+                      </TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -273,19 +317,31 @@ export const IncomeStatementPage = () => {
                       <TableCell align="right"></TableCell>
                     </TableRow>
                     <TableRow>
-                      <TableCell sx={{ pl: 4, color: 'text.secondary' }}>(-) Devoluciones en Ventas</TableCell>
-                      <TableCell align="right" sx={{ color: 'text.secondary' }}>({formatMoney(data.returns)})</TableCell>
+                      <TableCell sx={{ pl: 4, color: 'text.secondary' }}>
+                        (-) Devoluciones en Ventas
+                      </TableCell>
+                      <TableCell align="right" sx={{ color: 'text.secondary' }}>
+                        ({formatMoney(data.returns)})
+                      </TableCell>
                       <TableCell align="right"></TableCell>
                     </TableRow>
                     <TableRow>
-                      <TableCell sx={{ pl: 4, color: 'text.secondary' }}>(-) Descuentos Comerciales Concedidos</TableCell>
-                      <TableCell align="right" sx={{ color: 'text.secondary' }}>({formatMoney(data.discounts)})</TableCell>
+                      <TableCell sx={{ pl: 4, color: 'text.secondary' }}>
+                        (-) Descuentos Comerciales Concedidos
+                      </TableCell>
+                      <TableCell align="right" sx={{ color: 'text.secondary' }}>
+                        ({formatMoney(data.discounts)})
+                      </TableCell>
                       <TableCell align="right"></TableCell>
                     </TableRow>
                     <TableRow sx={{ bgcolor: 'grey.50' }}>
-                      <TableCell sx={{ pl: 4, fontWeight: 700 }}>(=) VENTAS NETAS TOTALES</TableCell>
+                      <TableCell sx={{ pl: 4, fontWeight: 700 }}>
+                        (=) VENTAS NETAS TOTALES
+                      </TableCell>
                       <TableCell align="right"></TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 700 }}>{formatMoney(data.netSales)}</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 700 }}>
+                        {formatMoney(data.netSales)}
+                      </TableCell>
                     </TableRow>
 
                     {/* 2. Costo de Ventas */}
@@ -299,7 +355,9 @@ export const IncomeStatementPage = () => {
                     <TableRow>
                       <TableCell sx={{ pl: 4 }}>(-) Costo de Mercancía Vendida</TableCell>
                       <TableCell align="right"></TableCell>
-                      <TableCell align="right" sx={{ color: 'error.main' }}>({formatMoney(data.costOfGoodsSold)})</TableCell>
+                      <TableCell align="right" sx={{ color: 'error.main' }}>
+                        ({formatMoney(data.costOfGoodsSold)})
+                      </TableCell>
                     </TableRow>
 
                     {/* 3. Utilidad Bruta */}
@@ -308,7 +366,10 @@ export const IncomeStatementPage = () => {
                         (=) UTILIDAD BRUTA (Margen Bruto: {data.grossMarginPercentage}%)
                       </TableCell>
                       <TableCell align="right"></TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 700, color: 'success.dark', fontSize: '1.05rem' }}>
+                      <TableCell
+                        align="right"
+                        sx={{ fontWeight: 700, color: 'success.dark', fontSize: '1.05rem' }}
+                      >
                         {formatMoney(data.grossProfit)}
                       </TableCell>
                     </TableRow>
@@ -334,7 +395,11 @@ export const IncomeStatementPage = () => {
                       data.operatingExpenses.map((exp) => (
                         <TableRow key={exp.accountId}>
                           <TableCell sx={{ pl: 4 }}>
-                            <Typography variant="body2" component="span" sx={{ fontFamily: 'monospace', fontWeight: 600, mr: 1 }}>
+                            <Typography
+                              variant="body2"
+                              component="span"
+                              sx={{ fontFamily: 'monospace', fontWeight: 600, mr: 1 }}
+                            >
                               {exp.accountCode}
                             </Typography>
                             {exp.accountName}
@@ -346,7 +411,9 @@ export const IncomeStatementPage = () => {
                     )}
 
                     <TableRow sx={{ bgcolor: 'grey.50' }}>
-                      <TableCell sx={{ pl: 4, fontWeight: 700 }}>(-) TOTAL GASTOS OPERACIONALES</TableCell>
+                      <TableCell sx={{ pl: 4, fontWeight: 700 }}>
+                        (-) TOTAL GASTOS OPERACIONALES
+                      </TableCell>
                       <TableCell align="right"></TableCell>
                       <TableCell align="right" sx={{ fontWeight: 700, color: 'warning.dark' }}>
                         ({formatMoney(data.totalOperatingExpenses)})
@@ -355,8 +422,16 @@ export const IncomeStatementPage = () => {
 
                     {/* 5. Utilidad Operacional / Resultado Neto */}
                     <TableRow sx={{ bgcolor: isNetIncomePositive ? 'success.100' : 'error.100' }}>
-                      <TableCell sx={{ fontWeight: 800, color: isNetIncomePositive ? 'success.dark' : 'error.dark', py: 2, fontSize: '1rem' }}>
-                        (=) UTILIDAD OPERACIONAL / RESULTADO NETO (Margen Neto: {data.operatingMarginPercentage}%)
+                      <TableCell
+                        sx={{
+                          fontWeight: 800,
+                          color: isNetIncomePositive ? 'success.dark' : 'error.dark',
+                          py: 2,
+                          fontSize: '1rem',
+                        }}
+                      >
+                        (=) UTILIDAD OPERACIONAL / RESULTADO NETO (Margen Neto:{' '}
+                        {data.operatingMarginPercentage}%)
                       </TableCell>
                       <TableCell align="right"></TableCell>
                       <TableCell

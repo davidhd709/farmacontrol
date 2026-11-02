@@ -106,6 +106,16 @@ const ImportAccountsPage = lazy(() =>
     default: m.ImportAccountsPage,
   })),
 );
+const AccountingLookupPage = lazy(() =>
+  import('./features/accounting/pages/AccountingLookupPage').then((m) => ({
+    default: m.AccountingLookupPage,
+  })),
+);
+const AccountingAuditPage = lazy(() =>
+  import('./features/accounting/pages/AccountingAuditPage').then((m) => ({
+    default: m.AccountingAuditPage,
+  })),
+);
 const JournalEntriesPage = lazy(() =>
   import('./features/accounting/pages/JournalEntriesPage').then((m) => ({
     default: m.JournalEntriesPage,
@@ -210,6 +220,8 @@ export const App = () => {
               <Route path="/accounting/purposes" element={<PurposesPage />} />
               <Route path="/accounting/import" element={<ImportAccountsPage />} />
               <Route path="/accounting/journal" element={<JournalEntriesPage />} />
+              <Route path="/accounting/lookup" element={<AccountingLookupPage />} />
+              <Route path="/accounting/audit" element={<AccountingAuditPage />} />
               <Route path="/accounting/trial-balance" element={<TrialBalancePage />} />
               <Route path="/accounting/income-statement" element={<IncomeStatementPage />} />
               <Route path="/accounting/balance-sheet" element={<BalanceSheetPage />} />

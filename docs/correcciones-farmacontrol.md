@@ -77,7 +77,7 @@ Cada flujo (venta, abono, pago a proveedor, gasto, nota crédito, movimiento man
 
 | Ítem | Cambio |
 |---|---|
-| Buscador de cuentas | Búsqueda rápida por código o nombre en el plan de cuentas. |
+| Buscador de cuentas | `AccountAutocomplete` (inicio del código o parte del nombre) en la nueva pantalla "Cuentas y Terceros" (con el auxiliar del periodo) y en la contrapartida de recibos y egresos manuales. El plan de cuentas ya tenía búsqueda. |
 | Buscador de terceros con estado de cuenta | Nueva pantalla: al elegir un tercero muestra su cartera (nos debe) y sus cuentas por pagar (le debemos). |
 | Auditoría contable | Nueva vista: asientos descuadrados (débitos ≠ créditos) y documentos anulados o reversados, con filtros de fecha y tipo de documento. |
 
@@ -113,5 +113,5 @@ Cada flujo (venta, abono, pago a proveedor, gasto, nota crédito, movimiento man
 | 2 | IMPLEMENTADO | ver `git log` (`feat(ventas): …`) |
 | 3 | IMPLEMENTADO | ver `git log` (`feat(tesoreria): …`) |
 | 4 | IMPLEMENTADO | ver `git log` (`feat(cuentas-por-pagar): …`) |
-| 5 | PENDIENTE | — |
+| 5 | IMPLEMENTADO | ver `git log` (`feat(contabilidad): …`) |
 | 6 | PENDIENTE | — |

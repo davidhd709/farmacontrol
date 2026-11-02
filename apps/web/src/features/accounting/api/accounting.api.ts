@@ -140,7 +140,21 @@ import type {
   IncomeStatementReportDto,
   BalanceSheetReportDto,
   PaginatedResponse,
+  AccountingAuditDto,
+  AccountingAuditFilters,
+  ThirdPartyStatementDto,
 } from '@farmacia/contracts';
+
+export const fetchAccountingAudit = (filters: AccountingAuditFilters) => {
+  const params = new URLSearchParams({ view: filters.view });
+  if (filters.fromDate) params.append('fromDate', filters.fromDate);
+  if (filters.toDate) params.append('toDate', filters.toDate);
+  if (filters.documentType) params.append('documentType', filters.documentType);
+  return apiRequest<AccountingAuditDto>(`accounting/audit?${params.toString()}`);
+};
+
+export const fetchThirdPartyStatement = (thirdPartyId: string) =>
+  apiRequest<ThirdPartyStatementDto>(`third-parties/${encodeURIComponent(thirdPartyId)}/statement`);
 
 export const fetchJournalEntries = (filters: JournalEntryQueryFilters = {}) => {
   const params = new URLSearchParams();
@@ -327,7 +341,13 @@ export interface AnnualClosingPreviewDto {
   netResult: string;
   destinationPurpose: 'RETAINED_EARNINGS' | 'ACCUMULATED_LOSSES' | null;
   destinationAccount: { id: string; code: string; name: string } | null;
-  lines: Array<{ accountId: string; accountCode: string; accountName: string; debit: string; credit: string }>;
+  lines: Array<{
+    accountId: string;
+    accountCode: string;
+    accountName: string;
+    debit: string;
+    credit: string;
+  }>;
   existingEntryId: string | null;
 }
 
@@ -335,11 +355,14 @@ export const fetchAnnualClosingPreview = (year: number) =>
   apiRequest<AnnualClosingPreviewDto>(`accounting/annual-closings/preview?year=${year}`);
 
 export const closeYear = (year: number, idempotencyKey: string) =>
-  apiRequest<{ year: number; journalEntryId: string; netResult: string }>('accounting/annual-closings', {
-    method: 'POST',
-    headers: { 'Idempotency-Key': idempotencyKey },
-    body: JSON.stringify({ year }),
-  });
+  apiRequest<{ year: number; journalEntryId: string; netResult: string }>(
+    'accounting/annual-closings',
+    {
+      method: 'POST',
+      headers: { 'Idempotency-Key': idempotencyKey },
+      body: JSON.stringify({ year }),
+    },
+  );
 
 // ===== BLOQUEO DE DOCUMENTOS POR FECHA =====
 
@@ -510,5 +533,3 @@ export const fetchAllDebitNotes = (purchaseId?: string) => {
   const q = purchaseId ? `?purchaseId=${encodeURIComponent(purchaseId)}` : '';
   return apiRequest<DebitNoteDto[]>(`debit-notes${q}`);
 };
-
-
