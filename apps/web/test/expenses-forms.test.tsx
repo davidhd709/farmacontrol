@@ -9,6 +9,9 @@ import type {
   PayablePaymentDto,
   ReceivablePaymentDto,
 } from '@farmacia/contracts';
+import { SYSTEM_PERMISSIONS } from '@farmacia/contracts';
+import { withAuth } from './support-auth';
+import { ExpensesWithoutSupplierDialog } from '../src/features/expenses/components/ExpensesWithoutSupplierDialog';
 import { ExpenseFormDialog } from '../src/features/expenses/components/ExpenseFormDialog';
 import { ExpenseReasonDialog } from '../src/features/expenses/components/ExpenseReasonDialog';
 import { ExpensesPage } from '../src/features/expenses/pages/ExpensesPage';
@@ -221,7 +224,7 @@ it('integra los diálogos en gastos y conserva cancellationReason/reversalReason
   vi.spyOn(api, 'fetchExpenseCategories').mockResolvedValue(categories);
   const cancel = vi.spyOn(api, 'cancelExpense').mockResolvedValue(expense);
   const reverse = vi.spyOn(api, 'reverseExpensePayment').mockResolvedValue(expense);
-  mount(<ExpensesPage />);
+  mount(withAuth(<ExpensesPage />, [SYSTEM_PERMISSIONS.EXPENSES_MANAGE]));
   fireEvent.click(await screen.findByRole('button', { name: 'Anular gasto' }));
   change(/Motivo de la Anulación/, ' Motivo válido ');
   fireEvent.click(screen.getByRole('button', { name: 'Confirmar Anulación' }));
@@ -235,4 +238,39 @@ it('integra los diálogos en gastos y conserva cancellationReason/reversalReason
   await waitFor(() =>
     expect(reverse).toHaveBeenCalledWith('payment', { reversalReason: 'Motivo válido' }),
   );
+});
+
+it('lista las causaciones sin proveedor y asigna uno con confirmación', async () => {
+  vi.spyOn(api, 'fetchExpensesWithoutSupplier').mockResolvedValue([
+    {
+      id: 'exp-old',
+      expenseDate: '2026-08-10',
+      documentNumber: null,
+      description: 'Energía agosto',
+      beneficiary: 'Texto libre',
+      categoryName: 'Servicios',
+      amount: '45000.00',
+      balance: '45000.00',
+      status: 'PENDIENTE',
+    },
+  ]);
+  const assign = vi
+    .spyOn(api, 'assignExpenseSupplier')
+    .mockResolvedValue({ ...expense, supplierName: 'Enel', description: 'Energía agosto' } as ExpenseDto);
+  vi.mocked(parties.fetchThirdParties).mockResolvedValue({
+    items: [{ id: 'tp-1', documentType: 'NIT', documentNumber: '860', name: 'Enel', supplierId: 'sup-1' } as never],
+    total: 1,
+    page: 1,
+    pageSize: 20,
+    totalPages: 1,
+  });
+  mount(<ExpensesWithoutSupplierDialog canAssign onClose={vi.fn()} />);
+  expect(await screen.findByText('Energía agosto')).toBeInTheDocument();
+  expect(screen.getByText('2026-08-10')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Asignar proveedor' }));
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: /Proveedor/ }));
+  fireEvent.click(await screen.findByRole('option', { name: /Enel/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Asignar' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Asignar', hidden: false }));
+  await waitFor(() => expect(assign).toHaveBeenCalledWith('exp-old', 'sup-1'));
 });

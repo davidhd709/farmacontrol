@@ -59,10 +59,7 @@ export const ExpenseCategoriesModal: React.FC<Props> = ({ open, onClose, onCateg
     setLoading(true);
     setError(null);
     try {
-      const [cats, accs] = await Promise.all([
-        fetchExpenseCategories(true),
-        fetchPucAccounts(),
-      ]);
+      const [cats, accs] = await Promise.all([fetchExpenseCategories(true), fetchPucAccounts()]);
       setCategories(cats);
       // Filtrar cuentas imputables de tipo EXPENSE o COST
       const expenseAccs = accs.filter(
@@ -207,7 +204,10 @@ export const ExpenseCategoriesModal: React.FC<Props> = ({ open, onClose, onCateg
                     <TableCell sx={{ fontWeight: 600 }}>{c.name}</TableCell>
                     <TableCell>{c.description || '—'}</TableCell>
                     <TableCell>
-                      <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 'bold' }}>
+                      <Typography
+                        variant="body2"
+                        sx={{ fontFamily: 'monospace', fontWeight: 'bold' }}
+                      >
                         {c.accountCode}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">

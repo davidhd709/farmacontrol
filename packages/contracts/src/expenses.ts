@@ -80,6 +80,23 @@ export interface ExpenseDto {
  * Causación de gasto: reconoce el gasto y la cuenta por pagar (correcciones del cliente,
  * 2026-11-01). No registra pagos: se pagan con un comprobante de egreso.
  */
+/** Causación sin proveedor: no aparece en ningún estado de cuenta ni se paga con egreso. */
+export interface ExpenseWithoutSupplierDto {
+  id: string;
+  expenseDate: string;
+  documentNumber: string | null;
+  description: string;
+  beneficiary: string;
+  categoryName: string;
+  amount: string;
+  balance: string;
+  status: ExpenseStatus;
+}
+
+export interface AssignExpenseSupplierPayload {
+  supplierId: string;
+}
+
 export interface CreateExpensePayload {
   categoryId: string;
   description: string;

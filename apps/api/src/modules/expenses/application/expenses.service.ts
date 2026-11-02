@@ -1,6 +1,6 @@
 import { businessToday } from '../../../common/utils/business-date';
 import { IdempotencyService } from '../../../common/idempotency/idempotency.service';
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { prisma, Prisma } from '@farmacia/database';
 import { CashService } from '../../cash/application/cash.service';
 import { recordSourceBankMovement } from '../../treasury/application/record-source-bank-movement';
@@ -14,6 +14,7 @@ import {
   ExpenseQueryFilters,
   ExpensesSummaryDto,
   ExpenseMovementsDto,
+  ExpenseWithoutSupplierDto,
   PaginatedResponse,
 } from '@farmacia/contracts';
 import { buildDocumentMovements, RawDocumentMovement } from '../../../common/utils/document-movements';
@@ -567,6 +568,86 @@ export class ExpensesService {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
     });
 
+    return this.findById(expenseId);
+  }
+
+  /**
+   * Causaciones sin proveedor (anteriores a que fuera obligatorio): no aparecen en ningún estado
+   * de cuenta ni se pueden pagar con un comprobante de egreso hasta asignarles uno.
+   */
+  async listWithoutSupplier(filters: { fromDate?: string; toDate?: string }): Promise<ExpenseWithoutSupplierDto[]> {
+    if (filters.fromDate && filters.toDate && filters.fromDate > filters.toDate) {
+      throw new BadRequestException('La fecha desde no puede ser posterior a la fecha hasta.');
+    }
+    const rows = await prisma.expense.findMany({
+      where: {
+        supplierId: null,
+        status: { not: 'ANULADO' },
+        ...(filters.fromDate || filters.toDate
+          ? {
+              expenseDate: {
+                ...(filters.fromDate ? { gte: new Date(`${filters.fromDate}T00:00:00Z`) } : {}),
+                ...(filters.toDate ? { lte: new Date(`${filters.toDate}T00:00:00Z`) } : {}),
+              },
+            }
+          : {}),
+      },
+      include: { category: { select: { name: true } } },
+      orderBy: [{ expenseDate: 'asc' }, { createdAt: 'asc' }],
+    });
+    return rows.map((e) => ({
+      id: e.id,
+      expenseDate: e.expenseDate.toISOString().slice(0, 10),
+      documentNumber: e.documentNumber ?? null,
+      description: e.description,
+      beneficiary: e.beneficiary,
+      categoryName: e.category.name,
+      amount: e.amount.toFixed(2),
+      balance: e.balance.toFixed(2),
+      status: e.status as ExpenseWithoutSupplierDto['status'],
+    }));
+  }
+
+  /**
+   * Asigna manualmente el proveedor de una causación que no lo tiene. No reasigna: una causación
+   * con proveedor responde 409. Queda en auditoría quién lo asignó, cuándo y el beneficiario que
+   * tenía registrado.
+   */
+  async assignSupplier(expenseId: string, supplierId: unknown, userId: string): Promise<ExpenseDto> {
+    validateUuid(expenseId, 'ID de gasto');
+    if (typeof supplierId !== 'string') throw new BadRequestException('El proveedor es obligatorio.');
+    validateUuid(supplierId, 'ID de proveedor');
+    await prisma.$transaction(
+      async (tx) => {
+        const rows = await tx.$queryRaw<Array<{ supplier_id: string | null; status: string; beneficiary: string }>>`
+          SELECT supplier_id, status, beneficiary FROM expenses WHERE id = ${expenseId}::uuid FOR UPDATE
+        `;
+        if (!rows.length) throw new NotFoundException(`Gasto con ID "${expenseId}" no encontrado.`);
+        if (rows[0].status === 'ANULADO') {
+          throw new BadRequestException('Una causación anulada no admite cambios.');
+        }
+        if (rows[0].supplier_id) {
+          throw new ConflictException('La causación ya tiene proveedor; no se reasigna.');
+        }
+        const supplier = await tx.supplier.findUnique({ where: { id: supplierId }, select: { name: true } });
+        if (!supplier) throw new NotFoundException('El proveedor no existe.');
+        await tx.expense.update({ where: { id: expenseId }, data: { supplierId } });
+        await tx.auditEvent.create({
+          data: {
+            userId,
+            action: 'expenses:supplier_assigned',
+            entity: 'Expense',
+            entityId: expenseId,
+            details: {
+              supplierId,
+              supplierName: supplier.name,
+              previousBeneficiary: rows[0].beneficiary,
+            },
+          },
+        });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
     return this.findById(expenseId);
   }
 

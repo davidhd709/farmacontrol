@@ -8,6 +8,7 @@ import {
   cleanTestDatabase,
   seedRbac,
   AccountingPurpose as DbPurpose,
+  Prisma,
 } from '@farmacia/database';
 import { AppModule } from '../../src/app.module';
 import { UserProvisioningService } from '../../src/modules/identity/application/services/user-provisioning.service';
@@ -970,6 +971,75 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
         .set('Cookie', cookie)
         .send({ amount: '10000.00', paymentDate: '2026-10-06', paymentMethod: 'EFECTIVO' })
         .expect(400);
+    });
+  });
+
+  describe('Causaciones sin proveedor', () => {
+    it('las lista con fecha, valor y concepto, y permite asignarles proveedor una sola vez con auditoría', async () => {
+      const { accounts } = await setupPucAndTreasury();
+      const category = await categoriesService.create({ name: 'Servicios públicos', accountId: accounts.get('513530')! });
+      // Causaciones anteriores a que el proveedor fuera obligatorio
+      const legacy = (description: string, expenseDate: string, status = 'PENDIENTE') =>
+        prisma.expense.create({
+          data: {
+            categoryId: category.id,
+            description,
+            beneficiary: 'Texto libre',
+            amount: new Prisma.Decimal('45000.00'),
+            balance: new Prisma.Decimal('45000.00'),
+            expenseDate: new Date(expenseDate),
+            paymentMethod: 'CREDITO',
+            status,
+            createdById: adminUserId,
+          },
+        });
+      const energy = await legacy('Energía agosto', '2026-08-10');
+      await legacy('Agua septiembre', '2026-09-10');
+      await legacy('Anulada', '2026-09-11', 'ANULADO');
+
+      const all = await request(app.getHttpServer()).get('/api/v1/expenses/without-supplier').set('Cookie', cookie).expect(200);
+      expect(all.body.map((e: { description: string }) => e.description)).toEqual(['Energía agosto', 'Agua septiembre']);
+      expect(all.body[0]).toMatchObject({ expenseDate: '2026-08-10', amount: '45000.00', beneficiary: 'Texto libre', categoryName: 'Servicios públicos' });
+      const august = await request(app.getHttpServer())
+        .get('/api/v1/expenses/without-supplier?fromDate=2026-08-01&toDate=2026-08-31')
+        .set('Cookie', cookie)
+        .expect(200);
+      expect(august.body).toHaveLength(1);
+
+      // Un rol sin expenses:manage no asigna
+      await request(app.getHttpServer())
+        .post(`/api/v1/expenses/${energy.id}/supplier`)
+        .set('Cookie', cashierCookie)
+        .send({ supplierId: defaultSupplierId })
+        .expect(403);
+
+      const assigned = await request(app.getHttpServer())
+        .post(`/api/v1/expenses/${energy.id}/supplier`)
+        .set('Cookie', cookie)
+        .send({ supplierId: defaultSupplierId })
+        .expect(201);
+      expect(assigned.body).toMatchObject({ supplierId: defaultSupplierId, supplierName: 'Proveedor de gastos', beneficiary: 'Texto libre' });
+
+      const audit = await prisma.auditEvent.findFirstOrThrow({
+        where: { action: 'expenses:supplier_assigned', entityId: energy.id },
+      });
+      expect(audit.userId).toBe(adminUserId);
+      expect(audit.createdAt).toBeInstanceOf(Date);
+      expect(audit.details).toMatchObject({ supplierId: defaultSupplierId, previousBeneficiary: 'Texto libre' });
+
+      // No se reasigna en silencio; ya aparece en el estado de cuenta del proveedor
+      await request(app.getHttpServer())
+        .post(`/api/v1/expenses/${energy.id}/supplier`)
+        .set('Cookie', cookie)
+        .send({ supplierId: defaultSupplierId })
+        .expect(409);
+      const statement = await request(app.getHttpServer())
+        .get(`/api/v1/payables/statement?supplierId=${defaultSupplierId}`)
+        .set('Cookie', cookie)
+        .expect(200);
+      expect(statement.body.data.items.map((i: { documentId: string }) => i.documentId)).toContain(energy.id);
+      const remaining = await request(app.getHttpServer()).get('/api/v1/expenses/without-supplier').set('Cookie', cookie).expect(200);
+      expect(remaining.body.map((e: { description: string }) => e.description)).toEqual(['Agua septiembre']);
     });
   });
 

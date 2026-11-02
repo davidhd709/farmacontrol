@@ -110,6 +110,10 @@ Todo ingreso o egreso de dinero nace en un recibo de caja o un comprobante de eg
 
 Siguen activas las reversiones de abonos y pagos (`.../payments/:paymentId/reverse`), que son anulaciones con su propio movimiento y asiento. Consecuencia para los roles: cartera y compras ya no registran abonos ni pagos por API (en la interfaz ya no podían desde la fase 3); los recibos y egresos exigen el permiso contable. Queda pendiente la decisión del cliente sobre los permisos del rol cartera.
 
+## 3.2 Causaciones sin proveedor (2026-11-02)
+
+No se asignan proveedores automáticamente. En Gastos → "Sin proveedor" se listan las causaciones sin proveedor (fecha, concepto, beneficiario registrado, valor y saldo; `GET /expenses/without-supplier`) y se asigna uno a mano (`POST /expenses/:id/supplier`, permiso `expenses:manage`). La asignación no se reasigna (409), no aplica a causaciones anuladas y queda en auditoría (`expenses:supplier_assigned`: usuario, fecha, proveedor y beneficiario anterior).
+
 ## 4. Pendientes y dudas abiertas
 
 - `accounting-coverage` ("nota crédito devuelve el INC…") falla de noche, entre las 19:00 y las 24:00 de Bogotá, cuando la fecha UTC ya cambió: es preexistente. La prueba de `full-system-lifecycle` que dependía de octubre de 2026 se corrigió para usar la fecha de negocio de la corrida.

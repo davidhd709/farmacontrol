@@ -1,3 +1,6 @@
+import { SYSTEM_PERMISSIONS } from '@farmacia/contracts';
+import { ExpensesWithoutSupplierDialog } from '../components/ExpensesWithoutSupplierDialog';
+import { usePermissions } from '../../auth/hooks/usePermissions';
 import { ExpenseFormDialog } from '../components/ExpenseFormDialog';
 import { ExpenseReasonDialog } from '../components/ExpenseReasonDialog';
 import type { ExpenseReasonFormData } from '../validation/expense-reason.schema';
@@ -39,11 +42,7 @@ import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
-import {
-  ExpenseDto,
-  ExpenseCategoryDto,
-  ExpensesSummaryDto,
-} from '@farmacia/contracts';
+import { ExpenseDto, ExpenseCategoryDto, ExpensesSummaryDto } from '@farmacia/contracts';
 
 import {
   fetchExpenses,
@@ -63,6 +62,7 @@ function formatCurrency(val: string | number | undefined): string {
 }
 
 export const ExpensesPage: React.FC = () => {
+  const { hasPermission } = usePermissions();
   // Filtros
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -81,6 +81,7 @@ export const ExpensesPage: React.FC = () => {
 
   // Modales
   const [categoriesModalOpen, setCategoriesModalOpen] = useState(false);
+  const [noSupplierOpen, setNoSupplierOpen] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
@@ -225,6 +226,9 @@ export const ExpensesPage: React.FC = () => {
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 1.5 }}>
+          <Button variant="outlined" color="warning" onClick={() => setNoSupplierOpen(true)}>
+            Sin proveedor
+          </Button>
           <Button
             variant="outlined"
             color="primary"
@@ -462,7 +466,9 @@ export const ExpensesPage: React.FC = () => {
                         </Typography>
                       )}
                     </TableCell>
-                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{e.dueDate ?? e.expenseDate}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                      {e.dueDate ?? e.expenseDate}
+                    </TableCell>
                     <TableCell sx={{ textAlign: 'right', fontWeight: 'bold' }}>
                       {formatCurrency(e.amount)}
                     </TableCell>
@@ -531,6 +537,13 @@ export const ExpensesPage: React.FC = () => {
             setCreateModalOpen(false);
             await loadExpenses();
           }}
+        />
+      )}
+
+      {noSupplierOpen && (
+        <ExpensesWithoutSupplierDialog
+          canAssign={hasPermission(SYSTEM_PERMISSIONS.EXPENSES_MANAGE)}
+          onClose={() => setNoSupplierOpen(false)}
         />
       )}
 

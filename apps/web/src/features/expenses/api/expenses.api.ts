@@ -2,6 +2,7 @@ import { apiRequest } from '../../../api/http-client';
 import {
   ExpenseDto,
   ExpenseMovementsDto,
+  ExpenseWithoutSupplierDto,
   ExpenseCategoryDto,
   CreateExpenseCategoryPayload,
   UpdateExpenseCategoryPayload,
@@ -84,3 +85,19 @@ export const fetchPucAccounts = () => apiRequest<AccountDto[]>('accounts');
 
 export const fetchExpenseMovements = (id: string) =>
   apiRequest<ExpenseMovementsDto>(`expenses/${encodeURIComponent(id)}/movements`);
+
+export const fetchExpensesWithoutSupplier = (
+  filters: { fromDate?: string; toDate?: string } = {},
+) => {
+  const query = new URLSearchParams();
+  if (filters.fromDate) query.set('fromDate', filters.fromDate);
+  if (filters.toDate) query.set('toDate', filters.toDate);
+  const qs = query.toString();
+  return apiRequest<ExpenseWithoutSupplierDto[]>(`expenses/without-supplier${qs ? `?${qs}` : ''}`);
+};
+
+export const assignExpenseSupplier = (id: string, supplierId: string) =>
+  apiRequest<ExpenseDto>(`expenses/${encodeURIComponent(id)}/supplier`, {
+    method: 'POST',
+    body: JSON.stringify({ supplierId }),
+  });

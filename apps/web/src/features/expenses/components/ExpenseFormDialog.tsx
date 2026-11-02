@@ -247,7 +247,9 @@ export function ExpenseFormDialog({ categories, onClose, onSuccess }: Props) {
                       {...field}
                       inputRef={ref}
                       error={!!errors.dueDate}
-                      helperText={errors.dueDate?.message ?? 'Opcional: sin fecha vence el día del gasto'}
+                      helperText={
+                        errors.dueDate?.message ?? 'Opcional: sin fecha vence el día del gasto'
+                      }
                       fullWidth
                       size="small"
                       slotProps={{ inputLabel: { shrink: true } }}
