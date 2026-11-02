@@ -111,6 +111,42 @@ describe('Ventas a crédito, devoluciones y cambio de producto', () => {
       .get(`/api/v1/receivables/${receivableId}/movements`)
       .set('Cookie', adminCookie);
 
+  it('la venta de contado es su propio documento: un movimiento, sin recibo de caja y un solo asiento', async () => {
+    const adminId = (await prisma.user.findUniqueOrThrow({ where: { username: 'cartera_admin' } })).id;
+    const bank = await prisma.bankAccount.create({
+      data: { bankName: 'Bancolombia', accountType: 'AHORROS', accountNumber: '1001', name: 'Recaudos', createdById: adminId },
+    });
+    const cash = await sell({ paymentMethod: 'EFECTIVO', amountPaid: 10000, customerId });
+    expect(cash.status, JSON.stringify(cash.body)).toBe(201);
+    const transfer = await sell({ paymentMethod: 'TRANSFERENCIA', bankAccountId: bank.id, customerId });
+    expect(transfer.status, JSON.stringify(transfer.body)).toBe(201);
+
+    // Un solo movimiento por venta, en caja o en el banco, y ningún RC/CE adicional
+    const cashMovements = await prisma.cashMovement.findMany();
+    expect(cashMovements).toHaveLength(1);
+    expect(cashMovements[0]).toMatchObject({ referenceDocumentType: 'SALE', referenceDocumentId: cash.body.invoiceNumber });
+    expect(cashMovements[0].amount.toFixed(2)).toBe('10000.00');
+    const bankMovements = await prisma.bankMovement.findMany();
+    expect(bankMovements).toHaveLength(1);
+    expect(bankMovements[0].referenceDocumentId).toBe(transfer.body.invoiceNumber);
+    expect(await prisma.treasuryDocument.count()).toBe(0);
+
+    // Un solo asiento por venta, cuadrado, con el dinero en caja o bancos por el total
+    for (const sale of [cash.body, transfer.body]) {
+      const entries = await prisma.journalEntry.findMany({ where: { sourceId: sale.id }, include: { lines: true } });
+      expect(entries).toHaveLength(1);
+      expect(entries[0].sourceType).toBe('SALE');
+      const debit = entries[0].lines.reduce((acc, l) => acc.plus(l.debit), new Prisma.Decimal(0));
+      const credit = entries[0].lines.reduce((acc, l) => acc.plus(l.credit), new Prisma.Decimal(0));
+      expect(debit.toFixed(2)).toBe(credit.toFixed(2));
+      const money = entries[0].lines.filter((l) => l.purpose === 'CASH' || l.purpose === 'BANK');
+      expect(money).toHaveLength(1);
+      expect(money[0].purpose).toBe(sale.paymentMethod === 'EFECTIVO' ? 'CASH' : 'BANK');
+      expect(money[0].debit.toFixed(2)).toBe('10000.00');
+    }
+    expect(await prisma.journalEntry.count()).toBe(2);
+  });
+
   it('la venta a crédito exige un cliente identificado', async () => {
     const withoutCustomer = await sell({ paymentMethod: 'CREDITO' });
     expect(withoutCustomer.status).toBe(400);

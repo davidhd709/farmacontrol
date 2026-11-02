@@ -17,4 +17,4 @@ ADR-002 generaba un recibo de caja (RC) o un comprobante de egreso (CE) por cada
 ## Consecuencias
 
 - El consecutivo RC/CE ya no avanza con cada venta.
-- Queda por confirmar con la contadora que la venta de contado sin RC adicional cumple lo acordado el 4 de octubre.
+- **Confirmado por el cliente (2026-11-02):** la venta de contado no genera recibo de caja; la factura registra directamente su movimiento en caja o bancos y un único asiento. El recibo de caja queda para abonos de cartera y otros ingresos manuales.

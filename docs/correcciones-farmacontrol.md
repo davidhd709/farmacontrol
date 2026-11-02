@@ -89,7 +89,7 @@ Cada flujo (venta, abono, pago a proveedor, gasto, nota crédito, movimiento man
 
 ## 3. Decisiones
 
-1. **La venta es su propio documento.** Una venta de contado ya no genera además un recibo de caja. Esto reemplaza, solo para ventas y sus anulaciones, la regla de ADR-002 ("por cada venta una factura y un recibo de caja", reunión del 4 de octubre). Ver ADR-007.
+1. **La venta es su propio documento** (confirmado por el cliente el 2026-11-02). Una venta de contado ya no genera además un recibo de caja. Esto reemplaza, solo para ventas y sus anulaciones, la regla de ADR-002 ("por cada venta una factura y un recibo de caja", reunión del 4 de octubre). Ver ADR-007.
 2. **Los recibos y egresos nacen como documento.** El servicio crea el documento con su consecutivo y el movimiento de caja o banco que respalda; el trigger de ADR-002 queda como red de seguridad para los demás flujos.
 3. **Un asiento por aplicación.** Un recibo que abona tres facturas publica tres asientos cuadrados (uno por abono, como hasta ahora) bajo el mismo documento, para conservar la reversión individual de abonos.
 4. **Edades de cartera y cuentas por pagar.** Días vencidos desde la fecha de vencimiento: Corriente (no vencida o hasta 30 días), 31–60, 61–90, más de 90. Las causaciones sin vencimiento se miden desde su fecha.
@@ -102,7 +102,6 @@ Cada flujo (venta, abono, pago a proveedor, gasto, nota crédito, movimiento man
 
 - ⚠️ Pantalla del botón "Reservar" (sección 2, fase 1).
 - ⚠️ Pantalla de "Organizar diseño" (sección 2, fase 1).
-- Confirmar con la contadora que la venta de contado sin recibo de caja adicional cumple lo acordado el 4 de octubre (decisión 1).
 - Confirmar si los rangos de edad deben medirse desde el vencimiento (decisión 4) o desde la fecha de la factura.
 
 ## 5. Avance por fase
