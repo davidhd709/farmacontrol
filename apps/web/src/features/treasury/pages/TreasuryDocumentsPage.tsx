@@ -23,16 +23,18 @@ import {
   Typography,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
-import type {
-  TreasuryDocumentApplicationDto,
-  TreasuryDocumentDto,
-  TreasuryDocumentType,
+import {
+  SYSTEM_PERMISSIONS,
+  type TreasuryDocumentApplicationDto,
+  type TreasuryDocumentDto,
+  type TreasuryDocumentType,
 } from '@farmacia/contracts';
 import { getTreasuryDocuments } from '../api/treasury.api';
 import { QuickDateRange } from '../../../components/QuickDateRange';
 import { HomeBackButton } from '../../../components/HomeBackButton';
 import { SweetModal } from '../../../components/SweetModal';
 import { VoucherFormDialog } from '../components/VoucherFormDialog';
+import { usePermissions } from '../../auth/hooks/usePermissions';
 
 const LABELS: Record<
   TreasuryDocumentType,
@@ -112,6 +114,15 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
   const [selected, setSelected] = useState<TreasuryDocumentDto | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const { hasPermission, hasAnyPermission } = usePermissions();
+  // El recibo se registra con abono a cartera o manual (permiso contable); el egreso con su permiso
+  const canCreate =
+    type === 'RECIBO_CAJA'
+      ? hasAnyPermission([
+          SYSTEM_PERMISSIONS.CASH_RECEIPTS_COLLECT,
+          SYSTEM_PERMISSIONS.ACCOUNTING_READ,
+        ])
+      : hasPermission(SYSTEM_PERMISSIONS.DISBURSEMENTS_CREATE);
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['treasury-documents', type, fromDate, toDate, search, page, pageSize],
@@ -145,13 +156,15 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
               </Typography>
             </Box>
           </Box>
-          <Button
-            variant="contained"
-            onClick={() => setFormOpen(true)}
-            sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}
-          >
-            {labels.create}
-          </Button>
+          {canCreate && (
+            <Button
+              variant="contained"
+              onClick={() => setFormOpen(true)}
+              sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}
+            >
+              {labels.create}
+            </Button>
+          )}
         </Stack>
 
         <Paper sx={{ p: 2 }}>

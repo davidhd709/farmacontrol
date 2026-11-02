@@ -100,7 +100,7 @@ describe('Auditoría contable y estado de cuenta por tercero', () => {
     });
     expect(sale.status, JSON.stringify(sale.body)).toBe(201);
     const receivable = await prisma.receivable.findUniqueOrThrow({ where: { saleId: sale.body.id } });
-    const receipt = await post('treasury/cash-receipts', {
+    const receipt = await post('treasury/cash-receipts/collections', {
       kind: 'CARTERA',
       paymentMethod: 'EFECTIVO',
       concept: 'Abono Clínica',

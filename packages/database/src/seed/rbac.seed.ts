@@ -89,6 +89,8 @@ export const BASE_PERMISSIONS: PermissionDefinition[] = [
   { name: SYSTEM_PERMISSIONS.TREASURY_ACCOUNTS_SELECT, description: 'Seleccionar cuenta activa en cobros y pagos sin consultar saldos' },
   { name: SYSTEM_PERMISSIONS.TREASURY_READ, description: 'Consultar cuentas bancarias y movimientos de tesorería' },
   { name: SYSTEM_PERMISSIONS.TREASURY_MANAGE, description: 'Gestionar cuentas bancarias y registrar movimientos de tesorería' },
+  { name: SYSTEM_PERMISSIONS.CASH_RECEIPTS_COLLECT, description: 'Registrar recibos de caja de abono a cartera (el asiento automático no exige permiso contable)' },
+  { name: SYSTEM_PERMISSIONS.DISBURSEMENTS_CREATE, description: 'Registrar comprobantes de egreso: pago a proveedores y causaciones (el manual exige además el permiso contable)' },
 
   // Gastos
   { name: SYSTEM_PERMISSIONS.EXPENSES_READ, description: 'Consultar categorías y registros de gastos operativos' },
@@ -212,6 +214,7 @@ export const BASE_ROLES: RoleDefinition[] = [
       SYSTEM_PERMISSIONS.CUSTOMERS_MANAGE,
       SYSTEM_PERMISSIONS.RECEIVABLES_READ,
       SYSTEM_PERMISSIONS.RECEIVABLES_MANAGE,
+      SYSTEM_PERMISSIONS.CASH_RECEIPTS_COLLECT,
       SYSTEM_PERMISSIONS.TREASURY_ACCOUNTS_SELECT,
       SYSTEM_PERMISSIONS.SALES_READ,
     ],

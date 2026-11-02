@@ -104,11 +104,11 @@ Todo ingreso o egreso de dinero nace en un recibo de caja o un comprobante de eg
 | `POST /cash-movements` | `POST /treasury/cash-receipts` o `POST /treasury/disbursements` (tipo `MANUAL`, efectivo) |
 | `POST /treasury/bank-accounts/:id/movements` | Recibo o egreso `MANUAL` por transferencia |
 | `POST /treasury/bank-accounts/:id/movements/:movementId/reverse` | El documento contrario (recibo o egreso manual) |
-| `POST /receivables/:id/payments` | `POST /treasury/cash-receipts` (tipo `CARTERA`) |
+| `POST /receivables/:id/payments` | `POST /treasury/cash-receipts/collections` (abono a cartera) |
 | `POST /payables/:id/payments` | `POST /treasury/disbursements` (tipo `PROVEEDOR`, `FACTURA_COMPRA`) |
 | `POST /expenses/:id/payments` | `POST /treasury/disbursements` (tipo `PROVEEDOR`, `CAUSACION_GASTO`) |
 
-Siguen activas las reversiones de abonos y pagos (`.../payments/:paymentId/reverse`), que son anulaciones con su propio movimiento y asiento. Consecuencia para los roles: cartera y compras ya no registran abonos ni pagos por API (en la interfaz ya no podían desde la fase 3); los recibos y egresos exigen el permiso contable. Queda pendiente la decisión del cliente sobre los permisos del rol cartera.
+Siguen activas las reversiones de abonos y pagos (`.../payments/:paymentId/reverse`), que son anulaciones con su propio movimiento y asiento. Los permisos de cada documento se definieron después (sección 3.4).
 
 ## 3.2 Causaciones sin proveedor (2026-11-02)
 
@@ -128,6 +128,23 @@ No existe ni existió un botón **"Reservar"** en la web (búsqueda en `apps/web
 | Cuentas por cobrar | `/receivables` | `apps/web/src/features/receivables/pages/ReceivablesPage.tsx` | Ver Abonos (hace las veces de detalle; "Abonar" se retiró en la fase 3) |
 
 Pendiente: que el cliente confirme si se refería al Libro Diario.
+
+## 3.4 Permisos por documento de tesorería (decisión del cliente, 2026-11-02)
+
+Cada documento tiene su permiso. El asiento automático que genera no exige el permiso contable; el permiso contable (`accounting:read`) sigue siendo necesario para los documentos manuales (el usuario elige la contrapartida) y para la contabilidad en general. Todo se valida en el backend.
+
+| Documento | Ruta | Permiso | Roles |
+|---|---|---|---|
+| Recibo de caja de abono a cartera | `POST /treasury/cash-receipts/collections` | `recibo_caja.crear_abono` | cartera, admin |
+| Recibo de caja manual (otros ingresos) | `POST /treasury/cash-receipts` (solo `kind: MANUAL`; un abono aquí responde 400 con la ruta correcta) | `accounting:read` + `cash:movements` (efectivo) o `treasury:manage` (transferencia) | admin |
+| Comprobante de egreso a proveedor (facturas de compra y causaciones) | `POST /treasury/disbursements` (`kind: PROVEEDOR`) | `comprobante_egreso.crear` | admin |
+| Comprobante de egreso manual | `POST /treasury/disbursements` (`kind: MANUAL`) | `comprobante_egreso.crear` + `accounting:read` + permiso del medio | admin |
+
+- **Compras** conserva la causación y la consulta de cuentas por pagar, pero no paga (403).
+- No existe un rol "tesorería": por ahora `comprobante_egreso.crear` solo lo tiene admin. Si se crea ese rol, basta asignarle el permiso.
+- **Supervisor** tiene `receivables:manage` pero no `recibo_caja.crear_abono`: no registra recibos. Si debe hacerlo, se le asigna el permiso.
+- En la web, cartera registra el recibo desde **Cuentas por cobrar → "Nuevo recibo de caja"** (solo abono a cartera; elige el cliente del maestro de clientes, sin acceso a terceros). En Recibos de Caja y Comprobantes de Egreso cada modo se ofrece según estos permisos.
+- Pruebas por rol (`treasury-vouchers`, "permisos por documento"): cartera y admin abonan (201) aunque cartera no tenga permiso contable, y se publica el asiento cuadrado; cajero, compras, supervisor e inventario reciben 403; cartera no registra recibos manuales ni egresos; solo admin paga proveedores; un egreso manual sin permiso contable se rechaza.
 
 ## 4. Pendientes y dudas abiertas
 

@@ -22,12 +22,15 @@ import {
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 
-import { type ReceivableStatus } from '@farmacia/contracts';
+import { SYSTEM_PERMISSIONS, type ReceivableStatus } from '@farmacia/contracts';
 import { fetchReceivables, fetchReceivablesAgingSummary } from '../api/receivables.api';
 import { HomeBackButton } from '../../../components/HomeBackButton';
 import { AgingSummaryCards } from '../../../components/AgingSummaryCards';
 
 import { ReceivableMovementsDialog } from '../components/ReceivableMovementsDialog';
+import { VoucherFormDialog } from '../../treasury/components/VoucherFormDialog';
+import { PermissionGate } from '../../auth/components/PermissionGate';
+import { formatMoney, toCents } from '../../../utils/money';
 import { isOverdue, getStatusDisplay } from '../utils/status';
 
 export function ReceivablesPage() {
@@ -39,6 +42,8 @@ export function ReceivablesPage() {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [movementsReceivableId, setMovementsReceivableId] = useState<string | null>(null);
+  const [receiptOpen, setReceiptOpen] = useState(false);
+  const [receiptNotice, setReceiptNotice] = useState<string | null>(null);
 
   const { data: agingData } = useQuery({
     queryKey: ['receivables-aging'],
@@ -59,7 +64,6 @@ export function ReceivablesPage() {
     placeholderData: (prev) => prev,
   });
 
-
   const filteredItems = (data?.items ?? []).filter((r) => {
     if (!search.trim()) return true;
     const q = search.toLowerCase();
@@ -74,9 +78,9 @@ export function ReceivablesPage() {
   return (
     <Box sx={{ p: 3 }}>
       {/* Header */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3, flexWrap: 'wrap' }}>
         <HomeBackButton />
-        <Box>
+        <Box sx={{ flex: 1 }}>
           <Typography variant="h5" sx={{ fontWeight: 700 }}>
             Cuentas por Cobrar
           </Typography>
@@ -84,7 +88,18 @@ export function ReceivablesPage() {
             Gestión y seguimiento de cartera, abonos y créditos comerciales de clientes.
           </Typography>
         </Box>
+        {/* El abono se registra con un recibo de caja (recibo_caja.crear_abono) */}
+        <PermissionGate permission={SYSTEM_PERMISSIONS.CASH_RECEIPTS_COLLECT}>
+          <Button variant="contained" onClick={() => setReceiptOpen(true)} sx={{ fontWeight: 600 }}>
+            Nuevo recibo de caja
+          </Button>
+        </PermissionGate>
       </Box>
+      {receiptNotice && (
+        <Alert severity="success" onClose={() => setReceiptNotice(null)} sx={{ mb: 2 }}>
+          {receiptNotice}
+        </Alert>
+      )}
 
       {/* Cartera por edades: los mismos rangos que cuentas por pagar */}
       {agingData && (
@@ -318,6 +333,17 @@ export function ReceivablesPage() {
         />
       )}
 
+      <VoucherFormDialog
+        type="RECIBO_CAJA"
+        open={receiptOpen}
+        onClose={() => setReceiptOpen(false)}
+        onCreated={(document) => {
+          setReceiptOpen(false);
+          setReceiptNotice(
+            `Recibo de caja ${document.documentNumber} registrado por ${formatMoney(toCents(document.amount))}.`,
+          );
+        }}
+      />
     </Box>
   );
 }

@@ -102,7 +102,10 @@ export async function createCashReceipt(
   payload: CreateCashReceiptPayload,
   idempotencyKey: string,
 ): Promise<TreasuryDocumentDto> {
-  return apiRequest<TreasuryDocumentDto>('treasury/cash-receipts', {
+  // El abono a cartera tiene su ruta y su permiso (recibo_caja.crear_abono)
+  const path =
+    payload.kind === 'CARTERA' ? 'treasury/cash-receipts/collections' : 'treasury/cash-receipts';
+  return apiRequest<TreasuryDocumentDto>(path, {
     method: 'POST',
     headers: { 'Idempotency-Key': idempotencyKey },
     body: JSON.stringify(payload),

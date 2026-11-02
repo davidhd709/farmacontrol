@@ -8,22 +8,40 @@ import * as treasuryApi from '../src/features/treasury/api/treasury.api';
 import * as thirdPartiesApi from '../src/features/third-parties/api/third-parties.api';
 import * as receivablesApi from '../src/features/receivables/api/receivables.api';
 import * as payablesApi from '../src/features/payables/api/payables.api';
-import type { ThirdPartyDto, TreasuryDocumentDto } from '@farmacia/contracts';
+import * as customersApi from '../src/features/customers/api/customers.api';
+import {
+  SYSTEM_PERMISSIONS,
+  type CustomerDto,
+  type ThirdPartyDto,
+  type TreasuryDocumentDto,
+} from '@farmacia/contracts';
+import { withAuth } from './support-auth';
+import { ReceivablesPage } from '../src/features/receivables/pages/ReceivablesPage';
 import {
   CashReceiptsPage,
   DisbursementVouchersPage,
 } from '../src/features/treasury/pages/TreasuryDocumentsPage';
 
-function renderPage(page: React.ReactElement) {
+const ADMIN_PERMISSIONS = Object.values(SYSTEM_PERMISSIONS);
+
+function renderPage(page: React.ReactElement, permissions: string[] = ADMIN_PERMISSIONS) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
       <ThemeProvider theme={appTheme}>
-        <MemoryRouter>{page}</MemoryRouter>
+        <MemoryRouter>{withAuth(page, permissions)}</MemoryRouter>
       </ThemeProvider>
     </QueryClientProvider>,
   );
 }
+
+const marta = {
+  id: 'cust-1',
+  documentType: 'CC',
+  documentNumber: '1030',
+  name: 'Marta Crédito',
+  isActive: true,
+} as CustomerDto;
 
 const egreso = {
   id: 'doc-1',
@@ -90,16 +108,8 @@ describe('Recibos de caja y comprobantes de egreso', () => {
       pageSize: 25,
       totalPages: 1,
     });
-    vi.spyOn(thirdPartiesApi, 'fetchThirdParties').mockResolvedValue({
-      items: [
-        {
-          id: 'tp-1',
-          documentType: 'CC',
-          documentNumber: '1030',
-          name: 'Marta Crédito',
-          customerId: 'cust-1',
-        } as ThirdPartyDto,
-      ],
+    vi.spyOn(customersApi, 'fetchCustomers').mockResolvedValue({
+      items: [marta],
       total: 1,
       page: 1,
       pageSize: 20,
@@ -251,5 +261,66 @@ describe('Recibos de caja y comprobantes de egreso', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Estado de cuenta' }));
     expect(await screen.findByText('Estado de cuenta — Droguería Mayorista')).toBeInTheDocument();
     expect(statement).toHaveBeenLastCalledWith({ supplierId: 'sup-1', includePaid: true });
+  });
+
+  describe('permisos por documento', () => {
+    const empty = { items: [], total: 0, page: 1, pageSize: 25, totalPages: 1 };
+
+    it('cartera registra el recibo desde cuentas por cobrar, solo como abono a cartera', async () => {
+      vi.spyOn(receivablesApi, 'fetchReceivables').mockResolvedValue(empty);
+      vi.spyOn(receivablesApi, 'fetchReceivablesAgingSummary').mockResolvedValue({
+        current: { amount: '0.00', count: 0 },
+        days31To60: { amount: '0.00', count: 0 },
+        days61To90: { amount: '0.00', count: 0 },
+        daysOver90: { amount: '0.00', count: 0 },
+        totalPending: '0.00',
+        totalCount: 0,
+      });
+      vi.spyOn(customersApi, 'fetchCustomers').mockResolvedValue({ ...empty, items: [marta] });
+      const thirdParties = vi.spyOn(thirdPartiesApi, 'fetchThirdParties');
+      renderPage(<ReceivablesPage />, [
+        SYSTEM_PERMISSIONS.RECEIVABLES_READ,
+        SYSTEM_PERMISSIONS.RECEIVABLES_MANAGE,
+        SYSTEM_PERMISSIONS.CUSTOMERS_READ,
+        SYSTEM_PERMISSIONS.CASH_RECEIPTS_COLLECT,
+        SYSTEM_PERMISSIONS.TREASURY_ACCOUNTS_SELECT,
+      ]);
+      fireEvent.click(await screen.findByRole('button', { name: 'Nuevo recibo de caja' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Nuevo recibo de caja' });
+      // Sin permiso contable no se ofrece el ingreso manual
+      expect(within(dialog).queryByRole('button', { name: 'Ingreso manual' })).toBeNull();
+      fireEvent.mouseDown(within(dialog).getByRole('combobox', { name: /Cliente/ }));
+      expect(await screen.findByRole('option', { name: /Marta Crédito/ })).toBeInTheDocument();
+      expect(thirdParties).not.toHaveBeenCalled();
+    });
+
+    it('sin recibo_caja.crear_abono cuentas por cobrar no muestra el botón del recibo', async () => {
+      vi.spyOn(receivablesApi, 'fetchReceivables').mockResolvedValue(empty);
+      renderPage(<ReceivablesPage />, [SYSTEM_PERMISSIONS.RECEIVABLES_READ]);
+      expect(await screen.findByText('Cuentas por Cobrar')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Nuevo recibo de caja' })).toBeNull();
+    });
+
+    it('sin comprobante_egreso.crear no se ofrece el comprobante de egreso', async () => {
+      vi.spyOn(treasuryApi, 'getTreasuryDocuments').mockResolvedValue(empty);
+      renderPage(<DisbursementVouchersPage />, [
+        SYSTEM_PERMISSIONS.ACCOUNTING_READ,
+        SYSTEM_PERMISSIONS.PAYABLES_MANAGE,
+        SYSTEM_PERMISSIONS.EXPENSES_MANAGE,
+      ]);
+      expect(
+        await screen.findByText('No hay documentos para los filtros seleccionados.'),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Nuevo comprobante de egreso' })).toBeNull();
+    });
+
+    it('con permiso contable sin recibo_caja.crear_abono el recibo solo es manual', async () => {
+      vi.spyOn(treasuryApi, 'getTreasuryDocuments').mockResolvedValue(empty);
+      renderPage(<CashReceiptsPage />, [SYSTEM_PERMISSIONS.ACCOUNTING_READ]);
+      fireEvent.click(await screen.findByRole('button', { name: 'Nuevo recibo de caja' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Nuevo recibo de caja' });
+      expect(within(dialog).queryByRole('button', { name: 'Abono a cartera' })).toBeNull();
+      expect(within(dialog).getByRole('combobox', { name: /Tercero/ })).toBeInTheDocument();
+    });
   });
 });

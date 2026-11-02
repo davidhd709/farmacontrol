@@ -14,7 +14,7 @@ export function retiredRoute(route: string, replacement: string): never {
 }
 
 export const CASH_RECEIPT_REPLACEMENT =
-  'Registre el ingreso con un recibo de caja: POST /api/v1/treasury/cash-receipts.';
+  'Registre el abono con un recibo de caja: POST /api/v1/treasury/cash-receipts/collections.';
 export const DISBURSEMENT_REPLACEMENT =
   'Registre el egreso con un comprobante de egreso: POST /api/v1/treasury/disbursements.';
 export const VOUCHER_REPLACEMENT =

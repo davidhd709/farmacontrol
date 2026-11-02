@@ -96,7 +96,7 @@ export class TreasuryVouchersService {
   ): Promise<TreasuryDocumentDto> {
     const base = this.validateBase(payload, user);
     if (payload.kind === 'CARTERA') {
-      this.requirePermission(user, SYSTEM_PERMISSIONS.RECEIVABLES_MANAGE, 'abonar a cartera');
+      // Lo autoriza recibo_caja.crear_abono en la ruta; el asiento no exige permiso contable
       const customerId = this.uuid(payload.customerId, 'Cliente');
       const applications = this.applications(payload.applications, (a) => ({
         id: this.uuid(a.receivableId, 'Factura'),
@@ -158,20 +158,7 @@ export class TreasuryVouchersService {
           amountCents: this.money(a.amount, 'Valor pagado'),
         };
       });
-      if (applications.some((a) => a.documentType === 'FACTURA_COMPRA')) {
-        this.requirePermission(
-          user,
-          SYSTEM_PERMISSIONS.PAYABLES_MANAGE,
-          'pagar facturas de compra',
-        );
-      }
-      if (applications.some((a) => a.documentType === 'CAUSACION_GASTO')) {
-        this.requirePermission(
-          user,
-          SYSTEM_PERMISSIONS.EXPENSES_MANAGE,
-          'pagar causaciones de gasto',
-        );
-      }
+      // Lo autoriza comprobante_egreso.crear en la ruta; el asiento no exige permiso contable
       return this.run('/api/v1/treasury/disbursements', payload, user, idempotencyKey, {
         voucher: {
           ...base,
@@ -235,9 +222,16 @@ export class TreasuryVouchersService {
     if (method !== 'EFECTIVO' && method !== 'TRANSFERENCIA') {
       throw new BadRequestException('El medio de pago debe ser EFECTIVO o TRANSFERENCIA.');
     }
-    // Un abono o pago de facturas lo autoriza el permiso de cartera, cuentas por pagar o gastos
-    // (igual que sus rutas propias); un movimiento manual exige el del auxiliar que mueve
-    if (payload.kind === 'MANUAL') requirePaymentMethodPermission(user.permissions, method);
+    // En un documento manual el usuario elige la contrapartida (permiso contable) y mueve caja
+    // o bancos directamente (permiso del auxiliar según el medio)
+    if (payload.kind === 'MANUAL') {
+      this.requirePermission(
+        user,
+        SYSTEM_PERMISSIONS.ACCOUNTING_READ,
+        'registrar documentos manuales contra una contrapartida contable',
+      );
+      requirePaymentMethodPermission(user.permissions, method);
+    }
     if (method === 'TRANSFERENCIA') {
       requirePaymentBankAccountId(payload.bankAccountId);
     } else if (payload.bankAccountId) {
@@ -269,7 +263,10 @@ export class TreasuryVouchersService {
         },
         select: { purpose: true },
       }),
-      prisma.bankAccount.findFirst({ where: { ledgerAccountId: accountId }, select: { name: true } }),
+      prisma.bankAccount.findFirst({
+        where: { ledgerAccountId: accountId },
+        select: { name: true },
+      }),
     ]);
     if (mapping || bank) {
       const why =
@@ -308,7 +305,10 @@ export class TreasuryVouchersService {
       thirdPartyId,
     };
     await this.assertManualCounterpart(counterpartAccountId);
-    if (thirdPartyId && !(await prisma.thirdParty.findUnique({ where: { id: thirdPartyId }, select: { id: true } }))) {
+    if (
+      thirdPartyId &&
+      !(await prisma.thirdParty.findUnique({ where: { id: thirdPartyId }, select: { id: true } }))
+    ) {
       throw new BadRequestException('El tercero indicado no existe.');
     }
     return this.run(endpoint, payload, user, idempotencyKey, {

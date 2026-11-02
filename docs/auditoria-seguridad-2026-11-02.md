@@ -12,7 +12,7 @@
 | 3 | La venta que entrega un cambio de producto no dejaba en su auditoría la nota crédito que reemplaza (sí quedaba en `credit_notes.exchange_sale_id`). | Baja | **Corregido**: `sales:sale_confirmed` incluye `exchangeCreditNoteId`. |
 | 4 | Rutas antiguas que movían dinero sin documento de origen (`POST /cash-movements`, movimientos y reversiones bancarias manuales, pagos por factura). | Media | **Corregido** en el punto 2: responden 410; caja y bancos quedan de solo consulta en la API. |
 | 5 | `GET /payables/statement` exige `payables:read` y devuelve también causaciones de gasto (descripción y valores), visibles para un rol sin `expenses:read` (p. ej. compras). | Baja | **Aceptado**: el cliente pidió que cuentas por pagar incluya las causaciones. Si debe restringirse, filtrarlas por `expenses:read`. |
-| 6 | Abonos, pagos y sus reversiones los autoriza el permiso de cartera, cuentas por pagar o gastos, sin exigir el permiso de caja o bancos (sí se exige en movimientos manuales). | Informativo | **Pendiente de decisión del cliente** (permisos del rol cartera sobre caja). Hoy los recibos y egresos exigen además `accounting:read`. |
+| 6 | Abonos, pagos y sus reversiones los autoriza el permiso de cartera, cuentas por pagar o gastos, sin exigir el permiso de caja o bancos (sí se exige en movimientos manuales). | Informativo | **Resuelto por decisión del cliente**: permiso por documento (`recibo_caja.crear_abono`, `comprobante_egreso.crear`); ver `docs/correcciones-farmacontrol.md` §3.4. Las reversiones siguen con `receivables:manage` / `payables:manage`. |
 | 7 | El saldo inicial de una cuenta bancaria crea un movimiento `INITIAL_BALANCE` sin asiento (la apertura contable se registra con los saldos iniciales del asistente, F7). | Informativo | Sin cambio en esta ronda (anterior a las correcciones). |
 
 Sin hallazgos críticos.
@@ -24,7 +24,9 @@ Todo endpoint nuevo o modificado declara su permiso en el controlador (`Permissi
 
 | Endpoint | Permiso |
 |---|---|
-| `POST /treasury/cash-receipts`, `POST /treasury/disbursements` | `accounting:read` + por tipo: cartera `receivables:manage`; proveedor `payables:manage` / `expenses:manage`; manual `cash:movements` (efectivo) o `treasury:manage` (transferencia) |
+| `POST /treasury/cash-receipts/collections` (abono a cartera) | `recibo_caja.crear_abono` |
+| `POST /treasury/cash-receipts` (solo manual) | `accounting:read` + `cash:movements` (efectivo) o `treasury:manage` (transferencia) |
+| `POST /treasury/disbursements` | `comprobante_egreso.crear`; el manual además `accounting:read` + permiso del medio |
 | `GET /treasury/documents[/:id]`, `GET /accounting/audit`, `GET /third-parties/:id/statement` | `accounting:read` |
 | `POST /expenses`, `POST /expenses/:id/supplier`, `POST /expenses/:id/cancel`, reversión de pago de gasto | `expenses:manage` |
 | `GET /expenses/without-supplier`, `GET /expenses/:id/movements` | `expenses:read` |

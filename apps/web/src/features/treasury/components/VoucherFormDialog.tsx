@@ -28,13 +28,17 @@ import {
   Typography,
 } from '@mui/material';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type {
-  ThirdPartyDto,
-  TreasuryDocumentDto,
-  TreasuryDocumentType,
-  TreasuryVoucherPaymentMethod,
+import {
+  SYSTEM_PERMISSIONS,
+  type CustomerDto,
+  type ThirdPartyDto,
+  type TreasuryDocumentDto,
+  type TreasuryDocumentType,
+  type TreasuryVoucherPaymentMethod,
 } from '@farmacia/contracts';
 import { ThirdPartyAutocomplete } from '../../third-parties/components/ThirdPartyAutocomplete';
+import { CustomerAutocomplete } from '../../customers/components/CustomerAutocomplete';
+import { usePermissions } from '../../auth/hooks/usePermissions';
 import { CounterpartAccountSelect } from '../../accounting/components/CounterpartAccountSelect';
 import { fetchReceivables } from '../../receivables/api/receivables.api';
 import { fetchPayableStatement } from '../../payables/api/payables.api';
@@ -69,6 +73,9 @@ const centsOf = (value: string) => {
  * Registro de un recibo de caja (ingresos) o un comprobante de egreso (egresos): el único
  * lugar donde se mueve dinero manualmente. Con facturas, aplica el valor a las facturas
  * elegidas del cliente o del proveedor; manual, contabiliza contra la contrapartida elegida.
+ * Cada modo se ofrece según el permiso del documento (correcciones del cliente, 2026-11-02):
+ * el abono a cartera con `recibo_caja.crear_abono`, el pago a proveedor con
+ * `comprobante_egreso.crear` y el documento manual además con el permiso contable.
  */
 export function VoucherFormDialog({
   type,
@@ -83,11 +90,20 @@ export function VoucherFormDialog({
 }) {
   const isReceipt = type === 'RECIBO_CAJA';
   const queryClient = useQueryClient();
-  const [mode, setMode] = useState<Mode>('FACTURAS');
+  const { hasPermission } = usePermissions();
+  const canInvoices = hasPermission(
+    isReceipt ? SYSTEM_PERMISSIONS.CASH_RECEIPTS_COLLECT : SYSTEM_PERMISSIONS.DISBURSEMENTS_CREATE,
+  );
+  const canManual =
+    hasPermission(SYSTEM_PERMISSIONS.ACCOUNTING_READ) &&
+    (isReceipt || hasPermission(SYSTEM_PERMISSIONS.DISBURSEMENTS_CREATE));
+  const initialMode: Mode = canInvoices ? 'FACTURAS' : 'MANUAL';
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [paymentMethod, setPaymentMethod] = useState<TreasuryVoucherPaymentMethod>('EFECTIVO');
   const [bankAccountId, setBankAccountId] = useState('');
   const [concept, setConcept] = useState('');
   const [party, setParty] = useState<ThirdPartyDto | null>(null);
+  const [customer, setCustomer] = useState<CustomerDto | null>(null);
   const [amount, setAmount] = useState('');
   const [counterpartAccountId, setCounterpartAccountId] = useState('');
   const [selected, setSelected] = useState<Record<string, string>>({});
@@ -100,19 +116,21 @@ export function VoucherFormDialog({
 
   useEffect(() => {
     if (!open) return;
-    setMode('FACTURAS');
+    setMode(initialMode);
     setPaymentMethod('EFECTIVO');
     setBankAccountId('');
     setConcept('');
     setParty(null);
+    setCustomer(null);
     setAmount('');
     setCounterpartAccountId('');
     setSelected({});
     setError(null);
     retry.current = null;
-  }, [open]);
+  }, [open, initialMode]);
 
-  const customerId = party?.customerId ?? null;
+  // El abono a cartera elige el cliente en el maestro de clientes (lo puede consultar cartera)
+  const customerId = customer?.id ?? null;
   const supplierId = party?.supplierId ?? null;
   const ownerId = isReceipt ? customerId : supplierId;
 
@@ -300,28 +318,30 @@ export function VoucherFormDialog({
       </DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2.5}>
-          <ToggleButtonGroup
-            exclusive
-            fullWidth
-            size="small"
-            color="primary"
-            aria-label="Tipo de documento"
-            value={mode}
-            onChange={(_, value: Mode | null) => {
-              if (value) {
-                setMode(value);
-                setSelected({});
-                setError(null);
-              }
-            }}
-          >
-            <ToggleButton value="FACTURAS" sx={{ textTransform: 'none', fontWeight: 600 }}>
-              {labels.invoices}
-            </ToggleButton>
-            <ToggleButton value="MANUAL" sx={{ textTransform: 'none', fontWeight: 600 }}>
-              {labels.manual}
-            </ToggleButton>
-          </ToggleButtonGroup>
+          {canInvoices && canManual && (
+            <ToggleButtonGroup
+              exclusive
+              fullWidth
+              size="small"
+              color="primary"
+              aria-label="Tipo de documento"
+              value={mode}
+              onChange={(_, value: Mode | null) => {
+                if (value) {
+                  setMode(value);
+                  setSelected({});
+                  setError(null);
+                }
+              }}
+            >
+              <ToggleButton value="FACTURAS" sx={{ textTransform: 'none', fontWeight: 600 }}>
+                {labels.invoices}
+              </ToggleButton>
+              <ToggleButton value="MANUAL" sx={{ textTransform: 'none', fontWeight: 600 }}>
+                {labels.manual}
+              </ToggleButton>
+            </ToggleButtonGroup>
+          )}
 
           <Box>
             <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
@@ -370,19 +390,30 @@ export function VoucherFormDialog({
             spacing={1}
             sx={{ alignItems: { sm: 'flex-start' } }}
           >
-            <ThirdPartyAutocomplete
-              value={party}
-              onChange={(value) => {
-                setParty(value);
-                setSelected({});
-              }}
-              role={mode === 'FACTURAS' ? labels.role : undefined}
-              label={mode === 'FACTURAS' ? labels.party : 'Tercero (opcional)'}
-              required={mode === 'FACTURAS'}
-              showQuickCreate={false}
-              error={mode === 'FACTURAS' && Boolean(party) && !ownerId}
-              helperText={mode === 'FACTURAS' && party && !ownerId ? labels.notParty : undefined}
-            />
+            {isReceipt && mode === 'FACTURAS' ? (
+              <CustomerAutocomplete
+                value={customer}
+                onChange={(value) => {
+                  setCustomer(value);
+                  setSelected({});
+                }}
+                required
+              />
+            ) : (
+              <ThirdPartyAutocomplete
+                value={party}
+                onChange={(value) => {
+                  setParty(value);
+                  setSelected({});
+                }}
+                role={mode === 'FACTURAS' ? labels.role : undefined}
+                label={mode === 'FACTURAS' ? labels.party : 'Tercero (opcional)'}
+                required={mode === 'FACTURAS'}
+                showQuickCreate={false}
+                error={mode === 'FACTURAS' && Boolean(party) && !ownerId}
+                helperText={mode === 'FACTURAS' && party && !ownerId ? labels.notParty : undefined}
+              />
+            )}
             {!isReceipt && mode === 'FACTURAS' && supplierId && (
               <Button
                 variant="outlined"

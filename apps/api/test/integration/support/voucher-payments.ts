@@ -62,7 +62,7 @@ class VoucherPayment implements PromiseLike<Result> {
     if (this.target === 'RECEIVABLE') {
       const row = await prisma.receivable.findUnique({ where: { id: this.id }, select: { customerId: true } });
       return {
-        path: 'treasury/cash-receipts',
+        path: 'treasury/cash-receipts/collections',
         body: {
           ...base,
           kind: 'CARTERA',

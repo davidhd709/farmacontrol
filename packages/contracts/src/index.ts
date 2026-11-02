@@ -124,6 +124,10 @@ export const SYSTEM_PERMISSIONS = {
   TREASURY_ACCOUNTS_SELECT: 'treasury:accounts:select',
   TREASURY_READ: 'treasury:read',
   TREASURY_MANAGE: 'treasury:manage',
+  // Documentos de tesorería (correcciones del cliente, 2026-11-02): permiso por documento.
+  // El asiento automático que generan no exige el permiso contable al usuario.
+  CASH_RECEIPTS_COLLECT: 'recibo_caja.crear_abono',
+  DISBURSEMENTS_CREATE: 'comprobante_egreso.crear',
 
   // Gastos
   EXPENSES_READ: 'expenses:read',
