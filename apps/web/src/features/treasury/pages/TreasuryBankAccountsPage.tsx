@@ -33,7 +33,6 @@ import type {
   BankMovementDirection,
   SortOrder,
   CreateBankAccountDto,
-  CreateBankMovementDto,
   UpdateBankAccountDto,
 } from '@farmacia/contracts';
 import { usePermissions } from '../../auth/hooks/usePermissions';
@@ -42,11 +41,9 @@ import {
   useBankAccounts,
   useBankMovements,
   useCreateBankAccount,
-  useCreateBankMovement,
   useUpdateBankAccount,
 } from '../hooks/useTreasury';
 import { BankAccountDialog } from '../components/BankAccountDialog';
-import { BankMovementDialog } from '../components/BankMovementDialog';
 import { SweetModal } from '../../../components/SweetModal';
 import { SortByDateButton } from '../../../components/SortByDateButton';
 
@@ -67,8 +64,6 @@ export function TreasuryBankAccountsPage() {
   // Modals state
   const [accountDialogOpen, setAccountDialogOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<BankAccountDto | null>(null);
-  const [movementDialogOpen, setMovementDialogOpen] = useState(false);
-  const [movementAccount, setMovementAccount] = useState<BankAccountDto | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   // Filter state for movements
@@ -95,7 +90,6 @@ export function TreasuryBankAccountsPage() {
 
   const createAccountMutation = useCreateBankAccount();
   const updateAccountMutation = useUpdateBankAccount();
-  const createMovementMutation = useCreateBankMovement();
 
   if (!canRead) {
     return (
@@ -117,10 +111,6 @@ export function TreasuryBankAccountsPage() {
     setAccountDialogOpen(true);
   };
 
-  const handleOpenCreateMovement = (account: BankAccountDto) => {
-    setMovementAccount(account);
-    setMovementDialogOpen(true);
-  };
 
   const handleSaveAccount = async (data: CreateBankAccountDto | UpdateBankAccountDto) => {
     if (editingAccount) {
@@ -135,14 +125,6 @@ export function TreasuryBankAccountsPage() {
     }
   };
 
-  const handleSaveMovement = async (data: CreateBankMovementDto) => {
-    if (!movementAccount) return;
-    await createMovementMutation.mutateAsync({
-      accountId: movementAccount.id,
-      data,
-    });
-    setToastMsg('Movimiento de tesorería registrado correctamente.');
-  };
 
   const totalBalanceNumber = parseFloat(summary?.totalBalance ?? '0');
 
@@ -163,7 +145,8 @@ export function TreasuryBankAccountsPage() {
             Tesorería y Cuentas Bancarias
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Gestión independiente de bancos, transferencias y medios digitales (separado de Caja física).
+            Consulta de cuentas bancarias y sus movimientos. Los movimientos nacen de las ventas por
+            transferencia, los recibos de caja y los comprobantes de egreso.
           </Typography>
         </Box>
         {canManage && (
@@ -269,9 +252,14 @@ export function TreasuryBankAccountsPage() {
                           {acc.bankName}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          {acc.accountNumber} • {ACCOUNT_TYPE_LABELS[acc.accountType] ?? acc.accountType}
+                          {acc.accountNumber} •{' '}
+                          {ACCOUNT_TYPE_LABELS[acc.accountType] ?? acc.accountType}
                         </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ display: 'block' }}
+                        >
                           {acc.ledgerAccountCode
                             ? `PUC ${acc.ledgerAccountCode}`
                             : 'Sin subcuenta del PUC: edítela para vincularla'}
@@ -307,20 +295,9 @@ export function TreasuryBankAccountsPage() {
                       {isSelected ? 'Viendo Movimientos' : 'Ver Movimientos'}
                     </Button>
                     {canManage && (
-                      <Stack direction="row" spacing={1}>
-                        <Button
-                          size="small"
-                          color="secondary"
-                          onClick={() => handleOpenCreateMovement(acc)}
-                          disabled={!acc.isActive}
-                          data-testid={`new-movement-btn-${acc.id}`}
-                        >
-                          Movimiento
-                        </Button>
-                        <Button size="small" onClick={() => handleOpenEditAccount(acc)}>
-                          Editar
-                        </Button>
-                      </Stack>
+                      <Button size="small" onClick={() => handleOpenEditAccount(acc)}>
+                        Editar
+                      </Button>
                     )}
                   </CardActions>
                 </Card>
@@ -352,7 +329,11 @@ export function TreasuryBankAccountsPage() {
             </Box>
 
             {/* Filtros de movimientos */}
-            <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+            <Stack
+              direction="row"
+              spacing={1.5}
+              sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1 }}
+            >
               <TextField
                 size="small"
                 type="date"
@@ -461,10 +442,14 @@ export function TreasuryBankAccountsPage() {
                           {mov.externalReference || mov.referenceDocumentId || '—'}
                         </TableCell>
                         <TableCell align="right" sx={{ color: 'success.main', fontWeight: 600 }}>
-                          {isDebit ? `$${amountNum.toLocaleString('es-CO', { minimumFractionDigits: 2 })}` : ''}
+                          {isDebit
+                            ? `$${amountNum.toLocaleString('es-CO', { minimumFractionDigits: 2 })}`
+                            : ''}
                         </TableCell>
                         <TableCell align="right" sx={{ color: 'error.main', fontWeight: 600 }}>
-                          {!isDebit ? `-$${amountNum.toLocaleString('es-CO', { minimumFractionDigits: 2 })}` : ''}
+                          {!isDebit
+                            ? `-$${amountNum.toLocaleString('es-CO', { minimumFractionDigits: 2 })}`
+                            : ''}
                         </TableCell>
                         <TableCell align="right" sx={{ fontWeight: 700 }}>
                           ${balAfterNum.toLocaleString('es-CO', { minimumFractionDigits: 2 })}
@@ -486,14 +471,6 @@ export function TreasuryBankAccountsPage() {
         onSubmit={handleSaveAccount}
         accountToEdit={editingAccount}
         isSubmitting={createAccountMutation.isPending || updateAccountMutation.isPending}
-      />
-
-      <BankMovementDialog
-        open={movementDialogOpen}
-        onClose={() => setMovementDialogOpen(false)}
-        account={movementAccount}
-        onSubmit={handleSaveMovement}
-        isSubmitting={createMovementMutation.isPending}
       />
 
       <SweetModal

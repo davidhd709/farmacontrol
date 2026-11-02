@@ -6,6 +6,8 @@ export interface RawDocumentMovement {
   documentNumber: string | null;
   description: string;
   paymentMethod?: string | null;
+  paymentId?: string | null;
+  isReversed?: boolean;
   /** Centavos: positivo aumenta el saldo, negativo lo disminuye */
   deltaCents: bigint;
 }
@@ -40,6 +42,8 @@ export function buildDocumentMovements(raw: RawDocumentMovement[]): DocumentMove
         documentNumber: movement.documentNumber,
         description: movement.description,
         paymentMethod: movement.paymentMethod ?? null,
+        paymentId: movement.paymentId ?? null,
+        isReversed: movement.isReversed ?? false,
         charge: cents(movement.deltaCents > 0n ? movement.deltaCents : 0n),
         credit: cents(movement.deltaCents < 0n ? -movement.deltaCents : 0n),
         balance: cents(balance),

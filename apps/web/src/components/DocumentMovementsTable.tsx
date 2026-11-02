@@ -1,4 +1,5 @@
 import {
+  Button,
   Chip,
   Table,
   TableBody,
@@ -26,7 +27,16 @@ export const formatMoney = (value: string) =>
  * Movimientos de una factura (cartera o cuentas por pagar) con el saldo después de cada uno.
  * El sentido se muestra en columnas separadas y con texto, no solo con color.
  */
-export function DocumentMovementsTable({ movements }: { movements: DocumentMovementDto[] }) {
+export function DocumentMovementsTable({
+  movements,
+  creditLabel = 'Abono',
+  onReverse,
+}: {
+  movements: DocumentMovementDto[];
+  creditLabel?: string;
+  /** Revertir un abono o pago vigente; sin él la tabla es de solo lectura */
+  onReverse?: (movement: DocumentMovementDto) => void;
+}) {
   if (!movements.length) {
     return (
       <Typography color="text.secondary" sx={{ py: 2 }}>
@@ -47,11 +57,12 @@ export function DocumentMovementsTable({ movements }: { movements: DocumentMovem
               Cargo
             </TableCell>
             <TableCell sx={{ fontWeight: 700 }} align="right">
-              Abono
+              {creditLabel}
             </TableCell>
             <TableCell sx={{ fontWeight: 700 }} align="right">
               Saldo
             </TableCell>
+            {onReverse && <TableCell />}
           </TableRow>
         </TableHead>
         <TableBody>
@@ -83,6 +94,20 @@ export function DocumentMovementsTable({ movements }: { movements: DocumentMovem
               <TableCell align="right" sx={{ fontWeight: 700 }}>
                 {formatMoney(movement.balance)}
               </TableCell>
+              {onReverse && (
+                <TableCell align="right">
+                  {movement.type === 'ABONO' && movement.paymentId && !movement.isReversed && (
+                    <Button size="small" color="error" onClick={() => onReverse(movement)}>
+                      Revertir
+                    </Button>
+                  )}
+                  {movement.type === 'ABONO' && movement.isReversed && (
+                    <Typography variant="caption" color="text.secondary">
+                      Revertido
+                    </Typography>
+                  )}
+                </TableCell>
+              )}
             </TableRow>
           ))}
         </TableBody>

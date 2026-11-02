@@ -1,5 +1,4 @@
 import { ExpenseFormDialog } from '../components/ExpenseFormDialog';
-import { ExpensePaymentDialog } from '../components/ExpensePaymentDialog';
 import { ExpenseReasonDialog } from '../components/ExpenseReasonDialog';
 import type { ExpenseReasonFormData } from '../validation/expense-reason.schema';
 import { toCents } from '../../../utils/money';
@@ -32,7 +31,6 @@ import {
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import CategoryIcon from '@mui/icons-material/Category';
-import PaymentIcon from '@mui/icons-material/Payment';
 import BlockIcon from '@mui/icons-material/Block';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import UndoIcon from '@mui/icons-material/Undo';
@@ -91,7 +89,6 @@ export const ExpensesPage: React.FC = () => {
   // Modales
   const [categoriesModalOpen, setCategoriesModalOpen] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
-  const [payModalOpen, setPayModalOpen] = useState(false);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [reversePaymentModalOpen, setReversePaymentModalOpen] = useState(false);
@@ -184,12 +181,6 @@ export const ExpensesPage: React.FC = () => {
     setCreateModalOpen(true);
     setError(null);
   };
-  const handleOpenPay = (exp: ExpenseDto) => {
-    setSelectedExpense(exp);
-    setPayModalOpen(true);
-    setError(null);
-  };
-
   // Manejo de Anulación de Gasto
   const handleOpenCancel = (exp: ExpenseDto) => {
     setSelectedExpense(exp);
@@ -578,18 +569,6 @@ export const ExpensesPage: React.FC = () => {
                           <VisibilityIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
-                      {isPending && (
-                        <Tooltip title="Pagar / Abonar">
-                          <IconButton
-                            aria-label="Pagar gasto"
-                            size="small"
-                            color="success"
-                            onClick={() => handleOpenPay(e)}
-                          >
-                            <PaymentIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      )}
                       {!isCancelled && (
                         <Tooltip title="Anular Gasto">
                           <IconButton
@@ -631,18 +610,6 @@ export const ExpensesPage: React.FC = () => {
           onSuccess={async () => {
             setSuccess('Gasto registrado exitosamente con partida doble y tesorería.');
             setCreateModalOpen(false);
-            await loadExpenses();
-          }}
-        />
-      )}
-      {payModalOpen && selectedExpense && (
-        <ExpensePaymentDialog
-          expense={selectedExpense}
-          bankAccounts={bankAccounts}
-          onClose={() => setPayModalOpen(false)}
-          onSuccess={async () => {
-            setSuccess('Pago de gasto registrado exitosamente.');
-            setPayModalOpen(false);
             await loadExpenses();
           }}
         />

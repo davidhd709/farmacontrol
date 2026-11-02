@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { createPaymentSchema as receivableSchema } from '../src/features/receivables/validation/payment.schema';
-import { createPaymentSchema as payableSchema } from '../src/features/payables/validation/payment.schema';
 import { reversalSchema as receivableReversal } from '../src/features/receivables/validation/reversal.schema';
 import { reversalSchema as payableReversal } from '../src/features/payables/validation/reversal.schema';
 import { expenseSchema } from '../src/features/expenses/validation/expense.schema';
-import { createExpensePaymentSchema } from '../src/features/expenses/validation/expense-payment.schema';
 import { expenseReasonSchema } from '../src/features/expenses/validation/expense-reason.schema';
 
 const payment = { amount: '0.30', paymentMethod: 'EFECTIVO', bankAccountId: '', notes: '' };
@@ -19,9 +16,6 @@ const expense = {
 };
 
 describe.each([
-  ['cartera', receivableSchema('0.30'), payment],
-  ['proveedores', payableSchema('0.30'), payment],
-  ['pago de gasto', createExpensePaymentSchema('0.30'), { ...payment, paymentDate: '2026-10-18' }],
   ['causación de gasto', expenseSchema, expense],
 ])('Esquema de %s', (_name, schema, valid) => {
   it('acepta el formulario válido sin transformar el importe', () => {
@@ -54,18 +48,6 @@ describe.each([
   });
 });
 
-describe.each([receivableSchema, payableSchema, createExpensePaymentSchema])(
-  'Saldo pendiente',
-  (createSchema) => {
-    it('acepta el saldo exacto y bloquea un centavo de exceso', () => {
-      const schema = createSchema('0.30');
-      const valid = { ...payment, paymentDate: '2026-10-18' };
-      expect(schema.safeParse(valid).success).toBe(true);
-      expect(schema.safeParse({ ...valid, amount: '0.31' }).success).toBe(false);
-    });
-  },
-);
-
 it('la causación exige categoría, beneficiario, descripción, fecha y vencimiento a crédito', () => {
   for (const field of ['categoryId', 'beneficiary', 'description', 'expenseDate']) {
     expect(expenseSchema.safeParse({ ...expense, [field]: '' }).success).toBe(false);
@@ -75,9 +57,6 @@ it('la causación exige categoría, beneficiario, descripción, fecha y vencimie
     expenseSchema.safeParse({ ...expense, paymentMethod: 'CREDITO', dueDate: '2026-11-18' })
       .success,
   ).toBe(true);
-  expect(createExpensePaymentSchema('1').safeParse({ ...payment, paymentDate: '' }).success).toBe(
-    false,
-  );
 });
 
 describe.each([

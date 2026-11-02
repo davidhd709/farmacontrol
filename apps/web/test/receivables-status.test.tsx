@@ -1,3 +1,4 @@
+import { withAuth } from './support-auth';
 import { ThemeProvider } from '@mui/material';
 import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -66,6 +67,26 @@ function mockApi() {
   vi.spyOn(receivablesApi, 'fetchReceivableById').mockImplementation(async (id: string) =>
     dataset.find((r) => r.id === id)!,
   );
+  vi.spyOn(receivablesApi, 'fetchReceivableMovements').mockImplementation(async (id: string) => {
+    const r = dataset.find((item) => item.id === id)!;
+    return {
+      receivableId: r.id,
+      invoiceNumber: r.invoiceNumber ?? null,
+      customerName: r.customerName ?? null,
+      totalAmount: String(r.totalAmount),
+      amountPaid: String(r.amountPaid),
+      balance: r.status === 'ANULADA' ? '0.00' : String(r.balance),
+      status: r.status,
+      dueDate: r.dueDate,
+      movements:
+        r.status === 'ANULADA'
+          ? [
+              { date: r.createdAt, type: 'CARGO', documentNumber: r.invoiceNumber ?? null, description: 'Venta a crédito', charge: String(r.totalAmount), credit: '0.00', balance: String(r.totalAmount) },
+              { date: r.updatedAt, type: 'ANULACION', documentNumber: r.invoiceNumber ?? null, description: 'Venta anulada', charge: '0.00', credit: String(r.totalAmount), balance: '0.00' },
+            ]
+          : [],
+    };
+  });
   vi.spyOn(receivablesApi, 'fetchReceivablesAgingSummary').mockResolvedValue({
     current: { amount: '100000.00', count: 1 },
     days1To30: { amount: '0.00', count: 0 },
@@ -83,7 +104,7 @@ const renderPage = () => {
     <ThemeProvider theme={appTheme}>
       <QueryClientProvider client={queryClient}>
         <MemoryRouter>
-          <ReceivablesPage />
+          {withAuth(<ReceivablesPage />)}
         </MemoryRouter>
       </QueryClientProvider>
     </ThemeProvider>,
@@ -110,18 +131,18 @@ describe('ReceivablesPage: estados de cartera (FARM-AUD-003)', () => {
     expect(within(rowOf('FAC-102')).getByText('Pagada')).toBeInTheDocument();
   });
 
-  it('el detalle de una cuenta anulada explica que no es deuda pendiente y no permite abonar', async () => {
+  it('el detalle de una cuenta anulada muestra la anulación, saldo en cero y no invita a abonar', async () => {
     renderPage();
     await waitFor(() => rowOf('FAC-103'));
 
-    fireEvent.click(within(rowOf('FAC-103')).getByRole('button', { name: 'Detalle' }));
+    fireEvent.click(within(rowOf('FAC-103')).getByRole('button', { name: /Ver Abonos/i }));
 
     const dialog = await screen.findByRole('dialog');
     await waitFor(() => {
-      expect(within(dialog).getByText(/venta de origen fue anulada/i)).toBeInTheDocument();
+      expect(within(dialog).getAllByText('Anulación').length).toBeGreaterThan(0);
     });
     expect(within(dialog).getByText('Anulada')).toBeInTheDocument();
-    expect(within(dialog).queryByLabelText(/Monto del abono/i)).not.toBeInTheDocument();
+    expect(within(dialog).queryByText(/registra un recibo de caja/)).not.toBeInTheDocument();
   });
 
   it.each([
@@ -170,11 +191,11 @@ describe('ReceivablesPage: estados de cartera (FARM-AUD-003)', () => {
     expect(within(row).queryByText('Anulada')).not.toBeInTheDocument();
     expect(within(rowOf('FAC-101')).getByText('Pendiente')).toBeInTheDocument();
 
-    fireEvent.click(within(row).getByRole('button', { name: 'Detalle' }));
+    fireEvent.click(within(row).getByRole('button', { name: /Ver Abonos/i }));
     const dialog = await screen.findByRole('dialog');
     await waitFor(() => {
-      expect(within(dialog).getByText(/no es reconocido/i)).toBeInTheDocument();
+      expect(within(dialog).getByText(/Estado no reconocido: CANCELADA/)).toBeInTheDocument();
     });
-    expect(within(dialog).queryByLabelText(/Monto del abono/i)).not.toBeInTheDocument();
+    expect(within(dialog).queryByText(/registra un recibo de caja/)).not.toBeInTheDocument();
   });
 });

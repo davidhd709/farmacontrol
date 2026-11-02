@@ -11,7 +11,6 @@ import type {
   ReceivablePaymentDto,
 } from '@farmacia/contracts';
 import { ExpenseFormDialog } from '../src/features/expenses/components/ExpenseFormDialog';
-import { ExpensePaymentDialog } from '../src/features/expenses/components/ExpensePaymentDialog';
 import { ExpenseReasonDialog } from '../src/features/expenses/components/ExpenseReasonDialog';
 import { ExpensesPage } from '../src/features/expenses/pages/ExpensesPage';
 import { ReceivableReversalDialog } from '../src/features/receivables/components/ReceivableReversalDialog';
@@ -147,87 +146,6 @@ describe('Causación de gastos', () => {
     await act(async () => finish(expense));
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Confirmar Gasto' })).toBeEnabled(),
-    );
-  });
-});
-
-describe('Pago de gastos', () => {
-  const form = (bankAccounts = banks) =>
-    mount(
-      <ExpensePaymentDialog
-        expense={expense}
-        bankAccounts={bankAccounts}
-        onClose={vi.fn()}
-        onSuccess={vi.fn().mockResolvedValue(undefined)}
-      />,
-    );
-  it('bloquea exceso de saldo, fecha vacía y transferencia sin cuenta', async () => {
-    const spy = vi.spyOn(api, 'payExpense');
-    form([]);
-    change(/Monto a Pagar/, '0.31');
-    fireEvent.click(screen.getByRole('button', { name: 'Confirmar Pago' }));
-    expect(await screen.findByText(/no puede superar el saldo pendiente/)).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByLabelText(/Monto a Pagar/)).toHaveFocus());
-    change(/Monto a Pagar/, '0.30');
-    change(/Fecha del Pago/, '');
-    await choose('Medio de Pago', 'Transferencia (Cuenta Bancaria)');
-    fireEvent.click(screen.getByRole('button', { name: 'Confirmar Pago' }));
-    expect(await screen.findByText('La fecha del pago es obligatoria')).toBeInTheDocument();
-    expect(
-      screen.getByText('Selecciona una cuenta bancaria para transferencia'),
-    ).toBeInTheDocument();
-    expect(spy).not.toHaveBeenCalled();
-  });
-
-  it('conserva el payload, cambia clave sólo al cambiarlo y bloquea doble envío', async () => {
-    let finish!: (value: ExpenseDto) => void;
-    const spy = vi
-      .spyOn(api, 'payExpense')
-      .mockRejectedValueOnce(new Error('Sin conexión'))
-      .mockRejectedValueOnce(new Error('Sin conexión de nuevo'))
-      .mockImplementationOnce(
-        () =>
-          new Promise((resolve) => {
-            finish = resolve;
-          }),
-      );
-    form();
-    change(/Fecha del Pago/, '2026-10-18');
-    change(/Notas \/ Referencia/, ' soporte ');
-    fireEvent.click(screen.getByRole('button', { name: 'Confirmar Pago' }));
-    expect(await screen.findByText('Sin conexión')).toBeInTheDocument();
-    expect(spy.mock.calls[0]).toEqual([
-      'expense',
-      {
-        amount: '0.30',
-        paymentDate: '2026-10-18',
-        paymentMethod: 'EFECTIVO',
-        bankAccountId: undefined,
-        notes: 'soporte',
-      },
-      expect.any(String),
-    ]);
-    fireEvent.click(screen.getByRole('button', { name: 'Confirmar Pago' }));
-    expect(await screen.findByText('Sin conexión de nuevo')).toBeInTheDocument();
-    expect(spy.mock.calls[1]).toEqual(spy.mock.calls[0]);
-    change(/Monto a Pagar/, '0.20');
-    await choose('Medio de Pago', 'Transferencia (Cuenta Bancaria)');
-    const button = screen.getByRole('button', { name: 'Confirmar Pago' });
-    fireEvent.click(button);
-    fireEvent.click(button);
-    await waitFor(() => expect(spy).toHaveBeenCalledTimes(3));
-    expect(spy.mock.calls[2][2]).not.toBe(spy.mock.calls[0][2]);
-    expect(spy.mock.calls[2][1]).toEqual({
-      amount: '0.20',
-      paymentDate: '2026-10-18',
-      paymentMethod: 'TRANSFERENCIA',
-      bankAccountId: 'bank',
-      notes: 'soporte',
-    });
-    expect(screen.getByRole('button', { name: 'Procesando...' })).toBeDisabled();
-    await act(async () => finish(expense));
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Confirmar Pago' })).toBeEnabled(),
     );
   });
 });

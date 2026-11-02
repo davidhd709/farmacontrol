@@ -111,6 +111,60 @@ export interface BankAccountsSummaryDto {
 
 export type TreasuryDocumentType = 'RECIBO_CAJA' | 'COMPROBANTE_EGRESO';
 
+/**
+ * AUTOMATICO: emitido por el trigger de un movimiento (ADR-002). MANUAL, CARTERA y PROVEEDOR:
+ * registrados como documento de origen desde Tesorería (ADR-007).
+ */
+export type TreasuryDocumentOrigin = 'AUTOMATICO' | 'MANUAL' | 'CARTERA' | 'PROVEEDOR';
+
+export type TreasuryVoucherPaymentMethod = 'EFECTIVO' | 'TRANSFERENCIA';
+
+/** Factura que un recibo abona o que un egreso paga, con el valor aplicado. */
+export interface TreasuryDocumentApplicationDto {
+  documentType: 'FACTURA_VENTA' | 'FACTURA_COMPRA' | 'CAUSACION_GASTO';
+  documentId: string;
+  documentNumber: string | null;
+  amount: string;
+  isReversed: boolean;
+}
+
+/**
+ * Recibo de caja: único registro de ingresos manuales de dinero. MANUAL contabiliza contra la
+ * contrapartida elegida; CARTERA abona facturas a crédito del cliente (el valor del recibo es
+ * la suma de lo aplicado).
+ */
+export interface CreateCashReceiptPayload {
+  kind: 'MANUAL' | 'CARTERA';
+  paymentMethod: TreasuryVoucherPaymentMethod;
+  bankAccountId?: string;
+  concept: string;
+  amount?: string;
+  counterpartAccountId?: string;
+  thirdPartyId?: string;
+  customerId?: string;
+  applications?: Array<{ receivableId: string; amount: string }>;
+}
+
+/**
+ * Comprobante de egreso: único registro de egresos de dinero. MANUAL contabiliza contra la
+ * contrapartida elegida; PROVEEDOR paga facturas de compra y causaciones del proveedor.
+ */
+export interface CreateDisbursementPayload {
+  kind: 'MANUAL' | 'PROVEEDOR';
+  paymentMethod: TreasuryVoucherPaymentMethod;
+  bankAccountId?: string;
+  concept: string;
+  amount?: string;
+  counterpartAccountId?: string;
+  thirdPartyId?: string;
+  supplierId?: string;
+  applications?: Array<{
+    documentType: 'FACTURA_COMPRA' | 'CAUSACION_GASTO';
+    documentId: string;
+    amount: string;
+  }>;
+}
+
 export interface TreasuryDocumentDto {
   id: string;
   documentType: TreasuryDocumentType;
@@ -127,6 +181,10 @@ export interface TreasuryDocumentDto {
   referenceDocumentId: string | null;
   /** Cliente, proveedor o beneficiario, cuando el origen lo identifica */
   thirdPartyName: string | null;
+  origin: TreasuryDocumentOrigin;
+  counterpartAccount: string | null;
+  /** Facturas abonadas o pagadas por el documento */
+  applications: TreasuryDocumentApplicationDto[];
   createdByName: string | null;
   createdAt: string;
 }

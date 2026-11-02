@@ -3,7 +3,8 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ReceivableDto } from '@farmacia/contracts';
+import { SYSTEM_PERMISSIONS, type ReceivableDto } from '@farmacia/contracts';
+import { withAuth } from './support-auth';
 import * as receivablesApi from '../src/features/receivables/api/receivables.api';
 import { ReceivablesPage } from '../src/features/receivables/pages/ReceivablesPage';
 import { appTheme } from '../src/theme/app-theme';
@@ -51,7 +52,7 @@ const renderPage = () => {
     <ThemeProvider theme={appTheme}>
       <QueryClientProvider client={queryClient}>
         <MemoryRouter>
-          <ReceivablesPage />
+          {withAuth(<ReceivablesPage />, [SYSTEM_PERMISSIONS.RECEIVABLES_MANAGE])}
         </MemoryRouter>
       </QueryClientProvider>
     </ThemeProvider>,
@@ -84,57 +85,30 @@ describe('ReceivablesPage (Frontend Cuentas por Cobrar — UX-21)', () => {
     });
   });
 
-  it('abre el modal de abono al hacer click en Abonar', async () => {
+  it('no registra abonos en cartera: "Ver abonos" muestra los movimientos con su recibo de caja y saldo', async () => {
+    vi.spyOn(receivablesApi, 'fetchReceivableMovements').mockResolvedValue({
+      receivableId: 'rec-1',
+      invoiceNumber: 'FAC-001',
+      customerName: 'Carlos Gómez',
+      totalAmount: '150000.00',
+      amountPaid: '50000.00',
+      balance: '100000.00',
+      status: 'PENDIENTE',
+      dueDate: '2026-10-31',
+      movements: [
+        { date: '2026-09-01T10:00:00.000Z', type: 'CARGO', documentNumber: 'FAC-001', description: 'Venta a crédito', charge: '150000.00', credit: '0.00', balance: '150000.00' },
+        { date: '2026-09-10T10:00:00.000Z', type: 'ABONO', documentNumber: 'RC-000007', description: 'Abono', paymentMethod: 'EFECTIVO', paymentId: 'pay-1', isReversed: false, charge: '0.00', credit: '50000.00', balance: '100000.00' },
+      ],
+    });
     renderPage();
+    await waitFor(() => expect(screen.getByText('Carlos Gómez')).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /^Abonar$/i })).not.toBeInTheDocument();
 
-    await waitFor(() => {
-      expect(screen.getByText('Carlos Gómez')).toBeInTheDocument();
-    });
-
-    const abonarButton = screen.getByRole('button', { name: /Abonar/i });
-    fireEvent.click(abonarButton);
-
-    await waitFor(() => {
-      expect(screen.getByText('Cuenta por Cobrar')).toBeInTheDocument();
-      expect(screen.getByLabelText(/Monto del abono/i)).toBeInTheDocument();
-    });
-  });
-
-  it('permite registrar un abono exitosamente', async () => {
-    const registerPaymentSpy = vi
-      .spyOn(receivablesApi, 'registerReceivablePayment')
-      .mockResolvedValue({
-        ...mockReceivables[0],
-        amountPaid: 100000,
-        balance: 50000,
-      });
-
-    renderPage();
-
-    await waitFor(() => {
-      expect(screen.getByText('Carlos Gómez')).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: /Abonar/i }));
-
-    await waitFor(() => {
-      expect(screen.getByLabelText(/Monto del abono/i)).toBeInTheDocument();
-    });
-
-    const amountInput = screen.getByLabelText(/Monto del abono/i);
-    fireEvent.change(amountInput, { target: { value: '50000' } });
-
-    const submitBtn = screen.getByRole('button', { name: /Registrar Abono/i });
-    fireEvent.click(submitBtn);
-
-    const confirmBtn = await screen.findByRole('button', { name: /Confirmar y Abonar/i });
-    fireEvent.click(confirmBtn);
-
-    await waitFor(() => {
-      expect(registerPaymentSpy).toHaveBeenCalledWith('rec-1', expect.objectContaining({
-        amount: '50000',
-        paymentMethod: 'EFECTIVO',
-      }), expect.any(String));
-    });
+    fireEvent.click(screen.getAllByRole('button', { name: /Ver Abonos/i })[0]);
+    expect(await screen.findByText('RC-000007')).toBeInTheDocument();
+    expect(screen.getByText(/registra un recibo de caja/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Monto del abono/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Revertir' }));
+    expect(await screen.findByText('Revertir Abono de Cliente')).toBeInTheDocument();
   });
 });

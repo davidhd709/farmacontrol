@@ -14,7 +14,12 @@ import {
   Stack,
   TextField,
 } from '@mui/material';
-import type { BankAccountDto, BankAccountType, CreateBankAccountDto, UpdateBankAccountDto } from '@farmacia/contracts';
+import type {
+  BankAccountDto,
+  BankAccountType,
+  CreateBankAccountDto,
+  UpdateBankAccountDto,
+} from '@farmacia/contracts';
 import { useAccounts } from '../../accounting/hooks/useAccounting';
 import type { AccountDto } from '../../accounting/api/accounting.api';
 

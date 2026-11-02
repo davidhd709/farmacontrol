@@ -13,7 +13,9 @@ import {
   RegisterPayablePaymentPayload,
   PaginatedResponse,
   AgingSummaryDto,
+  PayableMovementsDto,
 } from '@farmacia/contracts';
+import { buildDocumentMovements, RawDocumentMovement } from '../../../common/utils/document-movements';
 import { centsToMoneyString, parseMoneyToCents } from '../../treasury/domain/treasury-rules';
 import { recordSourceBankMovement } from '../../treasury/application/record-source-bank-movement';
 import {
@@ -196,105 +198,55 @@ export class PayablesService {
             ? await this.idempotencyService.getRecord(idempotencyKey, requestHash, tx, 'http')
             : null;
           if (cached) return cached.responseBody as PayableDto;
-          // 1. Bloqueo pesimista
-          const rows = await tx.$queryRaw<any[]>`
-        SELECT
-          id,
-          purchase_id  AS "purchaseId",
-          supplier_id  AS "supplierId",
-          total_amount AS "totalAmount",
-          amount_paid  AS "amountPaid",
-          balance,
-          status,
-          due_date     AS "dueDate",
-          notes,
-          created_at   AS "createdAt",
-          updated_at   AS "updatedAt"
-        FROM payables
-        WHERE id = ${payableId}::uuid
-        FOR UPDATE
-      `;
-
-          if (!rows.length) {
-            throw new NotFoundException(`Cuenta por pagar "${payableId}" no encontrada`);
-          }
-
-          const raw = rows[0];
-          if (raw.status !== 'PENDIENTE') {
-            throw new BadRequestException(`No se puede pagar una cuenta en estado "${raw.status}"`);
-          }
-          const balanceCents = parseMoneyToCents(raw.balance.toString(), 'Saldo pendiente');
-          if (amountCents > balanceCents) {
-            throw new BadRequestException('El monto del pago supera el saldo pendiente.');
-          }
-          const amountPaidCents = parseMoneyToCents(raw.amountPaid.toString(), 'Total pagado');
-          const newBalanceCents = balanceCents - amountCents;
+          const applied = await this.applyPaymentInTransaction(tx, {
+            payableId,
+            amountCents,
+            paymentMethod: method,
+            bankAccountId: method === 'TRANSFERENCIA' ? payload.bankAccountId! : null,
+            notes: payload.notes ?? null,
+            userId,
+          });
+          const concept = `Pago proveedor - Factura ${applied.invoiceNumber ?? payableId}`;
           const amount = centsToMoneyString(amountCents);
 
-          // 3. Persistir cambios en payable
-          const updated = await (tx as any).payable.update({
-            where: { id: payableId },
-            data: {
-              amountPaid: new Prisma.Decimal(centsToMoneyString(amountPaidCents + amountCents)),
-              balance: new Prisma.Decimal(centsToMoneyString(newBalanceCents)),
-              status: newBalanceCents === 0n ? 'PAGADA' : 'PENDIENTE',
-            },
-            include: {
-              supplier: { select: { name: true } },
-              purchase: { select: { invoiceNumber: true } },
-              payments: { orderBy: { createdAt: 'asc' } },
-            },
-          });
-
-          // 4. Registrar pago
-          const payment = await (tx as any).payablePayment.create({
-            data: {
-              payableId,
-              amount: new Prisma.Decimal(amount),
-              paymentMethod: method,
-              bankAccountId: method === 'TRANSFERENCIA' ? payload.bankAccountId : null,
-              notes: payload.notes ?? null,
-              createdByUserId: userId,
-            },
-          });
-
-          // 5. Egreso de caja (dentro de la misma transacción)
+          // Egreso de caja o banco (misma transacción); el trigger emite su comprobante
+          let document: { id: string } | null;
           if (method === 'TRANSFERENCIA') {
-            await recordSourceBankMovement(tx, {
+            const movementId = await recordSourceBankMovement(tx, {
               bankAccountId: payload.bankAccountId!,
               movementType: 'WITHDRAWAL',
               amount,
-              concept: `Pago proveedor - Factura ${updated.purchase?.invoiceNumber ?? payableId}`,
+              concept,
               referenceDocumentType: 'PAYABLE_PAYMENT',
-              referenceDocumentId: payment.id,
+              referenceDocumentId: applied.paymentId,
               createdById: userId,
             });
+            document = await tx.treasuryDocument.findUnique({ where: { bankMovementId: movementId } });
           } else {
-            await this.cashService.recordMovementInTransaction(tx, {
+            const movementId = await this.cashService.recordMovementInTransaction(tx, {
               movementType: 'EGRESO_PAGO_PROVEEDOR',
               amount,
               paymentMethod: 'EFECTIVO',
-              reason: `Pago proveedor - Factura ${updated.purchase?.invoiceNumber ?? payableId}`,
+              reason: concept,
               referenceDocumentType: 'PAYABLE',
               referenceDocumentId: payableId,
               createdByUserId: userId,
             });
+            document = await tx.treasuryDocument.findUnique({ where: { cashMovementId: movementId } });
           }
-
-          // 5.1. Asiento contable automático
-          await this.accountingEngine.handleSupplierPayment(
-            {
-              id: payment.id,
-              payableId,
-              amount: payment.amount,
-              paymentMethod: method,
-              bankAccountId: method === 'TRANSFERENCIA' ? payload.bankAccountId : null,
-              createdByUserId: userId,
-              supplierName: updated.supplier?.name,
-              invoiceNumber: updated.purchase?.invoiceNumber,
+          if (document) {
+            await tx.payablePayment.update({
+              where: { id: applied.paymentId },
+              data: { treasuryDocumentId: document.id },
+            });
+          }
+          const updated = await tx.payable.findUniqueOrThrow({
+            where: { id: payableId },
+            include: {
+              supplier: { select: { name: true } },
+              purchase: { select: { invoiceNumber: true } },
             },
-            tx,
-          );
+          });
 
           // Leer pagos actualizados para retornar
           const payments = await (tx as any).payablePayment.findMany({
@@ -323,6 +275,187 @@ export class PayablesService {
         },
       ),
     );
+  }
+
+  /** Movimientos de una factura de compra con el saldo después de cada uno. */
+  async getMovements(id: string): Promise<PayableMovementsDto> {
+    const row = await prisma.payable.findUnique({
+      where: { id },
+      include: {
+        supplier: { select: { name: true } },
+        purchase: {
+          select: {
+            invoiceNumber: true,
+            purchaseDate: true,
+            createdAt: true,
+            debitNotes: {
+              select: {
+                debitNoteNumber: true,
+                reason: true,
+                total: true,
+                withholdingIncome: true,
+                withholdingVat: true,
+                withholdingIca: true,
+                createdAt: true,
+              },
+            },
+          },
+        },
+        payments: { include: { treasuryDocument: { select: { documentNumber: true } } } },
+      },
+    });
+    if (!row) {
+      throw new NotFoundException(`Cuenta por pagar "${id}" no encontrada`);
+    }
+    const toCents = (value: Prisma.Decimal) => parseMoneyToCents(value.toFixed(2), 'Valor');
+    // La nota débito baja el total y el saldo por su valor neto de retenciones
+    const notes = (row.purchase?.debitNotes ?? []).map((n) => ({
+      ...n,
+      netCents:
+        toCents(n.total) - toCents(n.withholdingIncome) - toCents(n.withholdingVat) - toCents(n.withholdingIca),
+    }));
+    const raw: RawDocumentMovement[] = [
+      {
+        at: row.purchase?.createdAt ?? row.createdAt,
+        type: 'CARGO',
+        documentNumber: row.purchase?.invoiceNumber ?? null,
+        description: 'Factura de compra',
+        deltaCents: toCents(row.totalAmount) + notes.reduce((acc, n) => acc + n.netCents, 0n),
+      },
+    ];
+    for (const note of notes) {
+      raw.push({
+        at: note.createdAt,
+        type: 'NOTA_DEBITO',
+        documentNumber: note.debitNoteNumber,
+        description: `Devolución al proveedor: ${note.reason}`,
+        deltaCents: -note.netCents,
+      });
+    }
+    for (const payment of row.payments) {
+      raw.push({
+        at: payment.createdAt,
+        type: 'ABONO',
+        documentNumber: payment.treasuryDocument?.documentNumber ?? null,
+        description: payment.notes || 'Pago al proveedor',
+        paymentMethod: payment.paymentMethod,
+        paymentId: payment.id,
+        isReversed: payment.isReversed,
+        deltaCents: -toCents(payment.amount),
+      });
+      if (payment.isReversed && payment.reversedAt) {
+        raw.push({
+          at: payment.reversedAt,
+          type: 'REVERSION_ABONO',
+          documentNumber: null,
+          description: `Reversión del pago: ${payment.reversalReason ?? ''}`.trim(),
+          paymentMethod: payment.paymentMethod,
+          deltaCents: toCents(payment.amount),
+        });
+      }
+    }
+    return {
+      payableId: row.id,
+      invoiceNumber: row.purchase?.invoiceNumber ?? null,
+      supplierName: row.supplier?.name ?? null,
+      totalAmount: row.totalAmount.toFixed(2),
+      amountPaid: row.amountPaid.toFixed(2),
+      balance: row.balance.toFixed(2),
+      status: row.status,
+      dueDate: row.dueDate.toISOString().slice(0, 10),
+      movements: buildDocumentMovements(raw),
+    };
+  }
+
+  /**
+   * Aplica un pago a una factura de compra dentro de la transacción del llamador: bloquea la
+   * cuenta, valida estado, saldo y proveedor, actualiza saldos, registra el pago y su asiento.
+   * El movimiento de dinero lo registra el comprobante de egreso que respalda el pago.
+   */
+  async applyPaymentInTransaction(
+    tx: Prisma.TransactionClient,
+    input: {
+      payableId: string;
+      amountCents: bigint;
+      paymentMethod: 'EFECTIVO' | 'TRANSFERENCIA';
+      bankAccountId: string | null;
+      notes: string | null;
+      userId: string;
+      treasuryDocumentId?: string;
+      /** Proveedor del egreso: la factura debe ser suya */
+      expectedSupplierId?: string;
+    },
+  ): Promise<{ paymentId: string; invoiceNumber: string | null; supplierName: string | null }> {
+    if (input.amountCents <= 0n) {
+      throw new BadRequestException('El monto del pago debe ser mayor a cero');
+    }
+    const rows = await tx.$queryRaw<
+      Array<{ supplierId: string; amountPaid: Prisma.Decimal; balance: Prisma.Decimal; status: string }>
+    >`
+      SELECT supplier_id AS "supplierId", amount_paid AS "amountPaid", balance, status
+      FROM payables
+      WHERE id = ${input.payableId}::uuid
+      FOR UPDATE
+    `;
+    if (!rows.length) {
+      throw new NotFoundException(`Cuenta por pagar "${input.payableId}" no encontrada`);
+    }
+    const raw = rows[0];
+    if (input.expectedSupplierId && raw.supplierId !== input.expectedSupplierId) {
+      throw new BadRequestException('La factura seleccionada no pertenece al proveedor del egreso.');
+    }
+    if (raw.status !== 'PENDIENTE') {
+      throw new BadRequestException(`No se puede pagar una cuenta en estado "${raw.status}"`);
+    }
+    const balanceCents = parseMoneyToCents(raw.balance.toString(), 'Saldo pendiente');
+    if (input.amountCents > balanceCents) {
+      throw new BadRequestException('El monto del pago supera el saldo pendiente.');
+    }
+    const amountPaidCents = parseMoneyToCents(raw.amountPaid.toString(), 'Total pagado');
+    const newBalanceCents = balanceCents - input.amountCents;
+    const amount = centsToMoneyString(input.amountCents);
+
+    const updated = await tx.payable.update({
+      where: { id: input.payableId },
+      data: {
+        amountPaid: new Prisma.Decimal(centsToMoneyString(amountPaidCents + input.amountCents)),
+        balance: new Prisma.Decimal(centsToMoneyString(newBalanceCents)),
+        status: newBalanceCents === 0n ? 'PAGADA' : 'PENDIENTE',
+      },
+      include: {
+        supplier: { select: { name: true } },
+        purchase: { select: { invoiceNumber: true } },
+      },
+    });
+    const payment = await tx.payablePayment.create({
+      data: {
+        payableId: input.payableId,
+        amount: new Prisma.Decimal(amount),
+        paymentMethod: input.paymentMethod,
+        bankAccountId: input.paymentMethod === 'TRANSFERENCIA' ? input.bankAccountId : null,
+        notes: input.notes,
+        createdByUserId: input.userId,
+        treasuryDocumentId: input.treasuryDocumentId ?? null,
+      },
+    });
+    await this.accountingEngine.handleSupplierPayment(
+      {
+        id: payment.id,
+        payableId: input.payableId,
+        amount: payment.amount,
+        paymentMethod: input.paymentMethod,
+        bankAccountId: input.paymentMethod === 'TRANSFERENCIA' ? input.bankAccountId : null,
+        createdByUserId: input.userId,
+        supplierName: updated.supplier?.name,
+        invoiceNumber: updated.purchase?.invoiceNumber,
+      },
+      tx,
+    );
+    return {
+      paymentId: payment.id,
+      invoiceNumber: updated.purchase?.invoiceNumber ?? null,
+      supplierName: updated.supplier?.name ?? null,
+    };
   }
 
   /**

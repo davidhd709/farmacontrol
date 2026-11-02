@@ -5,7 +5,6 @@ import {
   CreateExpenseCategoryPayload,
   UpdateExpenseCategoryPayload,
   CreateExpensePayload,
-  CreateExpensePaymentPayload,
   CancelExpensePayload,
   ReverseExpensePaymentPayload,
   ExpenseQueryFilters,
@@ -47,17 +46,6 @@ export const fetchExpenseById = (id: string) =>
 
 export const createExpense = (payload: CreateExpensePayload, idempotencyKey: string) =>
   apiRequest<ExpenseDto>('expenses', {
-    method: 'POST',
-    headers: { 'Idempotency-Key': idempotencyKey },
-    body: JSON.stringify(payload),
-  });
-
-export const payExpense = (
-  id: string,
-  payload: CreateExpensePaymentPayload,
-  idempotencyKey: string,
-) =>
-  apiRequest<ExpenseDto>(`expenses/${encodeURIComponent(id)}/payments`, {
     method: 'POST',
     headers: { 'Idempotency-Key': idempotencyKey },
     body: JSON.stringify(payload),

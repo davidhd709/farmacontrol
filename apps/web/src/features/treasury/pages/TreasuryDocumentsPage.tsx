@@ -23,21 +23,76 @@ import {
   Typography,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
-import type { TreasuryDocumentDto, TreasuryDocumentType } from '@farmacia/contracts';
+import type {
+  TreasuryDocumentApplicationDto,
+  TreasuryDocumentDto,
+  TreasuryDocumentType,
+} from '@farmacia/contracts';
 import { getTreasuryDocuments } from '../api/treasury.api';
 import { QuickDateRange } from '../../../components/QuickDateRange';
+import { HomeBackButton } from '../../../components/HomeBackButton';
+import { SweetModal } from '../../../components/SweetModal';
+import { VoucherFormDialog } from '../components/VoucherFormDialog';
 
-const LABELS: Record<TreasuryDocumentType, { title: string; singular: string; description: string }> = {
+const LABELS: Record<
+  TreasuryDocumentType,
+  { title: string; singular: string; description: string; create: string }
+> = {
   RECIBO_CAJA: {
     title: 'Recibos de Caja',
     singular: 'Recibo de caja',
-    description: 'Un recibo por cada ingreso de dinero a caja o bancos: ventas, abonos de cartera e ingresos manuales.',
+    description:
+      'Único registro de ingresos manuales de dinero, en efectivo o transferencia: abonos de clientes a sus facturas a crédito e ingresos de contado.',
+    create: 'Nuevo recibo de caja',
   },
   COMPROBANTE_EGRESO: {
     title: 'Comprobantes de Egreso',
     singular: 'Comprobante de egreso',
-    description: 'Un comprobante por cada salida de dinero: pagos a proveedores, gastos, devoluciones y comisiones.',
+    description:
+      'Único registro de egresos de dinero, en efectivo o transferencia: pagos de facturas de compra y causaciones de gasto, y egresos manuales.',
+    create: 'Nuevo comprobante de egreso',
   },
+};
+
+const ORIGIN_LABELS: Record<TreasuryDocumentDto['origin'], string> = {
+  AUTOMATICO: 'Automático',
+  MANUAL: 'Manual',
+  CARTERA: 'Abono a cartera',
+  PROVEEDOR: 'Pago a proveedor',
+};
+
+const REFERENCE_LABELS: Record<string, string> = {
+  SALE: 'Venta',
+  SALE_CANCEL: 'Anulación de venta',
+  CREDIT_NOTE: 'Nota crédito',
+  RECEIVABLE: 'Cartera',
+  RECEIVABLE_PAYMENT: 'Abono de cartera',
+  RECEIVABLE_PAYMENT_REVERSAL: 'Reversión de abono',
+  PAYABLE: 'Cuenta por pagar',
+  PAYABLE_PAYMENT: 'Pago a proveedor',
+  PAYABLE_PAYMENT_REVERSAL: 'Reversión de pago',
+  EXPENSE: 'Gasto',
+  EXPENSE_CANCEL: 'Anulación de gasto',
+  EXPENSE_PAYMENT: 'Pago de gasto',
+  EXPENSE_PAYMENT_REVERSAL: 'Reversión de pago de gasto',
+};
+
+const APPLICATION_LABELS: Record<TreasuryDocumentApplicationDto['documentType'], string> = {
+  FACTURA_VENTA: 'Factura de venta',
+  FACTURA_COMPRA: 'Factura de compra',
+  CAUSACION_GASTO: 'Causación de gasto',
+};
+
+const originOf = (doc: TreasuryDocumentDto) => {
+  if (doc.applications.length) {
+    return doc.applications
+      .map((a) => a.documentNumber ?? APPLICATION_LABELS[a.documentType])
+      .join(', ');
+  }
+  if (doc.referenceDocumentType && doc.referenceDocumentType !== 'TREASURY_DOCUMENT') {
+    return `${REFERENCE_LABELS[doc.referenceDocumentType] ?? doc.referenceDocumentType} ${doc.referenceDocumentId ?? ''}`;
+  }
+  return ORIGIN_LABELS[doc.origin];
 };
 
 const money = (value: string) =>
@@ -55,6 +110,8 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(25);
   const [selected, setSelected] = useState<TreasuryDocumentDto | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['treasury-documents', type, fromDate, toDate, search, page, pageSize],
@@ -72,12 +129,30 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
   return (
     <Container component="main" maxWidth="xl" sx={{ py: 4 }}>
       <Stack spacing={3}>
-        <Box>
-          <Typography component="h1" variant="h4" sx={{ fontWeight: 700 }}>
-            {labels.title}
-          </Typography>
-          <Typography color="text.secondary">{labels.description}</Typography>
-        </Box>
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={2}
+          sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <HomeBackButton />
+            <Box>
+              <Typography component="h1" variant="h5" sx={{ fontWeight: 700 }}>
+                {labels.title}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {labels.description}
+              </Typography>
+            </Box>
+          </Box>
+          <Button
+            variant="contained"
+            onClick={() => setFormOpen(true)}
+            sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}
+          >
+            {labels.create}
+          </Button>
+        </Stack>
 
         <Paper sx={{ p: 2 }}>
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
@@ -136,7 +211,7 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
                 <TableCell sx={{ fontWeight: 700 }}>Tercero</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>Concepto</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>Auxiliar</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Documento origen</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Origen / facturas</TableCell>
                 <TableCell sx={{ fontWeight: 700 }} align="right">
                   Valor
                 </TableCell>
@@ -157,9 +232,18 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
                 </TableRow>
               ) : (
                 data.items.map((doc) => (
-                  <TableRow key={doc.id} hover sx={{ cursor: 'pointer' }} onClick={() => setSelected(doc)}>
+                  <TableRow
+                    key={doc.id}
+                    hover
+                    sx={{ cursor: 'pointer' }}
+                    onClick={() => setSelected(doc)}
+                  >
                     <TableCell sx={{ fontWeight: 700, fontFamily: 'monospace' }}>
-                      <Button size="small" onClick={() => setSelected(doc)} sx={{ p: 0, minWidth: 0 }}>
+                      <Button
+                        size="small"
+                        onClick={() => setSelected(doc)}
+                        sx={{ p: 0, minWidth: 0 }}
+                      >
                         {doc.documentNumber}
                       </Button>
                     </TableCell>
@@ -173,11 +257,7 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
                         label={doc.source === 'CAJA' ? 'Caja' : (doc.bankAccountName ?? 'Banco')}
                       />
                     </TableCell>
-                    <TableCell>
-                      {doc.referenceDocumentType
-                        ? `${doc.referenceDocumentType} ${doc.referenceDocumentId ?? ''}`
-                        : '—'}
-                    </TableCell>
+                    <TableCell>{originOf(doc)}</TableCell>
                     <TableCell align="right" sx={{ fontWeight: 700 }}>
                       {money(doc.amount)}
                     </TableCell>
@@ -202,7 +282,13 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
         </TableContainer>
       </Stack>
 
-      <Dialog open={!!selected} onClose={() => setSelected(null)} maxWidth="sm" fullWidth>
+      <Dialog
+        open={!!selected}
+        onClose={() => setSelected(null)}
+        maxWidth="sm"
+        fullWidth
+        slotProps={{ paper: { className: 'print-document' } }}
+      >
         {selected && (
           <>
             <DialogTitle sx={{ fontWeight: 700 }}>
@@ -225,20 +311,49 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
                 </Typography>
                 <Typography>
                   <strong>Medio:</strong>{' '}
-                  {selected.source === 'CAJA' ? `Caja (${selected.paymentMethod})` : selected.bankAccountName}
+                  {selected.source === 'CAJA'
+                    ? `Caja (${selected.paymentMethod})`
+                    : selected.bankAccountName}
                 </Typography>
                 <Typography>
-                  <strong>Documento origen:</strong>{' '}
-                  {selected.referenceDocumentType
-                    ? `${selected.referenceDocumentType} ${selected.referenceDocumentId ?? ''}`
-                    : '—'}
+                  <strong>Origen:</strong> {ORIGIN_LABELS[selected.origin]}
                 </Typography>
+                {selected.counterpartAccount && (
+                  <Typography>
+                    <strong>Contrapartida:</strong> {selected.counterpartAccount}
+                  </Typography>
+                )}
+                {selected.applications.length > 0 ? (
+                  <Table size="small" aria-label="Facturas aplicadas">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Documento</TableCell>
+                        <TableCell align="right">Valor</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {selected.applications.map((a) => (
+                        <TableRow key={`${a.documentType}-${a.documentId}`}>
+                          <TableCell>
+                            {APPLICATION_LABELS[a.documentType]} {a.documentNumber ?? ''}
+                            {a.isReversed ? ' (revertido)' : ''}
+                          </TableCell>
+                          <TableCell align="right">{money(a.amount)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <Typography>
+                    <strong>Documento origen:</strong> {originOf(selected)}
+                  </Typography>
+                )}
                 <Typography>
                   <strong>Elaborado por:</strong> {selected.createdByName ?? '—'}
                 </Typography>
               </Stack>
             </DialogContent>
-            <DialogActions>
+            <DialogActions className="no-print">
               <Button onClick={() => window.print()}>Imprimir</Button>
               <Button variant="contained" onClick={() => setSelected(null)}>
                 Cerrar
@@ -247,6 +362,29 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
           </>
         )}
       </Dialog>
+
+      <VoucherFormDialog
+        type={type}
+        open={formOpen}
+        onClose={() => setFormOpen(false)}
+        onCreated={(document) => {
+          setFormOpen(false);
+          setToast(
+            `${labels.singular} ${document.documentNumber} registrado por ${money(document.amount)}.`,
+          );
+          setSelected(document);
+        }}
+      />
+
+      <SweetModal
+        open={Boolean(toast)}
+        type="success"
+        title="¡Buen trabajo!"
+        text={toast ?? ''}
+        confirmText="OK"
+        onConfirm={() => setToast(null)}
+        onClose={() => setToast(null)}
+      />
     </Container>
   );
 }

@@ -18,9 +18,12 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { PayablesService } from '../application/payables.service';
+import { PayablesStatementService } from '../application/payables-statement.service';
 import {
   RegisterPayablePaymentPayload,
   ApiResponse,
+  PayableMovementsDto,
+  PayableStatementDto,
   SYSTEM_PERMISSIONS,
 } from '@farmacia/contracts';
 import {
@@ -34,7 +37,10 @@ import { RequirePermissions } from '../../identity/presentation/decorators/requi
 @Controller('payables')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 export class PayablesController {
-  constructor(private readonly svc: PayablesService) {}
+  constructor(
+    private readonly svc: PayablesService,
+    private readonly statement: PayablesStatementService,
+  ) {}
 
   /**
    * GET /api/v1/payables
@@ -67,6 +73,32 @@ export class PayablesController {
   }
 
   /**
+   * GET /api/v1/payables/statement
+   * Facturas de compra y causaciones por proveedor o por fecha, con saldo y edad.
+   */
+  @Get('statement')
+  @RequirePermissions(SYSTEM_PERMISSIONS.PAYABLES_READ)
+  async getStatement(
+    @Query(
+      new QueryShapeValidationPipe({
+        supplierId: 'uuid?',
+        fromDate: 'date?',
+        toDate: 'date?',
+        includePaid: 'booleanString?',
+      }),
+    )
+    query: Record<string, string>,
+  ): Promise<ApiResponse<PayableStatementDto>> {
+    const data = await this.statement.getStatement({
+      supplierId: query['supplierId'],
+      fromDate: query['fromDate'],
+      toDate: query['toDate'],
+      includePaid: query['includePaid'] === 'true',
+    });
+    return { success: true, data };
+  }
+
+  /**
    * GET /api/v1/payables/aging-summary
    * Resumen de cartera por edades de vencimiento.
    */
@@ -74,6 +106,17 @@ export class PayablesController {
   @RequirePermissions(SYSTEM_PERMISSIONS.PAYABLES_READ)
   async getAgingSummary(): Promise<ApiResponse<any>> {
     const data = await this.svc.getAgingSummary();
+    return { success: true, data };
+  }
+
+  /**
+   * GET /api/v1/payables/:id/movements
+   * Movimientos de la factura de compra con el saldo después de cada uno.
+   */
+  @Get(':id/movements')
+  @RequirePermissions(SYSTEM_PERMISSIONS.PAYABLES_READ)
+  async getMovements(@Param('id', ParseUUIDPipe) id: string): Promise<ApiResponse<PayableMovementsDto>> {
+    const data = await this.svc.getMovements(id);
     return { success: true, data };
   }
 

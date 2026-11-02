@@ -84,57 +84,9 @@ describe('PayablesPage (Frontend Cuentas por Pagar — UX-23)', () => {
     });
   });
 
-  it('abre el modal de pago al hacer click en Pagar', async () => {
+  it('no registra pagos desde cuentas por pagar: solo ofrece el detalle de la factura', async () => {
     renderPage();
-
-    await waitFor(() => {
-      expect(screen.getByText('Distribuciones Farmacéuticas del Valle')).toBeInTheDocument();
-    });
-
-    const pagarButton = screen.getByRole('button', { name: /Pagar/i });
-    fireEvent.click(pagarButton);
-
-    await waitFor(() => {
-      expect(screen.getByText('Cuenta por Pagar')).toBeInTheDocument();
-      expect(screen.getByLabelText(/Monto del pago/i)).toBeInTheDocument();
-    });
-  });
-
-  it('permite registrar un pago a proveedor exitosamente', async () => {
-    const registerPaymentSpy = vi
-      .spyOn(payablesApi, 'registerPayablePayment')
-      .mockResolvedValue({
-        ...mockPayables[0],
-        amountPaid: 350000,
-        balance: 150000,
-      });
-
-    renderPage();
-
-    await waitFor(() => {
-      expect(screen.getByText('Distribuciones Farmacéuticas del Valle')).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: /Pagar/i }));
-
-    await waitFor(() => {
-      expect(screen.getByLabelText(/Monto del pago/i)).toBeInTheDocument();
-    });
-
-    const amountInput = screen.getByLabelText(/Monto del pago/i);
-    fireEvent.change(amountInput, { target: { value: '150000' } });
-
-    const submitBtn = screen.getByRole('button', { name: /Pagar Proveedor/i });
-    fireEvent.click(submitBtn);
-
-    const confirmBtn = await screen.findByRole('button', { name: 'Confirmar y Pagar' });
-    fireEvent.click(confirmBtn);
-
-    await waitFor(() => {
-      expect(registerPaymentSpy).toHaveBeenCalledWith('pay-1', expect.objectContaining({
-        amount: '150000',
-        paymentMethod: 'EFECTIVO',
-      }), expect.any(String));
-    });
+    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Detalle' }).length).toBeGreaterThan(0));
+    expect(screen.queryByRole('button', { name: /^Pagar$/ })).not.toBeInTheDocument();
   });
 });

@@ -1,7 +1,6 @@
 import type {
   ReceivableDto,
   ReceivableQueryFilters,
-  RegisterReceivablePaymentPayload,
   PaginatedResponse,
   AgingSummaryDto,
   ReversePaymentPayload,
@@ -38,18 +37,6 @@ export async function fetchReceivableMovements(id: string): Promise<ReceivableMo
 
 export async function fetchReceivablesAgingSummary(): Promise<AgingSummaryDto> {
   return apiRequestData<AgingSummaryDto>('receivables/aging-summary', { method: 'GET' });
-}
-
-export async function registerReceivablePayment(
-  id: string,
-  payload: RegisterReceivablePaymentPayload,
-  idempotencyKey: string,
-): Promise<ReceivableDto> {
-  return apiRequestData<ReceivableDto>(`receivables/${id}/payments`, {
-    method: 'POST',
-    headers: { 'Idempotency-Key': idempotencyKey },
-    body: JSON.stringify(payload),
-  });
 }
 
 export async function revertReceivablePayment(

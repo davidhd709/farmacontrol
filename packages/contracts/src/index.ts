@@ -845,6 +845,9 @@ export interface DocumentMovementDto {
   documentNumber: string | null;
   description: string;
   paymentMethod?: string | null;
+  /** Abono o pago que se puede revertir desde la factura */
+  paymentId?: string | null;
+  isReversed?: boolean;
   /** Aumenta el saldo (factura, reversión de un abono) */
   charge: string;
   /** Disminuye el saldo (abono, nota crédito, anulación) */
@@ -860,6 +863,18 @@ export interface ReceivableMovementsDto {
   amountPaid: string;
   balance: string;
   status: ReceivableStatus;
+  dueDate: string;
+  movements: DocumentMovementDto[];
+}
+
+export interface PayableMovementsDto {
+  payableId: string;
+  invoiceNumber: string | null;
+  supplierName: string | null;
+  totalAmount: string;
+  amountPaid: string;
+  balance: string;
+  status: string;
   dueDate: string;
   movements: DocumentMovementDto[];
 }
@@ -941,6 +956,55 @@ export interface AgingSummaryDto {
   daysOver90: AgingBucketDto;
   totalPending: string;
   totalCount: number;
+}
+
+/**
+ * Edades de cartera y de cuentas por pagar (correcciones del cliente, 2026-11-01): días
+ * vencidos desde el vencimiento. Corriente incluye lo no vencido y hasta 30 días.
+ */
+export type AgingBucket = 'CORRIENTE' | 'DIAS_31_60' | 'DIAS_61_90' | 'MAS_90';
+
+export interface AgingBreakdownDto {
+  current: AgingBucketDto;
+  days31To60: AgingBucketDto;
+  days61To90: AgingBucketDto;
+  daysOver90: AgingBucketDto;
+  totalPending: string;
+  totalCount: number;
+}
+
+export type PayableDocumentType = 'FACTURA_COMPRA' | 'CAUSACION_GASTO';
+
+/** Factura de compra o causación de gasto en el estado de cuenta de un proveedor. */
+export interface PayableStatementItemDto {
+  documentType: PayableDocumentType;
+  /** payables.id o expenses.id: lo que se envía al pagar con un comprobante de egreso */
+  documentId: string;
+  documentNumber: string | null;
+  supplierId: string | null;
+  supplierName: string | null;
+  description: string;
+  documentDate: string;
+  dueDate: string | null;
+  totalAmount: string;
+  amountPaid: string;
+  balance: string;
+  status: string;
+  daysOverdue: number;
+  agingBucket: AgingBucket;
+}
+
+export interface PayableStatementDto {
+  items: PayableStatementItemDto[];
+  aging: AgingBreakdownDto;
+}
+
+export interface PayableStatementFilters {
+  supplierId?: string;
+  fromDate?: string;
+  toDate?: string;
+  /** Incluye las facturas ya saldadas (por defecto solo las que tienen saldo) */
+  includePaid?: boolean;
 }
 
 export interface PayableQueryFilters {

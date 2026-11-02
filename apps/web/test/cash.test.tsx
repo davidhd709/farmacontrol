@@ -11,7 +11,6 @@ import {
 } from '@farmacia/contracts';
 import { AuthContext, type AuthContextValue } from '../src/features/auth/context/auth-context';
 import * as cashApi from '../src/features/cash/api/cash.api';
-import * as accountingApi from '../src/features/accounting/api/accounting.api';
 import { CashPage } from '../src/features/cash/pages/CashPage';
 import { appTheme } from '../src/theme/app-theme';
 
@@ -89,36 +88,12 @@ describe('Operación de Caja — Pantalla CashPage (UX-25)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.spyOn(cashApi, 'fetchCashBalance').mockResolvedValue(mockBalance);
-    vi.spyOn(accountingApi, 'fetchAccounts').mockResolvedValue([
-      {
-        id: 'capital',
-        code: '310505',
-        name: 'Capital',
-        type: 'EQUITY',
-        nature: 'CREDIT',
-        parentId: null,
-        level: 4,
-        allowsMovement: true,
-        isActive: true,
-      } as unknown as Awaited<ReturnType<typeof accountingApi.fetchAccounts>>[number],
-    ]);
     vi.spyOn(cashApi, 'fetchCashMovements').mockResolvedValue({
       items: mockMovements,
       total: mockMovements.length,
       page: 1,
       pageSize: 15,
       totalPages: 1,
-    });
-    vi.spyOn(cashApi, 'createCashMovement').mockResolvedValue({
-      id: 'mov-3',
-      movementType: 'INGRESO_MANUAL',
-      amount: 50000,
-      paymentMethod: 'EFECTIVO',
-      reason: 'Aporte de cambio adicional',
-      balanceAfter: 125000,
-      createdAt: '2026-09-26T16:00:00.000Z',
-      createdByUserId: 'user-cajero',
-      createdByUsername: 'cajero_1',
     });
   });
 
@@ -136,79 +111,26 @@ describe('Operación de Caja — Pantalla CashPage (UX-25)', () => {
     });
   });
 
-  it('permite abrir el modal de registro de movimiento y registrar una entrada de efectivo exitosa', async () => {
+  it('es de solo consulta: no ofrece registrar movimientos y remite a recibos y egresos', async () => {
     renderWithProviders(<CashPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText('+ Registrar Movimiento')).toBeInTheDocument();
-    });
-
-    const openBtn = screen.getByText('+ Registrar Movimiento');
-    fireEvent.click(openBtn);
-
-    expect(screen.getByText('Recibo de Caja')).toBeInTheDocument();
-
-    const amountInput = screen.getByLabelText(/Monto/i);
-    const reasonInput = screen.getByLabelText(/Motivo \/ Justificación/i);
-
-    fireEvent.change(amountInput, { target: { value: '50000' } });
-    fireEvent.change(reasonInput, { target: { value: 'Aporte de cambio adicional' } });
-    // F8: el ingreso manual se contabiliza contra una cuenta de contrapartida
-    await waitFor(() =>
-      expect(screen.getByLabelText(/Cuenta de contrapartida/i)).not.toHaveAttribute(
-        'aria-disabled',
-        'true',
-      ),
+    await waitFor(() => expect(screen.getByText('Pago de mensajería urgente')).toBeInTheDocument());
+    expect(screen.queryByText(/Registrar Movimiento/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Recibos de caja' })).toHaveAttribute('href', '/treasury/receipts');
+    expect(screen.getByRole('link', { name: 'Comprobantes de egreso' })).toHaveAttribute(
+      'href',
+      '/treasury/disbursements',
     );
-    fireEvent.mouseDown(screen.getByLabelText(/Cuenta de contrapartida/i));
-    fireEvent.click(await screen.findByRole('option', { name: /310505 · Capital/ }));
-
-    const confirmBtn = screen.getByRole('button', { name: 'Confirmar Movimiento' });
-    expect(confirmBtn).toBeEnabled();
-
-    fireEvent.click(confirmBtn);
-
-    const finalConfirmBtn = await screen.findByRole('button', { name: 'Confirmar Ingreso' });
-    fireEvent.click(finalConfirmBtn);
-
-    await waitFor(() => {
-      expect(cashApi.createCashMovement).toHaveBeenCalledWith(
-        expect.objectContaining({
-          movementType: 'INGRESO_MANUAL',
-          amount: 50000,
-          paymentMethod: 'EFECTIVO',
-          reason: 'Aporte de cambio adicional',
-          counterpartAccountId: 'capital',
-        })
-      );
-    });
   });
 
-  it('muestra advertencia y bloquea el botón cuando un egreso en efectivo supera el saldo disponible', async () => {
+  it('ordena los movimientos por fecha: más nuevo primero y, al alternar, más viejo primero', async () => {
     renderWithProviders(<CashPage />);
-
-    await waitFor(() => {
-      expect(screen.getByText('+ Registrar Movimiento')).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByText('+ Registrar Movimiento'));
-
-    // Cambiar a Egreso Manual
-    const egresoRadio = screen.getByLabelText(/- Comprobante de egreso/i);
-    fireEvent.click(egresoRadio);
-
-    const amountInput = screen.getByLabelText(/Monto/i);
-    const reasonInput = screen.getByLabelText(/Motivo \/ Justificación/i);
-
-    // Intentar retirar $100.000 cuando solo hay $75.000
-    fireEvent.change(amountInput, { target: { value: '100000' } });
-    fireEvent.change(reasonInput, { target: { value: 'Retiro no permitido' } });
-
-    expect(
-      screen.getByText(/El egreso supera el saldo actual disponible en caja física/i)
-    ).toBeInTheDocument();
-
-    const confirmBtn = screen.getByRole('button', { name: 'Confirmar Movimiento' });
-    expect(confirmBtn).toBeDisabled();
+    await waitFor(() =>
+      expect(cashApi.fetchCashMovements).toHaveBeenCalledWith(expect.objectContaining({ sortOrder: 'desc' })),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Orden por fecha/ }));
+    await waitFor(() =>
+      expect(cashApi.fetchCashMovements).toHaveBeenLastCalledWith(expect.objectContaining({ sortOrder: 'asc' })),
+    );
+    expect(screen.getByRole('button', { name: /más viejo primero/ })).toBeInTheDocument();
   });
 });

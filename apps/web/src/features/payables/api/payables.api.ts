@@ -1,10 +1,12 @@
 import type {
   PayableDto,
   PayableQueryFilters,
-  RegisterPayablePaymentPayload,
   PaginatedResponse,
   AgingSummaryDto,
   ReversePaymentPayload,
+  PayableMovementsDto,
+  PayableStatementDto,
+  PayableStatementFilters,
 } from '@farmacia/contracts';
 import { apiRequestData } from '../../../api/http-client';
 
@@ -26,24 +28,29 @@ export async function fetchPayables(
   });
 }
 
+export async function fetchPayableStatement(
+  filters: PayableStatementFilters,
+): Promise<PayableStatementDto> {
+  const query = new URLSearchParams();
+  if (filters.supplierId) query.set('supplierId', filters.supplierId);
+  if (filters.fromDate) query.set('fromDate', filters.fromDate);
+  if (filters.toDate) query.set('toDate', filters.toDate);
+  if (filters.includePaid) query.set('includePaid', 'true');
+  return apiRequestData<PayableStatementDto>(`payables/statement?${query.toString()}`, {
+    method: 'GET',
+  });
+}
+
+export async function fetchPayableMovements(id: string): Promise<PayableMovementsDto> {
+  return apiRequestData<PayableMovementsDto>(`payables/${id}/movements`, { method: 'GET' });
+}
+
 export async function fetchPayableById(id: string): Promise<PayableDto> {
   return apiRequestData<PayableDto>(`payables/${id}`, { method: 'GET' });
 }
 
 export async function fetchPayablesAgingSummary(): Promise<AgingSummaryDto> {
   return apiRequestData<AgingSummaryDto>('payables/aging-summary', { method: 'GET' });
-}
-
-export async function registerPayablePayment(
-  id: string,
-  payload: RegisterPayablePaymentPayload,
-  idempotencyKey: string,
-): Promise<PayableDto> {
-  return apiRequestData<PayableDto>(`payables/${id}/payments`, {
-    method: 'POST',
-    headers: { 'Idempotency-Key': idempotencyKey },
-    body: JSON.stringify(payload),
-  });
 }
 
 export async function revertPayablePayment(

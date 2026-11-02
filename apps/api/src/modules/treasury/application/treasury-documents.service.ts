@@ -2,7 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { prisma, Prisma } from '@farmacia/database';
 import type {
   PaginatedResponse,
+  TreasuryDocumentApplicationDto,
   TreasuryDocumentDto,
+  TreasuryDocumentOrigin,
   TreasuryDocumentFilters,
   TreasuryDocumentType,
 } from '@farmacia/contracts';
@@ -14,13 +16,27 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const include = {
   bankAccount: { select: { name: true, bankName: true } },
   createdBy: { select: { username: true } },
+  customer: { select: { name: true } },
+  supplier: { select: { name: true } },
+  thirdParty: { select: { name: true } },
+  counterpartAccount: { select: { code: true, name: true } },
+  receivablePayments: {
+    select: { receivableId: true, amount: true, isReversed: true, receivable: { select: { sale: { select: { invoiceNumber: true } } } } },
+  },
+  payablePayments: {
+    select: { payableId: true, amount: true, isReversed: true, payable: { select: { purchase: { select: { invoiceNumber: true } } } } },
+  },
+  expensePayments: {
+    select: { expenseId: true, amount: true, isReversed: true, expense: { select: { documentNumber: true, description: true } } },
+  },
 } as const;
+type Client = Prisma.TransactionClient | typeof prisma;
 type DocumentRecord = Prisma.TreasuryDocumentGetPayload<{ include: typeof include }>;
 
 /**
- * Consulta de recibos de caja y comprobantes de egreso. Los documentos los generan los
- * triggers de cash_movements y bank_movements en la misma transacción del movimiento
- * (docs/adr/ADR-002); aquí solo se leen y se resuelve el tercero según el origen.
+ * Consulta de recibos de caja y comprobantes de egreso. Los registrados desde Tesorería
+ * guardan su tercero y las facturas que aplican (ADR-007); los emitidos por los triggers de
+ * cash_movements y bank_movements (ADR-002) resuelven el tercero según el origen.
  */
 @Injectable()
 export class TreasuryDocumentsService {
@@ -75,11 +91,11 @@ export class TreasuryDocumentsService {
     };
   }
 
-  async getById(id: string): Promise<TreasuryDocumentDto> {
+  async getById(id: string, client: Client = prisma): Promise<TreasuryDocumentDto> {
     validateUuid(id, 'ID del documento');
-    const record = await prisma.treasuryDocument.findUnique({ where: { id }, include });
+    const record = await client.treasuryDocument.findUnique({ where: { id }, include });
     if (!record) throw new TreasuryNotFoundError('Documento no encontrado.');
-    const thirdParties = await this.resolveThirdParties([record]);
+    const thirdParties = await this.resolveThirdParties([record], client);
     return this.toDto(record, thirdParties.get(record.id) ?? null);
   }
 
@@ -98,14 +114,49 @@ export class TreasuryDocumentsService {
       concept: record.concept,
       referenceDocumentType: record.referenceDocumentType,
       referenceDocumentId: record.referenceDocumentId,
-      thirdPartyName,
+      thirdPartyName:
+        record.customer?.name ?? record.supplier?.name ?? record.thirdParty?.name ?? thirdPartyName,
+      origin: record.origin as TreasuryDocumentOrigin,
+      counterpartAccount: record.counterpartAccount
+        ? `${record.counterpartAccount.code} - ${record.counterpartAccount.name}`
+        : null,
+      applications: this.applicationsOf(record),
       createdByName: record.createdBy?.username ?? null,
       createdAt: record.createdAt.toISOString(),
     };
   }
 
+  private applicationsOf(record: DocumentRecord): TreasuryDocumentApplicationDto[] {
+    return [
+      ...record.receivablePayments.map((p) => ({
+        documentType: 'FACTURA_VENTA' as const,
+        documentId: p.receivableId,
+        documentNumber: p.receivable.sale?.invoiceNumber ?? null,
+        amount: p.amount.toFixed(2),
+        isReversed: p.isReversed,
+      })),
+      ...record.payablePayments.map((p) => ({
+        documentType: 'FACTURA_COMPRA' as const,
+        documentId: p.payableId,
+        documentNumber: p.payable.purchase?.invoiceNumber ?? null,
+        amount: p.amount.toFixed(2),
+        isReversed: p.isReversed,
+      })),
+      ...record.expensePayments.map((p) => ({
+        documentType: 'CAUSACION_GASTO' as const,
+        documentId: p.expenseId,
+        documentNumber: p.expense.documentNumber ?? p.expense.description,
+        amount: p.amount.toFixed(2),
+        isReversed: p.isReversed,
+      })),
+    ];
+  }
+
   /** Tercero por origen: ventas y notas crédito (cliente), cartera, cuentas por pagar y gastos. */
-  private async resolveThirdParties(records: DocumentRecord[]): Promise<Map<string, string>> {
+  private async resolveThirdParties(
+    records: DocumentRecord[],
+    client: Client = prisma,
+  ): Promise<Map<string, string>> {
     const idsOf = (...types: string[]) => [
       ...new Set(
         records
@@ -116,27 +167,27 @@ export class TreasuryDocumentsService {
     const uuids = (values: string[]) => values.filter((v) => /^[0-9a-f-]{36}$/i.test(v));
 
     const [sales, creditNotes, receivables, payables, expenses, expensePayments] = await Promise.all([
-      prisma.sale.findMany({
+      client.sale.findMany({
         where: { invoiceNumber: { in: idsOf('SALE', 'SALE_CANCEL') } },
         select: { invoiceNumber: true, customer: { select: { name: true } } },
       }),
-      prisma.creditNote.findMany({
+      client.creditNote.findMany({
         where: { creditNoteNumber: { in: idsOf('CREDIT_NOTE') } },
         select: { creditNoteNumber: true, sale: { select: { customer: { select: { name: true } } } } },
       }),
-      prisma.receivable.findMany({
+      client.receivable.findMany({
         where: { id: { in: uuids(idsOf('RECEIVABLE', 'RECEIVABLE_PAYMENT_REVERSAL')) } },
         select: { id: true, customer: { select: { name: true } } },
       }),
-      prisma.payable.findMany({
+      client.payable.findMany({
         where: { id: { in: uuids(idsOf('PAYABLE', 'PAYABLE_PAYMENT_REVERSAL')) } },
         select: { id: true, supplier: { select: { name: true } } },
       }),
-      prisma.expense.findMany({
+      client.expense.findMany({
         where: { id: { in: uuids(idsOf('EXPENSE', 'EXPENSE_CANCEL')) } },
         select: { id: true, beneficiary: true },
       }),
-      prisma.expensePayment.findMany({
+      client.expensePayment.findMany({
         where: { id: { in: uuids(idsOf('EXPENSE_PAYMENT', 'EXPENSE_PAYMENT_REVERSAL')) } },
         select: { id: true, expense: { select: { beneficiary: true } } },
       }),

@@ -18,6 +18,7 @@ import { ReportsModule } from './modules/reports/reports.module';
 import { BackupsModule } from './modules/backups/backups.module';
 import { AccountingModule } from './modules/accounting/accounting.module';
 import { TreasuryModule } from './modules/treasury/treasury.module';
+import { TreasuryVouchersModule } from './modules/treasury/treasury-vouchers.module';
 import { ExpensesModule } from './modules/expenses/expenses.module';
 import { ThirdPartiesModule } from './modules/third-parties/third-parties.module';
 import { CompanyModule } from './modules/company/company.module';
@@ -28,7 +29,7 @@ import { CorrelationIdInterceptor } from './common/interceptors/correlation-id.i
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
 @Module({
-  imports: [IdentityModule, AuditModule, CatalogModule, InventoryModule, SuppliersModule, PurchasesModule, CashModule, CustomersModule, SalesModule, ReceivablesModule, PayablesModule, AlertsModule, ReportsModule, BackupsModule, AccountingModule, TreasuryModule, ExpensesModule, ThirdPartiesModule, CompanyModule, TaxesModule],
+  imports: [IdentityModule, AuditModule, CatalogModule, InventoryModule, SuppliersModule, PurchasesModule, CashModule, CustomersModule, SalesModule, ReceivablesModule, PayablesModule, AlertsModule, ReportsModule, BackupsModule, AccountingModule, TreasuryModule, TreasuryVouchersModule, ExpensesModule, ThirdPartiesModule, CompanyModule, TaxesModule],
   controllers: [AppController],
   providers: [
     AppService,

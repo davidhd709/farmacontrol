@@ -18,7 +18,7 @@ import { reversalSchema, type ReversalFormData } from '../validation/reversal.sc
 
 interface Props {
   accountId: string;
-  payment: PayablePaymentDto;
+  payment: Pick<PayablePaymentDto, 'id' | 'paymentMethod'>;
   onClose: () => void;
 }
 export function PayableReversalDialog({ accountId, payment, onClose }: Props) {
@@ -39,6 +39,8 @@ export function PayableReversalDialog({ accountId, payment, onClose }: Props) {
       queryClient.invalidateQueries({ queryKey: ['payables'] });
       queryClient.invalidateQueries({ queryKey: ['payable-detail', accountId] });
       queryClient.invalidateQueries({ queryKey: ['payables-aging'] });
+      queryClient.invalidateQueries({ queryKey: ['payable-movements', accountId] });
+      queryClient.invalidateQueries({ queryKey: ['payables-statement'] });
       onClose();
     },
     onSettled: () => {

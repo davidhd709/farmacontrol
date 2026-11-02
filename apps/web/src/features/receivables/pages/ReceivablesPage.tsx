@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import {
   Box,
   Typography,
@@ -22,11 +22,10 @@ import {
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 
-import { type ReceivableDto, type ReceivableStatus } from '@farmacia/contracts';
+import { type ReceivableStatus } from '@farmacia/contracts';
 import { fetchReceivables, fetchReceivablesAgingSummary } from '../api/receivables.api';
 import { HomeBackButton } from '../../../components/HomeBackButton';
 
-import { ReceivablePaymentDialog } from '../components/ReceivablePaymentDialog';
 import { ReceivableMovementsDialog } from '../components/ReceivableMovementsDialog';
 import { isOverdue, getStatusDisplay } from '../utils/status';
 
@@ -38,7 +37,6 @@ export function ReceivablesPage() {
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
-  const [selectedReceivable, setSelectedReceivable] = useState<ReceivableDto | null>(null);
   const [movementsReceivableId, setMovementsReceivableId] = useState<string | null>(null);
 
   const { data: agingData } = useQuery({
@@ -60,9 +58,6 @@ export function ReceivablesPage() {
     placeholderData: (prev) => prev,
   });
 
-  const handlePaymentSuccess = useCallback(() => {
-    // Mantener el modal abierto para ver la actualización del saldo
-  }, []);
 
   const filteredItems = (data?.items ?? []).filter((r) => {
     if (!search.trim()) return true;
@@ -355,7 +350,7 @@ export function ReceivablesPage() {
                       bgcolor: overdue ? 'error.50' : undefined,
                       cursor: 'pointer',
                     }}
-                    onClick={() => setSelectedReceivable(r)}
+                    onClick={() => setMovementsReceivableId(r.id)}
                   >
                     <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
                       {r.invoiceNumber ?? '—'}
@@ -405,29 +400,6 @@ export function ReceivablesPage() {
                         >
                           Ver Abonos
                         </Button>
-                        {r.status === 'PENDIENTE' ? (
-                          <Button
-                            size="small"
-                            variant="contained"
-                            color="primary"
-                            onClick={() => setSelectedReceivable(r)}
-                            id={`receivable-action-${r.id}`}
-                            sx={{ textTransform: 'none', minWidth: 75, fontSize: '0.75rem' }}
-                          >
-                            Abonar
-                          </Button>
-                        ) : (
-                          <Button
-                            size="small"
-                            variant="text"
-                            color="inherit"
-                            onClick={() => setSelectedReceivable(r)}
-                            id={`receivable-action-${r.id}`}
-                            sx={{ textTransform: 'none', minWidth: 70, fontSize: '0.75rem' }}
-                          >
-                            Detalle
-                          </Button>
-                        )}
                       </Stack>
                     </TableCell>
                   </TableRow>
@@ -458,13 +430,6 @@ export function ReceivablesPage() {
         />
       )}
 
-      {selectedReceivable && (
-        <ReceivablePaymentDialog
-          receivable={selectedReceivable}
-          onClose={() => setSelectedReceivable(null)}
-          onSuccess={handlePaymentSuccess}
-        />
-      )}
     </Box>
   );
 }

@@ -231,56 +231,27 @@ describe('TreasuryBankAccountsPage (Slice 11.4 Frontend)', () => {
     });
   });
 
-  it('permite abrir el diálogo de registro de movimiento en una cuenta', async () => {
-    vi.mocked(treasuryApi.createBankMovement).mockResolvedValue({
-      id: 'mov-2',
-      bankAccountId: 'acc-1',
-      movementType: 'DEPOSIT',
-      amount: '50000.00',
-      balanceBefore: '750000.00',
-      balanceAfter: '800000.00',
-      concept: 'Depósito manual',
-      referenceDocumentType: null,
-      referenceDocumentId: null,
-      externalReference: null,
-      movementDate: new Date().toISOString(),
-      createdById: 'user-1',
-      createdAt: new Date().toISOString(),
-    });
-
+  it('es de solo consulta: sin registro de movimientos, con tipos en español, filtro Débito/Crédito y orden', async () => {
     renderWithProviders();
+    expect(await screen.findByTestId('account-movements-section')).toBeInTheDocument();
+    expect(screen.queryByTestId('new-movement-btn-acc-1')).not.toBeInTheDocument();
+    expect(await screen.findByText('Consignación')).toBeInTheDocument();
 
-    const movBtn = await screen.findByTestId('new-movement-btn-acc-1');
-    fireEvent.click(movBtn);
-
-    expect(await screen.findByRole('heading', { name: /Registrar Movimiento en Bancolombia/i })).toBeInTheDocument();
-
-    const amountInput = screen.getByLabelText(/Importe/i);
-    fireEvent.change(amountInput, { target: { value: '50000.00' } });
-
-    const conceptInput = screen.getByLabelText(/Concepto/i);
-    fireEvent.change(conceptInput, { target: { value: 'Depósito manual' } });
-
-    // F8: todo movimiento manual se contabiliza contra una cuenta de contrapartida
-    fireEvent.mouseDown(screen.getByLabelText(/Cuenta de contrapartida/i));
-    fireEvent.click(await screen.findByRole('option', { name: /110505 · Caja general/ }));
-
-    const submitBtn = screen.getByTestId('submit-movement-btn');
-    fireEvent.click(submitBtn);
-
-    const confirmBtn = await screen.findByRole('button', { name: 'Confirmar y Asentar' });
-    fireEvent.click(confirmBtn);
-
-    await waitFor(() => {
-      expect(treasuryApi.createBankMovement).toHaveBeenCalledWith(
+    fireEvent.mouseDown(screen.getByLabelText('Tipo de Movimiento'));
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['Todos', 'Débito', 'Crédito']);
+    fireEvent.click(screen.getByRole('option', { name: 'Crédito' }));
+    await waitFor(() =>
+      expect(treasuryApi.getBankMovements).toHaveBeenLastCalledWith(
         'acc-1',
-        expect.objectContaining({
-          movementType: 'DEPOSIT',
-          amount: '50000.00',
-          concept: 'Depósito manual',
-          counterpartAccountId: 'caja',
-        }),
-      );
-    });
+        expect.objectContaining({ direction: 'CREDITO', sortOrder: 'desc' }),
+      ),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Orden por fecha/ }));
+    await waitFor(() =>
+      expect(treasuryApi.getBankMovements).toHaveBeenLastCalledWith(
+        'acc-1',
+        expect.objectContaining({ sortOrder: 'asc' }),
+      ),
+    );
   });
 });

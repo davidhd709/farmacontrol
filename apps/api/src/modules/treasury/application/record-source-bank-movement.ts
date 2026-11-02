@@ -7,7 +7,10 @@ import {
   validateUuid,
 } from '../domain/treasury-rules';
 
-/** Registers the source document and its bank balance change in the caller's transaction. */
+/**
+ * Registers the source document and its bank balance change in the caller's transaction and
+ * returns the bank movement id.
+ */
 export async function recordSourceBankMovement(
   tx: Prisma.TransactionClient,
   input: {
@@ -19,7 +22,7 @@ export async function recordSourceBankMovement(
     referenceDocumentId: string;
     createdById: string;
   },
-): Promise<void> {
+): Promise<string> {
   try {
     validateUuid(input.bankAccountId, 'ID de cuenta bancaria');
     const amountCents = parseMoneyToCents(input.amount, 'Importe de transferencia');
@@ -72,6 +75,7 @@ export async function recordSourceBankMovement(
         },
       },
     });
+    return movement.id;
   } catch (error) {
     if (error instanceof NotFoundException || error instanceof BadRequestException) throw error;
     if (error instanceof Error && error.name === 'TreasuryValidationError') {

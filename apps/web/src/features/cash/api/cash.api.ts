@@ -1,7 +1,6 @@
 import type {
   CashMovementDto,
   CashBalanceDto,
-  CreateCashMovementPayload,
   CashMovementQueryFilters,
   PaginatedResponse,
 } from '@farmacia/contracts';
@@ -14,7 +13,7 @@ export async function fetchCashBalance(): Promise<CashBalanceDto> {
 }
 
 export async function fetchCashMovements(
-  filters: CashMovementQueryFilters = {}
+  filters: CashMovementQueryFilters = {},
 ): Promise<PaginatedResponse<CashMovementDto>> {
   const query = new URLSearchParams();
 
@@ -29,21 +28,12 @@ export async function fetchCashMovements(
   const qs = query.toString();
   return apiRequest<PaginatedResponse<CashMovementDto>>(
     qs ? `cash-movements?${qs}` : 'cash-movements',
-    { method: 'GET' }
+    { method: 'GET' },
   );
 }
 
 export async function fetchCashMovementById(id: string): Promise<CashMovementDto> {
   return apiRequest<CashMovementDto>(`cash-movements/${id}`, {
     method: 'GET',
-  });
-}
-
-export async function createCashMovement(
-  payload: CreateCashMovementPayload
-): Promise<CashMovementDto> {
-  return apiRequest<CashMovementDto>('cash-movements', {
-    method: 'POST',
-    body: JSON.stringify(payload),
   });
 }

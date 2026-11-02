@@ -97,6 +97,9 @@ Cada flujo (venta, abono, pago a proveedor, gasto, nota crédito, movimiento man
 
 ## 4. Pendientes y dudas abiertas
 
+- Los endpoints antiguos de pago por factura (`POST /receivables/:id/payments`, `POST /payables/:id/payments`, `POST /expenses/:id/payments`) y los de movimientos manuales (`POST /cash-movements`, `POST /treasury/bank-accounts/:id/movements`) siguen en la API por compatibilidad: la interfaz ya no los usa y cada uno sigue emitiendo su RC/CE por el trigger. Retirarlos es una decisión aparte (rompe integraciones o scripts que los usen).
+- Dos pruebas de integración preexistentes (`accounting-coverage` "nota crédito devuelve el INC…" y `full-system-lifecycle` "Estado de Resultados antes del cierre mensual") fallan cuando la fecha UTC ya cambió y en Bogotá sigue siendo el día anterior (entre las 19:00 y las 24:00): la base usa `CURRENT_DATE` y la prueba la fecha de negocio. No las introdujeron estas correcciones.
+
 - ⚠️ Pantalla del botón "Reservar" (sección 2, fase 1).
 - ⚠️ Pantalla de "Organizar diseño" (sección 2, fase 1).
 - Confirmar con la contadora que la venta de contado sin recibo de caja adicional cumple lo acordado el 4 de octubre (decisión 1).
@@ -108,7 +111,7 @@ Cada flujo (venta, abono, pago a proveedor, gasto, nota crédito, movimiento man
 |---|---|---|
 | 1 | IMPLEMENTADO | ver `git log` (`fix(ventas): …`) |
 | 2 | IMPLEMENTADO | ver `git log` (`feat(ventas): …`) |
-| 3 | PENDIENTE | — |
+| 3 | IMPLEMENTADO | ver `git log` (`feat(tesoreria): …`) |
 | 4 | PENDIENTE | — |
 | 5 | PENDIENTE | — |
 | 6 | PENDIENTE | — |

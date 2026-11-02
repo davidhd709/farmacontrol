@@ -424,6 +424,8 @@ model Supplier {
   payables    Payable[]
   debitNotes  DebitNote[]
   thirdParty  ThirdParty?
+  expenses    Expense[]
+  treasuryDocuments TreasuryDocument[]
 
   @@index([taxId])
   @@index([name])
@@ -536,6 +538,7 @@ model Customer {
   receivables    Receivable[]
   creditNotes    CreditNote[]
   thirdParty     ThirdParty?
+  treasuryDocuments TreasuryDocument[]
 
   @@index([documentNumber])
   @@index([name])
@@ -694,7 +697,10 @@ model ReceivablePayment {
   reversedAt      DateTime? @map("reversed_at") @db.Timestamptz
   reversalReason  String?  @map("reversal_reason") @db.VarChar(500)
   reversedByUserId String? @map("reversed_by_user_id") @db.Uuid
+  /// Recibo de caja que respalda el abono
+  treasuryDocumentId String? @map("treasury_document_id") @db.Uuid
 
+  treasuryDocument TreasuryDocument? @relation(fields: [treasuryDocumentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   receivable    Receivable @relation(fields: [receivableId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   createdByUser User       @relation(fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   bankAccount   BankAccount? @relation(fields: [bankAccountId], references: [id], onDelete: Restrict, onUpdate: Cascade)
@@ -703,6 +709,7 @@ model ReceivablePayment {
   @@index([createdAt])
   @@index([bankAccountId])
   @@index([isReversed])
+  @@index([treasuryDocumentId])
   @@map("receivable_payments")
 }
 
@@ -742,7 +749,10 @@ model PayablePayment {
   reversedAt      DateTime? @map("reversed_at") @db.Timestamptz
   reversalReason  String?  @map("reversal_reason") @db.VarChar(500)
   reversedByUserId String? @map("reversed_by_user_id") @db.Uuid
+  /// Comprobante de egreso que respalda el pago
+  treasuryDocumentId String? @map("treasury_document_id") @db.Uuid
 
+  treasuryDocument TreasuryDocument? @relation(fields: [treasuryDocumentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   payable       Payable  @relation(fields: [payableId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   createdByUser User     @relation(fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   bankAccount   BankAccount? @relation(fields: [bankAccountId], references: [id], onDelete: Restrict, onUpdate: Cascade)
@@ -751,6 +761,7 @@ model PayablePayment {
   @@index([createdAt])
   @@index([bankAccountId])
   @@index([isReversed])
+  @@index([treasuryDocumentId])
   @@map("payable_payments")
 }
 
@@ -876,6 +887,7 @@ model Account {
   journalEntryLines JournalEntryLine[]
   expenseCategories ExpenseCategory[]
   bankAccounts   BankAccount[] @relation("BankAccountLedger")
+  treasuryDocuments TreasuryDocument[] @relation("TreasuryDocumentCounterpart")
 
   @@index([parentId])
   @@index([name])
@@ -1185,9 +1197,22 @@ model TreasuryDocument {
   cashMovementId        String?       @unique @map("cash_movement_id") @db.Uuid
   bankMovementId        String?       @unique @map("bank_movement_id") @db.Uuid
   bankAccountId         String?       @map("bank_account_id") @db.Uuid
+  /// AUTOMATICO (generado por trigger), MANUAL, CARTERA o PROVEEDOR (registrado como documento)
+  origin                String        @default("AUTOMATICO") @db.VarChar(20)
+  customerId            String?       @map("customer_id") @db.Uuid
+  supplierId            String?       @map("supplier_id") @db.Uuid
+  thirdPartyId          String?       @map("third_party_id") @db.Uuid
+  counterpartAccountId  String?       @map("counterpart_account_id") @db.Uuid
   createdById           String        @map("created_by_id") @db.Uuid
   createdAt             DateTime      @default(now()) @map("created_at") @db.Timestamptz
 
+  customer              Customer?     @relation(fields: [customerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  supplier              Supplier?     @relation(fields: [supplierId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  thirdParty            ThirdParty?   @relation(fields: [thirdPartyId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  counterpartAccount    Account?      @relation("TreasuryDocumentCounterpart", fields: [counterpartAccountId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  receivablePayments    ReceivablePayment[]
+  payablePayments       PayablePayment[]
+  expensePayments       ExpensePayment[]
   cashMovement          CashMovement? @relation(fields: [cashMovementId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   bankMovement          BankMovement? @relation(fields: [bankMovementId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   bankAccount           BankAccount?  @relation(fields: [bankAccountId], references: [id], onDelete: Restrict, onUpdate: Cascade)
@@ -1195,6 +1220,8 @@ model TreasuryDocument {
 
   @@index([documentType, documentDate], map: "treasury_documents_type_date_idx")
   @@index([referenceDocumentType, referenceDocumentId], map: "treasury_documents_reference_idx")
+  @@index([customerId])
+  @@index([supplierId])
   @@map("treasury_documents")
 }
 
@@ -1236,6 +1263,8 @@ model Expense {
   paymentMethod      String    @map("payment_method") @db.VarChar(50)
   status             String    @default("PENDIENTE") @db.VarChar(20)
   bankAccountId      String?   @map("bank_account_id") @db.Uuid
+  /// Proveedor de la causación: su estado de cuenta y el comprobante de egreso que la paga
+  supplierId         String?   @map("supplier_id") @db.Uuid
   notes              String?   @db.VarChar(500)
   supportDocUrl      String?   @map("support_doc_url") @db.VarChar(500)
   createdById        String    @map("created_by_id") @db.Uuid
@@ -1246,6 +1275,7 @@ model Expense {
   cancelledById      String?   @map("cancelled_by_id") @db.Uuid
 
   category           ExpenseCategory  @relation(fields: [categoryId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  supplier           Supplier?        @relation(fields: [supplierId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   bankAccount        BankAccount?     @relation(fields: [bankAccountId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   createdByUser      User             @relation("ExpensesCreated", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
   cancelledByUser    User?            @relation("ExpensesCancelled", fields: [cancelledById], references: [id], onDelete: Restrict, onUpdate: Cascade)
@@ -1257,6 +1287,7 @@ model Expense {
   @@index([dueDate])
   @@index([createdById])
   @@index([bankAccountId])
+  @@index([supplierId])
   @@map("expenses")
 }
 
@@ -1274,7 +1305,10 @@ model ExpensePayment {
   reversedAt       DateTime? @map("reversed_at") @db.Timestamptz
   reversalReason   String?   @map("reversal_reason") @db.VarChar(500)
   reversedById     String?   @map("reversed_by_id") @db.Uuid
+  /// Comprobante de egreso que respalda el pago
+  treasuryDocumentId String?  @map("treasury_document_id") @db.Uuid
 
+  treasuryDocument TreasuryDocument? @relation(fields: [treasuryDocumentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   expense          Expense      @relation(fields: [expenseId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   bankAccount      BankAccount? @relation(fields: [bankAccountId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   createdByUser    User         @relation("ExpensePaymentsCreated", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
@@ -1285,6 +1319,7 @@ model ExpensePayment {
   @@index([createdById])
   @@index([isReversed])
   @@index([bankAccountId])
+  @@index([treasuryDocumentId])
   @@map("expense_payments")
 }
 
@@ -1436,6 +1471,8 @@ model ThirdParty {
 
   supplierId        String?   @unique @map("supplier_id") @db.Uuid
   supplier          Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+
+  treasuryDocuments TreasuryDocument[]
 
   @@index([documentNumber])
   @@index([name])

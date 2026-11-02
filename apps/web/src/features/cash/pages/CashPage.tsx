@@ -29,10 +29,8 @@ import type {
   SortOrder,
 } from '@farmacia/contracts';
 import { fetchCashBalance, fetchCashMovements } from '../api/cash.api';
-import { CreateCashMovementDialog } from '../components/CreateCashMovementDialog';
-import { PermissionGate } from '../../auth/components/PermissionGate';
+import { Link as RouterLink } from 'react-router-dom';
 import { HomeBackButton } from '../../../components/HomeBackButton';
-import { SweetModal } from '../../../components/SweetModal';
 import { SortByDateButton } from '../../../components/SortByDateButton';
 
 export const CashPage: React.FC = () => {
@@ -56,19 +54,6 @@ export const CashPage: React.FC = () => {
 
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  const [dialogOpen, setDialogOpen] = useState(false);
-
-  // Notificación flotante (Snackbar)
-  const [snackbar, setSnackbar] = useState<{
-    open: boolean;
-    message: string;
-    severity: 'success' | 'error' | 'info' | 'warning';
-  }>({
-    open: false,
-    message: '',
-    severity: 'success',
-  });
 
   const loadData = useCallback(async () => {
     try {
@@ -132,7 +117,16 @@ export const CashPage: React.FC = () => {
   return (
     <Box sx={{ p: { xs: 2, md: 3 }, maxWidth: 1400, mx: 'auto' }}>
       {/* Encabezado */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          mb: 3,
+          flexWrap: 'wrap',
+          gap: 2,
+        }}
+      >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <HomeBackButton />
           <Box>
@@ -140,31 +134,28 @@ export const CashPage: React.FC = () => {
               Control de Caja y Movimientos
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Trazabilidad continua y arqueo de entradas y salidas de efectivo en tiempo real.
+              Consulta de entradas y salidas de efectivo. Los movimientos nacen de las ventas, los
+              recibos de caja y los comprobantes de egreso.
             </Typography>
           </Box>
         </Box>
 
         <Box sx={{ display: 'flex', gap: 1.5 }}>
-          <Button
-            variant="outlined"
-            size="small"
-            onClick={loadData}
-            disabled={loading}
-          >
+          <Button variant="outlined" size="small" onClick={loadData} disabled={loading}>
             Actualizar
           </Button>
 
-          <PermissionGate permission="cash:movements">
-            <Button
-              variant="contained"
-              color="primary"
-              onClick={() => setDialogOpen(true)}
-              sx={{ fontWeight: 600 }}
-            >
-              + Registrar Movimiento
-            </Button>
-          </PermissionGate>
+          <Button component={RouterLink} to="/treasury/receipts" variant="outlined" size="small">
+            Recibos de caja
+          </Button>
+          <Button
+            component={RouterLink}
+            to="/treasury/disbursements"
+            variant="outlined"
+            size="small"
+          >
+            Comprobantes de egreso
+          </Button>
         </Box>
       </Box>
 
@@ -175,8 +166,22 @@ export const CashPage: React.FC = () => {
       )}
 
       {/* Tarjetas KPI Superiores */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: 'repeat(4, 1fr)' }, gap: 2.5, mb: 4 }}>
-        <Card sx={{ bgcolor: 'primary.dark', color: 'primary.contrastText', borderRadius: 2, boxShadow: 2 }}>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: 'repeat(4, 1fr)' },
+          gap: 2.5,
+          mb: 4,
+        }}
+      >
+        <Card
+          sx={{
+            bgcolor: 'primary.dark',
+            color: 'primary.contrastText',
+            borderRadius: 2,
+            boxShadow: 2,
+          }}
+        >
           <CardContent>
             <Typography variant="overline" sx={{ opacity: 0.85, fontWeight: 600 }}>
               Saldo Actual en Caja
@@ -192,7 +197,14 @@ export const CashPage: React.FC = () => {
 
         <Card variant="outlined" sx={{ borderRadius: 2, bgcolor: 'background.paper' }}>
           <CardContent>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                mb: 0.5,
+              }}
+            >
               <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 600 }}>
                 Ingresos de Hoy
               </Typography>
@@ -209,7 +221,14 @@ export const CashPage: React.FC = () => {
 
         <Card variant="outlined" sx={{ borderRadius: 2, bgcolor: 'background.paper' }}>
           <CardContent>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                mb: 0.5,
+              }}
+            >
               <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 600 }}>
                 Egresos de Hoy
               </Typography>
@@ -226,7 +245,14 @@ export const CashPage: React.FC = () => {
 
         <Card variant="outlined" sx={{ borderRadius: 2, bgcolor: 'background.paper' }}>
           <CardContent>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                mb: 0.5,
+              }}
+            >
               <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 600 }}>
                 Operaciones de Hoy
               </Typography>
@@ -325,9 +351,15 @@ export const CashPage: React.FC = () => {
               <TableCell sx={{ fontWeight: 600 }}>Motivo / Justificación</TableCell>
               <TableCell sx={{ fontWeight: 600 }}>Medio de Pago</TableCell>
               <TableCell sx={{ fontWeight: 600 }}>Usuario</TableCell>
-              <TableCell align="right" sx={{ fontWeight: 600 }}>Débito</TableCell>
-              <TableCell align="right" sx={{ fontWeight: 600 }}>Crédito</TableCell>
-              <TableCell align="right" sx={{ fontWeight: 600 }}>Saldo</TableCell>
+              <TableCell align="right" sx={{ fontWeight: 600 }}>
+                Débito
+              </TableCell>
+              <TableCell align="right" sx={{ fontWeight: 600 }}>
+                Crédito
+              </TableCell>
+              <TableCell align="right" sx={{ fontWeight: 600 }}>
+                Saldo
+              </TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -356,9 +388,7 @@ export const CashPage: React.FC = () => {
                     <TableCell sx={{ whiteSpace: 'nowrap' }}>
                       {formatDateTime(mov.createdAt)}
                     </TableCell>
-                    <TableCell>
-                      {getMovementTypeChip(mov.movementType)}
-                    </TableCell>
+                    <TableCell>{getMovementTypeChip(mov.movementType)}</TableCell>
                     <TableCell sx={{ maxWidth: 300 }}>
                       <Typography variant="body2" sx={{ fontWeight: 500 }}>
                         {mov.reason}
@@ -372,9 +402,7 @@ export const CashPage: React.FC = () => {
                     <TableCell>
                       <Chip label={mov.paymentMethod} size="small" variant="outlined" />
                     </TableCell>
-                    <TableCell>
-                      {mov.createdByUsername || 'Sistema'}
-                    </TableCell>
+                    <TableCell>{mov.createdByUsername || 'Sistema'}</TableCell>
                     {/* Débitos positivos (entradas) y créditos negativos (salidas) */}
                     <TableCell align="right" sx={{ fontWeight: 700, color: 'success.main' }}>
                       {income ? formatCurrency(mov.amount) : ''}
@@ -405,33 +433,6 @@ export const CashPage: React.FC = () => {
           labelRowsPerPage="Filas por página:"
         />
       </TableContainer>
-
-      {/* Diálogo de Registro de Movimiento */}
-      <CreateCashMovementDialog
-        open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
-        onSuccess={(isIncome, amount) => {
-          setPage(0);
-          loadData();
-          setSnackbar({
-            open: true,
-            message: `${isIncome ? 'Ingreso' : 'Egreso'} de caja registrado con éxito por $${amount.toLocaleString('es-CO')}.`,
-            severity: 'success',
-          });
-        }}
-        currentBalance={balance.currentBalance}
-      />
-
-      {/* Notificación modal estilo SweetAlert2 */}
-      <SweetModal
-        open={snackbar.open}
-        type={snackbar.severity === 'error' ? 'error' : snackbar.severity === 'warning' ? 'warning' : 'success'}
-        title={snackbar.severity === 'error' ? '¡Error!' : '¡Buen trabajo!'}
-        text={snackbar.message}
-        confirmText="OK"
-        onConfirm={() => setSnackbar((prev) => ({ ...prev, open: false }))}
-        onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
-      />
     </Box>
   );
 };

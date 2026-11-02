@@ -340,111 +340,48 @@ export class ExpensesService {
       const cached = await this.idempotencyService.getRecord(key, requestHash, tx, 'http');
       if (cached) return cached.responseBody as ExpenseDto;
 
-      const rows = await tx.$queryRaw<Array<{ id: string; balance: Prisma.Decimal; amount_paid: Prisma.Decimal; status: string; description: string; beneficiary: string; document_number: string | null }>>`
-        SELECT id, balance, amount_paid, status, description, beneficiary, document_number
-        FROM expenses
-        WHERE id = ${expenseId}::uuid
-        FOR UPDATE
-      `;
-      if (!rows.length) {
-        throw new NotFoundException(`Gasto con ID "${expenseId}" no encontrado.`);
-      }
-      const exp = rows[0];
-
-      if (exp.status === 'ANULADO') {
-        throw new BadRequestException('No se pueden registrar pagos a un gasto anulado.');
-      }
-      if (exp.status === 'PAGADO') {
-        throw new BadRequestException('Este gasto ya se encuentra totalmente pagado.');
-      }
-
-      const balanceCents = parseMoneyToCents(exp.balance.toString(), 'Saldo de gasto');
-      if (payCents > balanceCents) {
-        throw new BadRequestException(
-          `El monto a pagar ($${payStr}) no puede ser mayor al saldo pendiente actual ($${centsToMoneyString(balanceCents)}).`,
-        );
-      }
-
-      const newBalanceCents = balanceCents - payCents;
-      const newAmountPaidCents = parseMoneyToCents(exp.amount_paid.toString(), 'Monto pagado') + payCents;
-      const newStatus = newBalanceCents === 0n ? 'PAGADO' : 'PENDIENTE';
-
-      const payment = await tx.expensePayment.create({
-        data: {
-          expenseId,
-          amount: new Prisma.Decimal(payStr),
-          paymentDate,
-          paymentMethod: method,
-          bankAccountId: method === 'TRANSFERENCIA' ? payload.bankAccountId : null,
-          notes: payload.notes?.trim() || null,
-          createdById: userId,
-        },
+      const applied = await this.applyPaymentInTransaction(tx, {
+        expenseId,
+        amountCents: payCents,
+        paymentMethod: method,
+        bankAccountId: method === 'TRANSFERENCIA' ? payload.bankAccountId! : null,
+        paymentDate,
+        notes: payload.notes?.trim() || null,
+        userId,
       });
+      const concept = `Abono gasto: ${applied.description} (${applied.beneficiary})`;
 
-      await tx.expense.update({
-        where: { id: expenseId },
-        data: {
-          balance: new Prisma.Decimal(centsToMoneyString(newBalanceCents)),
-          amountPaid: new Prisma.Decimal(centsToMoneyString(newAmountPaidCents)),
-          status: newStatus,
-        },
-      });
-
-      // Movimiento de tesorería
+      // Movimiento de tesorería; el trigger emite su comprobante de egreso
+      let document: { id: string } | null;
       if (method === 'EFECTIVO') {
-        await this.cashService.recordMovementInTransaction(tx, {
+        const movementId = await this.cashService.recordMovementInTransaction(tx, {
           movementType: 'EGRESO_MANUAL',
           amount: payStr,
           paymentMethod: 'EFECTIVO',
-          reason: `Abono gasto: ${exp.description} (${exp.beneficiary})`,
+          reason: concept,
           referenceDocumentType: 'EXPENSE_PAYMENT',
-          referenceDocumentId: payment.id,
+          referenceDocumentId: applied.paymentId,
           createdByUserId: userId,
         });
+        document = await tx.treasuryDocument.findUnique({ where: { cashMovementId: movementId } });
       } else {
-        await recordSourceBankMovement(tx, {
+        const movementId = await recordSourceBankMovement(tx, {
           bankAccountId: payload.bankAccountId!,
           movementType: 'WITHDRAWAL',
           amount: payStr,
-          concept: `Abono gasto: ${exp.description} (${exp.beneficiary})`,
+          concept,
           referenceDocumentType: 'EXPENSE_PAYMENT',
-          referenceDocumentId: payment.id,
+          referenceDocumentId: applied.paymentId,
           createdById: userId,
         });
+        document = await tx.treasuryDocument.findUnique({ where: { bankMovementId: movementId } });
       }
-
-      // Causación contable del pago: debita SUPPLIERS y acredita CASH o BANK
-      await this.accountingEngine.handleExpensePayment(
-        {
-          id: payment.id,
-          expenseId,
-          amount: payStr,
-          paymentMethod: method,
-          bankAccountId: method === 'TRANSFERENCIA' ? payload.bankAccountId : null,
-          beneficiary: exp.beneficiary,
-          description: exp.description,
-          documentNumber: exp.document_number,
-          createdById: userId,
-          paymentDate,
-        },
-        tx,
-      );
-
-      await tx.auditEvent.create({
-        data: {
-          userId,
-          action: 'expenses:expense_payment_registered',
-          entity: 'ExpensePayment',
-          entityId: payment.id,
-          details: {
-            expenseId,
-            amount: payStr,
-            paymentMethod: method,
-            balanceBefore: exp.balance.toFixed(2),
-            balanceAfter: centsToMoneyString(newBalanceCents),
-          },
-        },
-      });
+      if (document) {
+        await tx.expensePayment.update({
+          where: { id: applied.paymentId },
+          data: { treasuryDocumentId: document.id },
+        });
+      }
 
       const record = await tx.expense.findUnique({
         where: { id: expenseId },
@@ -461,6 +398,117 @@ export class ExpensesService {
     }, {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
     }));
+  }
+
+  /**
+   * Aplica un pago a una causación de gasto dentro de la transacción del llamador: bloquea el
+   * gasto, valida estado, saldo y proveedor, actualiza saldos, registra el pago, su asiento
+   * (cancela el pasivo contra caja o bancos) y su auditoría. El movimiento de dinero lo
+   * registra el comprobante de egreso que respalda el pago.
+   */
+  async applyPaymentInTransaction(
+    tx: Prisma.TransactionClient,
+    input: {
+      expenseId: string;
+      amountCents: bigint;
+      paymentMethod: 'EFECTIVO' | 'TRANSFERENCIA';
+      bankAccountId: string | null;
+      paymentDate: Date;
+      notes: string | null;
+      userId: string;
+      treasuryDocumentId?: string;
+      /** Proveedor del egreso: la causación debe ser suya */
+      expectedSupplierId?: string;
+    },
+  ): Promise<{ paymentId: string; description: string; beneficiary: string; documentNumber: string | null }> {
+    const payStr = centsToMoneyString(input.amountCents);
+    const rows = await tx.$queryRaw<Array<{ balance: Prisma.Decimal; amount_paid: Prisma.Decimal; status: string; description: string; beneficiary: string; document_number: string | null; supplier_id: string | null }>>`
+      SELECT balance, amount_paid, status, description, beneficiary, document_number, supplier_id
+      FROM expenses
+      WHERE id = ${input.expenseId}::uuid
+      FOR UPDATE
+    `;
+    if (!rows.length) {
+      throw new NotFoundException(`Gasto con ID "${input.expenseId}" no encontrado.`);
+    }
+    const exp = rows[0];
+    if (input.expectedSupplierId && exp.supplier_id !== input.expectedSupplierId) {
+      throw new BadRequestException('La causación seleccionada no pertenece al proveedor del egreso.');
+    }
+    if (exp.status === 'ANULADO') {
+      throw new BadRequestException('No se pueden registrar pagos a un gasto anulado.');
+    }
+    if (exp.status === 'PAGADO') {
+      throw new BadRequestException('Este gasto ya se encuentra totalmente pagado.');
+    }
+    const balanceCents = parseMoneyToCents(exp.balance.toString(), 'Saldo de gasto');
+    if (input.amountCents > balanceCents) {
+      throw new BadRequestException(
+        `El monto a pagar ($${payStr}) no puede ser mayor al saldo pendiente actual ($${centsToMoneyString(balanceCents)}).`,
+      );
+    }
+    const newBalanceCents = balanceCents - input.amountCents;
+    const newAmountPaidCents = parseMoneyToCents(exp.amount_paid.toString(), 'Monto pagado') + input.amountCents;
+    const newStatus = newBalanceCents === 0n ? 'PAGADO' : 'PENDIENTE';
+
+    const payment = await tx.expensePayment.create({
+      data: {
+        expenseId: input.expenseId,
+        amount: new Prisma.Decimal(payStr),
+        paymentDate: input.paymentDate,
+        paymentMethod: input.paymentMethod,
+        bankAccountId: input.paymentMethod === 'TRANSFERENCIA' ? input.bankAccountId : null,
+        notes: input.notes,
+        createdById: input.userId,
+        treasuryDocumentId: input.treasuryDocumentId ?? null,
+      },
+    });
+    await tx.expense.update({
+      where: { id: input.expenseId },
+      data: {
+        balance: new Prisma.Decimal(centsToMoneyString(newBalanceCents)),
+        amountPaid: new Prisma.Decimal(centsToMoneyString(newAmountPaidCents)),
+        status: newStatus,
+      },
+    });
+    // Causación contable del pago: debita SUPPLIERS y acredita CASH o BANK
+    await this.accountingEngine.handleExpensePayment(
+      {
+        id: payment.id,
+        expenseId: input.expenseId,
+        amount: payStr,
+        paymentMethod: input.paymentMethod,
+        bankAccountId: input.paymentMethod === 'TRANSFERENCIA' ? input.bankAccountId : null,
+        beneficiary: exp.beneficiary,
+        description: exp.description,
+        documentNumber: exp.document_number,
+        createdById: input.userId,
+        paymentDate: input.paymentDate,
+      },
+      tx,
+    );
+    await tx.auditEvent.create({
+      data: {
+        userId: input.userId,
+        action: 'expenses:expense_payment_registered',
+        entity: 'ExpensePayment',
+        entityId: payment.id,
+        details: {
+          expenseId: input.expenseId,
+          amount: payStr,
+          paymentMethod: input.paymentMethod,
+          balanceBefore: exp.balance.toFixed(2),
+          balanceAfter: centsToMoneyString(newBalanceCents),
+          treasuryDocumentId: input.treasuryDocumentId ?? null,
+        },
+      },
+    });
+    return {
+      paymentId: payment.id,
+      description: exp.description,
+      beneficiary: exp.beneficiary,
+      documentNumber: exp.document_number,
+    };
   }
 
   async cancelExpense(expenseId: string, payload: CancelExpensePayload, userId: string): Promise<ExpenseDto> {

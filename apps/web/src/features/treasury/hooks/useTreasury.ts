@@ -1,12 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   CreateBankAccountDto,
-  CreateBankMovementDto,
   UpdateBankAccountDto,
 } from '@farmacia/contracts';
 import {
   createBankAccount,
-  createBankMovement,
   getBankAccount,
   getBankAccounts,
   getBankAccountOptions,
@@ -86,17 +84,3 @@ export function useUpdateBankAccount() {
   });
 }
 
-export function useCreateBankMovement() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ accountId, data }: { accountId: string; data: CreateBankMovementDto }) =>
-      createBankMovement(accountId, data),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['treasury'] });
-      queryClient.invalidateQueries({ queryKey: TREASURY_KEYS.account(variables.accountId) });
-      queryClient.invalidateQueries({
-        queryKey: ['treasury', 'movements', variables.accountId],
-      });
-    },
-  });
-}

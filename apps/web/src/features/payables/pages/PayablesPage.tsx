@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import {
   Box,
   Typography,
@@ -26,7 +26,7 @@ import type { PayableDto, PayableStatus } from '@farmacia/contracts';
 import { fetchPayables, fetchPayablesAgingSummary } from '../api/payables.api';
 import { HomeBackButton } from '../../../components/HomeBackButton';
 
-import { PayablePaymentDialog } from '../components/PayablePaymentDialog';
+import { PayableMovementsDialog } from '../components/PayableMovementsDialog';
 import { statusConfig, isOverdue } from '../utils/status';
 
 export function PayablesPage() {
@@ -58,7 +58,6 @@ export function PayablesPage() {
     placeholderData: (prev) => prev,
   });
 
-  const handlePaymentSuccess = useCallback(() => {}, []);
 
   const filteredItems = (data?.items ?? []).filter((p) => {
     if (!search.trim()) return true;
@@ -399,13 +398,12 @@ export function PayablesPage() {
                     <TableCell align="center" onClick={(e) => e.stopPropagation()}>
                       <Button
                         size="small"
-                        variant={p.status === 'PENDIENTE' ? 'contained' : 'outlined'}
-                        color={p.status === 'PENDIENTE' ? 'error' : 'inherit'}
+                        variant="outlined"
                         onClick={() => setSelectedPayable(p)}
                         id={`payable-action-${p.id}`}
                         sx={{ textTransform: 'none', minWidth: 75 }}
                       >
-                        {p.status === 'PENDIENTE' ? 'Pagar' : 'Detalle'}
+                        Detalle
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -430,10 +428,9 @@ export function PayablesPage() {
 
       {/* Modal */}
       {selectedPayable && (
-        <PayablePaymentDialog
-          payable={selectedPayable}
+        <PayableMovementsDialog
+          payableId={selectedPayable.id}
           onClose={() => setSelectedPayable(null)}
-          onSuccess={handlePaymentSuccess}
         />
       )}
     </Box>

@@ -21,7 +21,7 @@ import {
   ReceivableStatus,
   ReceivableMovementsDto,
 } from '@farmacia/contracts';
-import { buildDocumentMovements, RawDocumentMovement } from '../domain/document-movements';
+import { buildDocumentMovements, RawDocumentMovement } from '../../../common/utils/document-movements';
 import { centsToMoneyString, parseMoneyToCents } from '../../treasury/domain/treasury-rules';
 import { recordSourceBankMovement } from '../../treasury/application/record-source-bank-movement';
 import {
@@ -160,7 +160,7 @@ export class ReceivablesService {
             },
           },
         },
-        payments: true,
+        payments: { include: { treasuryDocument: { select: { documentNumber: true } } } },
       },
     });
     if (!row) {
@@ -184,9 +184,11 @@ export class ReceivablesService {
       raw.push({
         at: payment.createdAt,
         type: 'ABONO',
-        documentNumber: null,
+        documentNumber: payment.treasuryDocument?.documentNumber ?? null,
         description: payment.notes || 'Abono del cliente',
         paymentMethod: payment.paymentMethod,
+        paymentId: payment.id,
+        isReversed: payment.isReversed,
         deltaCents: -toCents(payment.amount),
       });
       if (payment.isReversed && payment.reversedAt) {
@@ -279,107 +281,55 @@ export class ReceivablesService {
             ? await this.idempotencyService.getRecord(idempotencyKey, requestHash, tx, 'http')
             : null;
           if (cached) return cached.responseBody as ReceivableDto;
-          // 1. Bloqueo pesimista para evitar doble abono concurrente
-          const rows = await tx.$queryRaw<any[]>`
-        SELECT
-          id,
-          sale_id    AS "saleId",
-          customer_id AS "customerId",
-          total_amount AS "totalAmount",
-          amount_paid  AS "amountPaid",
-          balance,
-          status,
-          due_date    AS "dueDate",
-          notes,
-          created_at  AS "createdAt",
-          updated_at  AS "updatedAt"
-        FROM receivables
-        WHERE id = ${receivableId}::uuid
-        FOR UPDATE
-      `;
-
-          if (!rows.length) {
-            throw new NotFoundException(`Cuenta por cobrar "${receivableId}" no encontrada`);
-          }
-
-          const raw = rows[0];
-          if (raw.status !== 'PENDIENTE') {
-            throw new BadRequestException(
-              `No se puede abonar a una cuenta en estado "${raw.status}"`,
-            );
-          }
-          const balanceCents = parseMoneyToCents(raw.balance.toString(), 'Saldo pendiente');
-          if (amountCents > balanceCents) {
-            throw new BadRequestException('El monto del abono supera el saldo pendiente.');
-          }
-          const amountPaidCents = parseMoneyToCents(raw.amountPaid.toString(), 'Total abonado');
-          const newBalanceCents = balanceCents - amountCents;
+          const applied = await this.applyPaymentInTransaction(tx, {
+            receivableId,
+            amountCents,
+            paymentMethod: method,
+            bankAccountId: method === 'TRANSFERENCIA' ? payload.bankAccountId! : null,
+            notes: payload.notes ?? null,
+            userId,
+          });
+          const concept = `Abono cartera - Factura ${applied.invoiceNumber ?? receivableId}`;
           const amount = centsToMoneyString(amountCents);
 
-          // 3. Persistir cambios en receivable
-          const updated = await (tx as any).receivable.update({
-            where: { id: receivableId },
-            data: {
-              amountPaid: new Prisma.Decimal(centsToMoneyString(amountPaidCents + amountCents)),
-              balance: new Prisma.Decimal(centsToMoneyString(newBalanceCents)),
-              status: (newBalanceCents === 0n ? 'PAGADA' : 'PENDIENTE') satisfies ReceivableStatus,
-            },
-            include: {
-              customer: { select: { name: true } },
-              sale: { select: { invoiceNumber: true } },
-              payments: { orderBy: { createdAt: 'asc' } },
-            },
-          });
-
-          // 4. Registrar pago
-          const payment = await (tx as any).receivablePayment.create({
-            data: {
-              receivableId,
-              amount: new Prisma.Decimal(amount),
-              paymentMethod: method,
-              bankAccountId: method === 'TRANSFERENCIA' ? payload.bankAccountId : null,
-              notes: payload.notes ?? null,
-              createdByUserId: userId,
-            },
-          });
-
-          // 5. Ingreso a caja (dentro de la misma transacción)
+          // Ingreso a caja o banco (dentro de la misma transacción); el trigger emite su recibo
+          let document: { id: string } | null;
           if (method === 'TRANSFERENCIA') {
-            await recordSourceBankMovement(tx, {
+            const movementId = await recordSourceBankMovement(tx, {
               bankAccountId: payload.bankAccountId!,
               movementType: 'DEPOSIT',
               amount,
-              concept: `Abono cartera - Factura ${updated.sale?.invoiceNumber ?? receivableId}`,
+              concept,
               referenceDocumentType: 'RECEIVABLE_PAYMENT',
-              referenceDocumentId: payment.id,
+              referenceDocumentId: applied.paymentId,
               createdById: userId,
             });
+            document = await tx.treasuryDocument.findUnique({ where: { bankMovementId: movementId } });
           } else {
-            await this.cashService.recordMovementInTransaction(tx, {
+            const movementId = await this.cashService.recordMovementInTransaction(tx, {
               movementType: 'INGRESO_MANUAL',
               amount,
               paymentMethod: 'EFECTIVO',
-              reason: `Abono cartera - Factura ${updated.sale?.invoiceNumber ?? receivableId}`,
+              reason: concept,
               referenceDocumentType: 'RECEIVABLE',
               referenceDocumentId: receivableId,
               createdByUserId: userId,
             });
+            document = await tx.treasuryDocument.findUnique({ where: { cashMovementId: movementId } });
           }
-
-          // 5.1. Asiento contable automático
-          await this.accountingEngine.handleCustomerPayment(
-            {
-              id: payment.id,
-              receivableId,
-              amount: payment.amount,
-              paymentMethod: method,
-              bankAccountId: method === 'TRANSFERENCIA' ? payload.bankAccountId : null,
-              createdByUserId: userId,
-              customerName: updated.customer?.name,
-              invoiceNumber: updated.sale?.invoiceNumber,
+          if (document) {
+            await tx.receivablePayment.update({
+              where: { id: applied.paymentId },
+              data: { treasuryDocumentId: document.id },
+            });
+          }
+          const updated = await tx.receivable.findUniqueOrThrow({
+            where: { id: receivableId },
+            include: {
+              customer: { select: { name: true } },
+              sale: { select: { invoiceNumber: true } },
             },
-            tx,
-          );
+          });
 
           // Leer los pagos actualizados para devolver
           const payments = await (tx as any).receivablePayment.findMany({
@@ -408,6 +358,98 @@ export class ReceivablesService {
         },
       ),
     );
+  }
+
+  /**
+   * Aplica un abono a una factura en cartera dentro de la transacción del llamador: bloquea la
+   * cuenta, valida estado, saldo y cliente, actualiza saldos, registra el abono y su asiento.
+   * El movimiento de dinero lo registra el documento que respalda el abono (recibo de caja).
+   */
+  async applyPaymentInTransaction(
+    tx: Prisma.TransactionClient,
+    input: {
+      receivableId: string;
+      amountCents: bigint;
+      paymentMethod: 'EFECTIVO' | 'TRANSFERENCIA';
+      bankAccountId: string | null;
+      notes: string | null;
+      userId: string;
+      treasuryDocumentId?: string;
+      /** Cliente del recibo: la factura debe ser suya */
+      expectedCustomerId?: string;
+    },
+  ): Promise<{ paymentId: string; invoiceNumber: string | null; customerName: string | null }> {
+    if (input.amountCents <= 0n) {
+      throw new BadRequestException('El monto del abono debe ser mayor a cero');
+    }
+    // Bloqueo pesimista para evitar doble abono concurrente
+    const rows = await tx.$queryRaw<
+      Array<{ customerId: string; amountPaid: Prisma.Decimal; balance: Prisma.Decimal; status: string }>
+    >`
+      SELECT customer_id AS "customerId", amount_paid AS "amountPaid", balance, status
+      FROM receivables
+      WHERE id = ${input.receivableId}::uuid
+      FOR UPDATE
+    `;
+    if (!rows.length) {
+      throw new NotFoundException(`Cuenta por cobrar "${input.receivableId}" no encontrada`);
+    }
+    const raw = rows[0];
+    if (input.expectedCustomerId && raw.customerId !== input.expectedCustomerId) {
+      throw new BadRequestException('La factura seleccionada no pertenece al cliente del recibo.');
+    }
+    if (raw.status !== 'PENDIENTE') {
+      throw new BadRequestException(`No se puede abonar a una cuenta en estado "${raw.status}"`);
+    }
+    const balanceCents = parseMoneyToCents(raw.balance.toString(), 'Saldo pendiente');
+    if (input.amountCents > balanceCents) {
+      throw new BadRequestException('El monto del abono supera el saldo pendiente.');
+    }
+    const amountPaidCents = parseMoneyToCents(raw.amountPaid.toString(), 'Total abonado');
+    const newBalanceCents = balanceCents - input.amountCents;
+    const amount = centsToMoneyString(input.amountCents);
+
+    const updated = await tx.receivable.update({
+      where: { id: input.receivableId },
+      data: {
+        amountPaid: new Prisma.Decimal(centsToMoneyString(amountPaidCents + input.amountCents)),
+        balance: new Prisma.Decimal(centsToMoneyString(newBalanceCents)),
+        status: (newBalanceCents === 0n ? 'PAGADA' : 'PENDIENTE') satisfies ReceivableStatus,
+      },
+      include: {
+        customer: { select: { name: true } },
+        sale: { select: { invoiceNumber: true } },
+      },
+    });
+    const payment = await tx.receivablePayment.create({
+      data: {
+        receivableId: input.receivableId,
+        amount: new Prisma.Decimal(amount),
+        paymentMethod: input.paymentMethod,
+        bankAccountId: input.paymentMethod === 'TRANSFERENCIA' ? input.bankAccountId : null,
+        notes: input.notes,
+        createdByUserId: input.userId,
+        treasuryDocumentId: input.treasuryDocumentId ?? null,
+      },
+    });
+    await this.accountingEngine.handleCustomerPayment(
+      {
+        id: payment.id,
+        receivableId: input.receivableId,
+        amount: payment.amount,
+        paymentMethod: input.paymentMethod,
+        bankAccountId: input.paymentMethod === 'TRANSFERENCIA' ? input.bankAccountId : null,
+        createdByUserId: input.userId,
+        customerName: updated.customer?.name,
+        invoiceNumber: updated.sale?.invoiceNumber,
+      },
+      tx,
+    );
+    return {
+      paymentId: payment.id,
+      invoiceNumber: updated.sale?.invoiceNumber ?? null,
+      customerName: updated.customer?.name ?? null,
+    };
   }
 
   /**

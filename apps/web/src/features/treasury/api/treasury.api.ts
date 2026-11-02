@@ -4,9 +4,10 @@ import type {
   BankAccountsSummaryDto,
   BankMovementDirection,
   BankMovementDto,
+  CreateCashReceiptPayload,
+  CreateDisbursementPayload,
   CreateBankAccountDto,
   SortOrder,
-  CreateBankMovementDto,
   PaginatedResponse,
   TreasuryDocumentDto,
   TreasuryDocumentFilters,
@@ -79,19 +80,6 @@ export async function getBankMovements(
   );
 }
 
-export async function createBankMovement(
-  accountId: string,
-  data: CreateBankMovementDto,
-): Promise<BankMovementDto> {
-  return apiRequest<BankMovementDto>(
-    `treasury/bank-accounts/${encodeURIComponent(accountId)}/movements`,
-    {
-      method: 'POST',
-      body: JSON.stringify(data),
-    },
-  );
-}
-
 // ===== RECIBOS DE CAJA Y COMPROBANTES DE EGRESO =====
 
 export async function getTreasuryDocuments(
@@ -101,5 +89,33 @@ export async function getTreasuryDocuments(
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined && value !== '') query.set(key, String(value));
   }
-  return apiRequest<PaginatedResponse<TreasuryDocumentDto>>(`treasury/documents?${query.toString()}`);
+  return apiRequest<PaginatedResponse<TreasuryDocumentDto>>(
+    `treasury/documents?${query.toString()}`,
+  );
+}
+
+export async function getTreasuryDocument(id: string): Promise<TreasuryDocumentDto> {
+  return apiRequest<TreasuryDocumentDto>(`treasury/documents/${encodeURIComponent(id)}`);
+}
+
+export async function createCashReceipt(
+  payload: CreateCashReceiptPayload,
+  idempotencyKey: string,
+): Promise<TreasuryDocumentDto> {
+  return apiRequest<TreasuryDocumentDto>('treasury/cash-receipts', {
+    method: 'POST',
+    headers: { 'Idempotency-Key': idempotencyKey },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createDisbursement(
+  payload: CreateDisbursementPayload,
+  idempotencyKey: string,
+): Promise<TreasuryDocumentDto> {
+  return apiRequest<TreasuryDocumentDto>('treasury/disbursements', {
+    method: 'POST',
+    headers: { 'Idempotency-Key': idempotencyKey },
+    body: JSON.stringify(payload),
+  });
 }

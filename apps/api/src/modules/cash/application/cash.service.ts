@@ -181,12 +181,12 @@ export class CashService {
       referenceDocumentId?: string;
       createdByUserId: string;
     },
-  ): Promise<void> {
+  ): Promise<string> {
     const paymentMethod = payload.paymentMethod === undefined ? 'EFECTIVO' : payload.paymentMethod;
     if (paymentMethod !== 'EFECTIVO') {
       throw new BadRequestException(new InvalidCashPaymentMethodException().message);
     }
-    await this.cashRepository.saveTransactional(
+    const saved = await this.cashRepository.saveTransactional(
       {
         movementType: payload.movementType as any,
         amount: payload.amount,
@@ -198,6 +198,7 @@ export class CashService {
       },
       tx,
     );
+    return saved.id;
   }
 
   private toDto(entity: CashMovement): CashMovementDto {
