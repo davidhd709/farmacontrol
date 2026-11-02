@@ -11,7 +11,12 @@ import {
 const fixtures = loadFixtures();
 test.use({ storageState: adminStateFile });
 
-test('una venta a crédito abre cartera y un abono parcial baja el saldo', async ({ page }) => {
+/**
+ * Criterio de terminado de las correcciones del cliente (2026-11-01): una venta a crédito
+ * aparece en cuentas por cobrar, se abona con un recibo de caja, el saldo baja, "Ver abonos"
+ * muestra el recibo y el dinero entra a caja.
+ */
+test('una venta a crédito se abona con un recibo de caja y el saldo baja', async ({ page }) => {
   const admin = await apiAs(fixtures.admin.username, fixtures.admin.password);
   const product = await createStockedProduct(admin, fixtures, {
     name: 'Amoxicilina crédito',
@@ -25,22 +30,45 @@ test('una venta a crédito abre cartera y un abono parcial baja el saldo', async
   });
   expect(Number(sale.total)).toBe(8000);
 
+  // La cartera ya no registra abonos: solo consulta
   await page.goto('/receivables');
-  await page
-    .getByRole('row', { name: new RegExp(sale.invoiceNumber) })
-    .getByRole('button', { name: /Abonar/ })
-    .click();
-  await page.getByLabel('Monto del abono').fill('3000');
-  await page.getByRole('button', { name: 'Registrar Abono' }).click();
-  await page.getByRole('button', { name: 'Confirmar y Abonar' }).click();
-  await expect(page.getByText('Abono registrado correctamente y aplicado al saldo.')).toBeVisible();
+  const row = page.getByRole('row', { name: new RegExp(sale.invoiceNumber) });
+  await expect(row).toBeVisible();
+  await expect(row.getByRole('button', { name: /^Abonar$/ })).toHaveCount(0);
 
-  const receivables = await call<{ items: { saleId: string; balance: string | number }[] }>(
+  // Recibo de caja: abono a cartera eligiendo cliente y factura
+  await page.goto('/treasury/receipts');
+  await page.getByRole('button', { name: 'Nuevo recibo de caja' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Nuevo recibo de caja' });
+  await dialog.getByRole('combobox', { name: /Cliente/ }).fill(fixtures.customer.documentNumber);
+  await page.getByRole('option', { name: new RegExp(fixtures.customer.documentNumber) }).click();
+  await dialog.getByRole('checkbox', { name: `Seleccionar ${sale.invoiceNumber}` }).check();
+  await dialog.getByLabel(`Valor a aplicar a ${sale.invoiceNumber}`).fill('3000');
+  await dialog.getByLabel(/Concepto/).fill('Abono parcial E2E');
+  await dialog.getByRole('button', { name: 'Registrar' }).click();
+  await page.getByRole('button', { name: 'Confirmar' }).click();
+  await expect(page.getByText(/Recibo de caja RC-\d+ registrado/)).toBeVisible();
+
+  const receivables = await call<{ items: { id: string; saleId: string; balance: string | number }[] }>(
     admin,
     'get',
     `receivables?customerId=${fixtures.customer.id}`,
   );
   const receivable = receivables.items.find((item) => item.saleId === sale.id);
   expect(Number(receivable?.balance)).toBe(5000);
+
+  // "Ver abonos" muestra el recibo y el saldo después del abono
+  await page.goto('/receivables');
+  await page
+    .getByRole('row', { name: new RegExp(sale.invoiceNumber) })
+    .getByRole('button', { name: /Ver Abonos/ })
+    .click();
+  const movements = page.getByRole('dialog');
+  await expect(movements.getByText(/^RC-\d+$/)).toBeVisible();
+  await expect(movements.getByRole('cell', { name: /\$5\.000,00/ }).last()).toBeVisible();
+
+  // El dinero entra a caja con el concepto del recibo
+  await page.goto('/cash');
+  await expect(page.getByText('Abono parcial E2E')).toBeVisible();
   await admin.dispose();
 });

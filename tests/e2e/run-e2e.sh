@@ -67,7 +67,10 @@ WEB_PORT="$(free_port)"
 
 log "Compilando API y web..."
 pnpm --silent --filter @farmacia/api build >"${LOG_DIR}/build.log" 2>&1 || { tail -n 40 "${LOG_DIR}/build.log" >&2; die "Falló la compilación del API."; }
-pnpm --silent --filter @farmacia/web exec vite build >>"${LOG_DIR}/build.log" 2>&1 || { tail -n 40 "${LOG_DIR}/build.log" >&2; die "Falló la compilación de la web."; }
+# La web llama al API por el proxy de vite preview: un VITE_API_URL absoluto del .env local
+# (p. ej. http://localhost:3000) la mandaría a otro servicio. Las variables del proceso
+# tienen prioridad sobre los archivos .env en Vite.
+VITE_API_URL=/api/v1 pnpm --silent --filter @farmacia/web exec vite build >>"${LOG_DIR}/build.log" 2>&1 || { tail -n 40 "${LOG_DIR}/build.log" >&2; die "Falló la compilación de la web."; }
 
 log "Arrancando API en 127.0.0.1:${API_PORT}..."
 (
