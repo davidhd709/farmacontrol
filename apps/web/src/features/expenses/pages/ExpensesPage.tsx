@@ -53,6 +53,7 @@ import {
 } from '../api/expenses.api';
 import { ExpenseCategoriesModal } from '../components/ExpenseCategoriesModal';
 import { localIsoDate } from '../../../components/QuickDateRange';
+import { calendarMonthBounds } from '../../../utils/business-date';
 
 function formatCurrency(val: string | number | undefined): string {
   if (val === undefined || val === null) return '$0.00';
@@ -146,9 +147,7 @@ export const ExpensesPage: React.FC = () => {
   };
 
   const setMonthPreset = () => {
-    const now = new Date();
-    const firstDay = localIsoDate(new Date(now.getFullYear(), now.getMonth(), 1));
-    const lastDay = localIsoDate(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+    const { from: firstDay, to: lastDay } = calendarMonthBounds(localIsoDate(new Date()));
     setStartDate(firstDay);
     setEndDate(lastDay);
     setPage(1);

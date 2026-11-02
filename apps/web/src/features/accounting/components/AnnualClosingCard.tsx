@@ -15,6 +15,7 @@ import {
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { closeYear, fetchAnnualClosingPreview } from '../api/accounting.api';
+import { businessYear } from '../../../utils/business-date';
 
 const money = (value: string) =>
   `$${Number(value).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -25,7 +26,7 @@ const money = (value: string) =>
  */
 export function AnnualClosingCard({ canManage }: { canManage: boolean }) {
   const queryClient = useQueryClient();
-  const [year, setYear] = useState(new Date().getFullYear() - 1);
+  const [year, setYear] = useState(businessYear() - 1);
   const [requested, setRequested] = useState<number | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const keyRef = useRef<{ year: number; key: string } | null>(null);

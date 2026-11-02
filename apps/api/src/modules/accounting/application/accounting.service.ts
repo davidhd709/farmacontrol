@@ -26,6 +26,7 @@ import {
   parseAccountWorkbook,
   previewDto,
 } from '../infrastructure/excel-account-import';
+import { businessToday, calendarDate } from '../../../common/utils/business-date';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -209,8 +210,8 @@ export class AccountingService {
         createdAt: account.createdAt.toISOString(),
         updatedAt: account.updatedAt.toISOString(),
       }));
-      const today = new Date();
-      today.setUTCHours(0, 0, 0, 0);
+      // Mapeos vigentes hoy en Bogotá (de noche el día UTC ya es el siguiente)
+      const today = calendarDate(businessToday());
       const mappings = await tx.companyAccountingMapping.findMany({
         where: {
           status: 'ACTIVE',

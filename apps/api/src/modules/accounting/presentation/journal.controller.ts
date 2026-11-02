@@ -34,6 +34,7 @@ import { PermissionsGuard } from '../../identity/presentation/guards/permissions
 import { RequirePermissions } from '../../identity/presentation/decorators/require-permissions.decorator';
 import { CurrentUser } from '../../identity/presentation/decorators/current-user.decorator';
 import type { AuthenticatedUserContext } from '../../identity/presentation/guards/session-auth.guard';
+import { businessToday } from '../../../common/utils/business-date';
 
 function handleHttpError(error: unknown): never {
   if (error instanceof AccountingNotFoundError) throw new NotFoundException(error.message);
@@ -88,7 +89,8 @@ export class JournalController {
     @CurrentUser() user: AuthenticatedUserContext,
   ): Promise<JournalEntryDto> {
     try {
-      const entryDate = body.entryDate || new Date().toISOString().slice(0, 10);
+      // Sin fecha, el reverso queda con el día de Bogotá (de noche la fecha UTC ya es mañana)
+      const entryDate = body.entryDate || businessToday();
       const reversed = await this.journalService.reverse({
         entryId: id,
         entryDate,

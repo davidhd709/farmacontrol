@@ -1,4 +1,5 @@
 import { Stack, TextField } from '@mui/material';
+import { businessToday } from '../../../utils/business-date';
 
 /** Rango de fechas (YYYY-MM-DD) de un reporte. */
 export function PeriodFilter({
@@ -30,12 +31,12 @@ export function PeriodFilter({
   );
 }
 
+/** Primer día del mes en curso en Bogotá. */
 export function monthStart(today = new Date()): string {
-  const offset = today.getTimezoneOffset() * 60000;
-  return new Date(today.getTime() - offset).toISOString().slice(0, 8) + '01';
+  return `${businessToday(today).slice(0, 7)}-01`;
 }
 
+/** Fecha de hoy en Bogotá. */
 export function localToday(today = new Date()): string {
-  const offset = today.getTimezoneOffset() * 60000;
-  return new Date(today.getTime() - offset).toISOString().slice(0, 10);
+  return businessToday(today);
 }

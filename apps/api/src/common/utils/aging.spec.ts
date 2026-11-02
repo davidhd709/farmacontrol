@@ -44,4 +44,22 @@ describe('edades de cartera y cuentas por pagar', () => {
       new Date('2026-10-01T00:00:00Z'),
     );
   });
+
+  it('cerca de medianoche cuenta desde el día de emisión en Bogotá, no el UTC', () => {
+    // 31 de octubre a las 23:30 en Bogotá = 1 de noviembre 04:30 UTC
+    const lateIssue = new Date('2026-10-31T23:30:00-05:00');
+    expect(agingStartDate('ISSUE_DATE', { dueDate: null, issuedAt: lateIssue }).toISOString()).toBe(
+      '2026-10-31T00:00:00.000Z',
+    );
+    // 1 de noviembre a las 00:10 en Bogotá ya es el día siguiente
+    const earlyIssue = new Date('2026-11-01T00:10:00-05:00');
+    expect(agingStartDate('DUE_DATE_OR_ISSUE', { dueDate: null, issuedAt: earlyIssue }).toISOString()).toBe(
+      '2026-11-01T00:00:00.000Z',
+    );
+    // Corte del 30 de noviembre: 30 días (Corriente) y 31 días (31–60) según el lado de la medianoche
+    const cutoff = new Date('2026-12-01T00:00:00Z');
+    expect(daysOverdue(agingStartDate('ISSUE_DATE', { dueDate: null, issuedAt: earlyIssue }), cutoff)).toBe(30);
+    expect(daysOverdue(agingStartDate('ISSUE_DATE', { dueDate: null, issuedAt: lateIssue }), cutoff)).toBe(31);
+  });
 });
+

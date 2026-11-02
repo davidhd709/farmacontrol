@@ -39,6 +39,7 @@ import {
 import { ThirdPartyAutocomplete } from '../../third-parties/components/ThirdPartyAutocomplete';
 import { CustomerAutocomplete } from '../../customers/components/CustomerAutocomplete';
 import { usePermissions } from '../../auth/hooks/usePermissions';
+import { businessToday } from '../../../utils/business-date';
 import { CounterpartAccountSelect } from '../../accounting/components/CounterpartAccountSelect';
 import { fetchReceivables } from '../../receivables/api/receivables.api';
 import { fetchPayableStatement } from '../../payables/api/payables.api';
@@ -149,7 +150,7 @@ export function VoucherFormDialog({
           documentId: r.id,
           documentNumber: r.invoiceNumber ?? null,
           label: 'Factura de venta',
-          documentDate: r.createdAt.slice(0, 10),
+          documentDate: businessToday(new Date(r.createdAt)),
           dueDate: r.dueDate,
           balance: r.balance,
         }));

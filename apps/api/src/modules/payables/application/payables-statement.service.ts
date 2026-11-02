@@ -5,7 +5,7 @@ import type {
   PayableStatementFilters,
   PayableStatementItemDto,
 } from '@farmacia/contracts';
-import { businessToday, calendarDate } from '../../../common/utils/business-date';
+import { businessDateOf, businessToday, calendarDate } from '../../../common/utils/business-date';
 import { agingBreakdown, agingBucketOf, agingStartDate, daysOverdue } from '../../../common/utils/aging';
 import { accountingPolicyAt } from '../../company/application/accounting-policy.reader';
 
@@ -81,7 +81,8 @@ export class PayablesStatementService {
           supplierId: p.supplierId,
           supplierName: p.supplier?.name ?? null,
           description: 'Factura de compra',
-          documentDate: isoDay(p.purchase?.purchaseDate ?? p.createdAt),
+          // purchase_date es fecha calendario; created_at (sin compra) es un instante: día de Bogotá
+          documentDate: p.purchase?.purchaseDate ? isoDay(p.purchase.purchaseDate) : businessDateOf(p.createdAt),
           dueDate: isoDay(p.dueDate),
           totalAmount: p.totalAmount.toFixed(2),
           amountPaid: p.amountPaid.toFixed(2),

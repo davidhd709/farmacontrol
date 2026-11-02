@@ -40,6 +40,7 @@ import {
   fetchOpeningBalance,
 } from '../api/accounting-setup.api';
 import { formatMoney, toCents } from '../../../utils/money';
+import { businessToday } from '../../../utils/business-date';
 
 interface OpeningLine {
   accountId: string;
@@ -47,9 +48,9 @@ interface OpeningLine {
   credit: string;
 }
 
+/** Fecha calendario del instante en Bogotá (zona del negocio, no la del equipo). */
 function localIsoDate(date: Date): string {
-  const offset = date.getTimezoneOffset() * 60000;
-  return new Date(date.getTime() - offset).toISOString().slice(0, 10);
+  return businessToday(date);
 }
 
 const emptyLine = (): OpeningLine => ({ accountId: '', debit: '', credit: '' });

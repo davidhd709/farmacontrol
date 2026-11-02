@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { prisma, Prisma } from '@farmacia/database';
 import type { ReceivableStatementItemDto, ThirdPartyStatementDto } from '@farmacia/contracts';
-import { businessToday, calendarDate } from '../../../common/utils/business-date';
+import { businessDateOf, businessToday, calendarDate } from '../../../common/utils/business-date';
 import { agingBreakdown, agingBucketOf, agingStartDate, daysOverdue } from '../../../common/utils/aging';
 import { accountingPolicyAt } from '../../company/application/accounting-policy.reader';
 
@@ -39,7 +39,8 @@ export class ThirdPartyStatementService {
         return {
           receivableId: r.id,
           invoiceNumber: r.sale?.invoiceNumber ?? null,
-          documentDate: (r.sale?.createdAt ?? r.createdAt).toISOString().slice(0, 10),
+          // La factura se emite en un instante; su fecha es el día de Bogotá, no el UTC
+          documentDate: businessDateOf(r.sale?.createdAt ?? r.createdAt),
           dueDate: r.dueDate.toISOString().slice(0, 10),
           totalAmount: r.totalAmount.toFixed(2),
           amountPaid: r.amountPaid.toFixed(2),

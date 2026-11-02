@@ -1,30 +1,28 @@
 import { Button, Stack } from '@mui/material';
+import { businessToday, calendarMonthBounds } from '../utils/business-date';
 
 export type QuickRange = 'today' | 'this_month' | 'last_month' | 'ytd';
 
-/** YYYY-MM-DD con la fecha local del equipo (Colombia), no la UTC de toISOString. */
+/**
+ * YYYY-MM-DD del instante en Bogotá, sin importar la zona del equipo ni la UTC de toISOString.
+ * Para meses y años se usa calendarMonthBounds, no fechas construidas con la hora local.
+ */
 export function localIsoDate(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+  return businessToday(date);
 }
 
-/** Rango de fechas de un atajo. Antes se usaba toISOString y "Hoy" saltaba al día siguiente desde las 7 p. m. */
+/** Rango de fechas de un atajo, en días de Bogotá ("Hoy" no salta al día siguiente desde las 7 p. m.). */
 export function quickRange(range: QuickRange, now: Date = new Date()): { from: string; to: string } {
-  const today = localIsoDate(now);
+  const today = businessToday(now);
   switch (range) {
     case 'today':
       return { from: today, to: today };
     case 'this_month':
-      return { from: localIsoDate(new Date(now.getFullYear(), now.getMonth(), 1)), to: today };
+      return { from: calendarMonthBounds(today).from, to: today };
     case 'last_month':
-      return {
-        from: localIsoDate(new Date(now.getFullYear(), now.getMonth() - 1, 1)),
-        to: localIsoDate(new Date(now.getFullYear(), now.getMonth(), 0)),
-      };
+      return calendarMonthBounds(today, -1);
     case 'ytd':
-      return { from: localIsoDate(new Date(now.getFullYear(), 0, 1)), to: today };
+      return { from: `${today.slice(0, 4)}-01-01`, to: today };
   }
 }
 

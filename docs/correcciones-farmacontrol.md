@@ -191,9 +191,24 @@ Si la empresa usó las dos, el banco queda contado dos veces en la operación fr
 
 Pregunta para el cliente: ¿una cuenta sin subcuenta del PUC asignada se bloquea hasta que se le asigne, o muestra el saldo de la cuenta 1110 general?
 
-## 4. Pendientes y dudas abiertas
+## 3.7 Fechas de producción en el día de Bogotá (2026-11-02)
 
-- `accounting-coverage` ("nota crédito devuelve el INC…") falla de noche, entre las 19:00 y las 24:00 de Bogotá, cuando la fecha UTC ya cambió: es preexistente. La prueba de `full-system-lifecycle` que dependía de octubre de 2026 se corrigió para usar la fecha de negocio de la corrida.
+La base y el servidor corren en UTC; desde las 19:00 de Colombia la fecha UTC ya es la del día siguiente. Se revisaron edades, cortes, filtros desde/hasta y fechas de documentos. Las columnas de fecha calendario (`@db.Date`: vencimientos, fechas de compra, de gasto, de pago, de asiento, de documento) ya se manejaban bien; los filtros sobre instantes (`created_at`) ya usaban `businessDayStart/End`, y las edades ya contaban desde el día de emisión de Bogotá. Se corrigió:
+
+| Dónde | Problema | Corrección |
+|---|---|---|
+| Base de datos: `guard_product_tax_profile_history` y `protect_accounting_mapped_account` | Comparaban con `CURRENT_DATE` (UTC). De noche, un perfil tributario que empieza "hoy" se rechazaba como iniciado en el pasado (la falla nocturna de `accounting-coverage`) | Migración `20261102120000_business_date_in_triggers`: función `business_date()` (día de Bogotá) y los dos triggers la usan. Solo reemplaza funciones |
+| `POST /journal-entries/:id/reverse` sin fecha | El reverso tomaba la fecha UTC (quedaba con fecha de mañana) | `businessToday()` |
+| Libro Diario, filtro "hasta" | `setHours(23,59)` con la hora local del servidor sobre una fecha calendario: según la zona podía incluir el día siguiente | Comparación por fecha calendario |
+| Estado de cuenta por tercero | La fecha de la factura salía del `created_at` en UTC (una venta de las 23:30 aparecía al día siguiente) | Día de Bogotá |
+| Estado de cuenta de proveedores | Igual, cuando el documento no tiene fecha de compra | Día de Bogotá |
+| Importación del PUC | Mapeos vigentes calculados con el día UTC | Día de Bogotá |
+| Web: atajos de fecha, Libro Diario, balance, gastos, saldos iniciales, perfiles tributarios, cierres y períodos | Usaban la zona horaria del equipo (bien en Colombia, mal en un equipo con otra zona) | `businessToday`, `businessYear` y `calendarMonthBounds` en `apps/web/src/utils/business-date.ts` |
+| Web: recibo de caja, fecha de la factura a abonar | `createdAt.slice(0, 10)` (UTC) | Día de Bogotá |
+
+Pruebas cerca de medianoche: `business-date-midnight` (integración con PostgreSQL: `business_date()` a las 23:59 y 00:00, triggers sin `CURRENT_DATE`, reverso a las 23:30, filtro "hasta", estado de cuenta de una factura de las 23:30), `business-date.spec` y `aging.spec` (23:59/00:00, cambio de año, edad a uno y otro lado de la medianoche) y `quick-date-range.test` en la web (último y primer minuto del mes, 31 de diciembre, febrero bisiesto; pasa con `TZ=Asia/Tokyo` y `TZ=America/Bogota`).
+
+## 4. Pendientes y dudas abiertas
 
 - ⚠️ Pantalla del botón "Reservar" (sección 2, fase 1).
 - ⚠️ Pantalla de "Organizar diseño" (sección 2, fase 1).

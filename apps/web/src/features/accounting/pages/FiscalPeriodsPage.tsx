@@ -43,6 +43,7 @@ import {
 } from '../api/accounting.api';
 import { DocumentLockCard } from '../components/DocumentLockCard';
 import { AnnualClosingCard } from '../components/AnnualClosingCard';
+import { businessYear } from '../../../utils/business-date';
 
 function formatMoney(value: string | number): string {
   const num = typeof value === 'number' ? value : Number(value);
@@ -54,7 +55,7 @@ export const FiscalPeriodsPage = () => {
   const { hasPermission } = usePermissions();
   const queryClient = useQueryClient();
 
-  const currentYear = new Date().getFullYear();
+  const currentYear = businessYear();
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
 

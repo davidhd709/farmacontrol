@@ -26,10 +26,11 @@ import {
   fetchTaxCatalog,
 } from '../api/taxes.api';
 import { REVIEW_PENDING_TEXT } from './tax-labels';
+import { businessToday } from '../../../utils/business-date';
 
+/** Fecha calendario del instante en Bogotá (zona del negocio, no la del equipo). */
 function localIsoDate(date: Date): string {
-  const offset = date.getTimezoneOffset() * 60000;
-  return new Date(date.getTime() - offset).toISOString().slice(0, 10);
+  return businessToday(date);
 }
 
 const OPERATION_LABELS: Record<ProductTaxOperation, string> = { SALE: 'Venta', PURCHASE: 'Compra' };

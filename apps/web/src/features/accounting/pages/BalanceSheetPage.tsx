@@ -24,6 +24,7 @@ import { SYSTEM_PERMISSIONS, type BalanceSheetCategoryGroupDto } from '@farmacia
 import { usePermissions } from '../../auth/hooks/usePermissions';
 import { fetchBalanceSheet, exportBalanceSheetExcel } from '../api/accounting.api';
 import { localIsoDate } from '../../../components/QuickDateRange';
+import { calendarMonthBounds } from '../../../utils/business-date';
 
 function formatMoney(value: string | number | undefined | null): string {
   if (value === undefined || value === null) return '$0.00';
@@ -88,15 +89,13 @@ export const BalanceSheetPage = () => {
   });
 
   const handleShortcut = (type: 'today' | 'last_month_end' | 'last_year_end') => {
-    const d = new Date();
+    const day = localIsoDate(new Date());
     if (type === 'today') {
-      setAsOfDate(localIsoDate(d));
+      setAsOfDate(day);
     } else if (type === 'last_month_end') {
-      const endLastMonth = localIsoDate(new Date(d.getFullYear(), d.getMonth(), 0));
-      setAsOfDate(endLastMonth);
+      setAsOfDate(calendarMonthBounds(day, -1).to);
     } else if (type === 'last_year_end') {
-      const endLastYear = localIsoDate(new Date(d.getFullYear() - 1, 11, 31));
-      setAsOfDate(endLastYear);
+      setAsOfDate(`${Number(day.slice(0, 4)) - 1}-12-31`);
     }
   };
 

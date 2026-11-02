@@ -29,3 +29,19 @@ export function businessDayStart(date: string): string {
 export function businessDayEnd(date: string): string {
   return `${date}T23:59:59.999${BUSINESS_UTC_OFFSET}`;
 }
+
+/** Año calendario actual en la zona del negocio. */
+export function businessYear(now: Date = new Date()): number {
+  return Number(businessToday(now).slice(0, 4));
+}
+
+/**
+ * Primer y último día del mes de una fecha calendario, desplazado `offset` meses
+ * (0 = el mismo mes, -1 = el anterior). No depende de la zona del equipo.
+ */
+export function calendarMonthBounds(day: string, offset = 0): { from: string; to: string } {
+  const [year, month] = day.split('-').map(Number);
+  const first = new Date(Date.UTC(year, month - 1 + offset, 1));
+  const last = new Date(Date.UTC(year, month + offset, 0));
+  return { from: first.toISOString().slice(0, 10), to: last.toISOString().slice(0, 10) };
+}

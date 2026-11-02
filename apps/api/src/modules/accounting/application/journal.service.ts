@@ -1,4 +1,4 @@
-import { businessDateOf } from '../../../common/utils/business-date';
+import { businessDateOf, calendarDate } from '../../../common/utils/business-date';
 import { Injectable } from '@nestjs/common';
 import { AccountingPurpose as DbPurpose, prisma, Prisma } from '@farmacia/database';
 import {
@@ -473,12 +473,11 @@ export class JournalService {
     if (filters.fromDate || filters.toDate) {
       where.entryDate = {};
       if (filters.fromDate) {
-        where.entryDate.gte = new Date(filters.fromDate);
+        where.entryDate.gte = calendarDate(filters.fromDate);
       }
       if (filters.toDate) {
-        const to = new Date(filters.toDate);
-        to.setHours(23, 59, 59, 999);
-        where.entryDate.lte = to;
+        // entry_date es una fecha calendario: no se le suma la hora local del servidor
+        where.entryDate.lte = calendarDate(filters.toDate);
       }
     }
 
