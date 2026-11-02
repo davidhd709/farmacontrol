@@ -166,6 +166,31 @@ Pruebas existentes: `credit-and-debit-notes` (anular venta con notas crédito y 
 
 Faltan anulaciones propias para la **nota crédito**, el **recibo de caja** y el **comprobante de egreso** como documento completo (y sus versiones manuales). Hay que decidir con el cliente si se agregan.
 
+## 3.6 Saldo inicial bancario: diagnóstico antes de migrar (2026-11-02, sin cambios)
+
+Decisión del cliente: una sola fuente. Los saldos iniciales se registran solo desde el asistente contable; la cuenta bancaria no genera asiento y muestra el saldo contable. Antes de migrar se pidió este reporte.
+
+**Cómo funciona hoy (código).** Hay dos fuentes que no se hablan:
+
+1. **Cuenta bancaria** (Tesorería → Bancos → nueva cuenta, campo "Saldo inicial"): `TreasuryService.createAccount` guarda `initial_balance` y `current_balance` y, si el valor es mayor que cero, crea un movimiento bancario `DEPOSIT` con `reference_document_type = 'INITIAL_BALANCE'`. **Nunca genera asiento**: no llama al motor contable, y el trigger de documentos de tesorería omite `INITIAL_BALANCE`, así que tampoco hay recibo de caja. Mueve el auxiliar de bancos, no el mayor.
+2. **Asistente contable → saldos iniciales**: publica un asiento `OPENING_BALANCE` con las cuentas del PUC (incluidas las de bancos). Mueve el mayor, no el auxiliar.
+
+Si la empresa usó las dos, el banco queda contado dos veces en la operación frente a la contabilidad, o el mayor y el auxiliar no coinciden. Por el código, **ningún saldo inicial bancario pudo haber generado asiento**: todos los que existan están sin asiento.
+
+**Datos revisados.** La única base a la que tengo acceso es la local de desarrollo (`farmacia_db` en el contenedor `farmacia-postgres-dev`): **0 cuentas bancarias, 0 movimientos `INITIAL_BALANCE` y ningún asiento `OPENING_BALANCE`**. No hay nada que migrar ahí. La base del cliente no la he revisado: hay que ejecutar en ella el diagnóstico de solo lectura `infra/scripts/diagnostics/saldos-iniciales-bancarios.sql` (lo ejecuté sin errores en la base local), que lista:
+
+1. cada cuenta bancaria con saldo inicial, si tiene movimiento inicial y cuántos asientos lo respaldan (hoy siempre 0);
+2. los saldos iniciales vigentes del asistente y su neto en bancos (1110 y subcuentas);
+3. por cuenta bancaria, el saldo del auxiliar frente al saldo contable de su subcuenta del PUC.
+
+**Propuesta de migración (no ejecutada, espera aprobación).** Según lo que salga en la base del cliente:
+
+- Cuenta con saldo inicial **y** el mismo valor en el asiento de saldos iniciales del asistente: no se crea asiento; solo se deja de usar el saldo inicial de la cuenta.
+- Cuenta con saldo inicial **sin** respaldo en el asistente: registrar ese valor en los saldos iniciales del asistente (contra la cuenta de apertura que defina el contador) y no tocar el movimiento histórico, que es inmutable.
+- Después: quitar el campo "Saldo inicial" del formulario de cuenta bancaria (la API lo rechazará con un mensaje que lleve al asistente) y mostrar en Bancos el **saldo contable** de la subcuenta del PUC, con el saldo del auxiliar como dato de conciliación mientras existan movimientos anteriores.
+
+Pregunta para el cliente: ¿una cuenta sin subcuenta del PUC asignada se bloquea hasta que se le asigne, o muestra el saldo de la cuenta 1110 general?
+
 ## 4. Pendientes y dudas abiertas
 
 - `accounting-coverage` ("nota crédito devuelve el INC…") falla de noche, entre las 19:00 y las 24:00 de Bogotá, cuando la fecha UTC ya cambió: es preexistente. La prueba de `full-system-lifecycle` que dependía de octubre de 2026 se corrigió para usar la fecha de negocio de la corrida.
