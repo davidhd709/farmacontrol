@@ -415,4 +415,108 @@ describe('Recibos de caja y comprobantes de egreso como documento de origen', ()
     expect(await prisma.treasuryDocument.count()).toBe(1);
     expect(await prisma.cashMovement.count()).toBe(1);
   });
+
+  it('valida montos: no negativos, sin cero, máximo 2 decimales y nunca más que el saldo', async () => {
+    const receivable = await creditSale(2);
+    const cartera = (amount: string) =>
+      post('treasury/cash-receipts', {
+        kind: 'CARTERA',
+        paymentMethod: 'EFECTIVO',
+        concept: 'Abono',
+        customerId,
+        applications: [{ receivableId: receivable.id, amount }],
+      });
+    for (const amount of ['-1000.00', '0', '0.00', '10.001', 'abc', '2000.01']) {
+      const res = await cartera(amount);
+      expect(res.status, amount).toBe(400);
+    }
+    const manual = (amount: string) =>
+      post('treasury/cash-receipts', { kind: 'MANUAL', paymentMethod: 'EFECTIVO', concept: 'Ingreso', amount, counterpartAccountId: capitalAccountId });
+    for (const amount of ['-5.00', '0', '1.999']) {
+      expect((await manual(amount)).status, amount).toBe(400);
+    }
+    expect(await prisma.cashMovement.count()).toBe(0);
+    expect(await prisma.receivablePayment.count()).toBe(0);
+  });
+
+  it('dos recibos simultáneos con claves distintas no pagan dos veces la misma factura', async () => {
+    const receivable = await creditSale(3);
+    const pay = () =>
+      post('treasury/cash-receipts', {
+        kind: 'CARTERA',
+        paymentMethod: 'EFECTIVO',
+        concept: 'Pago total',
+        customerId,
+        applications: [{ receivableId: receivable.id, amount: '3000.00' }],
+      });
+    const results = await Promise.all([pay(), pay(), pay()]);
+    expect(results.map((r) => r.status).sort()).toEqual([201, 400, 400]);
+    const after = await prisma.receivable.findUniqueOrThrow({ where: { id: receivable.id } });
+    expect(after.balance.toFixed(2)).toBe('0.00');
+    expect(after.status).toBe('PAGADA');
+    expect(await prisma.receivablePayment.count({ where: { receivableId: receivable.id } })).toBe(1);
+    expect(await prisma.cashMovement.count()).toBe(1);
+  });
+
+  it('dos egresos simultáneos con claves distintas no pagan dos veces la misma factura de compra', async () => {
+    await post('treasury/cash-receipts', {
+      kind: 'MANUAL',
+      paymentMethod: 'EFECTIVO',
+      concept: 'Base',
+      amount: '100000.00',
+      counterpartAccountId: capitalAccountId,
+    }).expect(201);
+    const invoice = await payable('FC-RACE', '50000.00');
+    const pay = () =>
+      post('treasury/disbursements', {
+        kind: 'PROVEEDOR',
+        paymentMethod: 'EFECTIVO',
+        concept: 'Pago FC-RACE',
+        supplierId,
+        applications: [{ documentType: 'FACTURA_COMPRA', documentId: invoice.id, amount: '50000.00' }],
+      });
+    const results = await Promise.all([pay(), pay()]);
+    expect(results.map((r) => r.status).sort()).toEqual([201, 400]);
+    expect(await prisma.payablePayment.count({ where: { payableId: invoice.id } })).toBe(1);
+    expect((await prisma.payable.findUniqueOrThrow({ where: { id: invoice.id } })).balance.toFixed(2)).toBe('0.00');
+  });
+
+  it('un recibo o egreso manual no puede usar una cuenta de control ni un tercero inexistente', async () => {
+    const mappings = await prisma.companyAccountingMapping.findMany({
+      where: { purpose: { in: ['CUSTOMERS', 'SUPPLIERS', 'CASH', 'INVENTORY'] }, status: 'ACTIVE' },
+    });
+    for (const mapping of mappings) {
+      const res = await post('treasury/cash-receipts', {
+        kind: 'MANUAL',
+        paymentMethod: 'EFECTIVO',
+        concept: 'Ingreso contra cuenta de control',
+        amount: '1000.00',
+        counterpartAccountId: mapping.accountId,
+      });
+      expect(res.status, mapping.purpose).toBe(400);
+      expect(res.body.message).toMatch(/cuenta de control/);
+    }
+    const bankLedger = await prisma.account.create({
+      data: { code: '11100599', name: 'Banco con subcuenta', type: 'ASSET', level: 1, allowsMovement: true },
+    });
+    await prisma.bankAccount.update({ where: { id: bankId }, data: { ledgerAccountId: bankLedger.id } });
+    const viaBank = await post('treasury/disbursements', {
+      kind: 'MANUAL',
+      paymentMethod: 'EFECTIVO',
+      concept: 'Egreso contra la cuenta del banco',
+      amount: '1000.00',
+      counterpartAccountId: bankLedger.id,
+    });
+    expect(viaBank.status).toBe(400);
+    const ghost = await post('treasury/cash-receipts', {
+      kind: 'MANUAL',
+      paymentMethod: 'EFECTIVO',
+      concept: 'Ingreso',
+      amount: '1000.00',
+      counterpartAccountId: capitalAccountId,
+      thirdPartyId: randomUUID(),
+    });
+    expect(ghost.status).toBe(400);
+    expect(await prisma.cashMovement.count()).toBe(0);
+  });
 });

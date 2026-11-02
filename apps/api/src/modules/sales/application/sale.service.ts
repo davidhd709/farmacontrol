@@ -775,6 +775,8 @@ export class SaleService {
                 total: sale.total,
                 paymentMethod: sale.paymentMethod,
                 itemsCount: sale.lines.length,
+                // Cambio de producto: trazabilidad de la devolución que reemplaza
+                exchangeCreditNoteId: payload.exchangeCreditNoteId ?? null,
               },
               ipAddress: auditCtx.ipAddress || null,
               correlationId: auditCtx.correlationId || null,

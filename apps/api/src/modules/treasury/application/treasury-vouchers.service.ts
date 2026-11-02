@@ -254,7 +254,37 @@ export class TreasuryVouchersService {
     };
   }
 
-  private runManual(
+  /**
+   * La contrapartida de un movimiento manual no puede ser una cuenta de control con auxiliar:
+   * caja, bancos, clientes, proveedores o inventario. Moverlas a mano descuadra su auxiliar (p.
+   * ej. un "ingreso" contra Clientes bajaría la cartera sin abonar ninguna factura).
+   */
+  private async assertManualCounterpart(accountId: string): Promise<void> {
+    const [mapping, bank] = await Promise.all([
+      prisma.companyAccountingMapping.findFirst({
+        where: {
+          accountId,
+          status: 'ACTIVE',
+          purpose: { in: ['CASH', 'BANK', 'CUSTOMERS', 'SUPPLIERS', 'INVENTORY'] },
+        },
+        select: { purpose: true },
+      }),
+      prisma.bankAccount.findFirst({ where: { ledgerAccountId: accountId }, select: { name: true } }),
+    ]);
+    if (mapping || bank) {
+      const why =
+        mapping?.purpose === 'CUSTOMERS'
+          ? 'el abono de un cliente se registra como abono a cartera eligiendo sus facturas'
+          : mapping?.purpose === 'SUPPLIERS'
+            ? 'el pago a un proveedor se registra como pago a proveedor eligiendo sus facturas'
+            : 'su saldo lo mueven solo los documentos que la afectan';
+      throw new BadRequestException(
+        `La cuenta de contrapartida es una cuenta de control con auxiliar (${bank ? 'cuenta bancaria' : mapping!.purpose}): ${why}.`,
+      );
+    }
+  }
+
+  private async runManual(
     endpoint: string,
     payload: CreateCashReceiptPayload | CreateDisbursementPayload,
     user: VoucherUser,
@@ -277,6 +307,10 @@ export class TreasuryVouchersService {
       counterpartAccountId,
       thirdPartyId,
     };
+    await this.assertManualCounterpart(counterpartAccountId);
+    if (thirdPartyId && !(await prisma.thirdParty.findUnique({ where: { id: thirdPartyId }, select: { id: true } }))) {
+      throw new BadRequestException('El tercero indicado no existe.');
+    }
     return this.run(endpoint, payload, user, idempotencyKey, {
       voucher,
       apply: async (tx, _documentId, movement) => {
