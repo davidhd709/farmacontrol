@@ -27,9 +27,11 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { SYSTEM_PERMISSIONS } from '@farmacia/contracts';
+import { BANK_MOVEMENT_TYPE_LABELS, SYSTEM_PERMISSIONS } from '@farmacia/contracts';
 import type {
   BankAccountDto,
+  BankMovementDirection,
+  SortOrder,
   CreateBankAccountDto,
   CreateBankMovementDto,
   UpdateBankAccountDto,
@@ -46,6 +48,13 @@ import {
 import { BankAccountDialog } from '../components/BankAccountDialog';
 import { BankMovementDialog } from '../components/BankMovementDialog';
 import { SweetModal } from '../../../components/SweetModal';
+import { SortByDateButton } from '../../../components/SortByDateButton';
+
+const ACCOUNT_TYPE_LABELS: Record<string, string> = {
+  AHORROS: 'Ahorros',
+  CORRIENTE: 'Corriente',
+  DIGITAL: 'Digital',
+};
 
 export function TreasuryBankAccountsPage() {
   const { hasPermission } = usePermissions();
@@ -63,7 +72,8 @@ export function TreasuryBankAccountsPage() {
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   // Filter state for movements
-  const [movementTypeFilter, setMovementTypeFilter] = useState('');
+  const [directionFilter, setDirectionFilter] = useState<BankMovementDirection | ''>('');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [searchFilter, setSearchFilter] = useState('');
   const [fromDateFilter, setFromDateFilter] = useState('');
   const [toDateFilter, setToDateFilter] = useState('');
@@ -76,7 +86,8 @@ export function TreasuryBankAccountsPage() {
   const activeAccountId = selectedAccount?.id ?? '';
 
   const { data: movementsData, isLoading: isLoadingMovements } = useBankMovements(activeAccountId, {
-    movementType: movementTypeFilter || undefined,
+    direction: directionFilter || undefined,
+    sortOrder,
     search: searchFilter || undefined,
     fromDate: fromDateFilter || undefined,
     toDate: toDateFilter || undefined,
@@ -258,7 +269,7 @@ export function TreasuryBankAccountsPage() {
                           {acc.bankName}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          {acc.accountNumber} • {acc.accountType}
+                          {acc.accountNumber} • {ACCOUNT_TYPE_LABELS[acc.accountType] ?? acc.accountType}
                         </Typography>
                         <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                           {acc.ledgerAccountCode
@@ -363,19 +374,17 @@ export function TreasuryBankAccountsPage() {
                 <InputLabel id="filter-type-label">Tipo de Movimiento</InputLabel>
                 <Select
                   labelId="filter-type-label"
-                  value={movementTypeFilter}
+                  value={directionFilter}
                   label="Tipo de Movimiento"
-                  onChange={(e) => setMovementTypeFilter(e.target.value)}
+                  onChange={(e) => setDirectionFilter(e.target.value as BankMovementDirection | '')}
                 >
-                  <MenuItem value="">Todos los tipos</MenuItem>
-                  <MenuItem value="DEPOSIT">Depósitos / Consignaciones</MenuItem>
-                  <MenuItem value="TRANSFER_IN">Transferencias Recibidas</MenuItem>
-                  <MenuItem value="WITHDRAWAL">Retiros</MenuItem>
-                  <MenuItem value="TRANSFER_OUT">Transferencias Enviadas</MenuItem>
-                  <MenuItem value="FEE">Comisiones Bancarias</MenuItem>
-                  <MenuItem value="ADJUSTMENT">Ajustes</MenuItem>
+                  <MenuItem value="">Todos</MenuItem>
+                  <MenuItem value="DEBITO">Débito</MenuItem>
+                  <MenuItem value="CREDITO">Crédito</MenuItem>
                 </Select>
               </FormControl>
+
+              <SortByDateButton value={sortOrder} onChange={setSortOrder} />
 
               <TextField
                 size="small"
@@ -421,7 +430,8 @@ export function TreasuryBankAccountsPage() {
                   </TableRow>
                 ) : (
                   movementsData.items.map((mov) => {
-                    const isCredit = ['DEPOSIT', 'TRANSFER_IN', 'ADJUSTMENT'].includes(
+                    // Débito aumenta el saldo de la cuenta bancaria; crédito lo disminuye
+                    const isDebit = ['DEPOSIT', 'TRANSFER_IN', 'ADJUSTMENT'].includes(
                       mov.movementType,
                     );
                     const amountNum = parseFloat(mov.amount);
@@ -440,9 +450,9 @@ export function TreasuryBankAccountsPage() {
                         </TableCell>
                         <TableCell>
                           <Chip
-                            label={mov.movementType}
+                            label={BANK_MOVEMENT_TYPE_LABELS[mov.movementType] ?? mov.movementType}
                             size="small"
-                            color={isCredit ? 'success' : 'error'}
+                            color={isDebit ? 'success' : 'error'}
                             variant="outlined"
                           />
                         </TableCell>
@@ -451,10 +461,10 @@ export function TreasuryBankAccountsPage() {
                           {mov.externalReference || mov.referenceDocumentId || '—'}
                         </TableCell>
                         <TableCell align="right" sx={{ color: 'success.main', fontWeight: 600 }}>
-                          {isCredit ? `$${amountNum.toLocaleString('es-CO', { minimumFractionDigits: 2 })}` : ''}
+                          {isDebit ? `$${amountNum.toLocaleString('es-CO', { minimumFractionDigits: 2 })}` : ''}
                         </TableCell>
                         <TableCell align="right" sx={{ color: 'error.main', fontWeight: 600 }}>
-                          {!isCredit ? `-$${amountNum.toLocaleString('es-CO', { minimumFractionDigits: 2 })}` : ''}
+                          {!isDebit ? `-$${amountNum.toLocaleString('es-CO', { minimumFractionDigits: 2 })}` : ''}
                         </TableCell>
                         <TableCell align="right" sx={{ fontWeight: 700 }}>
                           ${balAfterNum.toLocaleString('es-CO', { minimumFractionDigits: 2 })}

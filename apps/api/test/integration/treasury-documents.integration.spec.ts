@@ -83,7 +83,7 @@ describe('Recibos de caja y comprobantes de egreso', () => {
     });
 
   it('cada entrada genera un recibo de caja y cada salida un comprobante de egreso, con consecutivo propio', async () => {
-    const venta = await cash('INGRESO_VENTA', '28000.00', { referenceDocumentType: 'SALE', referenceDocumentId: 'FAC-000010' });
+    const abono = await cash('INGRESO_MANUAL', '28000.00', { referenceDocumentType: 'RECEIVABLE', referenceDocumentId: 'CXC-10' });
     await cash('EGRESO_MANUAL', '185000.00', { reason: 'Pago energía' });
     await cash('INGRESO_MANUAL', '50000.00');
     const transferencia = await bank('DEPOSIT', '90000.00');
@@ -94,13 +94,24 @@ describe('Recibos de caja y comprobantes de egreso', () => {
     expect(docs.map((d) => d.documentNumber)).toEqual([
       'RC-000001', 'CE-000001', 'RC-000002', 'RC-000003', 'CE-000002', 'CE-000003',
     ]);
-    const rcVenta = docs.find((d) => d.cashMovementId === venta.id)!;
-    expect(rcVenta.documentType).toBe('RECIBO_CAJA');
-    expect(rcVenta.amount.toFixed(2)).toBe('28000.00');
-    expect(rcVenta.referenceDocumentId).toBe('FAC-000010');
+    const rcAbono = docs.find((d) => d.cashMovementId === abono.id)!;
+    expect(rcAbono.documentType).toBe('RECIBO_CAJA');
+    expect(rcAbono.amount.toFixed(2)).toBe('28000.00');
+    expect(rcAbono.referenceDocumentId).toBe('CXC-10');
     const rcBanco = docs.find((d) => d.bankMovementId === transferencia.id)!;
     expect(rcBanco.bankAccountId).toBe(bankId);
     expect(rcBanco.paymentMethod).toBe('TRANSFERENCIA');
+  });
+
+  it('la venta y su anulación son su propio documento: no generan recibo ni egreso adicional', async () => {
+    await cash('INGRESO_VENTA', '28000.00', { referenceDocumentType: 'SALE', referenceDocumentId: 'FAC-000010' });
+    await cash('EGRESO_MANUAL', '28000.00', { referenceDocumentType: 'SALE_CANCEL', referenceDocumentId: 'FAC-000010' });
+    await bank('DEPOSIT', '15000.00', { referenceDocumentType: 'SALE', referenceDocumentId: 'FAC-000011' });
+    await bank('WITHDRAWAL', '15000.00', { referenceDocumentType: 'SALE_CANCEL', referenceDocumentId: 'FAC-000011' });
+    expect(await prisma.treasuryDocument.count()).toBe(0);
+
+    await cash('INGRESO_MANUAL', '1000.00');
+    expect((await prisma.treasuryDocument.findFirstOrThrow()).documentNumber).toBe('RC-000001');
   });
 
   it('el saldo de apertura de una cuenta bancaria no genera recibo', async () => {

@@ -68,6 +68,7 @@ export class CashController {
         paymentMethod: 'text?',
         startDate: 'date?',
         endDate: 'date?',
+        sortOrder: 'text?',
       }),
       CashMovementQueryValidationPipe,
     )

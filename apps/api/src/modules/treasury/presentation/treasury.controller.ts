@@ -161,12 +161,16 @@ export class TreasuryController {
     @Query('search', new QueryFieldValidationPipe('search', 'text?')) search?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('direction', new QueryFieldValidationPipe('direction', 'text?')) direction?: string,
+    @Query('sortOrder', new QueryFieldValidationPipe('sortOrder', 'text?')) sortOrder?: string,
   ): Promise<{ items: BankMovementDto[]; total: number }> {
     try {
       return await this.treasuryService.listMovements(id, {
         fromDate,
         toDate,
         movementType,
+        direction,
+        sortOrder,
         search,
         page: parsePaginationValue(page, 'page'),
         limit: parsePaginationValue(limit, 'limit'),

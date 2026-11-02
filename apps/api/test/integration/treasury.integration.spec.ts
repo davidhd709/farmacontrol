@@ -280,6 +280,32 @@ describe('Treasury & Bank Accounts (Slice 11.4 Integration with PostgreSQL)', ()
       .get(`${root}/${accountId}`)
       .set('Cookie', adminCookie);
     expect(getAcc.body.currentBalance).toBe('120000.00');
+
+    // 6. Filtro por sentido: débito aumenta el saldo (apertura y transferencia), crédito lo disminuye
+    const debits = await request(app.getHttpServer())
+      .get(`${root}/${accountId}/movements?direction=DEBITO&sortOrder=asc`)
+      .set('Cookie', adminCookie)
+      .expect(200);
+    expect(debits.body.items.map((m: { amount: string }) => m.amount)).toEqual([
+      '100000.00',
+      '50000.00',
+    ]);
+    const credits = await request(app.getHttpServer())
+      .get(`${root}/${accountId}/movements?direction=CREDITO`)
+      .set('Cookie', adminCookie)
+      .expect(200);
+    expect(credits.body.items.map((m: { movementType: string }) => m.movementType)).toEqual([
+      'WITHDRAWAL',
+    ]);
+    const newestFirst = await request(app.getHttpServer())
+      .get(`${root}/${accountId}/movements`)
+      .set('Cookie', adminCookie)
+      .expect(200);
+    expect(newestFirst.body.items[0].movementType).toBe('WITHDRAWAL');
+    await request(app.getHttpServer())
+      .get(`${root}/${accountId}/movements?direction=ENTRADA`)
+      .set('Cookie', adminCookie)
+      .expect(400);
   });
 
   it('procesa múltiples movimientos concurrentes sin inconsistencias en el saldo', async () => {

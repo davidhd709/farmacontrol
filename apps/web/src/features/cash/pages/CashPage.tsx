@@ -26,12 +26,14 @@ import type {
   CashMovementDto,
   CashBalanceDto,
   CashMovementType,
+  SortOrder,
 } from '@farmacia/contracts';
 import { fetchCashBalance, fetchCashMovements } from '../api/cash.api';
 import { CreateCashMovementDialog } from '../components/CreateCashMovementDialog';
 import { PermissionGate } from '../../auth/components/PermissionGate';
 import { HomeBackButton } from '../../../components/HomeBackButton';
 import { SweetModal } from '../../../components/SweetModal';
+import { SortByDateButton } from '../../../components/SortByDateButton';
 
 export const CashPage: React.FC = () => {
   const [balance, setBalance] = useState<CashBalanceDto>({
@@ -50,6 +52,7 @@ export const CashPage: React.FC = () => {
   const [selectedType, setSelectedType] = useState<string>('');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
 
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -78,6 +81,7 @@ export const CashPage: React.FC = () => {
           movementType: selectedType ? (selectedType as CashMovementType) : undefined,
           startDate: startDate || undefined,
           endDate: endDate || undefined,
+          sortOrder,
           page: page + 1,
           limit: pageSize,
         }),
@@ -91,7 +95,7 @@ export const CashPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedType, startDate, endDate, page, pageSize]);
+  }, [selectedType, startDate, endDate, sortOrder, page, pageSize]);
 
   useEffect(() => {
     loadData();
@@ -284,6 +288,14 @@ export const CashPage: React.FC = () => {
             }}
             slotProps={{ inputLabel: { shrink: true } }}
             sx={{ minWidth: 160 }}
+          />
+
+          <SortByDateButton
+            value={sortOrder}
+            onChange={(next) => {
+              setSortOrder(next);
+              setPage(0);
+            }}
           />
 
           {(selectedType || startDate || endDate) && (

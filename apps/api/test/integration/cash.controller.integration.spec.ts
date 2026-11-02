@@ -153,6 +153,20 @@ describe('CashController (Integration with PostgreSQL & RBAC)', () => {
     expect(resList.body.items).toHaveLength(2);
     expect(resList.body.total).toBe(2);
     expect(resList.body.items[0].id).toBe(resEgreso.body.id); // Más reciente primero
+
+    // 5. Orden por fecha ascendente (más viejo primero) y valor inválido
+    const resAsc = await request(app.getHttpServer())
+      .get('/api/v1/cash-movements?sortOrder=asc')
+      .set('Cookie', cajeroCookie)
+      .expect(200);
+    expect(resAsc.body.items.map((m: { id: string }) => m.id)).toEqual([
+      resIngreso.body.id,
+      resEgreso.body.id,
+    ]);
+    await request(app.getHttpServer())
+      .get('/api/v1/cash-movements?sortOrder=fecha')
+      .set('Cookie', cajeroCookie)
+      .expect(400);
   });
 
   it('rechaza un egreso si supera el saldo disponible en caja física', async () => {

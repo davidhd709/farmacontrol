@@ -146,7 +146,7 @@ describe('Operación de Caja — Pantalla CashPage (UX-25)', () => {
     const openBtn = screen.getByText('+ Registrar Movimiento');
     fireEvent.click(openBtn);
 
-    expect(screen.getByText('Registrar Movimiento de Caja')).toBeInTheDocument();
+    expect(screen.getByText('Recibo de Caja')).toBeInTheDocument();
 
     const amountInput = screen.getByLabelText(/Monto/i);
     const reasonInput = screen.getByLabelText(/Motivo \/ Justificación/i);
@@ -194,7 +194,7 @@ describe('Operación de Caja — Pantalla CashPage (UX-25)', () => {
     fireEvent.click(screen.getByText('+ Registrar Movimiento'));
 
     // Cambiar a Egreso Manual
-    const egresoRadio = screen.getByLabelText(/- Egreso Manual/i);
+    const egresoRadio = screen.getByLabelText(/- Comprobante de egreso/i);
     fireEvent.click(egresoRadio);
 
     const amountInput = screen.getByLabelText(/Monto/i);

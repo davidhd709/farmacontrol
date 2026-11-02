@@ -2,8 +2,10 @@ import type {
   BankAccountDto,
   BankAccountOptionDto,
   BankAccountsSummaryDto,
+  BankMovementDirection,
   BankMovementDto,
   CreateBankAccountDto,
+  SortOrder,
   CreateBankMovementDto,
   PaginatedResponse,
   TreasuryDocumentDto,
@@ -16,6 +18,8 @@ export interface MovementFilterParams {
   fromDate?: string;
   toDate?: string;
   movementType?: string;
+  direction?: BankMovementDirection;
+  sortOrder?: SortOrder;
   search?: string;
   page?: number;
   limit?: number;
@@ -63,6 +67,8 @@ export async function getBankMovements(
   if (params.fromDate) searchParams.append('fromDate', params.fromDate);
   if (params.toDate) searchParams.append('toDate', params.toDate);
   if (params.movementType) searchParams.append('movementType', params.movementType);
+  if (params.direction) searchParams.append('direction', params.direction);
+  if (params.sortOrder) searchParams.append('sortOrder', params.sortOrder);
   if (params.search) searchParams.append('search', params.search);
   if (params.page) searchParams.append('page', params.page.toString());
   if (params.limit) searchParams.append('limit', params.limit.toString());

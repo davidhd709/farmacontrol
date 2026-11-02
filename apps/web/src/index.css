@@ -29,27 +29,40 @@ body {
   box-sizing: border-box;
 }
 
+/*
+ * Impresión de un documento abierto en un diálogo (comprobante de venta, recibo de caja,
+ * comprobante de egreso). La pantalla de fondo se retira del flujo en lugar de ocultarse: con
+ * visibility y position: fixed el navegador repetía el documento en cada página que ocupaba
+ * el fondo y el cliente veía dos comprobantes por venta.
+ */
 @media print {
-  body * {
-    visibility: hidden !important;
+  body:has(.print-document) > #root,
+  .MuiDialog-root:has(.print-document) .MuiBackdrop-root {
+    display: none !important;
   }
 
-  .sale-receipt-print,
-  .sale-receipt-print * {
-    visibility: visible !important;
+  .MuiDialog-root:has(.print-document),
+  .MuiDialog-root:has(.print-document) .MuiDialog-container {
+    position: static !important;
+    display: block !important;
+    height: auto !important;
   }
 
-  .sale-receipt-print {
-    position: fixed !important;
-    inset: 0 !important;
+  .print-document {
+    position: static !important;
     width: 100% !important;
     max-width: none !important;
+    max-height: none !important;
     margin: 0 !important;
     box-shadow: none !important;
     overflow: visible !important;
   }
 
-  .sale-receipt-no-print {
+  .print-document .MuiDialogContent-root {
+    overflow: visible !important;
+  }
+
+  .no-print {
     display: none !important;
   }
 }

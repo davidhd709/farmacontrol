@@ -61,7 +61,7 @@ export const SaleReceiptDialog: React.FC<SaleReceiptDialogProps> = ({
       fullWidth
       slotProps={{
         paper: {
-          className: 'sale-receipt-print',
+          className: 'sale-receipt-print print-document',
           sx: {
             borderRadius: 2.5,
             boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.04)',
@@ -84,10 +84,7 @@ export const SaleReceiptDialog: React.FC<SaleReceiptDialogProps> = ({
 
       <DialogContent dividers sx={{ '@media print': { p: 0 } }}>
         <Box sx={{ textAlign: 'center', mb: 2 }}>
-          <Typography variant="h5" sx={{ fontWeight: 800, color: 'primary.main' }}>
-            Comprobante de venta
-          </Typography>
-          <Typography variant="subtitle2" sx={{ fontWeight: 700, mt: 1 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
             Comprobante N°: {sale.invoiceNumber}
           </Typography>
           <Typography variant="caption" color="text.secondary">
@@ -105,7 +102,10 @@ export const SaleReceiptDialog: React.FC<SaleReceiptDialogProps> = ({
             <strong>Atendido por:</strong> {sale.createdByUsername || 'Cajero POS'}
           </Typography>
           <Typography variant="body2">
-            <strong>Medio de Pago:</strong> {sale.paymentMethod}
+            <strong>Condición:</strong>{' '}
+            {sale.paymentMethod === 'CREDITO'
+              ? 'Crédito'
+              : `Contado (${sale.paymentMethod === 'TRANSFERENCIA' ? 'transferencia' : 'efectivo'})`}
           </Typography>
         </Box>
 
@@ -240,7 +240,7 @@ export const SaleReceiptDialog: React.FC<SaleReceiptDialogProps> = ({
       </DialogContent>
 
       <DialogActions
-        className="sale-receipt-no-print"
+        className="no-print"
         sx={{ p: 2, display: 'flex', justifyContent: 'space-between' }}
       >
         <Button

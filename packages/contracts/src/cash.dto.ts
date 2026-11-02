@@ -41,6 +41,10 @@ export interface CashMovementQueryFilters {
   paymentMethod?: PaymentMethod;
   startDate?: string;
   endDate?: string;
+  /** Orden por fecha: 'desc' (más nuevo primero, predeterminado) o 'asc' */
+  sortOrder?: SortOrder;
   page?: number;
   limit?: number;
 }
+
+export type SortOrder = 'asc' | 'desc';

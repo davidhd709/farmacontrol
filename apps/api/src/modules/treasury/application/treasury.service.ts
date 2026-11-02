@@ -36,10 +36,14 @@ export interface MovementFilter {
   fromDate?: string;
   toDate?: string;
   movementType?: string;
+  direction?: string;
+  sortOrder?: string;
   search?: string;
   page?: number;
   limit?: number;
 }
+
+const OUTFLOW_TYPES = ['WITHDRAWAL', 'TRANSFER_OUT', 'FEE'];
 
 const LEDGER_INCLUDE = { ledgerAccount: { select: { code: true, name: true } } } as const;
 type BankAccountWithLedger = BankAccount & {
@@ -482,6 +486,22 @@ export class TreasuryService {
     if (filter.movementType) {
       where.movementType = filter.movementType;
     }
+    if (filter.direction !== undefined) {
+      if (filter.direction !== 'DEBITO' && filter.direction !== 'CREDITO') {
+        throw new TreasuryValidationError('El sentido del movimiento debe ser DEBITO o CREDITO.');
+      }
+      // Débito aumenta el saldo de la cuenta bancaria; crédito lo disminuye (isOutflow)
+      where.AND = [
+        {
+          movementType:
+            filter.direction === 'CREDITO' ? { in: OUTFLOW_TYPES } : { notIn: OUTFLOW_TYPES },
+        },
+      ];
+    }
+    if (filter.sortOrder !== undefined && filter.sortOrder !== 'asc' && filter.sortOrder !== 'desc') {
+      throw new TreasuryValidationError('El orden debe ser asc o desc.');
+    }
+    const order = filter.sortOrder === 'asc' ? 'asc' : 'desc';
 
     if (filter.fromDate || filter.toDate) {
       where.movementDate = {};
@@ -522,7 +542,7 @@ export class TreasuryService {
     const [items, total] = await Promise.all([
       prisma.bankMovement.findMany({
         where,
-        orderBy: [{ movementDate: 'desc' }, { createdAt: 'desc' }],
+        orderBy: [{ movementDate: order }, { createdAt: order }, { id: order }],
         skip,
         take: limit,
       }),

@@ -22,6 +22,7 @@ export async function fetchCashMovements(
   if (filters.paymentMethod) query.set('paymentMethod', filters.paymentMethod);
   if (filters.startDate) query.set('startDate', filters.startDate);
   if (filters.endDate) query.set('endDate', filters.endDate);
+  if (filters.sortOrder) query.set('sortOrder', filters.sortOrder);
   if (filters.page) query.set('page', String(filters.page));
   if (filters.limit) query.set('limit', String(filters.limit));
 

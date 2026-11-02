@@ -159,11 +159,6 @@ const FiscalPeriodsPage = lazy(() =>
     default: m.FiscalPeriodsPage,
   })),
 );
-const ThirdPartiesReportPage = lazy(() =>
-  import('./features/accounting/pages/ThirdPartiesReportPage').then((m) => ({
-    default: m.ThirdPartiesReportPage,
-  })),
-);
 const AuditLogsPage = lazy(() =>
   import('./features/audit/pages/AuditLogsPage').then((m) => ({ default: m.AuditLogsPage })),
 );
@@ -218,7 +213,6 @@ export const App = () => {
               <Route path="/accounting/trial-balance" element={<TrialBalancePage />} />
               <Route path="/accounting/income-statement" element={<IncomeStatementPage />} />
               <Route path="/accounting/balance-sheet" element={<BalanceSheetPage />} />
-              <Route path="/accounting/third-parties" element={<ThirdPartiesReportPage />} />
               <Route path="/accounting/periods" element={<FiscalPeriodsPage />} />
               <Route path="/company" element={<CompanySettingsPage />} />
               <Route path="/tax-catalog" element={<TaxCatalogPage />} />

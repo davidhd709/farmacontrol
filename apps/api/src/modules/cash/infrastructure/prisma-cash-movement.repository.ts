@@ -187,7 +187,10 @@ export class PrismaCashMovementRepository implements ICashMovementRepository {
     const [records, total] = await Promise.all([
       this.client.cashMovement.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
+        orderBy: [
+          { createdAt: filters.sortOrder === 'asc' ? 'asc' : 'desc' },
+          { id: filters.sortOrder === 'asc' ? 'asc' : 'desc' },
+        ],
         skip,
         take: limit,
         include: {

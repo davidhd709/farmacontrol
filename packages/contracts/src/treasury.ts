@@ -11,6 +11,21 @@ export const BANK_MOVEMENT_TYPES = [
 ] as const;
 export type BankMovementType = (typeof BANK_MOVEMENT_TYPES)[number];
 
+/**
+ * Sentido contable de un movimiento en la cuenta bancaria (un activo): débito aumenta el
+ * saldo (consignaciones, transferencias recibidas, ajustes) y crédito lo disminuye.
+ */
+export type BankMovementDirection = 'DEBITO' | 'CREDITO';
+
+export const BANK_MOVEMENT_TYPE_LABELS: Record<BankMovementType, string> = {
+  DEPOSIT: 'Consignación',
+  WITHDRAWAL: 'Retiro',
+  TRANSFER_IN: 'Transferencia recibida',
+  TRANSFER_OUT: 'Transferencia enviada',
+  FEE: 'Comisión bancaria',
+  ADJUSTMENT: 'Ajuste',
+};
+
 export interface BankAccountDto {
   id: string;
   bankName: string;

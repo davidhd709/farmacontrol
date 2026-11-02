@@ -192,12 +192,6 @@ export const menuGroups: MenuGroupConfig[] = [
         permission: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
       },
       {
-        title: 'Auxiliar de Terceros',
-        path: '/accounting/third-parties',
-        icon: <PeopleAltIcon fontSize="small" />,
-        permission: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
-      },
-      {
         title: 'Períodos y Cierre Fiscal',
         path: '/accounting/periods',
         icon: <DateRangeIcon fontSize="small" />,

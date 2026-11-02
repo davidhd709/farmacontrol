@@ -149,6 +149,9 @@ describe('SalesHistoryPage (Frontend Historial y Anulación UX-04 / UX-05)', () 
 
     const receiptDialog = screen.getByRole('dialog');
     expect(receiptDialog).toHaveClass('sale-receipt-print');
+    // Un solo comprobante por venta: el título no se repite y el diálogo se imprime como documento
+    expect(receiptDialog).toHaveClass('print-document');
+    expect(screen.getAllByText(/Comprobante de venta/i)).toHaveLength(1);
     expect(screen.queryByText(/NIT:/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Régimen Común/i)).not.toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Descuento' })).toBeInTheDocument();

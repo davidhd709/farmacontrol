@@ -126,7 +126,7 @@ export const CreateCashMovementDialog: React.FC<CreateCashMovementDialogProps> =
     >
       <form onSubmit={handleSubmit}>
         <DialogTitle id="cash-movement-title" sx={{ fontWeight: 600 }}>
-          Registrar Movimiento de Caja
+          {movementType === 'INGRESO_MANUAL' ? 'Recibo de Caja' : 'Comprobante de Egreso'}
         </DialogTitle>
         <DialogContent dividers>
           {errorMsg && (
@@ -149,7 +149,7 @@ export const CreateCashMovementDialog: React.FC<CreateCashMovementDialogProps> =
                 control={<Radio color="success" />}
                 label={
                   <Typography variant="body2" sx={{ fontWeight: 600, color: 'success.main' }}>
-                    + Ingreso Manual (Entrada)
+                    + Recibo de caja (ingreso)
                   </Typography>
                 }
               />
@@ -158,7 +158,7 @@ export const CreateCashMovementDialog: React.FC<CreateCashMovementDialogProps> =
                 control={<Radio color="error" />}
                 label={
                   <Typography variant="body2" sx={{ fontWeight: 600, color: 'error.main' }}>
-                    - Egreso Manual (Salida)
+                    - Comprobante de egreso (salida)
                   </Typography>
                 }
               />
