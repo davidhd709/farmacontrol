@@ -42,10 +42,7 @@ import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import {
   ExpenseDto,
   ExpenseCategoryDto,
-  ExpenseStatus,
-  ExpensePaymentMethod,
   ExpensesSummaryDto,
-  BankAccountDto,
 } from '@farmacia/contracts';
 
 import {
@@ -54,7 +51,6 @@ import {
   cancelExpense,
   reverseExpensePayment,
   fetchExpenseCategories,
-  fetchActiveBankAccounts,
 } from '../api/expenses.api';
 import { ExpenseCategoriesModal } from '../components/ExpenseCategoriesModal';
 import { localIsoDate } from '../../../components/QuickDateRange';
@@ -71,8 +67,6 @@ export const ExpensesPage: React.FC = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [categoryId, setCategoryId] = useState('');
-  const [status, setStatus] = useState<string>('');
-  const [paymentMethod, setPaymentMethod] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
   const [page, setPage] = useState(1);
 
@@ -80,7 +74,6 @@ export const ExpensesPage: React.FC = () => {
   const [expenses, setExpenses] = useState<ExpenseDto[]>([]);
   const [summary, setSummary] = useState<ExpensesSummaryDto | null>(null);
   const [categories, setCategories] = useState<ExpenseCategoryDto[]>([]);
-  const [bankAccounts, setBankAccounts] = useState<BankAccountDto[]>([]);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -100,12 +93,7 @@ export const ExpensesPage: React.FC = () => {
   // Carga de categorías y bancos auxiliares
   const loadAuxData = useCallback(async () => {
     try {
-      const [cats, banks] = await Promise.all([
-        fetchExpenseCategories(),
-        fetchActiveBankAccounts(),
-      ]);
-      setCategories(cats);
-      setBankAccounts(banks);
+      setCategories(await fetchExpenseCategories());
     } catch (err: any) {
       console.error('Error al cargar datos auxiliares:', err);
     }
@@ -120,8 +108,6 @@ export const ExpensesPage: React.FC = () => {
         startDate: startDate || undefined,
         endDate: endDate || undefined,
         categoryId: categoryId || undefined,
-        status: (status as ExpenseStatus) || undefined,
-        paymentMethod: (paymentMethod as ExpensePaymentMethod) || undefined,
         search: searchTerm.trim() || undefined,
         page,
         limit: 15,
@@ -140,7 +126,7 @@ export const ExpensesPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [startDate, endDate, categoryId, status, paymentMethod, searchTerm, page]);
+  }, [startDate, endDate, categoryId, searchTerm, page]);
 
   useEffect(() => {
     loadAuxData();
@@ -171,8 +157,6 @@ export const ExpensesPage: React.FC = () => {
     setStartDate('');
     setEndDate('');
     setCategoryId('');
-    setStatus('');
-    setPaymentMethod('');
     setSearchTerm('');
     setPage(1);
   };
@@ -386,43 +370,7 @@ export const ExpensesPage: React.FC = () => {
               ))}
             </TextField>
           </Grid>
-          <Grid size={{ xs: 12, sm: 6, md: 2 }}>
-            <TextField
-              select
-              label="Estado"
-              size="small"
-              fullWidth
-              value={status}
-              onChange={(e) => {
-                setStatus(e.target.value);
-                setPage(1);
-              }}
-            >
-              <MenuItem value="">Todos los Estados</MenuItem>
-              <MenuItem value="PAGADO">Pagado</MenuItem>
-              <MenuItem value="PENDIENTE">Pendiente</MenuItem>
-              <MenuItem value="ANULADO">Anulado</MenuItem>
-            </TextField>
-          </Grid>
-          <Grid size={{ xs: 12, sm: 6, md: 2.5 }}>
-            <TextField
-              select
-              label="Forma de Pago"
-              size="small"
-              fullWidth
-              value={paymentMethod}
-              onChange={(e) => {
-                setPaymentMethod(e.target.value);
-                setPage(1);
-              }}
-            >
-              <MenuItem value="">Todos los Medios</MenuItem>
-              <MenuItem value="EFECTIVO">Efectivo</MenuItem>
-              <MenuItem value="TRANSFERENCIA">Transferencia / Banco</MenuItem>
-              <MenuItem value="CREDITO">Crédito</MenuItem>
-            </TextField>
-          </Grid>
-          <Grid size={{ xs: 12, md: 4 }}>
+          <Grid size={{ xs: 12, md: 8.5 }}>
             <TextField
               label="Buscar por Beneficiario, Documento o Concepto"
               size="small"
@@ -469,8 +417,7 @@ export const ExpensesPage: React.FC = () => {
               <TableCell sx={{ fontWeight: 'bold' }}>Categoría</TableCell>
               <TableCell sx={{ fontWeight: 'bold' }}>Beneficiario</TableCell>
               <TableCell sx={{ fontWeight: 'bold' }}>Concepto & Comprobante</TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>Medio de Pago</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', textAlign: 'center' }}>Estado</TableCell>
+              <TableCell sx={{ fontWeight: 'bold' }}>Vence</TableCell>
               <TableCell sx={{ fontWeight: 'bold', textAlign: 'right' }}>Total ($)</TableCell>
               <TableCell sx={{ fontWeight: 'bold', textAlign: 'right' }}>
                 Saldo Pendiente ($)
@@ -487,13 +434,12 @@ export const ExpensesPage: React.FC = () => {
               </TableRow>
             ) : expenses.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} sx={{ textAlign: 'center', py: 4 }}>
+                <TableCell colSpan={8} sx={{ textAlign: 'center', py: 4 }}>
                   No se encontraron registros de gastos con los filtros aplicados.
                 </TableCell>
               </TableRow>
             ) : (
               expenses.map((e) => {
-                const isPaid = e.status === 'PAGADO';
                 const isPending = e.status === 'PENDIENTE';
                 const isCancelled = e.status === 'ANULADO';
 
@@ -516,33 +462,7 @@ export const ExpensesPage: React.FC = () => {
                         </Typography>
                       )}
                     </TableCell>
-                    <TableCell>
-                      <Typography variant="body2">{e.paymentMethod}</Typography>
-                      {e.bankAccountName && (
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          sx={{ display: 'block' }}
-                        >
-                          {e.bankAccountName}
-                        </Typography>
-                      )}
-                    </TableCell>
-                    <TableCell sx={{ textAlign: 'center' }}>
-                      <Chip
-                        label={e.status}
-                        color={isPaid ? 'success' : isPending ? 'warning' : 'error'}
-                        size="small"
-                      />
-                      {isPending && e.dueDate && (
-                        <Typography
-                          variant="caption"
-                          sx={{ color: 'warning.main', display: 'block' }}
-                        >
-                          Vence: {e.dueDate}
-                        </Typography>
-                      )}
-                    </TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{e.dueDate ?? e.expenseDate}</TableCell>
                     <TableCell sx={{ textAlign: 'right', fontWeight: 'bold' }}>
                       {formatCurrency(e.amount)}
                     </TableCell>
@@ -553,7 +473,7 @@ export const ExpensesPage: React.FC = () => {
                         color: isPending ? 'warning.main' : 'text.secondary',
                       }}
                     >
-                      {formatCurrency(e.balance)}
+                      {isCancelled ? 'Anulada' : formatCurrency(e.balance)}
                     </TableCell>
                     <TableCell sx={{ textAlign: 'center' }}>
                       <Tooltip title="Ver Detalle / Historial">
@@ -605,7 +525,6 @@ export const ExpensesPage: React.FC = () => {
       {createModalOpen && (
         <ExpenseFormDialog
           categories={categories}
-          bankAccounts={bankAccounts}
           onClose={() => setCreateModalOpen(false)}
           onSuccess={async () => {
             setSuccess('Gasto registrado exitosamente con partida doble y tesorería.');
@@ -695,21 +614,13 @@ export const ExpensesPage: React.FC = () => {
                 </Grid>
                 <Grid size={{ xs: 6, sm: 4 }}>
                   <Typography variant="caption" color="text.secondary">
-                    Estado
+                    Saldo por pagar
                   </Typography>
-                  <Box>
-                    <Chip
-                      label={selectedExpense.status}
-                      color={
-                        selectedExpense.status === 'PAGADO'
-                          ? 'success'
-                          : selectedExpense.status === 'PENDIENTE'
-                            ? 'warning'
-                            : 'error'
-                      }
-                      size="small"
-                    />
-                  </Box>
+                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                    {selectedExpense.status === 'ANULADO'
+                      ? 'Anulada'
+                      : formatCurrency(selectedExpense.balance)}
+                  </Typography>
                 </Grid>
               </Grid>
 

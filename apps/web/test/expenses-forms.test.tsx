@@ -4,7 +4,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
-  BankAccountDto,
   ExpenseCategoryDto,
   ExpenseDto,
   PayablePaymentDto,
@@ -44,9 +43,6 @@ const expense = {
 const categories = [
   { id: 'category', name: 'Servicios', accountCode: '51', accountName: 'Servicios' },
 ] as ExpenseCategoryDto[];
-const banks = [
-  { id: 'bank', bankName: 'Banco', accountNumber: '1234', currentBalance: '100.00' },
-] as BankAccountDto[];
 function mount(content: ReactNode) {
   return render(
     <ThemeProvider theme={appTheme}>
@@ -64,10 +60,6 @@ function mount(content: ReactNode) {
 }
 const change = (label: string | RegExp, value: string) =>
   fireEvent.change(screen.getByLabelText(label), { target: { value } });
-async function choose(label: string, name: string | RegExp) {
-  fireEvent.mouseDown(screen.getByRole('combobox', { name: new RegExp(label) }));
-  fireEvent.click(await screen.findByRole('option', { name }));
-}
 
 beforeEach(() => {
   vi.spyOn(parties, 'fetchThirdParties').mockResolvedValue({
@@ -84,7 +76,6 @@ describe('Causación de gastos', () => {
     mount(
       <ExpenseFormDialog
         categories={categories}
-        bankAccounts={banks}
         onClose={vi.fn()}
         onSuccess={vi.fn().mockResolvedValue(undefined)}
       />,
@@ -99,7 +90,7 @@ describe('Causación de gastos', () => {
     expect(spy).not.toHaveBeenCalled();
   });
 
-  it('conserva payload, exige vencimiento a crédito y reutiliza clave tras error', async () => {
+  it('causa sin medio de pago ni estado, valida el vencimiento y reutiliza clave tras error', async () => {
     let finish!: (value: ExpenseDto) => void;
     const spy = vi
       .spyOn(api, 'createExpense')
@@ -117,23 +108,23 @@ describe('Causación de gastos', () => {
     change(/Nº Factura/, ' DOC-1 ');
     change('Notas / Observaciones', ' soporte ');
     change(/Fecha de Gasto/, '2026-10-18');
-    await choose('Forma de Pago', 'A Crédito (Pendiente por Pagar)');
+    expect(screen.queryByLabelText('Forma de Pago')).not.toBeInTheDocument();
+    change(/Fecha de Vencimiento/, '2026-10-01');
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar Gasto' }));
-    expect(await screen.findByText(/fecha de vencimiento es obligatoria/)).toBeInTheDocument();
+    expect(await screen.findByText(/no puede ser anterior/)).toBeInTheDocument();
     expect(spy).not.toHaveBeenCalled();
     change(/Fecha de Vencimiento/, '2026-11-18');
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar Gasto' }));
     expect(await screen.findByText('Sin conexión')).toBeInTheDocument();
     const expected = {
       categoryId: 'category',
+      supplierId: undefined,
       beneficiary: 'Proveedor',
       description: 'Servicio',
       documentNumber: 'DOC-1',
       amount: '0.30',
       expenseDate: '2026-10-18',
       dueDate: '2026-11-18',
-      paymentMethod: 'CREDITO',
-      bankAccountId: undefined,
       notes: 'soporte',
     };
     expect(spy.mock.calls[0]).toEqual([expected, expect.any(String)]);
@@ -218,7 +209,6 @@ it('integra los diálogos en gastos y conserva cancellationReason/reversalReason
     totalPending: '0.30',
   } as never);
   vi.spyOn(api, 'fetchExpenseCategories').mockResolvedValue(categories);
-  vi.spyOn(api, 'fetchActiveBankAccounts').mockResolvedValue(banks);
   const cancel = vi.spyOn(api, 'cancelExpense').mockResolvedValue(expense);
   const reverse = vi.spyOn(api, 'reverseExpensePayment').mockResolvedValue(expense);
   mount(<ExpensesPage />);

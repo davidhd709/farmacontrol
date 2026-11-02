@@ -703,47 +703,57 @@ describe('Full System Multi-day Lifecycle Simulation (PostgreSQL Real)', () => {
       expect(bank.currentBalance.toFixed(2)).toBe('49960000.00'); // 50.960.000 - 1.000.000
     });
 
-    it('Gasto Operativo 1: Factura de energía eléctrica $150.000 en efectivo', async () => {
-      const res = await request(app.getHttpServer())
+    // Correcciones del cliente (2026-11-01): la causación reconoce el gasto y la cuenta por
+    // pagar; el pago es un comprobante de egreso que selecciona la causación
+    const causeAndPay = async (body: Record<string, string>) => {
+      const causation = await request(app.getHttpServer())
         .post('/api/v1/expenses')
         .set('Cookie', adminCookie)
         .set('Idempotency-Key', randomUUID())
-        .send({
-          categoryId: expenseCategoryIdPower,
-          description: 'Factura de luz Enel Colombia',
-          beneficiary: 'Enel Colombia S.A. ESP',
-          documentNumber: 'ENEL-2026-01',
-          amount: '150000.00',
-          expenseDate: '2026-10-03',
-          paymentMethod: 'EFECTIVO',
-        });
-
-      expect(res.status).toBe(201);
-      expect(res.body.status).toBe('PAGADO');
-    });
-
-    it('Gasto Operativo 2: Canon de arrendamiento $1.200.000 por transferencia bancaria', async () => {
-      const res = await request(app.getHttpServer())
-        .post('/api/v1/expenses')
+        .send({ ...body, supplierId });
+      expect(causation.status, JSON.stringify(causation.body)).toBe(201);
+      expect(causation.body.status).toBe('PENDIENTE');
+      const voucher = await request(app.getHttpServer())
+        .post('/api/v1/treasury/disbursements')
         .set('Cookie', adminCookie)
         .set('Idempotency-Key', randomUUID())
         .send({
-          categoryId: expenseCategoryIdRent,
-          description: 'Arrendamiento local comercial Enero',
-          beneficiary: 'Inmobiliaria El Prado S.A.S.',
-          documentNumber: 'ARR-2026-01',
-          amount: '1200000.00',
-          expenseDate: '2026-10-03',
+          kind: 'PROVEEDOR',
           paymentMethod: 'TRANSFERENCIA',
           bankAccountId,
+          concept: `Pago ${body.documentNumber}`,
+          supplierId,
+          applications: [
+            { documentType: 'CAUSACION_GASTO', documentId: causation.body.id, amount: body.amount },
+          ],
         });
+      expect(voucher.status, JSON.stringify(voucher.body)).toBe(201);
+      const paid = await prisma.expense.findUniqueOrThrow({ where: { id: causation.body.id } });
+      expect(paid.status).toBe('PAGADO');
+    };
 
-      expect(res.status).toBe(201);
-      expect(res.body.status).toBe('PAGADO');
-
-      // Saldo bancario actualizado
+    it('Gasto Operativo 1: Factura de energía eléctrica $150.000 causada y pagada con egreso', async () => {
+      await causeAndPay({
+        categoryId: expenseCategoryIdPower,
+        description: 'Factura de luz Enel Colombia',
+        documentNumber: 'ENEL-2026-01',
+        amount: '150000.00',
+        expenseDate: '2026-10-03',
+      });
       const bank = await prisma.bankAccount.findUniqueOrThrow({ where: { id: bankAccountId } });
-      expect(bank.currentBalance.toFixed(2)).toBe('48760000.00'); // 49.960.000 - 1.200.000
+      expect(bank.currentBalance.toFixed(2)).toBe('49810000.00'); // 49.960.000 - 150.000
+    });
+
+    it('Gasto Operativo 2: Canon de arrendamiento $1.200.000 causado y pagado con egreso', async () => {
+      await causeAndPay({
+        categoryId: expenseCategoryIdRent,
+        description: 'Arrendamiento local comercial Enero',
+        documentNumber: 'ARR-2026-01',
+        amount: '1200000.00',
+        expenseDate: '2026-10-03',
+      });
+      const bank = await prisma.bankAccount.findUniqueOrThrow({ where: { id: bankAccountId } });
+      expect(bank.currentBalance.toFixed(2)).toBe('48610000.00'); // 49.810.000 - 1.200.000
     });
 
     it('Anulación de Venta 1: POST /api/v1/sales/:id/cancel devuelve existencias a LOT-AMX-CLOSE y reversa contabilidad', async () => {

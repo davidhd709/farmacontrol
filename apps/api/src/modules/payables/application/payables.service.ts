@@ -12,7 +12,7 @@ import {
   PayableQueryFilters,
   RegisterPayablePaymentPayload,
   PaginatedResponse,
-  AgingSummaryDto,
+  AgingBreakdownDto,
   PayableMovementsDto,
 } from '@farmacia/contracts';
 import { buildDocumentMovements, RawDocumentMovement } from '../../../common/utils/document-movements';
@@ -22,6 +22,7 @@ import {
   parsePaymentAmount,
   requirePaymentBankAccountId,
 } from '../../treasury/application/payment-validation';
+import { agingBreakdown, agingBucketOf, daysOverdue } from '../../../common/utils/aging';
 import { IdempotencyService } from '../../../common/idempotency/idempotency.service';
 import { AccountingEngineService } from '../../accounting/application/accounting-engine.service';
 
@@ -459,73 +460,21 @@ export class PayablesService {
   }
 
   /**
-   * Resumen de Cartera de Proveedores por Edades de Vencimiento.
-   * Conforme a MODULO_CONTABILIDAD_FARMACIA.md: Corriente, 1-30, 31-60, 61-90, >90 días.
+   * Resumen por edades de las facturas pendientes: Corriente (no vencida o hasta 30 días),
+   * 31–60, 61–90 y más de 90 días vencida (los mismos rangos en cartera y cuentas por pagar).
    */
-  async getAgingSummary(): Promise<AgingSummaryDto> {
-    const payables = await prisma.payable.findMany({
-      where: {
-        status: 'PENDIENTE',
-        balance: { gt: 0 },
-      },
-      select: {
-        balance: true,
-        dueDate: true,
-      },
+  async getAgingSummary(): Promise<AgingBreakdownDto> {
+    const rows = await prisma.payable.findMany({
+      where: { status: 'PENDIENTE', balance: { gt: 0 } },
+      select: { balance: true, dueDate: true },
     });
-
-    const now = calendarDate(businessToday());
-
-    let currentCents = 0n;
-    let currentCount = 0;
-    let days1To30Cents = 0n;
-    let days1To30Count = 0;
-    let days31To60Cents = 0n;
-    let days31To60Count = 0;
-    let days61To90Cents = 0n;
-    let days61To90Count = 0;
-    let daysOver90Cents = 0n;
-    let daysOver90Count = 0;
-
-    for (const p of payables) {
-      const balanceCents = parseMoneyToCents(p.balance.toString(), 'Saldo de cuenta por pagar');
-      const due = p.dueDate;
-
-      const diffTime = now.getTime() - due.getTime();
-      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-
-      if (diffDays <= 0) {
-        currentCents += balanceCents;
-        currentCount++;
-      } else if (diffDays <= 30) {
-        days1To30Cents += balanceCents;
-        days1To30Count++;
-      } else if (diffDays <= 60) {
-        days31To60Cents += balanceCents;
-        days31To60Count++;
-      } else if (diffDays <= 90) {
-        days61To90Cents += balanceCents;
-        days61To90Count++;
-      } else {
-        daysOver90Cents += balanceCents;
-        daysOver90Count++;
-      }
-    }
-
-    const totalCents =
-      currentCents + days1To30Cents + days31To60Cents + days61To90Cents + daysOver90Cents;
-    const totalCount =
-      currentCount + days1To30Count + days31To60Count + days61To90Count + daysOver90Count;
-
-    return {
-      current: { amount: centsToMoneyString(currentCents), count: currentCount },
-      days1To30: { amount: centsToMoneyString(days1To30Cents), count: days1To30Count },
-      days31To60: { amount: centsToMoneyString(days31To60Cents), count: days31To60Count },
-      days61To90: { amount: centsToMoneyString(days61To90Cents), count: days61To90Count },
-      daysOver90: { amount: centsToMoneyString(daysOver90Cents), count: daysOver90Count },
-      totalPending: centsToMoneyString(totalCents),
-      totalCount,
-    };
+    const today = calendarDate(businessToday());
+    return agingBreakdown(
+      rows.map((row) => ({
+        balanceCents: parseMoneyToCents(row.balance.toString(), 'Saldo de cuenta por pagar'),
+        bucket: agingBucketOf(daysOverdue(row.dueDate, today)),
+      })),
+    );
   }
 
   /**

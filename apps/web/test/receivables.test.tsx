@@ -69,7 +69,6 @@ describe('ReceivablesPage (Frontend Cuentas por Cobrar — UX-21)', () => {
       pageSize: 15,
       totalPages: 1,
     });
-    vi.spyOn(receivablesApi, 'fetchReceivableById').mockResolvedValue(mockReceivables[0]);
   });
 
   it('renderiza la lista de cuentas por cobrar y métricas de saldo', async () => {

@@ -112,6 +112,6 @@ Cada flujo (venta, abono, pago a proveedor, gasto, nota crédito, movimiento man
 | 1 | IMPLEMENTADO | ver `git log` (`fix(ventas): …`) |
 | 2 | IMPLEMENTADO | ver `git log` (`feat(ventas): …`) |
 | 3 | IMPLEMENTADO | ver `git log` (`feat(tesoreria): …`) |
-| 4 | PENDIENTE | — |
+| 4 | IMPLEMENTADO | ver `git log` (`feat(cuentas-por-pagar): …`) |
 | 5 | PENDIENTE | — |
 | 6 | PENDIENTE | — |

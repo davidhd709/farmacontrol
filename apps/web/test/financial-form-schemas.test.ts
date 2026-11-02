@@ -4,9 +4,9 @@ import { reversalSchema as payableReversal } from '../src/features/payables/vali
 import { expenseSchema } from '../src/features/expenses/validation/expense.schema';
 import { expenseReasonSchema } from '../src/features/expenses/validation/expense-reason.schema';
 
-const payment = { amount: '0.30', paymentMethod: 'EFECTIVO', bankAccountId: '', notes: '' };
 const expense = {
-  ...payment,
+  amount: '0.30',
+  notes: '',
   categoryId: 'category',
   beneficiary: 'Proveedor',
   description: 'Servicio',
@@ -37,26 +37,15 @@ describe.each([
   ])('rechaza el importe %s', (amount) => {
     expect(schema.safeParse({ ...valid, amount }).success).toBe(false);
   });
-  it('exige medio de pago y banco sólo para transferencia', () => {
-    expect(schema.safeParse({ ...valid, paymentMethod: '' }).success).toBe(false);
-    expect(
-      schema.safeParse({ ...valid, paymentMethod: 'TRANSFERENCIA', bankAccountId: ' ' }).success,
-    ).toBe(false);
-    expect(
-      schema.safeParse({ ...valid, paymentMethod: 'TRANSFERENCIA', bankAccountId: 'bank' }).success,
-    ).toBe(true);
-  });
 });
 
-it('la causación exige categoría, beneficiario, descripción, fecha y vencimiento a crédito', () => {
+it('la causación exige categoría, beneficiario, descripción y fecha, sin medio de pago ni estado', () => {
   for (const field of ['categoryId', 'beneficiary', 'description', 'expenseDate']) {
     expect(expenseSchema.safeParse({ ...expense, [field]: '' }).success).toBe(false);
   }
-  expect(expenseSchema.safeParse({ ...expense, paymentMethod: 'CREDITO' }).success).toBe(false);
-  expect(
-    expenseSchema.safeParse({ ...expense, paymentMethod: 'CREDITO', dueDate: '2026-11-18' })
-      .success,
-  ).toBe(true);
+  expect(expenseSchema.safeParse({ ...expense, dueDate: '2026-11-18' }).success).toBe(true);
+  expect(expenseSchema.safeParse({ ...expense, dueDate: '2026-10-01' }).success).toBe(false);
+  expect(Object.keys(expenseSchema.parse(expense))).not.toContain('paymentMethod');
 });
 
 describe.each([

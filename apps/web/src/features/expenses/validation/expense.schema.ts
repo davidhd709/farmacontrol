@@ -18,6 +18,7 @@ export const moneySchema = z.string().superRefine((value, ctx) => {
 });
 
 const requiredText = (message: string) => z.string().refine((value) => !!value.trim(), message);
+/** Causación de gasto: reconoce el gasto y la cuenta por pagar; no registra pagos. */
 export const expenseSchema = z
   .object({
     categoryId: requiredText('Selecciona una categoría de gasto'),
@@ -27,25 +28,14 @@ export const expenseSchema = z
     amount: moneySchema,
     expenseDate: requiredText('La fecha del gasto es obligatoria'),
     dueDate: z.string(),
-    paymentMethod: z.enum(['EFECTIVO', 'TRANSFERENCIA', 'CREDITO'], {
-      error: 'Selecciona la forma de pago',
-    }),
-    bankAccountId: z.string(),
     notes: z.string(),
   })
   .superRefine((data, ctx) => {
-    if (data.paymentMethod === 'TRANSFERENCIA' && !data.bankAccountId.trim()) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['bankAccountId'],
-        message: 'Selecciona una cuenta bancaria para transferencia',
-      });
-    }
-    if (data.paymentMethod === 'CREDITO' && !data.dueDate) {
+    if (data.dueDate && data.expenseDate && data.dueDate < data.expenseDate) {
       ctx.addIssue({
         code: 'custom',
         path: ['dueDate'],
-        message: 'La fecha de vencimiento es obligatoria para gastos a crédito',
+        message: 'El vencimiento no puede ser anterior a la fecha del gasto',
       });
     }
   });

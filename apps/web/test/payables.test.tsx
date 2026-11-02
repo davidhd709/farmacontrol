@@ -1,92 +1,136 @@
 import { ThemeProvider } from '@mui/material';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { PayableDto } from '@farmacia/contracts';
+import type { PayableStatementDto, ThirdPartyDto } from '@farmacia/contracts';
 import * as payablesApi from '../src/features/payables/api/payables.api';
+import * as thirdPartiesApi from '../src/features/third-parties/api/third-parties.api';
 import { PayablesPage } from '../src/features/payables/pages/PayablesPage';
 import { appTheme } from '../src/theme/app-theme';
+import { withAuth } from './support-auth';
 
-const mockPayables: PayableDto[] = [
-  {
-    id: 'pay-1',
-    purchaseId: 'purch-1',
-    invoiceNumber: 'FAC-PROV-101',
-    supplierId: 'sup-1',
-    supplierName: 'Distribuciones Farmacéuticas del Valle',
-    totalAmount: 500000,
-    amountPaid: 200000,
-    balance: 300000,
-    status: 'PENDIENTE',
-    dueDate: '2026-11-30',
-    notes: 'Pago a 60 días',
-    createdAt: '2026-09-01T10:00:00.000Z',
-    updatedAt: '2026-09-01T10:00:00.000Z',
-    payments: [],
+const statement: PayableStatementDto = {
+  items: [
+    {
+      documentType: 'FACTURA_COMPRA',
+      documentId: 'pay-1',
+      documentNumber: 'FAC-PROV-101',
+      supplierId: 'sup-1',
+      supplierName: 'Distribuciones del Valle',
+      description: 'Factura de compra',
+      documentDate: '2026-08-01',
+      dueDate: '2026-08-31',
+      totalAmount: '500000.00',
+      amountPaid: '200000.00',
+      balance: '300000.00',
+      status: 'PENDIENTE',
+      daysOverdue: 62,
+      agingBucket: 'DIAS_61_90',
+    },
+    {
+      documentType: 'CAUSACION_GASTO',
+      documentId: 'exp-1',
+      documentNumber: 'FV-88',
+      supplierId: 'sup-1',
+      supplierName: 'Distribuciones del Valle',
+      description: 'Arriendo bodega',
+      documentDate: '2026-10-20',
+      dueDate: null,
+      totalAmount: '80000.00',
+      amountPaid: '0.00',
+      balance: '80000.00',
+      status: 'PENDIENTE',
+      daysOverdue: 12,
+      agingBucket: 'CORRIENTE',
+    },
+  ],
+  aging: {
+    current: { amount: '80000.00', count: 1 },
+    days31To60: { amount: '0.00', count: 0 },
+    days61To90: { amount: '300000.00', count: 1 },
+    daysOver90: { amount: '0.00', count: 0 },
+    totalPending: '380000.00',
+    totalCount: 2,
   },
-  {
-    id: 'pay-2',
-    purchaseId: 'purch-2',
-    invoiceNumber: 'FAC-PROV-102',
-    supplierId: 'sup-2',
-    supplierName: 'Laboratorios Genéricos SAS',
-    totalAmount: 180000,
-    amountPaid: 180000,
-    balance: 0,
-    status: 'PAGADA',
-    dueDate: '2026-09-10',
-    notes: null,
-    createdAt: '2026-08-10T12:00:00.000Z',
-    updatedAt: '2026-08-25T14:00:00.000Z',
-    payments: [],
-  },
-];
+};
 
 const renderPage = () => {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <ThemeProvider theme={appTheme}>
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
-          <PayablesPage />
-        </MemoryRouter>
+        <MemoryRouter>{withAuth(<PayablesPage />)}</MemoryRouter>
       </QueryClientProvider>
     </ThemeProvider>,
   );
 };
 
-describe('PayablesPage (Frontend Cuentas por Pagar — UX-23)', () => {
+describe('PayablesPage: consulta por proveedor y fechas con edades', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    vi.spyOn(payablesApi, 'fetchPayables').mockResolvedValue({
-      items: mockPayables,
-      total: mockPayables.length,
+    vi.restoreAllMocks();
+    vi.spyOn(thirdPartiesApi, 'fetchThirdParties').mockResolvedValue({
+      items: [
+        {
+          id: 'tp-1',
+          documentType: 'NIT',
+          documentNumber: '900',
+          name: 'Distribuciones del Valle',
+          supplierId: 'sup-1',
+        } as ThirdPartyDto,
+      ],
+      total: 1,
       page: 1,
-      pageSize: 15,
+      pageSize: 20,
       totalPages: 1,
     });
-    vi.spyOn(payablesApi, 'fetchPayableById').mockResolvedValue(mockPayables[0]);
   });
 
-  it('renderiza la lista de cuentas por pagar a proveedores', async () => {
+  it('no muestra nada por defecto ni consulta sin filtro', async () => {
+    const spy = vi.spyOn(payablesApi, 'fetchPayableStatement');
     renderPage();
+    expect(screen.getByText(/Consulta por proveedor o por fecha/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Consultar' }));
+    expect(await screen.findByText(/Elige un proveedor o un rango de fechas/)).toBeInTheDocument();
+    expect(spy).not.toHaveBeenCalled();
+  });
 
-    expect(screen.getByText('Cuentas por Pagar')).toBeInTheDocument();
-
-    await waitFor(() => {
-      expect(screen.getByText('Distribuciones Farmacéuticas del Valle')).toBeInTheDocument();
-      expect(screen.getByText('Laboratorios Genéricos SAS')).toBeInTheDocument();
-      expect(screen.getByText('FAC-PROV-101')).toBeInTheDocument();
-      expect(screen.getByText('FAC-PROV-102')).toBeInTheDocument();
+  it('consulta por proveedor y fechas, clasifica por edad y abre el detalle de cada documento', async () => {
+    const spy = vi.spyOn(payablesApi, 'fetchPayableStatement').mockResolvedValue(statement);
+    vi.spyOn(payablesApi, 'fetchPayableMovements').mockResolvedValue({
+      payableId: 'pay-1',
+      invoiceNumber: 'FAC-PROV-101',
+      supplierName: 'Distribuciones del Valle',
+      totalAmount: '500000.00',
+      amountPaid: '200000.00',
+      balance: '300000.00',
+      status: 'PENDIENTE',
+      dueDate: '2026-08-31',
+      movements: [],
     });
-  });
-
-  it('no registra pagos desde cuentas por pagar: solo ofrece el detalle de la factura', async () => {
     renderPage();
-    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Detalle' }).length).toBeGreaterThan(0));
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: /Proveedor/ }));
+    fireEvent.click(await screen.findByRole('option', { name: /Distribuciones del Valle/ }));
+    fireEvent.change(screen.getByLabelText('Fecha desde'), { target: { value: '2026-08-01' } });
+    fireEvent.change(screen.getByLabelText('Fecha hasta'), { target: { value: '2026-10-31' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Consultar' }));
+
+    await waitFor(() =>
+      expect(spy).toHaveBeenCalledWith({
+        supplierId: 'sup-1',
+        fromDate: '2026-08-01',
+        toDate: '2026-10-31',
+        includePaid: undefined,
+      }),
+    );
+    expect(await screen.findByText('FAC-PROV-101')).toBeInTheDocument();
+    expect(screen.getAllByText('Corriente (hasta 30 días)').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('90 días').length).toBeGreaterThan(0);
+    expect(screen.getByText('$380.000,00')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Pagar$/ })).not.toBeInTheDocument();
+
+    const row = screen.getByText('FAC-PROV-101').closest('tr') as HTMLElement;
+    fireEvent.click(within(row).getByRole('button', { name: 'Detalle' }));
+    expect(await screen.findByText(/registra un comprobante de egreso/)).toBeInTheDocument();
   });
 });

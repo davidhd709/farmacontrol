@@ -1,7 +1,5 @@
 import {
-  Box,
   Chip,
-  Paper,
   Table,
   TableBody,
   TableCell,
@@ -10,14 +8,8 @@ import {
   TableRow,
   Typography,
 } from '@mui/material';
-import type { AgingBreakdownDto, AgingBucket, PayableStatementItemDto } from '@farmacia/contracts';
-
-export const AGING_LABELS: Record<AgingBucket, string> = {
-  CORRIENTE: 'Corriente (hasta 30 días)',
-  DIAS_31_60: '60 días',
-  DIAS_61_90: '90 días',
-  MAS_90: 'Más de 90 días',
-};
+import type { PayableStatementItemDto } from '@farmacia/contracts';
+import { AGING_LABELS } from '../../../components/AgingSummaryCards';
 
 export const DOCUMENT_TYPE_LABELS: Record<PayableStatementItemDto['documentType'], string> = {
   FACTURA_COMPRA: 'Factura de compra',
@@ -26,40 +18,6 @@ export const DOCUMENT_TYPE_LABELS: Record<PayableStatementItemDto['documentType'
 
 const money = (value: string) =>
   `$${Number(value).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
-/** Totales por edad: Corriente (hasta 30 días), 60 días, 90 días y más de 90. */
-export function AgingSummaryCards({ aging }: { aging: AgingBreakdownDto }) {
-  const cards: Array<{ label: string; amount: string; count: number }> = [
-    { label: 'Total pendiente', amount: aging.totalPending, count: aging.totalCount },
-    { label: AGING_LABELS.CORRIENTE, ...aging.current },
-    { label: AGING_LABELS.DIAS_31_60, ...aging.days31To60 },
-    { label: AGING_LABELS.DIAS_61_90, ...aging.days61To90 },
-    { label: AGING_LABELS.MAS_90, ...aging.daysOver90 },
-  ];
-  return (
-    <Box
-      sx={{
-        display: 'grid',
-        gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(5, 1fr)' },
-        gap: 1.5,
-      }}
-    >
-      {cards.map((card) => (
-        <Paper key={card.label} variant="outlined" sx={{ p: 1.5, borderRadius: 2 }}>
-          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
-            {card.label}
-          </Typography>
-          <Typography variant="h6" sx={{ fontWeight: 700 }}>
-            {money(card.amount)}
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            {card.count} documento(s)
-          </Typography>
-        </Paper>
-      ))}
-    </Box>
-  );
-}
 
 /** Facturas de compra y causaciones con su saldo y su edad. */
 export function PayableStatementTable({

@@ -1,6 +1,7 @@
 import { apiRequest } from '../../../api/http-client';
 import {
   ExpenseDto,
+  ExpenseMovementsDto,
   ExpenseCategoryDto,
   CreateExpenseCategoryPayload,
   UpdateExpenseCategoryPayload,
@@ -10,7 +11,6 @@ import {
   ExpenseQueryFilters,
   ExpensesSummaryDto,
   PaginatedResponse,
-  BankAccountDto,
 } from '@farmacia/contracts';
 import { AccountDto } from '../../accounting/api/accounting.api';
 
@@ -82,7 +82,5 @@ export const updateExpenseCategory = (id: string, payload: UpdateExpenseCategory
 
 export const fetchPucAccounts = () => apiRequest<AccountDto[]>('accounts');
 
-export const fetchActiveBankAccounts = async (): Promise<BankAccountDto[]> => {
-  const res = await apiRequest<{ accounts: BankAccountDto[] }>('treasury/bank-accounts');
-  return (res.accounts || []).filter((a) => a.isActive);
-};
+export const fetchExpenseMovements = (id: string) =>
+  apiRequest<ExpenseMovementsDto>(`expenses/${encodeURIComponent(id)}/movements`);

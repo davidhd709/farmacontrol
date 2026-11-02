@@ -191,68 +191,43 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
   });
 
   describe('Registro de Gastos y Causación Contable', () => {
-    it('registra gasto de contado en efectivo: descuenta caja y genera asiento balanceado (Gasto vs CASH)', async () => {
-      const { accounts } = await setupPucAndTreasury();
+    it('la causación no registra pagos: rechaza efectivo y transferencia sin mover caja ni bancos', async () => {
+      const { accounts, bankAccount } = await setupPucAndTreasury();
       const category = await categoriesService.create({
         name: 'Papelería y Útiles',
         accountId: accounts.get('519530')!,
       });
-
-      const res = await request(app.getHttpServer())
-        .post('/api/v1/expenses')
-        .set('Cookie', cookie)
-        .set('Idempotency-Key', randomUUID())
-        .send({
-          categoryId: category.id,
-          description: 'Compra de resmas de papel para caja',
-          beneficiary: 'Papelería El Sol',
-          documentNumber: 'PAP-1020',
-          amount: '50000.00',
-          expenseDate: '2026-10-01',
-          paymentMethod: 'EFECTIVO',
-        });
-
-      expect(res.status).toBe(201);
-      expect(res.body.status).toBe('PAGADO');
-      expect(res.body.balance).toBe('0.00');
-      expect(res.body.amountPaid).toBe('50000.00');
-
-      // 1. Movimiento de caja registrado
-      const cashMov = await prisma.cashMovement.findFirst({
-        where: { referenceDocumentType: 'EXPENSE', referenceDocumentId: res.body.id },
-      });
-      expect(cashMov).toBeDefined();
-      expect(cashMov?.movementType).toBe('EGRESO_MANUAL');
-      expect(cashMov?.amount.toFixed(2)).toBe('50000.00');
-
-      // 2. Asiento contable en Libro Diario
-      const journalEntry = await prisma.journalEntry.findUnique({
-        where: { sourceType_sourceId: { sourceType: 'EXPENSE', sourceId: res.body.id } },
-        include: { lines: { include: { account: true } } },
-      });
-      expect(journalEntry).toBeDefined();
-      expect(journalEntry?.status).toBe('POSTED');
-      expect(journalEntry?.lines.length).toBe(2);
-      expect(
-        await prisma.auditEvent.count({
-          where: { action: 'expenses:expense_created', entityId: res.body.id },
-        }),
-      ).toBe(1);
-
-      const debitLine = journalEntry?.lines.find((l) => Number(l.debit) > 0);
-      const creditLine = journalEntry?.lines.find((l) => Number(l.credit) > 0);
-      expect(debitLine?.accountId).toBe(accounts.get('519530'));
-      expect(debitLine?.debit.toFixed(2)).toBe('50000.00');
-      expect(creditLine?.purpose).toBe('CASH');
-      expect(creditLine?.credit.toFixed(2)).toBe('50000.00');
+      const base = {
+        categoryId: category.id,
+        description: 'Compra de resmas de papel para caja',
+        beneficiary: 'Papelería El Sol',
+        amount: '50000.00',
+        expenseDate: '2026-10-01',
+      };
+      for (const extra of [
+        { paymentMethod: 'EFECTIVO' },
+        { paymentMethod: 'TRANSFERENCIA', bankAccountId: bankAccount.id },
+      ]) {
+        const res = await request(app.getHttpServer())
+          .post('/api/v1/expenses')
+          .set('Cookie', cookie)
+          .set('Idempotency-Key', randomUUID())
+          .send({ ...base, ...extra });
+        expect(res.status).toBe(400);
+        expect(res.body.message).toMatch(/comprobante de egreso/);
+      }
+      expect(await prisma.expense.count()).toBe(0);
+      expect(await prisma.cashMovement.count({ where: { referenceDocumentType: 'EXPENSE' } })).toBe(0);
+      expect(await prisma.bankMovement.count({ where: { referenceDocumentType: 'EXPENSE' } })).toBe(0);
     });
 
-    it('registra gasto de contado por banco: descuenta saldo bancario y genera asiento balanceado (Gasto vs BANK)', async () => {
-      const { accounts, bankAccount } = await setupPucAndTreasury();
+    it('causa con proveedor sin medio de pago: nace la deuda, queda en su estado de cuenta y se ve su detalle', async () => {
+      const { accounts } = await setupPucAndTreasury();
       const category = await categoriesService.create({
         name: 'Energía Eléctrica',
         accountId: accounts.get('513530')!,
       });
+      const supplier = await prisma.supplier.create({ data: { taxId: '860001', name: 'Enel Colombia' } });
 
       const res = await request(app.getHttpServer())
         .post('/api/v1/expenses')
@@ -260,41 +235,65 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
         .set('Idempotency-Key', randomUUID())
         .send({
           categoryId: category.id,
+          supplierId: supplier.id,
           description: 'Factura de luz mes de septiembre',
-          beneficiary: 'Enel Colombia',
           documentNumber: 'EN-8899',
           amount: '350000.00',
           expenseDate: '2026-10-01',
-          paymentMethod: 'TRANSFERENCIA',
-          bankAccountId: bankAccount.id,
         });
-
-      expect(res.status).toBe(201);
-      expect(res.body.status).toBe('PAGADO');
-
-      // 1. Saldo bancario disminuido
-      const updatedBank = await prisma.bankAccount.findUniqueOrThrow({
-        where: { id: bankAccount.id },
+      expect(res.status, JSON.stringify(res.body)).toBe(201);
+      expect(res.body).toMatchObject({
+        status: 'PENDIENTE',
+        paymentMethod: 'CREDITO',
+        supplierId: supplier.id,
+        supplierName: 'Enel Colombia',
+        beneficiary: 'Enel Colombia',
+        balance: '350000.00',
       });
-      expect(updatedBank.currentBalance.toFixed(2)).toBe('4650000.00');
 
-      // 2. Movimiento bancario de retiro
-      const bankMov = await prisma.bankMovement.findFirst({
-        where: { referenceDocumentType: 'EXPENSE', referenceDocumentId: res.body.id },
-      });
-      expect(bankMov).toBeDefined();
-      expect(bankMov?.movementType).toBe('WITHDRAWAL');
-      expect(bankMov?.amount.toFixed(2)).toBe('350000.00');
-
-      // 3. Asiento contable
-      const journalEntry = await prisma.journalEntry.findUnique({
+      const entry = await prisma.journalEntry.findUniqueOrThrow({
         where: { sourceType_sourceId: { sourceType: 'EXPENSE', sourceId: res.body.id } },
         include: { lines: true },
       });
-      expect(journalEntry?.status).toBe('POSTED');
-      const creditLine = journalEntry?.lines.find((l) => Number(l.credit) > 0);
-      expect(creditLine?.purpose).toBe('BANK');
-      expect(creditLine?.credit.toFixed(2)).toBe('350000.00');
+      expect(entry.lines.find((l) => Number(l.credit) > 0)?.purpose).toBe('SUPPLIERS');
+
+      const statement = await request(app.getHttpServer())
+        .get(`/api/v1/payables/statement?supplierId=${supplier.id}`)
+        .set('Cookie', cookie)
+        .expect(200);
+      expect(statement.body.data.items).toHaveLength(1);
+      expect(statement.body.data.items[0]).toMatchObject({
+        documentType: 'CAUSACION_GASTO',
+        documentNumber: 'EN-8899',
+        balance: '350000.00',
+      });
+      const byDate = await request(app.getHttpServer())
+        .get('/api/v1/payables/statement?fromDate=2026-10-02&toDate=2026-10-31')
+        .set('Cookie', cookie)
+        .expect(200);
+      expect(byDate.body.data.items).toHaveLength(0);
+
+      const movements = await request(app.getHttpServer())
+        .get(`/api/v1/expenses/${res.body.id}/movements`)
+        .set('Cookie', cookie)
+        .expect(200);
+      expect(movements.body.movements).toEqual([
+        expect.objectContaining({ type: 'CARGO', charge: '350000.00', balance: '350000.00' }),
+      ]);
+
+      await request(app.getHttpServer())
+        .post('/api/v1/expenses')
+        .set('Cookie', cookie)
+        .set('Idempotency-Key', randomUUID())
+        .send({
+          categoryId: category.id,
+          supplierId: supplier.id,
+          description: 'Vence antes de causarse',
+          amount: '1000.00',
+          expenseDate: '2026-10-10',
+          dueDate: '2026-10-01',
+        })
+        .expect(400);
     });
 
     it('registra gasto a crédito (pendiente): causa obligación contra SUPPLIERS y estado PENDIENTE', async () => {
@@ -337,7 +336,7 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
       expect(creditLine?.credit.toFixed(2)).toBe('200000.00');
     });
 
-    it('revierte gasto, caja, asiento, auditoría e idempotencia si falla la generación del asiento', async () => {
+    it('revierte gasto, asiento, auditoría e idempotencia si falla la generación del asiento', async () => {
       const { accounts } = await setupPucAndTreasury();
       const category = await categoriesService.create({
         name: 'Gasto con fallo contable',
@@ -374,7 +373,7 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
             documentNumber: 'EXP-F1-ROLLBACK',
             amount: '40000.00',
             expenseDate: '2026-10-01',
-            paymentMethod: 'EFECTIVO',
+            paymentMethod: 'CREDITO',
           });
 
         expect(res.status).toBe(500);
@@ -617,7 +616,7 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
       expect(reversalEntry?.status).toBe('POSTED');
     });
 
-    it('anula gasto de contado restituyendo fondos a tesorería y revirtiendo asiento contable', async () => {
+    it('anula una causación pendiente revirtiendo su asiento sin mover tesorería', async () => {
       const { accounts } = await setupPucAndTreasury();
       const category = await categoriesService.create({
         name: 'Papelería',
@@ -631,7 +630,6 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
           beneficiary: 'Suministros Tech',
           amount: '80000.00',
           expenseDate: '2026-10-01',
-          paymentMethod: 'EFECTIVO',
         },
         adminUserId,
         randomUUID(),
@@ -647,12 +645,12 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
       expect(cancelRes.status).toBe(201);
       expect(cancelRes.body.status).toBe('ANULADO');
 
-      // Reintegro a caja
-      const refundCash = await prisma.cashMovement.findFirst({
-        where: { referenceDocumentType: 'EXPENSE_CANCEL', referenceDocumentId: expense.id },
-      });
-      expect(refundCash).toBeDefined();
-      expect(refundCash?.movementType).toBe('INGRESO_MANUAL');
+      // Nunca salió dinero: la anulación no mueve caja
+      expect(
+        await prisma.cashMovement.count({
+          where: { referenceDocumentType: 'EXPENSE_CANCEL', referenceDocumentId: expense.id },
+        }),
+      ).toBe(0);
 
       // Asiento contable compensatorio
       const originalEntry = await prisma.journalEntry.findUniqueOrThrow({
@@ -678,7 +676,6 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
         beneficiary: 'Distribuidora Limpia',
         amount: '30000.00',
         expenseDate: '2026-10-01',
-        paymentMethod: 'EFECTIVO',
       };
 
       await request(app.getHttpServer())
@@ -704,8 +701,8 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
       expect(retry.body.id).toBe(first.body.id);
       expect(await prisma.expense.count({ where: { description: 'Insumos de aseo' } })).toBe(1);
       expect(
-        await prisma.cashMovement.count({
-          where: { referenceDocumentType: 'EXPENSE', referenceDocumentId: first.body.id },
+        await prisma.journalEntry.count({
+          where: { sourceType: 'EXPENSE', sourceId: first.body.id },
         }),
       ).toBe(1);
 
@@ -731,7 +728,6 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
         beneficiary: 'Operador móvil',
         amount: '25000.00',
         expenseDate: '2026-10-01',
-        paymentMethod: 'EFECTIVO',
       };
 
       const first = await request(app.getHttpServer())
@@ -768,7 +764,6 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
         beneficiary: 'Distribuidora Concurrente',
         amount: '42000.00',
         expenseDate: '2026-10-01',
-        paymentMethod: 'EFECTIVO',
       };
 
       // Hold the same advisory lock used by the API until both requests are
@@ -836,11 +831,6 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
         expect(second.status).toBe(201);
         expect(second.body).toEqual(first.body);
         expect(await prisma.expense.count({ where: { description: payload.description } })).toBe(1);
-        expect(
-          await prisma.cashMovement.count({
-            where: { referenceDocumentType: 'EXPENSE', referenceDocumentId: first.body.id },
-          }),
-        ).toBe(1);
         expect(
           await prisma.journalEntry.count({
             where: { sourceType: 'EXPENSE', sourceId: first.body.id },
@@ -954,7 +944,7 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
 
   describe('Reportes, Filtros y Seguridad RBAC', () => {
     it('calcula KPIs acumulados en el endpoint de resumen', async () => {
-      const { accounts } = await setupPucAndTreasury();
+      const { accounts, bankAccount } = await setupPucAndTreasury();
       const catLuz = await categoriesService.create({
         name: 'Energía',
         accountId: accounts.get('513530')!,
@@ -964,15 +954,25 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
         accountId: accounts.get('513525')!,
       });
 
-      // 1 pagado
-      await expensesService.createExpense(
+      // 1 causado y pagado después con su egreso
+      const paid = await expensesService.createExpense(
         {
           categoryId: catLuz.id,
           description: 'Luz oficina',
           beneficiary: 'Enel',
           amount: '100000.00',
           expenseDate: '2026-10-01',
-          paymentMethod: 'EFECTIVO',
+        },
+        adminUserId,
+        randomUUID(),
+      );
+      await expensesService.payExpense(
+        paid.id,
+        {
+          amount: '100000.00',
+          paymentDate: '2026-10-02',
+          paymentMethod: 'TRANSFERENCIA',
+          bankAccountId: bankAccount.id,
         },
         adminUserId,
         randomUUID(),

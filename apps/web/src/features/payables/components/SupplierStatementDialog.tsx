@@ -11,7 +11,8 @@ import {
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { fetchPayableStatement } from '../api/payables.api';
-import { AgingSummaryCards, PayableStatementTable } from './PayableStatementTable';
+import { PayableStatementTable } from './PayableStatementTable';
+import { AgingSummaryCards } from '../../../components/AgingSummaryCards';
 
 /** "Estado de cuenta" del proveedor: todas sus facturas y causaciones, saldadas o no. */
 export function SupplierStatementDialog({

@@ -64,9 +64,6 @@ function mockApi() {
       return { items, total: items.length, page: 1, pageSize: 20, totalPages: 1 };
     },
   );
-  vi.spyOn(receivablesApi, 'fetchReceivableById').mockImplementation(async (id: string) =>
-    dataset.find((r) => r.id === id)!,
-  );
   vi.spyOn(receivablesApi, 'fetchReceivableMovements').mockImplementation(async (id: string) => {
     const r = dataset.find((item) => item.id === id)!;
     return {

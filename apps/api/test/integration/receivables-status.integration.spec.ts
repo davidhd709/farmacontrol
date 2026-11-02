@@ -321,6 +321,11 @@ describe('Estados de cuentas por cobrar tras anular ventas a crédito (FARM-AUD-
       expect(res.status).toBe(200);
       expect(res.body.data.totalCount).toBe(1);
       expect(res.body.data.totalPending).toBe('2000.00');
+      // Vence a 30 días: Corriente; los rangos son los mismos de cuentas por pagar
+      expect(res.body.data.current).toEqual({ amount: '2000.00', count: 1 });
+      expect(Object.keys(res.body.data).sort()).toEqual(
+        ['current', 'days31To60', 'days61To90', 'daysOver90', 'totalCount', 'totalPending'].sort(),
+      );
     });
   });
 

@@ -13,26 +13,18 @@ import {
 } from '@mui/material';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import type { ExpenseCategoryDto, BankAccountDto, ThirdPartyDto } from '@farmacia/contracts';
+import type { ExpenseCategoryDto, ThirdPartyDto } from '@farmacia/contracts';
 import { localIsoDate } from '../../../components/QuickDateRange';
 import { ThirdPartyAutocomplete } from '../../third-parties/components/ThirdPartyAutocomplete';
 import { createExpense } from '../api/expenses.api';
 import { expenseSchema, type ExpenseFormData } from '../validation/expense.schema';
 
-function formatCurrency(val: string | number | undefined): string {
-  if (val === undefined || val === null) return '$0.00';
-  const num = typeof val === 'string' ? parseFloat(val) : val;
-  if (isNaN(num)) return '$0.00';
-  return `$${num.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
 interface Props {
   categories: ExpenseCategoryDto[];
-  bankAccounts: BankAccountDto[];
   onClose: () => void;
   onSuccess: () => Promise<void>;
 }
-export function ExpenseFormDialog({ categories, bankAccounts, onClose, onSuccess }: Props) {
+export function ExpenseFormDialog({ categories, onClose, onSuccess }: Props) {
   const [thirdParty, setThirdParty] = useState<ThirdPartyDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const busy = useRef(false);
@@ -41,7 +33,6 @@ export function ExpenseFormDialog({ categories, bankAccounts, onClose, onSuccess
   const {
     control,
     handleSubmit,
-    watch,
     getValues,
     setValue,
     formState: { errors },
@@ -56,12 +47,9 @@ export function ExpenseFormDialog({ categories, bankAccounts, onClose, onSuccess
       amount: '',
       expenseDate: localIsoDate(new Date()),
       dueDate: '',
-      paymentMethod: 'EFECTIVO',
-      bankAccountId: bankAccounts[0]?.id ?? '',
       notes: '',
     },
   });
-  const paymentMethod = watch('paymentMethod');
   const submit = async (data: ExpenseFormData) => {
     if (busy.current) return;
     busy.current = true;
@@ -69,14 +57,14 @@ export function ExpenseFormDialog({ categories, bankAccounts, onClose, onSuccess
     setError(null);
     const payload = {
       categoryId: data.categoryId,
+      // Un proveedor del directorio queda vinculado: su estado de cuenta y el egreso que la paga
+      supplierId: thirdParty?.supplierId ?? undefined,
       beneficiary: data.beneficiary.trim(),
       description: data.description.trim(),
       documentNumber: data.documentNumber.trim() || undefined,
       amount: data.amount,
       expenseDate: data.expenseDate,
-      dueDate: data.paymentMethod === 'CREDITO' ? data.dueDate : undefined,
-      paymentMethod: data.paymentMethod,
-      bankAccountId: data.paymentMethod === 'TRANSFERENCIA' ? data.bankAccountId : undefined,
+      dueDate: data.dueDate || undefined,
       notes: data.notes.trim() || undefined,
     };
     const fingerprint = JSON.stringify(payload);
@@ -247,75 +235,29 @@ export function ExpenseFormDialog({ categories, bankAccounts, onClose, onSuccess
               </Grid>
               <Grid size={{ xs: 6 }}>
                 <Controller
-                  name="paymentMethod"
+                  name="dueDate"
                   control={control}
                   render={({ field: { ref, ...field } }) => (
                     <TextField
-                      select
-                      label="Forma de Pago"
+                      label="Fecha de Vencimiento"
+                      type="date"
                       {...field}
                       inputRef={ref}
-                      error={!!errors.paymentMethod}
-                      helperText={errors.paymentMethod?.message}
-                      required
+                      error={!!errors.dueDate}
+                      helperText={errors.dueDate?.message ?? 'Opcional: sin fecha vence el día del gasto'}
                       fullWidth
                       size="small"
-                    >
-                      <MenuItem value="EFECTIVO">Efectivo (Caja General)</MenuItem>
-                      <MenuItem value="TRANSFERENCIA">Transferencia (Cuenta Bancaria)</MenuItem>
-                      <MenuItem value="CREDITO">A Crédito (Pendiente por Pagar)</MenuItem>
-                    </TextField>
+                      slotProps={{ inputLabel: { shrink: true } }}
+                    />
                   )}
                 />
               </Grid>
             </Grid>
 
-            {paymentMethod === 'TRANSFERENCIA' && (
-              <Controller
-                name="bankAccountId"
-                control={control}
-                render={({ field: { ref, ...field } }) => (
-                  <TextField
-                    select
-                    label="Cuenta Bancaria de Origen"
-                    {...field}
-                    inputRef={ref}
-                    error={!!errors.bankAccountId}
-                    helperText={errors.bankAccountId?.message}
-                    required
-                    fullWidth
-                    size="small"
-                  >
-                    {bankAccounts.map((b) => (
-                      <MenuItem key={b.id} value={b.id}>
-                        {b.bankName} - {b.accountNumber} ({formatCurrency(b.currentBalance)})
-                      </MenuItem>
-                    ))}
-                  </TextField>
-                )}
-              />
-            )}
-
-            {paymentMethod === 'CREDITO' && (
-              <Controller
-                name="dueDate"
-                control={control}
-                render={({ field: { ref, ...field } }) => (
-                  <TextField
-                    label="Fecha de Vencimiento de Pago"
-                    type="date"
-                    {...field}
-                    inputRef={ref}
-                    error={!!errors.dueDate}
-                    helperText={errors.dueDate?.message}
-                    required
-                    fullWidth
-                    size="small"
-                    slotProps={{ inputLabel: { shrink: true } }}
-                  />
-                )}
-              />
-            )}
+            <Alert severity="info" variant="outlined">
+              La causación reconoce el gasto y la cuenta por pagar al proveedor. El pago se registra
+              después con un comprobante de egreso.
+            </Alert>
 
             <Controller
               name="notes"

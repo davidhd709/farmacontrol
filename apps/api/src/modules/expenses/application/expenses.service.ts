@@ -14,8 +14,10 @@ import {
   ReverseExpensePaymentPayload,
   ExpenseQueryFilters,
   ExpensesSummaryDto,
+  ExpenseMovementsDto,
   PaginatedResponse,
 } from '@farmacia/contracts';
+import { buildDocumentMovements, RawDocumentMovement } from '../../../common/utils/document-movements';
 import {
   validateExpenseAmount,
   validateExpensePaymentMethod,
@@ -36,6 +38,7 @@ const fullExpenseInclude = {
   bankAccount: {
     select: { id: true, bankName: true, accountNumber: true, name: true },
   },
+  supplier: { select: { name: true } },
   createdByUser: {
     select: { id: true, username: true },
   },
@@ -109,6 +112,8 @@ export class ExpensesService {
       dueDate: e.dueDate ? (e.dueDate instanceof Date ? e.dueDate.toISOString().slice(0, 10) : String(e.dueDate).slice(0, 10)) : null,
       paymentMethod: e.paymentMethod as any,
       status: e.status as any,
+      supplierId: e.supplierId ?? null,
+      supplierName: e.supplier?.name ?? null,
       bankAccountId: e.bankAccountId ?? null,
       bankAccountName: e.bankAccount ? `${e.bankAccount.bankName} - ${e.bankAccount.accountNumber}` : null,
       notes: e.notes ?? null,
@@ -137,35 +142,27 @@ export class ExpensesService {
       throw new BadRequestException('La descripción del gasto es obligatoria.');
     }
 
-    const beneficiary = payload.beneficiary?.trim();
-    if (!beneficiary) {
+    if (payload.supplierId !== undefined) validateUuid(payload.supplierId, 'ID de proveedor');
+    if (!payload.supplierId && !payload.beneficiary?.trim()) {
       throw new BadRequestException('El proveedor o tercero beneficiario es obligatorio.');
     }
 
     const amountCents = validateExpenseAmount(payload.amount);
     const amountStr = centsToMoneyString(amountCents);
-    const method = validateExpensePaymentMethod(payload.paymentMethod);
-
-    if (method === 'TRANSFERENCIA') {
-      if (!payload.bankAccountId) {
-        throw new BadRequestException('Debe seleccionar una cuenta bancaria para pago por transferencia.');
-      }
-      validateUuid(payload.bankAccountId, 'ID de cuenta bancaria');
-    }
-
-    if (method === 'CREDITO') {
-      if (!payload.dueDate) {
-        throw new BadRequestException('La fecha de vencimiento es obligatoria para gastos a crédito.');
-      }
+    // La causación reconoce el gasto y la cuenta por pagar; el pago es un comprobante de egreso
+    const method = validateExpensePaymentMethod(payload.paymentMethod ?? 'CREDITO');
+    if (method !== 'CREDITO' || payload.bankAccountId) {
+      throw new BadRequestException(
+        'La causación de gasto solo reconoce el gasto y la cuenta por pagar; el pago se registra con un comprobante de egreso.',
+      );
     }
 
     const expenseDate = new Date(payload.expenseDate || businessToday());
     const dueDate = payload.dueDate ? new Date(payload.dueDate) : null;
-
-    const isCredit = method === 'CREDITO';
-    const status = isCredit ? 'PENDIENTE' : 'PAGADO';
-    const amountPaidStr = isCredit ? '0.00' : amountStr;
-    const balanceStr = isCredit ? amountStr : '0.00';
+    if (dueDate && dueDate < expenseDate) {
+      throw new BadRequestException('El vencimiento no puede ser anterior a la fecha del gasto.');
+    }
+    const status = 'PENDIENTE';
 
     const endpoint = '/api/v1/expenses';
     const requestHash = this.idempotencyService.computeHash(endpoint, userId, payload);
@@ -189,6 +186,13 @@ export class ExpensesService {
       if (!category.isActive) {
         throw new BadRequestException('La categoría de gasto seleccionada está inactiva.');
       }
+      const supplier = payload.supplierId
+        ? await tx.supplier.findUnique({ where: { id: payload.supplierId }, select: { name: true } })
+        : null;
+      if (payload.supplierId && !supplier) {
+        throw new NotFoundException('El proveedor de la causación no existe.');
+      }
+      const beneficiary = supplier?.name ?? payload.beneficiary!.trim();
 
       const expense = await tx.expense.create({
         data: {
@@ -197,41 +201,19 @@ export class ExpensesService {
           beneficiary,
           documentNumber: payload.documentNumber?.trim() || null,
           amount: new Prisma.Decimal(amountStr),
-          amountPaid: new Prisma.Decimal(amountPaidStr),
-          balance: new Prisma.Decimal(balanceStr),
+          amountPaid: new Prisma.Decimal('0.00'),
+          balance: new Prisma.Decimal(amountStr),
           expenseDate,
           dueDate,
           paymentMethod: method,
           status,
-          bankAccountId: method === 'TRANSFERENCIA' ? payload.bankAccountId : null,
+          supplierId: payload.supplierId ?? null,
+          bankAccountId: null,
           notes: payload.notes?.trim() || null,
           supportDocUrl: payload.supportDocUrl?.trim() || null,
           createdById: userId,
         },
       });
-
-      // Movimiento de tesorería inmediato si no es a crédito
-      if (method === 'EFECTIVO') {
-        await this.cashService.recordMovementInTransaction(tx, {
-          movementType: 'EGRESO_MANUAL',
-          amount: amountStr,
-          paymentMethod: 'EFECTIVO',
-          reason: `Gasto: ${description} (${beneficiary})`,
-          referenceDocumentType: 'EXPENSE',
-          referenceDocumentId: expense.id,
-          createdByUserId: userId,
-        });
-      } else if (method === 'TRANSFERENCIA') {
-        await recordSourceBankMovement(tx, {
-          bankAccountId: payload.bankAccountId!,
-          movementType: 'WITHDRAWAL',
-          amount: amountStr,
-          concept: `Gasto: ${description} (${beneficiary})`,
-          referenceDocumentType: 'EXPENSE',
-          referenceDocumentId: expense.id,
-          createdById: userId,
-        });
-      }
 
       // Causación contable automática de partida doble
       await this.accountingEngine.handleExpenseCreated(
@@ -244,7 +226,7 @@ export class ExpensesService {
           documentNumber: payload.documentNumber,
           amount: amountStr,
           paymentMethod: method,
-          bankAccountId: method === 'TRANSFERENCIA' ? payload.bankAccountId : null,
+          bankAccountId: null,
           status,
           expenseDate,
           createdById: userId,
@@ -263,6 +245,7 @@ export class ExpensesService {
             paymentMethod: method,
             categoryId: category.id,
             beneficiary,
+            supplierId: payload.supplierId ?? null,
           },
         },
       });
@@ -677,6 +660,73 @@ export class ExpensesService {
     });
 
     return this.findById(expenseId);
+  }
+
+  /** Movimientos de una causación: el pasivo, cada pago con su comprobante de egreso y saldo. */
+  async getMovements(id: string): Promise<ExpenseMovementsDto> {
+    validateUuid(id, 'ID de gasto');
+    const e = await prisma.expense.findUnique({
+      where: { id },
+      include: {
+        supplier: { select: { name: true } },
+        payments: { include: { treasuryDocument: { select: { documentNumber: true } } } },
+      },
+    });
+    if (!e) throw new NotFoundException(`Gasto con ID "${id}" no encontrado.`);
+    const toCents = (value: Prisma.Decimal) => parseMoneyToCents(value.toFixed(2), 'Valor');
+    const raw: RawDocumentMovement[] = [
+      {
+        at: e.createdAt,
+        type: 'CARGO',
+        documentNumber: e.documentNumber ?? null,
+        description: `Causación: ${e.description}`,
+        deltaCents: toCents(e.amount),
+      },
+    ];
+    for (const p of e.payments) {
+      raw.push({
+        at: p.createdAt,
+        type: 'ABONO',
+        documentNumber: p.treasuryDocument?.documentNumber ?? null,
+        description: p.notes || 'Pago de la causación',
+        paymentMethod: p.paymentMethod,
+        paymentId: p.id,
+        isReversed: p.isReversed,
+        deltaCents: -toCents(p.amount),
+      });
+      if (p.isReversed && p.reversedAt) {
+        raw.push({
+          at: p.reversedAt,
+          type: 'REVERSION_ABONO',
+          documentNumber: null,
+          description: `Reversión del pago: ${p.reversalReason ?? ''}`.trim(),
+          paymentMethod: p.paymentMethod,
+          deltaCents: toCents(p.amount),
+        });
+      }
+    }
+    const pendingCents = raw.reduce((acc, m) => acc + m.deltaCents, 0n);
+    if (e.status === 'ANULADO' && e.cancelledAt && pendingCents > 0n) {
+      raw.push({
+        at: e.cancelledAt,
+        type: 'ANULACION',
+        documentNumber: e.documentNumber ?? null,
+        description: e.cancellationReason ?? 'Causación anulada',
+        deltaCents: -pendingCents,
+      });
+    }
+    return {
+      expenseId: e.id,
+      documentNumber: e.documentNumber ?? null,
+      description: e.description,
+      supplierName: e.supplier?.name ?? e.beneficiary,
+      totalAmount: e.amount.toFixed(2),
+      amountPaid: e.amountPaid.toFixed(2),
+      balance: e.balance.toFixed(2),
+      status: e.status,
+      dueDate: e.dueDate ? e.dueDate.toISOString().slice(0, 10) : null,
+      movements: buildDocumentMovements(raw),
+    };
   }
 
   async findById(id: string): Promise<ExpenseDto> {

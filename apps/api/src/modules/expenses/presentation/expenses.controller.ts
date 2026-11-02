@@ -17,6 +17,7 @@ import {
 import { ExpensesService } from '../application/expenses.service';
 import {
   ExpenseDto,
+  ExpenseMovementsDto,
   CreateExpensePayload,
   CreateExpensePaymentPayload,
   CancelExpensePayload,
@@ -77,6 +78,12 @@ export class ExpensesController {
     return this.service.getSummary(query);
   }
 
+  @Get(':id/movements')
+  @RequirePermissions(SYSTEM_PERMISSIONS.EXPENSES_READ)
+  async getMovements(@Param('id', ParseUUIDPipe) id: string): Promise<ExpenseMovementsDto> {
+    return this.service.getMovements(id);
+  }
+
   @Get(':id')
   @RequirePermissions(SYSTEM_PERMISSIONS.EXPENSES_READ)
   async findById(@Param('id', ParseUUIDPipe) id: string): Promise<ExpenseDto> {
@@ -90,12 +97,14 @@ export class ExpensesController {
       new RequestShapeValidationPipe({
         categoryId: 'uuid',
         description: 'text',
-        beneficiary: 'text',
+        beneficiary: 'text?',
+        supplierId: 'uuid?',
         documentNumber: 'text?',
         amount: 'decimal',
         expenseDate: 'date',
         dueDate: 'date?',
-        paymentMethod: { values: ['EFECTIVO', 'TRANSFERENCIA', 'CREDITO'] },
+        // La causación solo reconoce el pasivo: un medio de contado se rechaza en el servicio
+        paymentMethod: { values: ['EFECTIVO', 'TRANSFERENCIA', 'CREDITO'], optional: true },
         bankAccountId: 'uuid?',
         notes: 'text?',
         supportDocUrl: 'text?',

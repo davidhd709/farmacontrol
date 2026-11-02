@@ -25,6 +25,7 @@ import { useQuery } from '@tanstack/react-query';
 import { type ReceivableStatus } from '@farmacia/contracts';
 import { fetchReceivables, fetchReceivablesAgingSummary } from '../api/receivables.api';
 import { HomeBackButton } from '../../../components/HomeBackButton';
+import { AgingSummaryCards } from '../../../components/AgingSummaryCards';
 
 import { ReceivableMovementsDialog } from '../components/ReceivableMovementsDialog';
 import { isOverdue, getStatusDisplay } from '../utils/status';
@@ -85,125 +86,12 @@ export function ReceivablesPage() {
         </Box>
       </Box>
 
-      {/* Aging KPI Cards */}
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: {
-            xs: '1fr',
-            sm: 'repeat(2, 1fr)',
-            md: 'repeat(3, 1fr)',
-            lg: 'repeat(6, 1fr)',
-          },
-          gap: 2,
-          mb: 3,
-        }}
-      >
-        <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: 'background.paper' }}>
-          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
-            Total en Cartera
-          </Typography>
-          <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5, color: 'text.primary' }}>
-            $
-            {Number(agingData?.totalPending ?? 0).toLocaleString('es-CO', {
-              minimumFractionDigits: 2,
-            })}
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            Saldo acumulado ({agingData?.totalCount ?? 0} créditos)
-          </Typography>
-        </Paper>
-
-        <Paper
-          variant="outlined"
-          sx={{ p: 2, borderRadius: 2, bgcolor: 'success.50', borderColor: 'success.200' }}
-        >
-          <Typography variant="caption" color="success.dark" sx={{ fontWeight: 600 }}>
-            Al Día / Corriente
-          </Typography>
-          <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5, color: 'success.dark' }}>
-            $
-            {Number(agingData?.current.amount ?? 0).toLocaleString('es-CO', {
-              minimumFractionDigits: 2,
-            })}
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            {agingData?.current.count ?? 0} crédito(s)
-          </Typography>
-        </Paper>
-
-        <Paper
-          variant="outlined"
-          sx={{ p: 2, borderRadius: 2, bgcolor: 'warning.50', borderColor: 'warning.200' }}
-        >
-          <Typography variant="caption" color="warning.dark" sx={{ fontWeight: 600 }}>
-            Vencidas 1 - 30 Días
-          </Typography>
-          <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5, color: 'warning.dark' }}>
-            $
-            {Number(agingData?.days1To30.amount ?? 0).toLocaleString('es-CO', {
-              minimumFractionDigits: 2,
-            })}
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            {agingData?.days1To30.count ?? 0} crédito(s)
-          </Typography>
-        </Paper>
-
-        <Paper
-          variant="outlined"
-          sx={{ p: 2, borderRadius: 2, bgcolor: 'warning.100', borderColor: 'warning.300' }}
-        >
-          <Typography variant="caption" color="warning.dark" sx={{ fontWeight: 600 }}>
-            Vencidas 31 - 60 Días
-          </Typography>
-          <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5, color: 'warning.dark' }}>
-            $
-            {Number(agingData?.days31To60.amount ?? 0).toLocaleString('es-CO', {
-              minimumFractionDigits: 2,
-            })}
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            {agingData?.days31To60.count ?? 0} crédito(s)
-          </Typography>
-        </Paper>
-
-        <Paper
-          variant="outlined"
-          sx={{ p: 2, borderRadius: 2, bgcolor: 'error.50', borderColor: 'error.200' }}
-        >
-          <Typography variant="caption" color="error.dark" sx={{ fontWeight: 600 }}>
-            Vencidas 61 - 90 Días
-          </Typography>
-          <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5, color: 'error.dark' }}>
-            $
-            {Number(agingData?.days61To90.amount ?? 0).toLocaleString('es-CO', {
-              minimumFractionDigits: 2,
-            })}
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            {agingData?.days61To90.count ?? 0} crédito(s)
-          </Typography>
-        </Paper>
-
-        <Paper
-          variant="outlined"
-          sx={{ p: 2, borderRadius: 2, bgcolor: 'error.100', borderColor: 'error.400' }}
-        >
-          <Typography variant="caption" color="error.dark" sx={{ fontWeight: 700 }}>
-            &gt; 90 Días (Cartera Crítica)
-          </Typography>
-          <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5, color: 'error.dark' }}>
-            $
-            {Number(agingData?.daysOver90.amount ?? 0).toLocaleString('es-CO', {
-              minimumFractionDigits: 2,
-            })}
-          </Typography>
-          <Typography variant="caption" color="error.dark" sx={{ fontWeight: 600 }}>
-            {agingData?.daysOver90.count ?? 0} crédito(s)
-          </Typography>
-        </Paper>
-      </Box>
+      {/* Cartera por edades: los mismos rangos que cuentas por pagar */}
+      {agingData && (
+        <Box sx={{ mb: 3 }}>
+          <AgingSummaryCards aging={agingData} />
+        </Box>
+      )}
 
       {/* Filtros */}
       <Paper variant="outlined" sx={{ p: 2, mb: 2, borderRadius: 2 }}>

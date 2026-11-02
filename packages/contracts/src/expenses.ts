@@ -61,6 +61,8 @@ export interface ExpenseDto {
   dueDate: string | null;
   paymentMethod: ExpensePaymentMethod;
   status: ExpenseStatus;
+  supplierId: string | null;
+  supplierName: string | null;
   bankAccountId: string | null;
   bankAccountName: string | null;
   notes: string | null;
@@ -74,15 +76,22 @@ export interface ExpenseDto {
   payments: ExpensePaymentDto[];
 }
 
+/**
+ * Causación de gasto: reconoce el gasto y la cuenta por pagar (correcciones del cliente,
+ * 2026-11-01). No registra pagos: se pagan con un comprobante de egreso.
+ */
 export interface CreateExpensePayload {
   categoryId: string;
   description: string;
-  beneficiary: string;
+  /** Proveedor de la causación; si se indica, el beneficiario es su nombre */
+  supplierId?: string;
+  beneficiary?: string;
   documentNumber?: string;
   amount: string | number;
   expenseDate: string;
   dueDate?: string;
-  paymentMethod: ExpensePaymentMethod;
+  /** Solo CREDITO (o se omite): el pago se registra con un comprobante de egreso */
+  paymentMethod?: ExpensePaymentMethod;
   bankAccountId?: string;
   notes?: string;
   supportDocUrl?: string;

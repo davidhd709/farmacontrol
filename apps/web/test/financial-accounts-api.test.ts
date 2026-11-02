@@ -1,8 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  fetchPayables,
-  fetchPayablesAgingSummary,
-} from '../src/features/payables/api/payables.api';
+import { fetchPayableStatement } from '../src/features/payables/api/payables.api';
 import {
   fetchReceivables,
   fetchReceivablesAgingSummary,
@@ -12,7 +9,6 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe('contrato HTTP de cuentas por pagar y por cobrar', () => {
   it.each([
-    ['payables', fetchPayables],
     ['receivables', fetchReceivables],
   ])('extrae los registros de GET %s', async (path, fetchAccounts) => {
     const list = { items: [{ id: 'account-1' }], total: 1, page: 1, pageSize: 20, totalPages: 1 };
@@ -30,9 +26,8 @@ describe('contrato HTTP de cuentas por pagar y por cobrar', () => {
   });
 
   it.each([
-    ['payables', fetchPayablesAgingSummary],
     ['receivables', fetchReceivablesAgingSummary],
-  ])('extrae el resumen de GET %s/aging-summary', async (path, fetchSummary) => {
+  ])('extrae el resumen de GET %s/aging-summary', async (_path, fetchSummary) => {
     const summary = { totalPending: '150.00', totalCount: 1 };
     vi.stubGlobal(
       'fetch',
@@ -58,6 +53,31 @@ describe('contrato HTTP de cuentas por pagar y por cobrar', () => {
       ),
     );
 
-    await expect(fetchPayables()).rejects.toThrow('no contiene datos válidos');
+    await expect(fetchPayableStatement({ supplierId: 'sup-1' })).rejects.toThrow(
+      'no contiene datos válidos',
+    );
+  });
+
+  it('consulta el estado de cuenta de cuentas por pagar con proveedor, fechas y saldadas', async () => {
+    const statement = { items: [], aging: { totalPending: '0.00', totalCount: 0 } };
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ success: true, data: statement }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    expect(
+      await fetchPayableStatement({
+        supplierId: 'sup-1',
+        fromDate: '2026-10-01',
+        toDate: '2026-10-31',
+        includePaid: true,
+      }),
+    ).toEqual(statement);
+    const apiUrl = (import.meta.env.VITE_API_URL || '/api/v1').replace(/\/$/, '');
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      `${apiUrl}/payables/statement?supplierId=sup-1&fromDate=2026-10-01&toDate=2026-10-31&includePaid=true`,
+    );
   });
 });

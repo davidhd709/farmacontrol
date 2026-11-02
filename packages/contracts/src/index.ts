@@ -879,6 +879,19 @@ export interface PayableMovementsDto {
   movements: DocumentMovementDto[];
 }
 
+export interface ExpenseMovementsDto {
+  expenseId: string;
+  documentNumber: string | null;
+  description: string;
+  supplierName: string;
+  totalAmount: string;
+  amountPaid: string;
+  balance: string;
+  status: string;
+  dueDate: string | null;
+  movements: DocumentMovementDto[];
+}
+
 export interface RegisterReceivablePaymentPayload {
   amount: number | string;
   paymentMethod?: string;
@@ -946,16 +959,6 @@ export interface ReversePaymentPayload {
 export interface AgingBucketDto {
   amount: string;
   count: number;
-}
-
-export interface AgingSummaryDto {
-  current: AgingBucketDto;
-  days1To30: AgingBucketDto;
-  days31To60: AgingBucketDto;
-  days61To90: AgingBucketDto;
-  daysOver90: AgingBucketDto;
-  totalPending: string;
-  totalCount: number;
 }
 
 /**
