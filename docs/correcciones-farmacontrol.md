@@ -146,6 +146,26 @@ Cada documento tiene su permiso. El asiento automático que genera no exige el p
 - En la web, cartera registra el recibo desde **Cuentas por cobrar → "Nuevo recibo de caja"** (solo abono a cartera; elige el cliente del maestro de clientes, sin acceso a terceros). En Recibos de Caja y Comprobantes de Egreso cada modo se ofrece según estos permisos.
 - Pruebas por rol (`treasury-vouchers`, "permisos por documento"): cartera y admin abonan (201) aunque cartera no tenga permiso contable, y se publica el asiento cuadrado; cajero, compras, supervisor e inventario reciben 403; cartera no registra recibos manuales ni egresos; solo admin paga proveedores; un egreso manual sin permiso contable se rechaza.
 
+## 3.5 Anulación propia por tipo de documento (verificación 2026-11-02, sin cambios)
+
+El botón **"Reversar"** del Libro Diario se mantiene mientras el cliente decide. Verificación en el código y con PostgreSQL real:
+
+| Documento | ¿Anulación propia? | Ruta y permiso | Reverso contable | Dinero, inventario y saldos | En la web |
+|---|---|---|---|---|---|
+| **Venta** | **Sí** | `POST /sales/:id/cancel` (`sales:cancel`) | Reversa el asiento de la venta (`handleSaleCancelled`) | Reintegra inventario, devuelve caja o banco y anula la cartera; se rechaza si tiene notas crédito o abonos vigentes | Historial de ventas → Anular |
+| **Devolución (nota crédito)** | **No** | — | — | Es definitiva una vez confirmada | — |
+| **Recibo de caja de abono a cartera** | **Parcial**: se reversa cada abono, no el recibo | `POST /receivables/:id/payments/:paymentId/reverse` (`receivables:manage`) | Reversa el asiento del abono (`handleCustomerPaymentReversed`) | Restituye el saldo de la factura y saca el dinero de caja o banco con su propio movimiento y comprobante; el recibo sigue vigente (los documentos de tesorería son inmutables) | Cuentas por cobrar → Ver abonos → Revertir |
+| **Recibo de caja manual** | **No** | — (la reversión de movimientos bancarios se retiró: 410) | — | Se corrige con el documento contrario (egreso manual), que es un registro nuevo, no un reverso | — |
+| **Comprobante de egreso a proveedor** | **Parcial**: se reversa cada pago, no el comprobante | `POST /payables/:id/payments/:paymentId/reverse` (`payables:manage`) y `POST /expenses/payments/:paymentId/reverse` (`expenses:manage`) | Reversa el asiento del pago (`handleSupplierPaymentReversed` / `handleExpensePaymentReversed`) | Restituye el saldo y devuelve el dinero a caja o banco | Cuentas por pagar → movimientos → Revertir; Gastos → revertir pago |
+| **Comprobante de egreso manual** | **No** | — | — | Igual que el recibo manual | — |
+| **Causación de gasto** | **Sí** | `POST /expenses/:id/cancel` (`expenses:manage`) | Reversa el asiento de la causación (`handleExpenseCancelled`) | Exige revertir antes los pagos; si se pagó de contado, devuelve el dinero | Gastos → Anular gasto |
+
+Pruebas existentes: `credit-and-debit-notes` (anular venta con notas crédito y anulación simultánea), `expenses` ("reversa pago de gasto…", "anula una causación pendiente…"), `receivables-payables` (reversión de abonos y pagos), `accounting-audit-statement` (los anulados muestran el documento reversado).
+
+**Riesgo del botón "Reversar" del Libro Diario.** Reversa cualquier asiento, también los automáticos. Lo comprobé con una venta de contado: reversar su asiento desde el Libro Diario responde 201, pero la venta sigue COMPLETADA, el inventario no vuelve (95 de 100) y el dinero sigue en caja; el mayor deja de cuadrar con los auxiliares. Si después se anula la venta, la anulación sale bien (inventario 100, egreso de caja) y no duplica el reverso, porque reutiliza el que ya existe; entre los dos momentos, la contabilidad y la operación no coinciden. Mientras el cliente decide, la recomendación es limitar el botón a los asientos manuales y reversar los automáticos solo desde la anulación de su documento.
+
+Faltan anulaciones propias para la **nota crédito**, el **recibo de caja** y el **comprobante de egreso** como documento completo (y sus versiones manuales). Hay que decidir con el cliente si se agregan.
+
 ## 4. Pendientes y dudas abiertas
 
 - `accounting-coverage` ("nota crédito devuelve el INC…") falla de noche, entre las 19:00 y las 24:00 de Bogotá, cuando la fecha UTC ya cambió: es preexistente. La prueba de `full-system-lifecycle` que dependía de octubre de 2026 se corrigió para usar la fecha de negocio de la corrida.
