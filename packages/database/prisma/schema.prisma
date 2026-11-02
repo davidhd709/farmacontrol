@@ -571,6 +571,8 @@ model Sale {
   lotAllocations SaleLotAllocation[]
   receivable     Receivable?
   creditNotes    CreditNote[]
+  /// Nota crédito cuyo cambio de producto entrega esta venta
+  exchangeFor    CreditNote?         @relation("CreditNoteExchangeSale")
 
   @@index([invoiceNumber])
   @@index([customerId])
@@ -1301,11 +1303,14 @@ model CreditNote {
   total            Decimal          @db.Decimal(12, 2)
   refundMethod     String           @default("EFECTIVO") @map("refund_method") @db.VarChar(50)
   restock          Boolean          @default(true)
+  /// Venta nueva que entrega el producto de reemplazo cuando la devolución es un cambio
+  exchangeSaleId   String?          @unique @map("exchange_sale_id") @db.Uuid
   createdById      String           @map("created_by_id") @db.Uuid
   createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz
   updatedAt        DateTime         @updatedAt @map("updated_at") @db.Timestamptz
 
   sale             Sale             @relation(fields: [saleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  exchangeSale     Sale?            @relation("CreditNoteExchangeSale", fields: [exchangeSaleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   customer         Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   createdByUser    User             @relation("CreditNotesCreated", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
   lines            CreditNoteLine[]

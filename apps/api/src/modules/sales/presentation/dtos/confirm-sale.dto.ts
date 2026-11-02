@@ -11,6 +11,7 @@ export class ConfirmSaleDto implements ConfirmSalePayload {
   bankAccountId?: string;
   amountPaid?: number;
   notes?: string;
+  exchangeCreditNoteId?: string;
   items!: ConfirmSaleLineItemPayload[];
 }
 
@@ -142,12 +143,26 @@ export class ConfirmSaleValidationPipe implements PipeTransform {
       notes = String(record.notes).trim() || undefined;
     }
 
+    let exchangeCreditNoteId: string | undefined;
+    if (record.exchangeCreditNoteId !== undefined && record.exchangeCreditNoteId !== null) {
+      if (
+        typeof record.exchangeCreditNoteId !== 'string' ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          record.exchangeCreditNoteId,
+        )
+      ) {
+        throw new BadRequestException('exchangeCreditNoteId debe ser un UUID.');
+      }
+      exchangeCreditNoteId = record.exchangeCreditNoteId;
+    }
+
     return {
       customerId,
       paymentMethod,
       bankAccountId,
       amountPaid,
       notes,
+      ...(exchangeCreditNoteId ? { exchangeCreditNoteId } : {}),
       items,
     };
   }

@@ -81,6 +81,17 @@ export class ReceivablesController {
   }
 
   /**
+   * GET /api/v1/receivables/:id/movements
+   * Movimientos de la factura en cartera con el saldo después de cada uno ("Ver abonos").
+   */
+  @Get(':id/movements')
+  @RequirePermissions(SYSTEM_PERMISSIONS.RECEIVABLES_READ)
+  async getMovements(@Param('id', ParseUUIDPipe) id: string): Promise<ApiResponse<any>> {
+    const data = await this.svc.getMovements(id);
+    return { success: true, data };
+  }
+
+  /**
    * GET /api/v1/receivables/:id
    * Detalle de una cuenta por cobrar con historial de pagos.
    */

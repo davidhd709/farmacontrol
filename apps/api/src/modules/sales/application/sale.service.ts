@@ -382,9 +382,19 @@ export class SaleService {
             if (!customer) {
               throw new NotFoundException(`Cliente con id '${customerId}' no existe.`);
             }
+            if (payload.paymentMethod === 'CREDITO' && customer.isDefault) {
+              throw new BadRequestException(
+                'La venta a crédito requiere un cliente identificado: la cartera no puede quedar a nombre del consumidor final.',
+              );
+            }
             customerName = customer.name;
             customerDoc = customer.documentNumber;
           } else {
+            if (payload.paymentMethod === 'CREDITO') {
+              throw new BadRequestException(
+                'La venta a crédito requiere un cliente identificado: la cartera no puede quedar a nombre del consumidor final.',
+              );
+            }
             const defaultCust = await tx.customer.findFirst({
               where: { isDefault: true, isActive: true },
             });
@@ -618,6 +628,35 @@ export class SaleService {
 
           // 2.5. Persistir Venta y Asignaciones
           await this.saleRepository.save(sale, tx);
+
+          // 2.5.1. Cambio de producto: la venta nueva queda vinculada a la devolución
+          if (payload.exchangeCreditNoteId) {
+            const notes = await tx.$queryRaw<
+              Array<{ customer_id: string; exchange_sale_id: string | null; credit_note_number: string }>
+            >`
+              SELECT customer_id, exchange_sale_id, credit_note_number
+              FROM credit_notes
+              WHERE id = ${payload.exchangeCreditNoteId}::uuid
+              FOR UPDATE
+            `;
+            if (!notes.length) {
+              throw new NotFoundException('La nota crédito del cambio no existe.');
+            }
+            if (notes[0].customer_id !== customerId) {
+              throw new BadRequestException(
+                `El cambio de la nota crédito ${notes[0].credit_note_number} debe venderse al mismo cliente de la devolución.`,
+              );
+            }
+            if (notes[0].exchange_sale_id) {
+              throw new ConflictException(
+                `La nota crédito ${notes[0].credit_note_number} ya tiene una venta de cambio.`,
+              );
+            }
+            await tx.creditNote.update({
+              where: { id: payload.exchangeCreditNoteId },
+              data: { exchangeSaleId: sale.id },
+            });
+          }
 
           if (payload.paymentMethod === 'TRANSFERENCIA') {
             if (

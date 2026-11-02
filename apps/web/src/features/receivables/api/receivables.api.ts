@@ -5,6 +5,7 @@ import type {
   PaginatedResponse,
   AgingSummaryDto,
   ReversePaymentPayload,
+  ReceivableMovementsDto,
 } from '@farmacia/contracts';
 import { apiRequestData } from '../../../api/http-client';
 
@@ -29,6 +30,10 @@ export async function fetchReceivables(
 
 export async function fetchReceivableById(id: string): Promise<ReceivableDto> {
   return apiRequestData<ReceivableDto>(`receivables/${id}`, { method: 'GET' });
+}
+
+export async function fetchReceivableMovements(id: string): Promise<ReceivableMovementsDto> {
+  return apiRequestData<ReceivableMovementsDto>(`receivables/${id}/movements`, { method: 'GET' });
 }
 
 export async function fetchReceivablesAgingSummary(): Promise<AgingSummaryDto> {

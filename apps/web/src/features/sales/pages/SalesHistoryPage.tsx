@@ -120,7 +120,16 @@ export const SalesHistoryPage: React.FC = () => {
   return (
     <Box sx={{ p: 3, maxWidth: 1400, margin: '0 auto' }}>
       {/* Encabezado y Navegación rápida */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          mb: 3,
+          flexWrap: 'wrap',
+          gap: 2,
+        }}
+      >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <HomeBackButton />
           <Box>
@@ -128,7 +137,8 @@ export const SalesHistoryPage: React.FC = () => {
               Historial de Ventas
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Auditoría de transacciones, consulta de comprobantes y anulación con reversión de lotes
+              Auditoría de transacciones, consulta de comprobantes y anulación con reversión de
+              lotes
             </Typography>
           </Box>
         </Box>
@@ -239,10 +249,18 @@ export const SalesHistoryPage: React.FC = () => {
               <TableCell sx={{ fontWeight: 'bold' }}>N° Comprobante</TableCell>
               <TableCell sx={{ fontWeight: 'bold' }}>Cliente</TableCell>
               <TableCell sx={{ fontWeight: 'bold' }}>Medio de Pago</TableCell>
-              <TableCell align="right" sx={{ fontWeight: 'bold' }}>Total</TableCell>
-              <TableCell align="center" sx={{ fontWeight: 'bold' }}>Estado</TableCell>
-              <TableCell align="center" sx={{ fontWeight: 'bold' }}>Vendedor</TableCell>
-              <TableCell align="center" sx={{ fontWeight: 'bold' }}>Acciones</TableCell>
+              <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                Total
+              </TableCell>
+              <TableCell align="center" sx={{ fontWeight: 'bold' }}>
+                Estado
+              </TableCell>
+              <TableCell align="center" sx={{ fontWeight: 'bold' }}>
+                Vendedor
+              </TableCell>
+              <TableCell align="center" sx={{ fontWeight: 'bold' }}>
+                Acciones
+              </TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -250,13 +268,17 @@ export const SalesHistoryPage: React.FC = () => {
               <TableRow>
                 <TableCell colSpan={8} align="center" sx={{ py: 6 }}>
                   <CircularProgress size={36} />
-                  <Typography variant="body2" sx={{ mt: 1 }}>Cargando ventas...</Typography>
+                  <Typography variant="body2" sx={{ mt: 1 }}>
+                    Cargando ventas...
+                  </Typography>
                 </TableCell>
               </TableRow>
             ) : sales.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={8} align="center" sx={{ py: 6 }}>
-                  <Typography color="text.secondary">No se encontraron ventas registradas con los criterios seleccionados.</Typography>
+                  <Typography color="text.secondary">
+                    No se encontraron ventas registradas con los criterios seleccionados.
+                  </Typography>
                 </TableCell>
               </TableRow>
             ) : (
@@ -291,7 +313,11 @@ export const SalesHistoryPage: React.FC = () => {
                     />
                   </TableCell>
                   <TableCell align="right" sx={{ fontWeight: 'bold', fontSize: '1rem' }}>
-                    ${sale.total.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    $
+                    {sale.total.toLocaleString('es-CO', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
                   </TableCell>
                   <TableCell align="center">
                     <Chip
@@ -379,11 +405,18 @@ export const SalesHistoryPage: React.FC = () => {
         </DialogTitle>
         <DialogContent dividers>
           <Alert severity="warning" sx={{ mb: 2 }}>
-            <strong>ADVERTENCIA:</strong> Esta acción restituirá el stock automáticamente a los lotes originales y registrará el egreso correspondiente en la caja activa. Esta operación es irreversible.
+            <strong>ADVERTENCIA:</strong> Esta acción restituirá el stock automáticamente a los
+            lotes originales y registrará el egreso correspondiente en la caja activa. Esta
+            operación es irreversible.
           </Alert>
 
           <DialogContentText sx={{ mb: 2 }}>
-            ¿Está seguro de que desea anular la venta con comprobante <strong>{saleToCancel?.invoiceNumber}</strong> por un total de <strong>${saleToCancel?.total.toLocaleString('es-CO', { minimumFractionDigits: 2 })}</strong>?
+            ¿Está seguro de que desea anular la venta con comprobante{' '}
+            <strong>{saleToCancel?.invoiceNumber}</strong> por un total de{' '}
+            <strong>
+              ${saleToCancel?.total.toLocaleString('es-CO', { minimumFractionDigits: 2 })}
+            </strong>
+            ?
           </DialogContentText>
 
           <TextField
@@ -425,8 +458,12 @@ export const SalesHistoryPage: React.FC = () => {
         open={Boolean(saleForCreditNote)}
         sale={saleForCreditNote}
         onClose={() => setSaleForCreditNote(null)}
-        onCreated={(number) => {
+        onCreated={(number, exchangeCreditNoteId) => {
           setSaleForCreditNote(null);
+          if (exchangeCreditNoteId) {
+            navigate(`/pos?cambio=${encodeURIComponent(exchangeCreditNoteId)}`);
+            return;
+          }
           setToastMsg(`Nota crédito ${number} registrada correctamente.`);
           void loadSales();
         }}

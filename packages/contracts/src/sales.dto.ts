@@ -71,6 +71,8 @@ export interface ConfirmSalePayload {
   bankAccountId?: string; // Obligatoria para TRANSFERENCIA.
   amountPaid?: number; // Requerido para cálculo de cambio si es efectivo
   notes?: string;
+  /** Cambio de producto: nota crédito de la devolución que esta venta reemplaza */
+  exchangeCreditNoteId?: string;
   items: ConfirmSaleLineItemPayload[];
 }
 
@@ -175,6 +177,9 @@ export interface CreditNoteDto {
   total: number;
   refundMethod: string;
   restock: boolean;
+  /** Venta de reemplazo cuando la devolución fue un cambio de producto */
+  exchangeSaleId?: string | null;
+  exchangeSaleInvoiceNumber?: string | null;
   createdById: string;
   createdByName?: string | null;
   createdAt: string;

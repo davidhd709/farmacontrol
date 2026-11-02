@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -27,7 +28,8 @@ import type {
   SaleDto,
   SalePaymentMethod,
 } from '@farmacia/contracts';
-import { fetchDefaultCustomer } from '../../customers/api/customers.api';
+import { fetchCustomerById, fetchDefaultCustomer } from '../../customers/api/customers.api';
+import { fetchCreditNoteById, type CreditNoteDto } from '../../accounting/api/accounting.api';
 import { CustomerFormDialog } from '../../customers/components/CustomerFormDialog';
 import { PosProductSearch } from '../components/PosProductSearch';
 import { PosCustomerSelector } from '../components/PosCustomerSelector';
@@ -69,6 +71,11 @@ export const PosPage: React.FC = () => {
   // Cliente Seleccionado (por defecto Consumidor Final)
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerDto | null>(null);
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
+
+  // Cambio de producto: la venta nueva reemplaza la devolución de esta nota crédito
+  const [searchParams, setSearchParams] = useSearchParams();
+  const exchangeCreditNoteId = searchParams.get('cambio');
+  const [exchangeNote, setExchangeNote] = useState<CreditNoteDto | null>(null);
 
   // Búsqueda de Productos
   // Clave de idempotencia estable mientras el contenido de la venta no cambie: un reintento
@@ -120,6 +127,30 @@ export const PosPage: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [canCharge, paymentDialogOpen, receiptSale]);
+
+  useEffect(() => {
+    if (!exchangeCreditNoteId) {
+      setExchangeNote(null);
+      return;
+    }
+    let active = true;
+    fetchCreditNoteById(exchangeCreditNoteId)
+      .then(async (note) => {
+        const customer = await fetchCustomerById(note.customerId);
+        if (!active) return;
+        setExchangeNote(note);
+        setSelectedCustomer(customer);
+      })
+      .catch((err: unknown) => {
+        if (active)
+          setErrorMsg(
+            err instanceof Error ? err.message : 'No se pudo cargar la nota crédito del cambio.',
+          );
+      });
+    return () => {
+      active = false;
+    };
+  }, [exchangeCreditNoteId]);
 
   // Cargar cliente por defecto al iniciar
   useEffect(() => {
@@ -369,6 +400,7 @@ export const PosPage: React.FC = () => {
         bankAccountId,
         amountPaid,
         notes,
+        ...(exchangeNote ? { exchangeCreditNoteId: exchangeNote.id } : {}),
         items: cart.map((item) => ({
           productId: item.productId,
           presentationId: item.presentationId || undefined,
@@ -388,6 +420,10 @@ export const PosPage: React.FC = () => {
       setPaymentDialogOpen(false);
       setReceiptSale(completedSale);
       setCart([]);
+      if (exchangeNote) {
+        setExchangeNote(null);
+        setSearchParams({}, { replace: true });
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al procesar la venta';
       setErrorMsg(msg);
@@ -450,6 +486,22 @@ export const PosPage: React.FC = () => {
           />
         </Paper>
       </Box>
+
+      {exchangeNote && (
+        <Alert
+          severity="info"
+          sx={{ mb: 2 }}
+          onClose={() => {
+            setExchangeNote(null);
+            setSearchParams({}, { replace: true });
+          }}
+        >
+          Cambio de producto de la nota crédito <strong>{exchangeNote.creditNoteNumber}</strong>{' '}
+          (factura {exchangeNote.saleInvoiceNumber}, devuelto $
+          {exchangeNote.total.toLocaleString('es-CO')}). Agrega el producto de reemplazo: la venta
+          quedará vinculada a la devolución.
+        </Alert>
+      )}
 
       {errorMsg && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setErrorMsg(null)}>
@@ -815,6 +867,8 @@ export const PosPage: React.FC = () => {
           quantityCommercial: item.quantityCommercial,
         }))}
         productNames={Object.fromEntries(cart.map((item) => [item.productId, item.productName]))}
+        customerName={selectedCustomer?.name}
+        customerIsDefault={!selectedCustomer || Boolean(selectedCustomer.isDefault)}
         onClose={() => setPaymentDialogOpen(false)}
         onConfirm={handleConfirmSale}
         loading={paymentLoading}

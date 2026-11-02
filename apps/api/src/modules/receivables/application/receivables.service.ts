@@ -19,7 +19,9 @@ import {
   PaginatedResponse,
   AgingSummaryDto,
   ReceivableStatus,
+  ReceivableMovementsDto,
 } from '@farmacia/contracts';
+import { buildDocumentMovements, RawDocumentMovement } from '../domain/document-movements';
 import { centsToMoneyString, parseMoneyToCents } from '../../treasury/domain/treasury-rules';
 import { recordSourceBankMovement } from '../../treasury/application/record-source-bank-movement';
 import {
@@ -136,6 +138,100 @@ export class ReceivablesService {
       throw new NotFoundException(`Cuenta por cobrar "${id}" no encontrada`);
     }
     return this.toDto(row, row.payments);
+  }
+
+  /**
+   * Estado de una factura en cartera: el cargo de la venta a crédito, cada abono con su
+   * recibo de caja, las reversiones, las notas crédito que la redujeron y el saldo después de
+   * cada movimiento ("Ver abonos").
+   */
+  async getMovements(id: string): Promise<ReceivableMovementsDto> {
+    const row = await prisma.receivable.findUnique({
+      where: { id },
+      include: {
+        customer: { select: { name: true } },
+        sale: {
+          select: {
+            invoiceNumber: true,
+            createdAt: true,
+            creditNotes: {
+              where: { refundMethod: 'CREDITO_CARTERA' },
+              select: { creditNoteNumber: true, total: true, reason: true, createdAt: true },
+            },
+          },
+        },
+        payments: true,
+      },
+    });
+    if (!row) {
+      throw new NotFoundException(`Cuenta por cobrar "${id}" no encontrada`);
+    }
+    const toCents = (value: Prisma.Decimal) => parseMoneyToCents(value.toFixed(2), 'Valor');
+    const notes = row.sale?.creditNotes ?? [];
+    // La nota crédito a cartera baja el total y el saldo: el cargo original es la suma de ambos
+    const originalCents =
+      toCents(row.totalAmount) + notes.reduce((acc, n) => acc + toCents(n.total), 0n);
+    const raw: RawDocumentMovement[] = [
+      {
+        at: row.sale?.createdAt ?? row.createdAt,
+        type: 'CARGO',
+        documentNumber: row.sale?.invoiceNumber ?? null,
+        description: 'Venta a crédito',
+        deltaCents: originalCents,
+      },
+    ];
+    for (const payment of row.payments) {
+      raw.push({
+        at: payment.createdAt,
+        type: 'ABONO',
+        documentNumber: null,
+        description: payment.notes || 'Abono del cliente',
+        paymentMethod: payment.paymentMethod,
+        deltaCents: -toCents(payment.amount),
+      });
+      if (payment.isReversed && payment.reversedAt) {
+        raw.push({
+          at: payment.reversedAt,
+          type: 'REVERSION_ABONO',
+          documentNumber: null,
+          description: `Reversión del abono: ${payment.reversalReason ?? ''}`.trim(),
+          paymentMethod: payment.paymentMethod,
+          deltaCents: toCents(payment.amount),
+        });
+      }
+    }
+    for (const note of notes) {
+      raw.push({
+        at: note.createdAt,
+        type: 'NOTA_CREDITO',
+        documentNumber: note.creditNoteNumber,
+        description: `Devolución: ${note.reason}`,
+        deltaCents: -toCents(note.total),
+      });
+    }
+    // La anulación de la venta cancela lo que quedaba pendiente
+    const pendingCents = raw.reduce((acc, m) => acc + m.deltaCents, 0n);
+    if (row.status === 'ANULADA' && pendingCents > 0n) {
+      raw.push({
+        at: row.updatedAt,
+        type: 'ANULACION',
+        documentNumber: row.sale?.invoiceNumber ?? null,
+        description: row.notes ?? 'Venta anulada',
+        deltaCents: -pendingCents,
+      });
+    }
+    const movements = buildDocumentMovements(raw);
+    return {
+      receivableId: row.id,
+      invoiceNumber: row.sale?.invoiceNumber ?? null,
+      customerName: row.customer?.name ?? null,
+      totalAmount: row.totalAmount.toFixed(2),
+      amountPaid: row.amountPaid.toFixed(2),
+      balance: row.balance.toFixed(2),
+      status: row.status as ReceivableStatus,
+      dueDate: row.dueDate.toISOString().slice(0, 10),
+      movements,
+    };
   }
 
   // ------------------------------------------------------------------ //

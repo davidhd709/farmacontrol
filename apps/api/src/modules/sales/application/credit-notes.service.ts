@@ -514,6 +514,7 @@ export class CreditNotesService {
       include: {
         customer: true,
         sale: true,
+        exchangeSale: { select: { invoiceNumber: true } },
         createdByUser: { select: { id: true, username: true } },
         lines: {
           include: { product: true, lot: true },
@@ -531,6 +532,7 @@ export class CreditNotesService {
       include: {
         customer: true,
         sale: true,
+        exchangeSale: { select: { invoiceNumber: true } },
         createdByUser: { select: { id: true, username: true } },
         lines: {
           include: { product: true, lot: true },
@@ -560,6 +562,8 @@ export class CreditNotesService {
       total: Number(raw.total),
       refundMethod: raw.refundMethod,
       restock: raw.restock,
+      exchangeSaleId: raw.exchangeSaleId ?? null,
+      exchangeSaleInvoiceNumber: raw.exchangeSale?.invoiceNumber ?? null,
       createdById: raw.createdById,
       createdByName: raw.createdByUser?.username,
       createdAt: raw.createdAt.toISOString(),

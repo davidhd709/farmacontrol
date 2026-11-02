@@ -27,6 +27,7 @@ import { fetchReceivables, fetchReceivablesAgingSummary } from '../api/receivabl
 import { HomeBackButton } from '../../../components/HomeBackButton';
 
 import { ReceivablePaymentDialog } from '../components/ReceivablePaymentDialog';
+import { ReceivableMovementsDialog } from '../components/ReceivableMovementsDialog';
 import { isOverdue, getStatusDisplay } from '../utils/status';
 
 export function ReceivablesPage() {
@@ -38,6 +39,7 @@ export function ReceivablesPage() {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [selectedReceivable, setSelectedReceivable] = useState<ReceivableDto | null>(null);
+  const [movementsReceivableId, setMovementsReceivableId] = useState<string | null>(null);
 
   const { data: agingData } = useQuery({
     queryKey: ['receivables-aging'],
@@ -397,7 +399,7 @@ export function ReceivablesPage() {
                           size="small"
                           variant="outlined"
                           color="info"
-                          onClick={() => setSelectedReceivable(r)}
+                          onClick={() => setMovementsReceivableId(r.id)}
                           id={`receivable-history-${r.id}`}
                           sx={{ textTransform: 'none', minWidth: 90, fontSize: '0.75rem' }}
                         >
@@ -449,6 +451,13 @@ export function ReceivablesPage() {
       </Paper>
 
       {/* Modal de abono */}
+      {movementsReceivableId && (
+        <ReceivableMovementsDialog
+          receivableId={movementsReceivableId}
+          onClose={() => setMovementsReceivableId(null)}
+        />
+      )}
+
       {selectedReceivable && (
         <ReceivablePaymentDialog
           receivable={selectedReceivable}

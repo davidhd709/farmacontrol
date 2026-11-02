@@ -414,11 +414,16 @@ export interface CreditNoteDto {
   total: number;
   refundMethod: string;
   restock: boolean;
+  exchangeSaleId?: string | null;
+  exchangeSaleInvoiceNumber?: string | null;
   createdById: string;
   createdByName?: string | null;
   createdAt: string;
   lines: CreditNoteLineDto[];
 }
+
+export const fetchCreditNoteById = (id: string) =>
+  apiRequest<CreditNoteDto>(`credit-notes/${encodeURIComponent(id)}`);
 
 export const fetchSaleCreditNotes = (saleId: string) =>
   apiRequest<CreditNoteDto[]>(`sales/${encodeURIComponent(saleId)}/credit-notes`);

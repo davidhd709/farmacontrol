@@ -17,6 +17,8 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  ToggleButton,
+  ToggleButtonGroup,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { fetchFefoPreview } from '../api/sales.api';
@@ -30,6 +32,9 @@ interface PosPaymentDialogProps {
   items: FefoPreviewPayload['items'];
   productNames: Record<string, string>;
   total: number;
+  /** Cliente de la venta: el crédito exige uno identificado (no el consumidor final) */
+  customerName?: string;
+  customerIsDefault?: boolean;
   onClose: () => void;
   onConfirm: (
     paymentMethod: SalePaymentMethod,
@@ -45,6 +50,8 @@ export const PosPaymentDialog: React.FC<PosPaymentDialogProps> = ({
   total,
   items,
   productNames,
+  customerName,
+  customerIsDefault = false,
   onClose,
   onConfirm,
   loading,
@@ -59,7 +66,9 @@ export const PosPaymentDialog: React.FC<PosPaymentDialogProps> = ({
   const hasShortfall =
     !preview.isError && Boolean(preview.data?.lines.some((line) => line.shortfallBaseUnits > 0));
   const previewPending = preview.isFetching || (open && preview.isPending);
-  const [paymentMethod, setPaymentMethod] = useState<SalePaymentMethod>('EFECTIVO');
+  const [condition, setCondition] = useState<'CONTADO' | 'CREDITO'>('CONTADO');
+  const [cashMethod, setCashMethod] = useState<SalePaymentMethod>('EFECTIVO');
+  const paymentMethod: SalePaymentMethod = condition === 'CREDITO' ? 'CREDITO' : cashMethod;
   const [amountPaidStr, setAmountPaidStr] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
   const [bankAccountId, setBankAccountId] = useState('');
@@ -68,7 +77,8 @@ export const PosPaymentDialog: React.FC<PosPaymentDialogProps> = ({
 
   useEffect(() => {
     if (open) {
-      setPaymentMethod('EFECTIVO');
+      setCondition('CONTADO');
+      setCashMethod('EFECTIVO');
       setAmountPaidStr(String(total));
       setNotes('');
       setBankAccountId('');
@@ -104,6 +114,12 @@ export const PosPaymentDialog: React.FC<PosPaymentDialogProps> = ({
         return;
       }
     }
+    if (paymentMethod === 'CREDITO' && customerIsDefault) {
+      setErrorMsg(
+        'Selecciona un cliente identificado: la venta a crédito no puede quedar a nombre del consumidor final.',
+      );
+      return;
+    }
     if (paymentMethod === 'TRANSFERENCIA' && !bankAccountId) {
       setErrorMsg('Selecciona la cuenta bancaria que recibió la transferencia.');
       return;
@@ -112,7 +128,7 @@ export const PosPaymentDialog: React.FC<PosPaymentDialogProps> = ({
     try {
       await onConfirm(
         paymentMethod,
-        amountPaidNum,
+        paymentMethod === 'CREDITO' ? 0 : amountPaidNum,
         notes.trim() || undefined,
         bankAccountId || undefined,
       );
@@ -184,141 +200,198 @@ export const PosPaymentDialog: React.FC<PosPaymentDialogProps> = ({
             <Typography role="status">Espera la vista previa para confirmar.</Typography>
           )}
           <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-            Medio de Pago
+            Condición de la venta
           </Typography>
-          <RadioGroup
-            aria-label="Medio de pago"
-            row
-            value={paymentMethod}
-            onChange={(e) => {
-              const val = e.target.value as SalePaymentMethod;
-              setPaymentMethod(val);
-              if (val !== 'EFECTIVO') {
-                setAmountPaidStr(String(total));
+          <ToggleButtonGroup
+            exclusive
+            fullWidth
+            size="small"
+            color="primary"
+            aria-label="Condición de la venta"
+            value={condition}
+            onChange={(_, value: 'CONTADO' | 'CREDITO' | null) => {
+              if (value) {
+                setCondition(value);
+                setErrorMsg(null);
               }
             }}
-            sx={{ mb: 2, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1 }}
+            sx={{ mb: 2 }}
           >
-            <FormControlLabel value="EFECTIVO" control={<Radio size="small" />} label="Efectivo" />
-            <FormControlLabel
-              value="TRANSFERENCIA"
-              control={<Radio size="small" />}
-              label="Transferencia"
-            />
-          </RadioGroup>
+            <ToggleButton value="CONTADO" sx={{ textTransform: 'none', fontWeight: 600 }}>
+              Contado
+            </ToggleButton>
+            <ToggleButton value="CREDITO" sx={{ textTransform: 'none', fontWeight: 600 }}>
+              Crédito
+            </ToggleButton>
+          </ToggleButtonGroup>
 
-          {paymentMethod === 'TRANSFERENCIA' && (
-            <FormControl
-              fullWidth
-              size="small"
-              sx={{ mb: 2 }}
-              required
-              error={bankAccounts.isError}
-            >
-              <InputLabel id="sale-bank-account-label">Cuenta que recibe</InputLabel>
-              <Select
-                labelId="sale-bank-account-label"
-                label="Cuenta que recibe"
-                value={bankAccountId}
-                onChange={(event) => setBankAccountId(event.target.value)}
-                disabled={loading || bankAccounts.isPending || bankAccounts.isError}
+          {condition === 'CREDITO' &&
+            (customerIsDefault ? (
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                Para vender a crédito selecciona un cliente identificado. La cartera no puede quedar
+                a nombre del consumidor final.
+              </Alert>
+            ) : (
+              <Alert severity="info" sx={{ mb: 2 }}>
+                Se creará una cuenta por cobrar a nombre de <strong>{customerName}</strong> por{' '}
+                {formatMoney(totalCents)}, con vencimiento a 30 días. La venta no entra a caja ni a
+                bancos: el dinero se recibe después con un recibo de caja.
+              </Alert>
+            ))}
+
+          {condition === 'CONTADO' && (
+            <>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                Medio de Pago
+              </Typography>
+              <RadioGroup
+                aria-label="Medio de pago"
+                row
+                value={cashMethod}
+                onChange={(e) => {
+                  const val = e.target.value as SalePaymentMethod;
+                  setCashMethod(val);
+                  if (val !== 'EFECTIVO') {
+                    setAmountPaidStr(String(total));
+                  }
+                }}
+                sx={{ mb: 2, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1 }}
               >
-                {(bankAccounts.data ?? []).map((account) => (
-                  <MenuItem key={account.id} value={account.id}>
-                    {account.name} · {account.bankName}
-                    {account.accountNumberLast4 ? ` ···${account.accountNumberLast4}` : ''}
-                  </MenuItem>
-                ))}
-              </Select>
-              {bankAccounts.isError && (
-                <Alert severity="error">No se pudieron consultar las cuentas bancarias.</Alert>
-              )}
-            </FormControl>
-          )}
+                <FormControlLabel
+                  value="EFECTIVO"
+                  control={<Radio size="small" />}
+                  label="Efectivo"
+                />
+                <FormControlLabel
+                  value="TRANSFERENCIA"
+                  control={<Radio size="small" />}
+                  label="Transferencia"
+                />
+              </RadioGroup>
 
-          {paymentMethod === 'EFECTIVO' && (
-            <Box sx={{ mb: 2 }}>
-              <TextField
-                label="Efectivo Recibido *"
-                type="number"
-                size="small"
-                fullWidth
-                value={amountPaidStr}
-                onChange={(e) => setAmountPaidStr(e.target.value)}
-                required
-                disabled={loading}
-                autoFocus
-                slotProps={{ htmlInput: { min: total, step: 'any' } }}
-                sx={{ mb: 1 }}
-              />
-
-              {/* Sugerencias de pago rápido con billetes comunes */}
-              <Box
-                sx={{ display: 'flex', gap: 0.8, flexWrap: 'wrap', mb: 1.5, alignItems: 'center' }}
-              >
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ fontWeight: 600, mr: 0.5 }}
-                >
-                  Rápido:
-                </Typography>
-                <Button
+              {paymentMethod === 'TRANSFERENCIA' && (
+                <FormControl
+                  fullWidth
                   size="small"
-                  variant={amountPaidNum === total ? 'contained' : 'outlined'}
-                  onClick={() => setAmountPaidStr(String(total))}
-                  sx={{
-                    py: 0.2,
-                    px: 0.8,
-                    fontSize: '0.75rem',
-                    minWidth: 'auto',
-                    textTransform: 'none',
-                  }}
+                  sx={{ mb: 2 }}
+                  required
+                  error={bankAccounts.isError}
                 >
-                  Exacto
-                </Button>
-                {quickDenominations.map((denom) => (
-                  <Button
-                    key={denom}
+                  <InputLabel id="sale-bank-account-label">Cuenta que recibe</InputLabel>
+                  <Select
+                    labelId="sale-bank-account-label"
+                    label="Cuenta que recibe"
+                    value={bankAccountId}
+                    onChange={(event) => setBankAccountId(event.target.value)}
+                    disabled={loading || bankAccounts.isPending || bankAccounts.isError}
+                  >
+                    {(bankAccounts.data ?? []).map((account) => (
+                      <MenuItem key={account.id} value={account.id}>
+                        {account.name} · {account.bankName}
+                        {account.accountNumberLast4 ? ` ···${account.accountNumberLast4}` : ''}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                  {bankAccounts.isError && (
+                    <Alert severity="error">No se pudieron consultar las cuentas bancarias.</Alert>
+                  )}
+                </FormControl>
+              )}
+
+              {paymentMethod === 'EFECTIVO' && (
+                <Box sx={{ mb: 2 }}>
+                  <TextField
+                    label="Efectivo Recibido *"
+                    type="number"
                     size="small"
-                    variant={amountPaidNum === denom ? 'contained' : 'outlined'}
-                    onClick={() => setAmountPaidStr(String(denom))}
+                    fullWidth
+                    value={amountPaidStr}
+                    onChange={(e) => setAmountPaidStr(e.target.value)}
+                    required
+                    disabled={loading}
+                    autoFocus
+                    slotProps={{ htmlInput: { min: total, step: 'any' } }}
+                    sx={{ mb: 1 }}
+                  />
+
+                  {/* Sugerencias de pago rápido con billetes comunes */}
+                  <Box
                     sx={{
-                      py: 0.2,
-                      px: 0.8,
-                      fontSize: '0.75rem',
-                      minWidth: 'auto',
-                      textTransform: 'none',
+                      display: 'flex',
+                      gap: 0.8,
+                      flexWrap: 'wrap',
+                      mb: 1.5,
+                      alignItems: 'center',
                     }}
                   >
-                    ${denom.toLocaleString('es-CO')}
-                  </Button>
-                ))}
-              </Box>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ fontWeight: 600, mr: 0.5 }}
+                    >
+                      Rápido:
+                    </Typography>
+                    <Button
+                      size="small"
+                      variant={amountPaidNum === total ? 'contained' : 'outlined'}
+                      onClick={() => setAmountPaidStr(String(total))}
+                      sx={{
+                        py: 0.2,
+                        px: 0.8,
+                        fontSize: '0.75rem',
+                        minWidth: 'auto',
+                        textTransform: 'none',
+                      }}
+                    >
+                      Exacto
+                    </Button>
+                    {quickDenominations.map((denom) => (
+                      <Button
+                        key={denom}
+                        size="small"
+                        variant={amountPaidNum === denom ? 'contained' : 'outlined'}
+                        onClick={() => setAmountPaidStr(String(denom))}
+                        sx={{
+                          py: 0.2,
+                          px: 0.8,
+                          fontSize: '0.75rem',
+                          minWidth: 'auto',
+                          textTransform: 'none',
+                        }}
+                      >
+                        ${denom.toLocaleString('es-CO')}
+                      </Button>
+                    ))}
+                  </Box>
 
-              <Box
-                sx={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  p: 1.5,
-                  bgcolor: changeGiven > 0 ? 'success.50' : 'background.default',
-                  borderRadius: 1.5,
-                  border: 1,
-                  borderColor: changeGiven > 0 ? 'success.200' : 'divider',
-                }}
-              >
-                <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                  Cambio / Devuelta:
-                </Typography>
-                <Typography
-                  variant="subtitle1"
-                  sx={{ fontWeight: 800, color: changeGiven > 0 ? 'success.dark' : 'text.primary' }}
-                >
-                  {formatMoney(changeGiven)}
-                </Typography>
-              </Box>
-            </Box>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      p: 1.5,
+                      bgcolor: changeGiven > 0 ? 'success.50' : 'background.default',
+                      borderRadius: 1.5,
+                      border: 1,
+                      borderColor: changeGiven > 0 ? 'success.200' : 'divider',
+                    }}
+                  >
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      Cambio / Devuelta:
+                    </Typography>
+                    <Typography
+                      variant="subtitle1"
+                      sx={{
+                        fontWeight: 800,
+                        color: changeGiven > 0 ? 'success.dark' : 'text.primary',
+                      }}
+                    >
+                      {formatMoney(changeGiven)}
+                    </Typography>
+                  </Box>
+                </Box>
+              )}
+            </>
           )}
 
           <TextField
@@ -345,7 +418,12 @@ export const PosPaymentDialog: React.FC<PosPaymentDialogProps> = ({
             type="submit"
             variant="contained"
             color="primary"
-            disabled={loading || previewPending || hasShortfall}
+            disabled={
+              loading ||
+              previewPending ||
+              hasShortfall ||
+              (condition === 'CREDITO' && customerIsDefault)
+            }
             data-testid="confirm-payment-btn"
             startIcon={loading ? <CircularProgress size={18} color="inherit" /> : null}
             sx={{

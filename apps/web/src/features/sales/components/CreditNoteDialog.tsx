@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  Box,
   Button,
   Checkbox,
   Dialog,
@@ -40,7 +41,8 @@ interface Props {
   open: boolean;
   sale: SaleDto | null;
   onClose: () => void;
-  onCreated: (creditNoteNumber: string) => void;
+  /** exchangeCreditNoteId llega cuando la devolución es un cambio de producto */
+  onCreated: (creditNoteNumber: string, exchangeCreditNoteId?: string) => void;
 }
 
 type RefundMethod = NonNullable<CreateCreditNotePayload['refundMethod']>;
@@ -61,6 +63,7 @@ export const CreditNoteDialog: React.FC<Props> = ({ open, sale, onClose, onCreat
     control,
     watch,
     reset,
+    setValue,
     handleSubmit,
     formState: { errors, isSubmitting: submitting },
   } = useForm<CreditNoteFormValues>({
@@ -70,6 +73,7 @@ export const CreditNoteDialog: React.FC<Props> = ({ open, sale, onClose, onCreat
   const { quantities, restock, refundMethod } = watch();
   const submittingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
+  const [isExchange, setIsExchange] = useState(false);
   // Un reintento del mismo contenido reutiliza la clave para no emitir la nota dos veces
   const retryRef = useRef<{ fingerprint: string; key: string } | null>(null);
 
@@ -83,6 +87,7 @@ export const CreditNoteDialog: React.FC<Props> = ({ open, sale, onClose, onCreat
         refundMethod: defaultRefundMethod(sale.paymentMethod),
       });
       setError(null);
+      setIsExchange(false);
     }
   }, [open, sale, reset]);
 
@@ -119,7 +124,7 @@ export const CreditNoteDialog: React.FC<Props> = ({ open, sale, onClose, onCreat
         retryRef.current = { fingerprint, key: crypto.randomUUID() };
       }
       const nc = await createSaleCreditNote(sale.id, payload, retryRef.current.key);
-      onCreated(nc.creditNoteNumber);
+      onCreated(nc.creditNoteNumber, isExchange ? nc.id : undefined);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo registrar la nota crédito.');
     } finally {
@@ -138,6 +143,22 @@ export const CreditNoteDialog: React.FC<Props> = ({ open, sale, onClose, onCreat
             {errors.quantities?.root?.message && (
               <Alert severity="error">{errors.quantities.root.message}</Alert>
             )}
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <Button
+                size="small"
+                variant="outlined"
+                disabled={submitting}
+                onClick={() =>
+                  sale.lines.forEach((line) =>
+                    setValue(`quantities.${line.id}`, String(line.quantityCommercial), {
+                      shouldValidate: true,
+                    }),
+                  )
+                }
+              >
+                Devolver todo
+              </Button>
+            </Box>
             <Table size="small" aria-label="Líneas a devolver">
               <TableHead>
                 <TableRow>
@@ -267,6 +288,16 @@ export const CreditNoteDialog: React.FC<Props> = ({ open, sale, onClose, onCreat
                     label="Reintegrar unidades al inventario (lote original)"
                   />
                 )}
+              />
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={isExchange}
+                    disabled={submitting}
+                    onChange={(e) => setIsExchange(e.target.checked)}
+                  />
+                }
+                label="Es un cambio de producto: abrir el punto de venta para la venta de reemplazo"
               />
             </Stack>
 

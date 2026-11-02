@@ -107,7 +107,7 @@ Cada flujo (venta, abono, pago a proveedor, gasto, nota crédito, movimiento man
 | Fase | Estado | Commit |
 |---|---|---|
 | 1 | IMPLEMENTADO | ver `git log` (`fix(ventas): …`) |
-| 2 | PENDIENTE | — |
+| 2 | IMPLEMENTADO | ver `git log` (`feat(ventas): …`) |
 | 3 | PENDIENTE | — |
 | 4 | PENDIENTE | — |
 | 5 | PENDIENTE | — |

@@ -829,6 +829,41 @@ export interface ReceivableDto {
   payments?: ReceivablePaymentDto[];
 }
 
+/** Movimiento del estado de una factura en cartera o en cuentas por pagar. */
+export type DocumentMovementType =
+  | 'CARGO'
+  | 'ABONO'
+  | 'REVERSION_ABONO'
+  | 'NOTA_CREDITO'
+  | 'NOTA_DEBITO'
+  | 'ANULACION';
+
+export interface DocumentMovementDto {
+  date: string;
+  type: DocumentMovementType;
+  /** Documento que respalda el movimiento: factura, recibo de caja, egreso o nota */
+  documentNumber: string | null;
+  description: string;
+  paymentMethod?: string | null;
+  /** Aumenta el saldo (factura, reversión de un abono) */
+  charge: string;
+  /** Disminuye el saldo (abono, nota crédito, anulación) */
+  credit: string;
+  balance: string;
+}
+
+export interface ReceivableMovementsDto {
+  receivableId: string;
+  invoiceNumber: string | null;
+  customerName: string | null;
+  totalAmount: string;
+  amountPaid: string;
+  balance: string;
+  status: ReceivableStatus;
+  dueDate: string;
+  movements: DocumentMovementDto[];
+}
+
 export interface RegisterReceivablePaymentPayload {
   amount: number | string;
   paymentMethod?: string;

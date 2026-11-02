@@ -213,6 +213,35 @@ describe('Formulario nota crédito', () => {
     expect(api).not.toHaveBeenCalled();
   });
 
+  it('"Devolver todo" llena lo vendido y un cambio de producto entrega la nota al punto de venta', async () => {
+    const api = vi
+      .spyOn(accountingApi, 'createSaleCreditNote')
+      .mockResolvedValue({
+        id: 'nc-1',
+        creditNoteNumber: 'NC-000001',
+      } as accountingApi.CreditNoteDto);
+    const onCreated = vi.fn();
+    render(
+      <CreditNoteDialog open sale={mockSalesList[0]} onClose={vi.fn()} onCreated={onCreated} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Devolver todo' }));
+    expect(screen.getByRole('spinbutton')).toHaveValue(
+      Number(mockSalesList[0].lines[0].quantityCommercial),
+    );
+    fireEvent.change(screen.getByLabelText(/Motivo de la devolución/), {
+      target: { value: 'Cambio por otra marca' },
+    });
+    fireEvent.click(screen.getByRole('checkbox', { name: /cambio de producto/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar nota crédito' }));
+    await waitFor(() => expect(onCreated).toHaveBeenCalledWith('NC-000001', 'nc-1'));
+    expect(api.mock.calls[0][1].items).toEqual([
+      {
+        saleLineId: 'line-1',
+        quantityCommercial: Number(mockSalesList[0].lines[0].quantityCommercial),
+      },
+    ]);
+  });
+
   it.each(['EFECTIVO', 'TRANSFERENCIA', 'CREDITO'] as const)(
     'conserva payload y medio de reembolso para %s, evita doble envío y conserva clave al reintentar',
     async (paymentMethod) => {
@@ -232,7 +261,7 @@ describe('Formulario nota crédito', () => {
       fireEvent.change(screen.getByLabelText(/Motivo de la devolución/), {
         target: { value: '  Envase roto  ' },
       });
-      fireEvent.click(screen.getByRole('checkbox'));
+      fireEvent.click(screen.getByRole('checkbox', { name: /Reintegrar unidades/ }));
       fireEvent.click(screen.getByRole('button', { name: 'Confirmar nota crédito' }));
       expect(await screen.findByText('Fallo temporal')).toBeInTheDocument();
       const confirm = screen.getByRole('button', { name: 'Confirmar nota crédito' });
