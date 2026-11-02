@@ -653,6 +653,40 @@ describe('Recibos de caja y comprobantes de egreso como documento de origen', ()
     expect(await prisma.cashMovement.count()).toBe(0);
   });
 
+  it('revertir un pago a proveedor del comprobante restituye el saldo, devuelve el dinero y reversa su asiento', async () => {
+    await post('treasury/cash-receipts', {
+      kind: 'MANUAL',
+      paymentMethod: 'EFECTIVO',
+      concept: 'Base',
+      amount: '100000.00',
+      counterpartAccountId: capitalAccountId,
+    }).expect(201);
+    const invoice = await payable('FC-REV', '20000.00');
+    await post('treasury/disbursements', {
+      kind: 'PROVEEDOR',
+      paymentMethod: 'EFECTIVO',
+      concept: 'Pago FC-REV',
+      supplierId,
+      applications: [{ documentType: 'FACTURA_COMPRA', documentId: invoice.id, amount: '20000.00' }],
+    }).expect(201);
+    const payment = await prisma.payablePayment.findFirstOrThrow({ where: { payableId: invoice.id } });
+    const entriesBefore = await prisma.journalEntry.count({ where: { sourceType: 'REVERSAL' } });
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/payables/${invoice.id}/payments/${payment.id}/reverse`)
+      .set('Cookie', adminCookie)
+      .send({ reason: 'Pago registrado dos veces' })
+      .expect(200);
+
+    const after = await prisma.payable.findUniqueOrThrow({ where: { id: invoice.id } });
+    expect(after.balance.toFixed(2)).toBe('20000.00');
+    expect((await prisma.payablePayment.findUniqueOrThrow({ where: { id: payment.id } })).isReversed).toBe(true);
+    const refund = await prisma.cashMovement.findFirstOrThrow({ where: { referenceDocumentId: payment.id } });
+    expect(refund.amount.toFixed(2)).toBe('20000.00');
+    expect(await prisma.journalEntry.count({ where: { sourceType: 'REVERSAL' } })).toBe(entriesBefore + 1);
+    expect(await journalIsBalanced()).toBe(true);
+  });
+
   describe('permisos por documento (correcciones del cliente, 2026-11-02)', () => {
     const collection = (receivableId: string, amount = '1000.00') => ({
       kind: 'CARTERA',
