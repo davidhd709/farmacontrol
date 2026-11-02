@@ -98,7 +98,7 @@ Cada flujo (venta, abono, pago a proveedor, gasto, nota crédito, movimiento man
 ## 4. Pendientes y dudas abiertas
 
 - Los endpoints antiguos de pago por factura (`POST /receivables/:id/payments`, `POST /payables/:id/payments`, `POST /expenses/:id/payments`) y los de movimientos manuales (`POST /cash-movements`, `POST /treasury/bank-accounts/:id/movements`) siguen en la API por compatibilidad: la interfaz ya no los usa y cada uno sigue emitiendo su RC/CE por el trigger. Retirarlos es una decisión aparte (rompe integraciones o scripts que los usen).
-- La prueba preexistente `full-system-lifecycle` "Estado de Resultados antes del cierre mensual" consulta octubre de 2026 con fechas fijas, pero las ventas de la simulación se registran con la fecha del día: falla fuera de octubre de 2026. `accounting-coverage` falla de noche (entre las 19:00 y las 24:00 de Bogotá, cuando la fecha UTC ya cambió). Ninguna de las dos la introdujeron estas correcciones.
+- `accounting-coverage` ("nota crédito devuelve el INC…") falla de noche, entre las 19:00 y las 24:00 de Bogotá, cuando la fecha UTC ya cambió: es preexistente. La prueba de `full-system-lifecycle` que dependía de octubre de 2026 se corrigió para usar la fecha de negocio de la corrida.
 
 - ⚠️ Pantalla del botón "Reservar" (sección 2, fase 1).
 - ⚠️ Pantalla de "Organizar diseño" (sección 2, fase 1).

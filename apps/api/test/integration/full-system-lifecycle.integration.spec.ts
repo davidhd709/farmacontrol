@@ -1,3 +1,4 @@
+import { businessToday } from '../../src/common/utils/business-date';
 import { randomUUID } from 'node:crypto';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
@@ -789,7 +790,13 @@ describe('Full System Multi-day Lifecycle Simulation (PostgreSQL Real)', () => {
   // =========================================================================
   describe('Día 5: Cierre de Período y Verificación Rigurosa de Ecuación Contable', () => {
     it('Consulta Estado de Resultados antes del cierre mensual', async () => {
-      const is = await reportsService.getIncomeStatement('2026-10-01', '2026-10-31');
+      // Las ventas del POS se registran con la fecha de negocio del día de la corrida, no con
+      // las fechas fijas de octubre de la simulación: el rango llega hasta ese día
+      const today = businessToday();
+      const is = await reportsService.getIncomeStatement(
+        '2026-10-01',
+        today > '2026-10-31' ? today : '2026-10-31',
+      );
 
       // Ventas brutas: Venta 2 ($960.000) + Venta 3 ($150.000) = $1.110.000 (Venta 1 fue anulada)
       expect(Number(is.netSales)).toBeGreaterThan(0);
