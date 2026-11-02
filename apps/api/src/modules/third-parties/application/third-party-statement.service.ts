@@ -2,7 +2,9 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { prisma, Prisma } from '@farmacia/database';
 import type { ReceivableStatementItemDto, ThirdPartyStatementDto } from '@farmacia/contracts';
 import { businessToday, calendarDate } from '../../../common/utils/business-date';
-import { agingBreakdown, agingBucketOf, daysOverdue } from '../../../common/utils/aging';
+import { agingBreakdown, agingBucketOf, agingStartDate, daysOverdue } from '../../../common/utils/aging';
+import { accountingPolicyAt } from '../../company/application/accounting-policy.reader';
+
 import { PayablesStatementService } from '../../payables/application/payables-statement.service';
 import { parseMoneyToCents, centsToMoneyString } from '../../treasury/domain/treasury-rules';
 
@@ -19,6 +21,7 @@ export class ThirdPartyStatementService {
     if (!party) throw new NotFoundException('Tercero no encontrado.');
 
     const today = calendarDate(businessToday());
+    const { agingBaseDate } = await accountingPolicyAt(prisma, businessToday());
     const cents = (value: Prisma.Decimal) => parseMoneyToCents(value.toFixed(2), 'Saldo');
 
     let receivables: ThirdPartyStatementDto['receivables'] = null;
@@ -29,7 +32,10 @@ export class ThirdPartyStatementService {
         orderBy: { dueDate: 'asc' },
       });
       const items: ReceivableStatementItemDto[] = rows.map((r) => {
-        const days = daysOverdue(r.dueDate, today);
+        const days = daysOverdue(
+          agingStartDate(agingBaseDate, { dueDate: r.dueDate, issuedAt: r.sale?.createdAt ?? r.createdAt }),
+          today,
+        );
         return {
           receivableId: r.id,
           invoiceNumber: r.sale?.invoiceNumber ?? null,

@@ -59,6 +59,13 @@ export type PurchaseReturnVariancePurpose = (typeof PURCHASE_RETURN_VARIANCE_PUR
 export const BONUS_UNITS_TREATMENTS = ['ZERO_COST_IN_AVERAGE'] as const;
 export type BonusUnitsTreatment = (typeof BONUS_UNITS_TREATMENTS)[number];
 
+/**
+ * Fecha desde la que se cuentan las edades de cartera y cuentas por pagar. DUE_DATE_OR_ISSUE:
+ * vencimiento y, si el documento no tiene, emisión (regla vigente). ISSUE_DATE: emisión.
+ */
+export const AGING_BASE_DATES = ['DUE_DATE_OR_ISSUE', 'ISSUE_DATE'] as const;
+export type AgingBaseDate = (typeof AGING_BASE_DATES)[number];
+
 export interface BranchDto {
   id: string;
   code: string;
@@ -95,6 +102,7 @@ export interface AccountingPolicyDto {
   openingCostSource: OpeningCostSource;
   purchaseReturnVariancePurpose: PurchaseReturnVariancePurpose;
   bonusUnitsTreatment: BonusUnitsTreatment;
+  agingBaseDate: AgingBaseDate;
   reason: string | null;
   createdByName: string | null;
   createdAt: string | null;
@@ -143,5 +151,7 @@ export interface CreateAccountingPolicyPayload {
   openingCostSource: OpeningCostSource;
   purchaseReturnVariancePurpose: PurchaseReturnVariancePurpose;
   bonusUnitsTreatment: BonusUnitsTreatment;
+  /** Opcional: si se omite rige DUE_DATE_OR_ISSUE */
+  agingBaseDate?: AgingBaseDate;
   reason: string;
 }

@@ -25,7 +25,12 @@ describe('Reglas de empresa (ADR-006)', () => {
       purchaseReturnVariancePurpose: 'INVENTORY_COST_VARIANCE',
       bonusUnitsTreatment: 'ZERO_COST_IN_AVERAGE',
     };
-    expect(validatePolicyValues(valid)).toEqual(valid);
+    // Sin fecha base de edades rige la regla vigente: vencimiento con respaldo en emisión
+    expect(validatePolicyValues(valid)).toEqual({ ...valid, agingBaseDate: 'DUE_DATE_OR_ISSUE' });
+    expect(validatePolicyValues({ ...valid, agingBaseDate: 'ISSUE_DATE' }).agingBaseDate).toBe('ISSUE_DATE');
+    expect(() => validatePolicyValues({ ...valid, agingBaseDate: 'PAGO' })).toThrow(
+      /Fecha base de las edades no válido/,
+    );
     // F5: los tres métodos están disponibles; LIFO no es un método admitido
     expect(validatePolicyValues({ ...valid, costingMethod: 'FIFO' }).costingMethod).toBe('FIFO');
     expect(validatePolicyValues({ ...valid, costingMethod: 'SPECIFIC_LOT' }).costingMethod).toBe(

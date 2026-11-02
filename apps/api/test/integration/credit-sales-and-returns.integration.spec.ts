@@ -148,6 +148,69 @@ describe('Ventas a crédito, devoluciones y cambio de producto', () => {
     expect(await prisma.journalEntry.count()).toBe(2);
   });
 
+  it('la fecha base de las edades es configurable: vencimiento por defecto o emisión', async () => {
+    const sale = await sell({ paymentMethod: 'CREDITO', customerId });
+    expect(sale.status, JSON.stringify(sale.body)).toBe(201);
+    // Emitida hace 45 días y vence dentro de 20: no vencida, pero con 45 días desde la emisión
+    const issuedAt = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000);
+    const dueDate = new Date(`${new Date(Date.now() + 20 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)}T00:00:00Z`);
+    await prisma.receivable.update({ where: { saleId: sale.body.id }, data: { createdAt: issuedAt, dueDate } });
+    const aging = async () =>
+      (await request(app.getHttpServer()).get('/api/v1/receivables/aging-summary').set('Cookie', adminCookie).expect(200)).body.data;
+
+    // Sin política registrada rige vencimiento con respaldo en emisión
+    expect((await aging()).current.count).toBe(1);
+
+    const company = await prisma.company.create({
+      data: { legalName: 'Droguería Prueba', taxId: '900123987', taxIdCheckDigit: '1', sectorProfile: 'PHARMACY' },
+    });
+    await prisma.companyAccountingPolicy.create({
+      data: {
+        companyId: company.id,
+        effectiveFrom: new Date('2020-01-01T00:00:00Z'),
+        costingMethod: 'WEIGHTED_AVERAGE',
+        openingCostSource: 'LAST_PURCHASE_THEN_CATALOG',
+        purchaseReturnVariancePurpose: 'COST_OF_SALES',
+        bonusUnitsTreatment: 'ZERO_COST_IN_AVERAGE',
+        reason: 'Política inicial',
+      },
+    });
+    // Una versión registrada sin indicarla conserva la regla vigente
+    expect((await aging()).current.count).toBe(1);
+
+    await prisma.companyAccountingPolicy.create({
+      data: {
+        companyId: company.id,
+        effectiveFrom: new Date('2021-01-01T00:00:00Z'),
+        costingMethod: 'WEIGHTED_AVERAGE',
+        openingCostSource: 'LAST_PURCHASE_THEN_CATALOG',
+        purchaseReturnVariancePurpose: 'COST_OF_SALES',
+        bonusUnitsTreatment: 'ZERO_COST_IN_AVERAGE',
+        agingBaseDate: 'ISSUE_DATE',
+        reason: 'Edades desde la emisión',
+      },
+    });
+    const byIssue = await aging();
+    expect(byIssue.current.count).toBe(0);
+    expect(byIssue.days31To60).toEqual({ amount: '10000.00', count: 1 });
+
+    // La API rechaza una fecha base que no existe
+    const invalid = await request(app.getHttpServer())
+      .post('/api/v1/company/accounting-policies')
+      .set('Cookie', adminCookie)
+      .send({
+        effectiveFrom: new Date().toISOString().slice(0, 10),
+        costingMethod: 'WEIGHTED_AVERAGE',
+        openingCostSource: 'LAST_PURCHASE_THEN_CATALOG',
+        purchaseReturnVariancePurpose: 'COST_OF_SALES',
+        bonusUnitsTreatment: 'ZERO_COST_IN_AVERAGE',
+        agingBaseDate: 'FECHA_DE_PAGO',
+        reason: 'Prueba',
+      });
+    expect(invalid.status).toBe(400);
+    expect(invalid.body.message).toMatch(/Fecha base de las edades/);
+  });
+
   it('la venta a crédito exige un cliente identificado', async () => {
     const withoutCustomer = await sell({ paymentMethod: 'CREDITO' });
     expect(withoutCustomer.status).toBe(400);

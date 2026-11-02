@@ -1,11 +1,13 @@
 import { DomainError } from '../../../common/domain-error';
 import {
+  AGING_BASE_DATES,
   AVAILABLE_COSTING_METHODS,
   BONUS_UNITS_TREATMENTS,
   COSTING_METHODS,
   OPENING_COST_SOURCES,
   PURCHASE_RETURN_VARIANCE_PURPOSES,
   SECTOR_PROFILES,
+  type AgingBaseDate,
   type BonusUnitsTreatment,
   type CostingMethod,
   type OpeningCostSource,
@@ -76,6 +78,7 @@ export interface AccountingPolicyValues {
   openingCostSource: OpeningCostSource;
   purchaseReturnVariancePurpose: PurchaseReturnVariancePurpose;
   bonusUnitsTreatment: BonusUnitsTreatment;
+  agingBaseDate: AgingBaseDate;
 }
 
 /**
@@ -87,6 +90,7 @@ export const DEFAULT_ACCOUNTING_POLICY: AccountingPolicyValues = {
   openingCostSource: 'LAST_PURCHASE_THEN_CATALOG',
   purchaseReturnVariancePurpose: 'COST_OF_SALES',
   bonusUnitsTreatment: 'ZERO_COST_IN_AVERAGE',
+  agingBaseDate: 'DUE_DATE_OR_ISSUE',
 };
 
 function assertOneOf<T extends string>(value: unknown, options: readonly T[], label: string): T {
@@ -120,6 +124,10 @@ export function validatePolicyValues(input: Record<string, unknown>): Accounting
       BONUS_UNITS_TREATMENTS,
       'Tratamiento de bonificaciones',
     ),
+    agingBaseDate:
+      input.agingBaseDate === undefined
+        ? DEFAULT_ACCOUNTING_POLICY.agingBaseDate
+        : assertOneOf(input.agingBaseDate, AGING_BASE_DATES, 'Fecha base de las edades'),
   };
 }
 

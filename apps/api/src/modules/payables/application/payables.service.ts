@@ -17,7 +17,9 @@ import {
 import { buildDocumentMovements, RawDocumentMovement } from '../../../common/utils/document-movements';
 import { centsToMoneyString, parseMoneyToCents } from '../../treasury/domain/treasury-rules';
 import { recordSourceBankMovement } from '../../treasury/application/record-source-bank-movement';
-import { agingBreakdown, agingBucketOf, daysOverdue } from '../../../common/utils/aging';
+import { agingBreakdown, agingBucketOf, agingStartDate, daysOverdue } from '../../../common/utils/aging';
+import { accountingPolicyAt } from '../../company/application/accounting-policy.reader';
+
 import { IdempotencyService } from '../../../common/idempotency/idempotency.service';
 import { AccountingEngineService } from '../../accounting/application/accounting-engine.service';
 
@@ -341,13 +343,16 @@ export class PayablesService {
   async getAgingSummary(): Promise<AgingBreakdownDto> {
     const rows = await prisma.payable.findMany({
       where: { status: 'PENDIENTE', balance: { gt: 0 } },
-      select: { balance: true, dueDate: true },
+      select: { balance: true, dueDate: true, createdAt: true, purchase: { select: { purchaseDate: true } } },
     });
     const today = calendarDate(businessToday());
+    const { agingBaseDate } = await accountingPolicyAt(prisma, businessToday());
     return agingBreakdown(
       rows.map((row) => ({
         balanceCents: parseMoneyToCents(row.balance.toString(), 'Saldo de cuenta por pagar'),
-        bucket: agingBucketOf(daysOverdue(row.dueDate, today)),
+        bucket: agingBucketOf(
+          daysOverdue(agingStartDate(agingBaseDate, { dueDate: row.dueDate, issuedAt: row.purchase?.purchaseDate ?? row.createdAt }), today),
+        ),
       })),
     );
   }

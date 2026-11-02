@@ -34,5 +34,6 @@ export async function accountingPolicyAt(
       policy.purchaseReturnVariancePurpose as AccountingPolicyValues['purchaseReturnVariancePurpose'],
     bonusUnitsTreatment:
       policy.bonusUnitsTreatment as AccountingPolicyValues['bonusUnitsTreatment'],
+    agingBaseDate: policy.agingBaseDate as AccountingPolicyValues['agingBaseDate'],
   };
 }

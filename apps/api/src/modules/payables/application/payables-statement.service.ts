@@ -6,7 +6,9 @@ import type {
   PayableStatementItemDto,
 } from '@farmacia/contracts';
 import { businessToday, calendarDate } from '../../../common/utils/business-date';
-import { agingBreakdown, agingBucketOf, daysOverdue } from '../../../common/utils/aging';
+import { agingBreakdown, agingBucketOf, agingStartDate, daysOverdue } from '../../../common/utils/aging';
+import { accountingPolicyAt } from '../../company/application/accounting-policy.reader';
+
 import { parseMoneyToCents } from '../../treasury/domain/treasury-rules';
 
 const isoDay = (value: Date) => value.toISOString().slice(0, 10);
@@ -61,10 +63,17 @@ export class PayablesStatementService {
     ]);
 
     const today = calendarDate(businessToday());
+    const { agingBaseDate } = await accountingPolicyAt(prisma, businessToday());
     const cents = (value: Prisma.Decimal) => parseMoneyToCents(value.toFixed(2), 'Saldo');
     const items: PayableStatementItemDto[] = [
       ...payables.map((p) => {
-        const days = daysOverdue(p.dueDate, today);
+        const days = daysOverdue(
+          agingStartDate(agingBaseDate, {
+            dueDate: p.dueDate,
+            issuedAt: p.purchase?.purchaseDate ?? p.createdAt,
+          }),
+          today,
+        );
         return {
           documentType: 'FACTURA_COMPRA' as const,
           documentId: p.id,
@@ -83,8 +92,11 @@ export class PayablesStatementService {
         };
       }),
       ...expenses.map((e) => {
-        // Una causación sin vencimiento vence el día en que se causa
-        const days = daysOverdue(e.dueDate ?? e.expenseDate, today);
+        // Una causación sin vencimiento cuenta desde el día en que se causa
+        const days = daysOverdue(
+          agingStartDate(agingBaseDate, { dueDate: e.dueDate, issuedAt: e.expenseDate }),
+          today,
+        );
         return {
           documentType: 'CAUSACION_GASTO' as const,
           documentId: e.id,

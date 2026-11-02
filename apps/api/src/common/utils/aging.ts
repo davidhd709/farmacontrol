@@ -1,6 +1,20 @@
-import type { AgingBreakdownDto, AgingBucket } from '@farmacia/contracts';
+import type { AgingBaseDate, AgingBreakdownDto, AgingBucket } from '@farmacia/contracts';
+import { businessDateOf, calendarDate } from './business-date';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Fecha desde la que se cuenta la edad según la política de la empresa: vencimiento y, si el
+ * documento no tiene, emisión (DUE_DATE_OR_ISSUE, regla vigente), o siempre la emisión
+ * (ISSUE_DATE). La emisión se toma como día calendario de Bogotá.
+ */
+export function agingStartDate(
+  base: AgingBaseDate,
+  dates: { dueDate: Date | null; issuedAt: Date },
+): Date {
+  const issueDay = calendarDate(businessDateOf(dates.issuedAt));
+  return base === 'ISSUE_DATE' ? issueDay : (dates.dueDate ?? issueDay);
+}
 
 /** Días vencidos a la fecha de corte; negativo si todavía no vence. */
 export function daysOverdue(dueDate: Date, today: Date): number {

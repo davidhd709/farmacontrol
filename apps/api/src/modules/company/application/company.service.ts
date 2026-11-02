@@ -90,6 +90,7 @@ function toPolicyDto(policy: PolicyRecord): AccountingPolicyDto {
     purchaseReturnVariancePurpose:
       policy.purchaseReturnVariancePurpose as AccountingPolicyDto['purchaseReturnVariancePurpose'],
     bonusUnitsTreatment: policy.bonusUnitsTreatment as AccountingPolicyDto['bonusUnitsTreatment'],
+    agingBaseDate: policy.agingBaseDate as AccountingPolicyDto['agingBaseDate'],
     reason: policy.reason,
     createdByName: policy.createdBy?.username ?? null,
     createdAt: policy.createdAt.toISOString(),

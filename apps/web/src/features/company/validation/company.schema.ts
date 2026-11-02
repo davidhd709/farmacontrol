@@ -70,6 +70,7 @@ export const policySchema = z.object({
   openingCostSource: z.enum(['LAST_PURCHASE_THEN_CATALOG', 'CATALOG']),
   purchaseReturnVariancePurpose: z.enum(['COST_OF_SALES', 'INVENTORY_COST_VARIANCE']),
   bonusUnitsTreatment: z.enum(['ZERO_COST_IN_AVERAGE']),
+  agingBaseDate: z.enum(['DUE_DATE_OR_ISSUE', 'ISSUE_DATE']),
   reason: z.string().trim().min(1, 'Explica el motivo del cambio').max(500),
 });
 export type PolicyFormData = z.infer<typeof policySchema>;

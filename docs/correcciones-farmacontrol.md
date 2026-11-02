@@ -92,7 +92,7 @@ Cada flujo (venta, abono, pago a proveedor, gasto, nota crédito, movimiento man
 1. **La venta es su propio documento** (confirmado por el cliente el 2026-11-02). Una venta de contado ya no genera además un recibo de caja. Esto reemplaza, solo para ventas y sus anulaciones, la regla de ADR-002 ("por cada venta una factura y un recibo de caja", reunión del 4 de octubre). Ver ADR-007.
 2. **Los recibos y egresos nacen como documento.** El servicio crea el documento con su consecutivo y el movimiento de caja o banco que respalda; el trigger de ADR-002 queda como red de seguridad para los demás flujos.
 3. **Un asiento por aplicación.** Un recibo que abona tres facturas publica tres asientos cuadrados (uno por abono, como hasta ahora) bajo el mismo documento, para conservar la reversión individual de abonos.
-4. **Edades de cartera y cuentas por pagar.** Días vencidos desde la fecha de vencimiento: Corriente (no vencida o hasta 30 días), 31–60, 61–90, más de 90. Las causaciones sin vencimiento se miden desde su fecha.
+4. **Edades de cartera y cuentas por pagar.** Rangos: Corriente (0–30 días), 31–60, 61–90 y más de 90. La fecha base es configurable en la política contable de la empresa (`agingBaseDate`): `DUE_DATE_OR_ISSUE` (vencimiento; si el documento no tiene, emisión) es la regla vigente y la de toda versión que no la indique; `ISSUE_DATE` cuenta desde la emisión. La regla definitiva está pendiente de confirmación del cliente.
 5. **Cambio de producto.** La devolución reembolsa por el medio original (o reduce la cartera si fue a crédito) y la venta nueva se cobra normalmente, quedando vinculada a la nota crédito. El efecto neto en caja es la diferencia.
 
 ## 3.1 Rutas retiradas (2026-11-02)
@@ -120,7 +120,7 @@ No se asignan proveedores automáticamente. En Gastos → "Sin proveedor" se lis
 
 - ⚠️ Pantalla del botón "Reservar" (sección 2, fase 1).
 - ⚠️ Pantalla de "Organizar diseño" (sección 2, fase 1).
-- Confirmar si los rangos de edad deben medirse desde el vencimiento (decisión 4) o desde la fecha de la factura.
+- Confirmar la regla definitiva de fecha base de las edades (hoy: vencimiento con respaldo en emisión; configurable en Empresa → Política contable).
 
 ## 5. Avance por fase
 

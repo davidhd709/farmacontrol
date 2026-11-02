@@ -48,6 +48,7 @@ describe('Formulario de la empresa', () => {
       openingCostSource: 'CATALOG',
       purchaseReturnVariancePurpose: 'COST_OF_SALES',
       bonusUnitsTreatment: 'ZERO_COST_IN_AVERAGE',
+      agingBaseDate: 'DUE_DATE_OR_ISSUE',
       reason: '  ',
     };
     expect(policySchema.safeParse(policy).success).toBe(false);

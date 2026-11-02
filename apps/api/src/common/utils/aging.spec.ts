@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { agingBreakdown, agingBucketOf, daysOverdue } from './aging';
+import { agingBreakdown, agingBucketOf, agingStartDate, daysOverdue } from './aging';
 
 describe('edades de cartera y cuentas por pagar', () => {
   it('clasifica en Corriente (hasta 30 días), 31–60, 61–90 y más de 90', () => {
@@ -31,5 +31,17 @@ describe('edades de cartera y cuentas por pagar', () => {
     expect(result.days61To90).toEqual({ amount: '2500.00', count: 1 });
     expect(result.totalPending).toBe('2510.51');
     expect(result.totalCount).toBe(3);
+  });
+
+  it('cuenta desde el vencimiento con respaldo en la emisión, o siempre desde la emisión', () => {
+    const issuedAt = new Date('2026-10-01T22:30:00Z'); // 17:30 en Bogotá: día 1
+    const dueDate = new Date('2026-10-31T00:00:00Z');
+    expect(agingStartDate('DUE_DATE_OR_ISSUE', { dueDate, issuedAt })).toEqual(dueDate);
+    expect(agingStartDate('DUE_DATE_OR_ISSUE', { dueDate: null, issuedAt })).toEqual(new Date('2026-10-01T00:00:00Z'));
+    expect(agingStartDate('ISSUE_DATE', { dueDate, issuedAt })).toEqual(new Date('2026-10-01T00:00:00Z'));
+    // A las 21:00 de Bogotá ya es el día siguiente en UTC, pero se emitió ese día
+    expect(agingStartDate('ISSUE_DATE', { dueDate, issuedAt: new Date('2026-10-02T02:00:00Z') })).toEqual(
+      new Date('2026-10-01T00:00:00Z'),
+    );
   });
 });

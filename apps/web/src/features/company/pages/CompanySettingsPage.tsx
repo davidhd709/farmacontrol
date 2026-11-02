@@ -62,6 +62,10 @@ const VARIANCE_LABELS = {
 const BONUS_LABELS = {
   ZERO_COST_IN_AVERAGE: 'Entran a costo cero y bajan el promedio',
 } as const;
+const AGING_BASE_LABELS = {
+  DUE_DATE_OR_ISSUE: 'Desde el vencimiento (o la emisión si no tiene vencimiento)',
+  ISSUE_DATE: 'Desde la fecha de emisión',
+} as const;
 
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
@@ -244,6 +248,7 @@ function PolicyForm({
       openingCostSource: current.openingCostSource,
       purchaseReturnVariancePurpose: current.purchaseReturnVariancePurpose,
       bonusUnitsTreatment: current.bonusUnitsTreatment,
+      agingBaseDate: current.agingBaseDate,
       reason: '',
     },
   });
@@ -274,7 +279,8 @@ function PolicyForm({
       | 'costingMethod'
       | 'openingCostSource'
       | 'purchaseReturnVariancePurpose'
-      | 'bonusUnitsTreatment',
+      | 'bonusUnitsTreatment'
+      | 'agingBaseDate',
     label: string,
     options: Record<string, string>,
     enabled: (value: string) => boolean = () => true,
@@ -346,6 +352,7 @@ function PolicyForm({
           VARIANCE_LABELS,
         )}
         {select('bonusUnitsTreatment', 'Unidades bonificadas', BONUS_LABELS)}
+        {select('agingBaseDate', 'Edades de cartera y cuentas por pagar', AGING_BASE_LABELS)}
         <Grid size={{ xs: 12 }}>
           <Controller
             name="reason"
@@ -389,6 +396,10 @@ function PolicySummary({ policy }: { policy: AccountingPolicyDto }) {
       </Typography>
       <Typography>
         <strong>Unidades bonificadas:</strong> {BONUS_LABELS[policy.bonusUnitsTreatment]}
+      </Typography>
+      <Typography>
+        <strong>Edades de cartera y cuentas por pagar:</strong>{' '}
+        {AGING_BASE_LABELS[policy.agingBaseDate]}
       </Typography>
     </Stack>
   );

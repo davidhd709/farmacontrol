@@ -970,6 +970,8 @@ model CompanyAccountingPolicy {
   openingCostSource             String   @map("opening_cost_source") @db.VarChar(32)
   purchaseReturnVariancePurpose String   @map("purchase_return_variance_purpose") @db.VarChar(32)
   bonusUnitsTreatment           String   @map("bonus_units_treatment") @db.VarChar(32)
+  /// Fecha base de las edades de cartera y cuentas por pagar: DUE_DATE_OR_ISSUE o ISSUE_DATE
+  agingBaseDate                 String   @default("DUE_DATE_OR_ISSUE") @map("aging_base_date") @db.VarChar(32)
   reason                        String   @db.VarChar(500)
   createdById                   String?  @map("created_by_id") @db.Uuid
   createdAt                     DateTime @default(now()) @map("created_at") @db.Timestamptz
