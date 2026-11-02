@@ -44,7 +44,7 @@ Cada flujo (venta, abono, pago a proveedor, gasto, nota crédito, movimiento man
 | Orden por fecha en Control de caja | `CashPage.tsx`, `cash-query.dto.ts`, `prisma-cash-movement.repository.ts` | Parámetro `sortOrder=asc\|desc` en `GET /cash-movements` y botón de orden. |
 | Bancos: etiquetas de tipo en español, filtro Débito/Crédito, orden | `TreasuryBankAccountsPage.tsx`, `treasury.controller.ts`/`treasury.service.ts` (`listMovements`) | Etiquetas traducidas, filtro `direction=DEBITO\|CREDITO` (agrupa los tipos), `sortOrder`. |
 | Renombrar ingreso manual como "Recibo de caja" | `CreateCashMovementDialog.tsx` (botón "+ Registrar Movimiento" de `CashPage`) | El registro se reemplazó en la fase 3 por el formulario de recibo de caja en Tesorería. Control de caja también muestra "Recibo de caja" en el movimiento y el filtro para `INGRESO_MANUAL`. |
-| ⚠️ Quitar "Reservar", dejar "Detalle" | **No existe ningún botón "Reservar" en el código** (búsqueda en `apps/web/src`). Lo más cercano son los botones de acción por fila "Abonar"/"Pagar" junto a "Detalle" en `ReceivablesPage` y `PayablesPage`, y "Pagar / Abonar" en `ExpensesPage`. | **PENDIENTE de confirmar.** Las fases 3 y 4 retiran de esas tres pantallas los botones de pago (los pagos pasan a recibos y egresos), así que quedan solo "Detalle"/"Ver abonos". Si el cliente se refería a otra pantalla, debe indicarla. |
+| ⚠️ Quitar "Reservar", dejar "Detalle" | **No existe ningún botón "Reservar" en el código** (ver el inventario de la sección 3.3: el Libro Diario tiene "Detalle" y "Reversar"). Lo más cercano son los botones de acción por fila "Abonar"/"Pagar" junto a "Detalle" en `ReceivablesPage` y `PayablesPage`, y "Pagar / Abonar" en `ExpensesPage`. | **PENDIENTE de confirmar.** Las fases 3 y 4 retiran de esas tres pantallas los botones de pago (los pagos pasan a recibos y egresos), así que quedan solo "Detalle"/"Ver abonos". Si el cliente se refería a otra pantalla, debe indicarla. |
 | ⚠️ "Organizar diseño" | Sin pantalla identificada. | **PENDIENTE de confirmar la pantalla.** Las pantallas que se rehacen en este trabajo (Cuentas por pagar, Recibos, Egresos, Auditoría contable) siguen el estilo de las demás (encabezado con `HomeBackButton`, filtros en `Paper`, tabla `small`). |
 | Eliminar Auxiliar de terceros | `navigation.tsx` (menú), `App.tsx` (ruta `/accounting/third-parties`), `ThirdPartiesReportPage.tsx` | Se retiran menú, ruta y página. El endpoint de la API se conserva porque lo usan los libros oficiales. Lo reemplaza el estado de cuenta por tercero de la fase 5. |
 
@@ -113,6 +113,21 @@ Siguen activas las reversiones de abonos y pagos (`.../payments/:paymentId/rever
 ## 3.2 Causaciones sin proveedor (2026-11-02)
 
 No se asignan proveedores automáticamente. En Gastos → "Sin proveedor" se listan las causaciones sin proveedor (fecha, concepto, beneficiario registrado, valor y saldo; `GET /expenses/without-supplier`) y se asigna uno a mano (`POST /expenses/:id/supplier`, permiso `expenses:manage`). La asignación no se reasigna (409), no aplica a causaciones anuladas y queda en auditoría (`expenses:supplier_assigned`: usuario, fecha, proveedor y beneficiario anterior).
+
+## 3.3 Pantallas con "Reservar" y "Detalle" (inventario 2026-11-02, sin cambios)
+
+No existe ni existió un botón **"Reservar"** en la web (búsqueda en `apps/web/src` y en el historial de git). La única pantalla con un botón de texto parecido junto a "Detalle" es el **Libro Diario**, que tiene **"Detalle"** y **"Reversar"** en cada asiento: es la candidata más probable (posible error de tipeo "Reservar" ↔ "Reversar").
+
+| Pantalla | Ruta | Archivo | Botones de la fila |
+|---|---|---|---|
+| **Libro Diario** | `/accounting/journal` | `apps/web/src/features/accounting/pages/JournalEntriesPage.tsx` (líneas ~335–352) | **Detalle** y **Reversar** (este último solo con `accounting:manage` y si el asiento no es una reversión) |
+| Cuentas por pagar | `/payables` | `apps/web/src/features/payables/pages/PayablesPage.tsx` (~161) | Detalle |
+| Historial de compras | `/purchases` | `apps/web/src/features/purchases/pages/PurchasesListPage.tsx` (~254) | Ver Detalle y Devolución |
+| Causación de gastos | `/expenses` | `apps/web/src/features/expenses/pages/ExpensesPage.tsx` (~485) | Ver detalle (icono) y Anular gasto |
+| Auditoría y trazabilidad | `/audit` | `apps/web/src/features/audit/pages/AuditLogsPage.tsx` (~498) | Ver detalle de auditoría (icono) |
+| Cuentas por cobrar | `/receivables` | `apps/web/src/features/receivables/pages/ReceivablesPage.tsx` | Ver Abonos (hace las veces de detalle; "Abonar" se retiró en la fase 3) |
+
+Pendiente: que el cliente confirme si se refería al Libro Diario.
 
 ## 4. Pendientes y dudas abiertas
 
