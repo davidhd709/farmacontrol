@@ -2,7 +2,9 @@
 
 Capturas de las 41 pantallas de la aplicación en cuatro anchos: **360, 768, 1024 y 1440 px**.
 
-| Carpeta | Contenido |
+Las capturas **no se versionan**: `antes/` y `despues/` están en `.gitignore` y se generan localmente con la prueba descrita abajo. En el repositorio solo quedan este README y la prueba que las produce.
+
+| Carpeta (local, no versionada) | Contenido |
 |---|---|
 | `antes/<ancho>/<pantalla>.jpg` | Estado antes de esta ronda de correcciones |
 | `despues/<ancho>/<pantalla>.jpg` | Estado después de la revisión |

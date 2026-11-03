@@ -45,3 +45,7 @@ infra/compose/backup.env
 
 # Registros de ejecuciones de pruebas (pnpm test)
 .test-runs/
+
+# Capturas de revisión responsive (se regeneran con RESPONSIVE_SHOTS; ver docs/responsive/README.md)
+docs/responsive/antes/
+docs/responsive/despues/
