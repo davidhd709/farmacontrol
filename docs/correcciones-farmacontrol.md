@@ -218,7 +218,7 @@ El botón **"Reversar"** salió de la tabla del Libro Diario (queda solo **"Deta
 |---|---|---|---|
 | Venta | ya existía | `POST /sales/:id/cancel` (`sales:cancel`) | Sin cambios. Ahora solo la bloquean las notas crédito **vigentes** |
 | **Nota crédito (devolución)** | **nueva** | `POST /credit-notes/:id/cancel` (`sales:cancel`) | La mercancía reintegrada vuelve a salir de los mismos lotes (kardex `SALIDA_ANULACION_DEVOLUCION`, submayor `SALE_RETURN_CANCELLATION`); el reembolso vuelve a caja o banco, o la factura vuelve a deberse en cartera; se reversa el asiento y, si la mercancía sale a un costo distinto del que entró, se registra la diferencia entre inventario y costo de ventas (mayor = submayor). Se rechaza si el lote ya no tiene las unidades o si la devolución entregó un cambio vigente (primero se anula esa venta). En la web: Historial de ventas → **Notas crédito** → Anular |
-| **Recibo de caja de abono** | **nueva** | `POST /treasury/cash-receipts/collections/:id/cancel` (`recibo_caja.anular`, ver 3.7) | Reversa cada abono vigente con su asiento y saca de caja o banco, en **un solo movimiento**, lo que seguía aplicado (los abonos revertidos antes uno a uno no se tocan) |
+| **Recibo de caja de abono** | **nueva** | `POST /treasury/cash-receipts/collections/:id/cancel` (`recibo_caja.anular`, ver 3.11) | Reversa cada abono vigente con su asiento y saca de caja o banco, en **un solo movimiento**, lo que seguía aplicado (los abonos revertidos antes uno a uno no se tocan) |
 | **Recibo de caja manual** | **nueva** | `POST /treasury/cash-receipts/:id/cancel` (`recibo_caja.anular` + `accounting:read` + permiso del medio) | Reversa el asiento contra la contrapartida y saca el dinero |
 | **Comprobante de egreso** (proveedor o manual) | **nueva** | `POST /treasury/disbursements/:id/cancel` (`comprobante_egreso.anular`; el manual además `accounting:read` + medio) | Reversa cada pago vigente (facturas de compra y causaciones) o el asiento manual y devuelve el dinero en un solo movimiento |
 | Causación | ya existía | `POST /expenses/:id/cancel` (`expenses:manage`) | Sin cambios |
@@ -264,7 +264,7 @@ Pantallas ajustadas:
 
 Resultado del reporte: 0 pantallas con scroll horizontal de página, 0 botones cortados o sin relleno y 0 elementos recortados en los cuatro anchos.
 
-## 3.7 Permiso propio para anular recibos y egresos; permisos API vs. web (2026-11-02)
+## 3.11 Permiso propio para anular recibos y egresos; permisos API vs. web (2026-11-02)
 
 Anular ya no usa el permiso de creación. Dos permisos nuevos: `recibo_caja.anular` y `comprobante_egreso.anular`. El seed los asigna a todo rol con permiso contable (`accounting:read`); hoy solo lo tiene admin. Cartera conserva `recibo_caja.crear_abono`.
 
