@@ -240,6 +240,30 @@ El botón **"Reversar"** salió de la tabla del Libro Diario (queda solo **"Deta
 - **Subtítulo** del Libro Diario: "Registro cronológico de los asientos contables generados por los documentos del sistema."
 - Pruebas: `journal-entries.test` (enlace, estados, fechas, paginación, subtítulo), `date-format.test` (también cerca de medianoche y con `TZ=Asia/Tokyo`) y `accounting-audit-statement` (número legible de venta y recibo).
 
+## 3.10 Revisión responsive y de diseño (2026-11-02)
+
+Revisión de las 41 pantallas en 360, 768, 1024 y 1440 px, con capturas antes y después en `docs/responsive/` y un reporte automático de desbordes por pantalla (ver `docs/responsive/README.md`). Primero se corrigieron los componentes compartidos, para que el arreglo se propague:
+
+| Componente | Cambio |
+|---|---|
+| **Tema** (`app-theme.ts`) | Botones: relleno uniforme (16 px; 12 px los pequeños), texto en una línea y sin encogerse por el contenido vecino (el "Consultar" de Cuentas por pagar ya no se sale). Títulos de página: todo `h1` con el mismo tamaño (1,75 rem; 1,375 rem en móvil). Tablas: encabezados en una línea y `TableContainer` con scroll horizontal propio. `Container` sin margen lateral propio: el layout da el margen y no se duplica en móvil |
+| **Layout** | Menú lateral temporal (colapsable con el botón ☰) hasta 1199 px, es decir en móvil y tablet incluido 1024 px; fijo en escritorio. Empieza cerrado en móvil y tablet |
+| **Espaciado** | Todas las pantallas usan el mismo margen vertical (`py: { xs: 1, md: 2 }`); antes variaba entre `p: 3`, `p: { xs: 2, md: 4 }` y `py: 4` |
+| **`FilterBar`** (nuevo) | Grilla de filtros: una columna en móvil, dos en tablet y columnas de 200 a 280 px en escritorio (un campo de fecha ya no ocupa todo el ancho); acciones (Consultar, Filtrar, Limpiar) juntas, alineadas a la derecha y separadas; Enter consulta |
+| **`PageHeader`** (nuevo) | Título, descripción y acciones; en móvil las acciones bajan debajo del título |
+| **Grillas** | `1fr` → `minmax(0, 1fr)` en toda la app: una tabla ancha ya no estira la grilla fuera de la pantalla (el POS en 360 px) |
+
+Pantallas ajustadas:
+
+- **Barra de filtros**: Cuentas por pagar, Cuentas por cobrar, Libro Diario, Estado de resultados, Historial de ventas, Historial de compras, Lotes, Movimientos de inventario (Kardex), Control de caja y Auditoría (botón Limpiar).
+- **Encabezado**: Cuentas por pagar, Cuentas por cobrar, Causación de gastos y Control de caja (sus botones se salían en 360 px).
+- **Tablas con scroll propio**: Usuarios, Catálogo tributario, Causación de gastos, Saldos iniciales, Empresa (sucursales y política), Bloqueo de documentos, Cierre anual y las tablas de los diálogos (nota contable, devolución, nota débito, comprobante, causaciones sin proveedor, categorías, perfiles tributarios, recibo y egreso).
+- **POS**: la búsqueda y el carrito ya no se recortan en 360 px.
+- **Recibos de caja y comprobantes de egreso**: el número del documento es un enlace, no un botón sin relleno.
+- **Todas**: título, margen vertical, botones y menú lateral (tema y layout).
+
+Resultado del reporte: 0 pantallas con scroll horizontal de página, 0 botones cortados o sin relleno y 0 elementos recortados en los cuatro anchos.
+
 ## 4. Pendientes y dudas abiertas
 
 - ⚠️ Pantalla del botón "Reservar" (sección 2, fase 1).

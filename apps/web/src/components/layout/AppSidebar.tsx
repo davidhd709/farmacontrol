@@ -27,7 +27,8 @@ interface AppSidebarProps {
 
 export const AppSidebar: React.FC<AppSidebarProps> = ({ open, onClose }) => {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  // Móvil y tablet (hasta 1199 px): menú temporal que se abre con el botón y se cierra al navegar
+  const isMobile = useMediaQuery(theme.breakpoints.down('lg'), { noSsr: true });
   const location = useLocation();
   const navigate = useNavigate();
   const { hasPermission } = usePermissions();
@@ -200,8 +201,8 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ open, onClose }) => {
     <Box
       component="nav"
       sx={{
-        width: { md: open ? SIDEBAR_WIDTH : 0 },
-        flexShrink: { md: 0 },
+        width: { lg: open ? SIDEBAR_WIDTH : 0 },
+        flexShrink: { lg: 0 },
       }}
     >
       {/* Móvil / Tablet: Drawer temporal */}
@@ -212,7 +213,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ open, onClose }) => {
           onClose={onClose}
           ModalProps={{ keepMounted: true }}
           sx={{
-            display: { xs: 'block', md: 'none' },
+            display: { xs: 'block', lg: 'none' },
             '& .MuiDrawer-paper': {
               boxSizing: 'border-box',
               width: SIDEBAR_WIDTH,
@@ -229,7 +230,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ open, onClose }) => {
           variant="persistent"
           open={open}
           sx={{
-            display: { xs: 'none', md: 'block' },
+            display: { xs: 'none', lg: 'block' },
             '& .MuiDrawer-paper': {
               boxSizing: 'border-box',
               width: SIDEBAR_WIDTH,

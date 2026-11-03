@@ -10,6 +10,7 @@ import {
   Stack,
   Tab,
   Table,
+  TableContainer,
   TableBody,
   TableCell,
   TableHead,
@@ -40,16 +41,18 @@ const TREATMENT_LABELS: Record<string, string> = {
 
 function Rows({ rows }: { rows: Array<[string, string]> }) {
   return (
-    <Table size="small">
-      <TableBody>
-        {rows.map(([label, value]) => (
-          <TableRow key={label}>
-            <TableCell>{label}</TableCell>
-            <TableCell align="right">{value}</TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+    <TableContainer>
+      <Table size="small">
+        <TableBody>
+          {rows.map(([label, value]) => (
+            <TableRow key={label}>
+              <TableCell>{label}</TableCell>
+              <TableCell align="right">{value}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </TableContainer>
   );
 }
 
@@ -85,7 +88,7 @@ export function TaxDraftsPage() {
   const active = { vat, withholdings: wh, ica, exogenous: exo }[tab];
 
   return (
-    <Container component="main" maxWidth="lg" sx={{ py: 3 }}>
+    <Container component="main" maxWidth="lg" sx={{ py: { xs: 1, md: 2 } }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
         <HomeBackButton />
         <Typography variant="h5" component="h1">

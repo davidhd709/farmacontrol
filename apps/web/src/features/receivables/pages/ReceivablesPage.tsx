@@ -24,7 +24,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { SYSTEM_PERMISSIONS, type ReceivableStatus } from '@farmacia/contracts';
 import { fetchReceivables, fetchReceivablesAgingSummary } from '../api/receivables.api';
-import { HomeBackButton } from '../../../components/HomeBackButton';
+import { PageHeader } from '../../../components/layout/PageHeader';
 import { AgingSummaryCards } from '../../../components/AgingSummaryCards';
 
 import { ReceivableMovementsDialog } from '../components/ReceivableMovementsDialog';
@@ -33,6 +33,7 @@ import { PermissionGate } from '../../auth/components/PermissionGate';
 import { formatMoney, toCents } from '../../../utils/money';
 import { isOverdue, getStatusDisplay } from '../utils/status';
 import { formatDate } from '../../../utils/date-format';
+import { FilterBar } from '../../../components/layout/FilterBar';
 
 export function ReceivablesPage() {
   const [page, setPage] = useState(0);
@@ -77,25 +78,20 @@ export function ReceivablesPage() {
   const hasActiveFilters = Boolean(search || statusFilter || overdueOnly || fromDate || toDate);
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ py: { xs: 1, md: 2 } }}>
       {/* Header */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3, flexWrap: 'wrap' }}>
-        <HomeBackButton />
-        <Box sx={{ flex: 1 }}>
-          <Typography variant="h5" sx={{ fontWeight: 700 }}>
-            Cuentas por Cobrar
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Gestión y seguimiento de cartera, abonos y créditos comerciales de clientes.
-          </Typography>
-        </Box>
-        {/* El abono se registra con un recibo de caja (recibo_caja.crear_abono) */}
-        <PermissionGate permission={SYSTEM_PERMISSIONS.CASH_RECEIPTS_COLLECT}>
-          <Button variant="contained" onClick={() => setReceiptOpen(true)} sx={{ fontWeight: 600 }}>
-            Nuevo recibo de caja
-          </Button>
-        </PermissionGate>
-      </Box>
+      <PageHeader
+        title="Cuentas por Cobrar"
+        description="Gestión y seguimiento de cartera, abonos y créditos comerciales de clientes."
+        actions={
+          // El abono se registra con un recibo de caja (recibo_caja.crear_abono)
+          <PermissionGate permission={SYSTEM_PERMISSIONS.CASH_RECEIPTS_COLLECT}>
+            <Button variant="contained" onClick={() => setReceiptOpen(true)}>
+              Nuevo recibo de caja
+            </Button>
+          </PermissionGate>
+        }
+      />
       {receiptNotice && (
         <Alert severity="success" onClose={() => setReceiptNotice(null)} sx={{ mb: 2 }}>
           {receiptNotice}
@@ -110,98 +106,98 @@ export function ReceivablesPage() {
       )}
 
       {/* Filtros */}
-      <Paper variant="outlined" sx={{ p: 2, mb: 2, borderRadius: 2 }}>
-        <Stack
-          direction={{ xs: 'column', md: 'row' }}
-          spacing={2}
-          sx={{ alignItems: { sm: 'center' }, flexWrap: 'wrap' }}
-        >
-          <TextField
-            id="receivables-search"
-            placeholder="Buscar cliente o factura…"
-            size="small"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            sx={{ minWidth: 220 }}
-          />
-
-          <FormControl size="small" sx={{ minWidth: 140 }}>
-            <InputLabel id="receivables-status-label">Estado</InputLabel>
-            <Select
-              labelId="receivables-status-label"
-              id="receivables-status"
-              value={statusFilter}
-              label="Estado"
-              onChange={(e) => {
-                setStatusFilter(e.target.value as ReceivableStatus | '');
+      <FilterBar
+        sx={{ mb: 2 }}
+        actions={
+          <>
+            <Button
+              variant={overdueOnly ? 'contained' : 'outlined'}
+              color="warning"
+              size="small"
+              onClick={() => {
+                setOverdueOnly((v) => !v);
                 setPage(0);
               }}
             >
-              <MenuItem value="">Todos</MenuItem>
-              <MenuItem value="PENDIENTE">Pendiente</MenuItem>
-              <MenuItem value="PAGADA">Pagada</MenuItem>
-              <MenuItem value="ANULADA">Anulada</MenuItem>
-            </Select>
-          </FormControl>
+              Solo vencidas
+            </Button>
 
-          <TextField
-            id="receivables-from-date"
-            label="Desde"
-            type="date"
-            size="small"
-            value={fromDate}
+            {hasActiveFilters && (
+              <Button
+                size="small"
+                color="inherit"
+                onClick={() => {
+                  setFromDate('');
+                  setToDate('');
+                  setStatusFilter('');
+                  setOverdueOnly(false);
+                  setSearch('');
+                  setPage(0);
+                }}
+              >
+                Limpiar filtros
+              </Button>
+            )}
+          </>
+        }
+      >
+        <TextField
+          id="receivables-search"
+          placeholder="Buscar cliente o factura…"
+          size="small"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          sx={{ minWidth: 220 }}
+        />
+
+        <FormControl size="small" sx={{ minWidth: 140 }}>
+          <InputLabel id="receivables-status-label">Estado</InputLabel>
+          <Select
+            labelId="receivables-status-label"
+            id="receivables-status"
+            value={statusFilter}
+            label="Estado"
             onChange={(e) => {
-              setFromDate(e.target.value);
-              setPage(0);
-            }}
-            slotProps={{ inputLabel: { shrink: true } }}
-            sx={{ minWidth: 140 }}
-          />
-
-          <TextField
-            id="receivables-to-date"
-            label="Hasta"
-            type="date"
-            size="small"
-            value={toDate}
-            onChange={(e) => {
-              setToDate(e.target.value);
-              setPage(0);
-            }}
-            slotProps={{ inputLabel: { shrink: true } }}
-            sx={{ minWidth: 140 }}
-          />
-
-          <Button
-            variant={overdueOnly ? 'contained' : 'outlined'}
-            color="warning"
-            size="small"
-            onClick={() => {
-              setOverdueOnly((v) => !v);
+              setStatusFilter(e.target.value as ReceivableStatus | '');
               setPage(0);
             }}
           >
-            Solo vencidas
-          </Button>
+            <MenuItem value="">Todos</MenuItem>
+            <MenuItem value="PENDIENTE">Pendiente</MenuItem>
+            <MenuItem value="PAGADA">Pagada</MenuItem>
+            <MenuItem value="ANULADA">Anulada</MenuItem>
+          </Select>
+        </FormControl>
 
-          {hasActiveFilters && (
-            <Button
-              size="small"
-              color="inherit"
-              onClick={() => {
-                setFromDate('');
-                setToDate('');
-                setStatusFilter('');
-                setOverdueOnly(false);
-                setSearch('');
-                setPage(0);
-              }}
-            >
-              Limpiar filtros
-            </Button>
-          )}
-        </Stack>
-      </Paper>
+        <TextField
+          id="receivables-from-date"
+          label="Desde"
+          type="date"
+          size="small"
+          value={fromDate}
+          onChange={(e) => {
+            setFromDate(e.target.value);
+            setPage(0);
+          }}
+          slotProps={{ inputLabel: { shrink: true } }}
+          sx={{ minWidth: 140 }}
+        />
+
+        <TextField
+          id="receivables-to-date"
+          label="Hasta"
+          type="date"
+          size="small"
+          value={toDate}
+          onChange={(e) => {
+            setToDate(e.target.value);
+            setPage(0);
+          }}
+          slotProps={{ inputLabel: { shrink: true } }}
+          sx={{ minWidth: 140 }}
+        />
+
+      </FilterBar>
 
       {/* Tabla */}
       <Paper variant="outlined" sx={{ borderRadius: 2 }}>

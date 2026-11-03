@@ -10,6 +10,7 @@ import {
   DialogTitle,
   Stack,
   Table,
+  TableContainer,
   TableBody,
   TableCell,
   TableHead,
@@ -119,59 +120,61 @@ export function ExpensesWithoutSupplierDialog({
               <Typography variant="body2" sx={{ fontWeight: 600 }}>
                 {list.data.length} causación(es) · saldo pendiente {money(String(total))}
               </Typography>
-              <Table size="small" aria-label="Causaciones sin proveedor">
-                <TableHead>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 700 }}>Fecha</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Concepto</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Beneficiario registrado</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }} align="right">
-                      Valor
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: 700 }} align="right">
-                      Saldo
-                    </TableCell>
-                    {canAssign && <TableCell />}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {list.data.map((e) => (
-                    <TableRow key={e.id} selected={selected?.id === e.id}>
-                      <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatDate(e.expenseDate)}</TableCell>
-                      <TableCell>
-                        {e.description}
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          sx={{ display: 'block' }}
-                        >
-                          {e.categoryName}
-                          {e.documentNumber ? ` · ${e.documentNumber}` : ''}
-                        </Typography>
+              <TableContainer>
+                <Table size="small" aria-label="Causaciones sin proveedor">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ fontWeight: 700 }}>Fecha</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Concepto</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>Beneficiario registrado</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }} align="right">
+                        Valor
                       </TableCell>
-                      <TableCell>{e.beneficiary}</TableCell>
-                      <TableCell align="right">{money(e.amount)}</TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 700 }}>
-                        {money(e.balance)}
+                      <TableCell sx={{ fontWeight: 700 }} align="right">
+                        Saldo
                       </TableCell>
-                      {canAssign && (
-                        <TableCell align="right">
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            onClick={() => {
-                              setSelected(e);
-                              setSupplier(null);
-                            }}
-                          >
-                            Asignar proveedor
-                          </Button>
-                        </TableCell>
-                      )}
+                      {canAssign && <TableCell />}
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHead>
+                  <TableBody>
+                    {list.data.map((e) => (
+                      <TableRow key={e.id} selected={selected?.id === e.id}>
+                        <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatDate(e.expenseDate)}</TableCell>
+                        <TableCell>
+                          {e.description}
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ display: 'block' }}
+                          >
+                            {e.categoryName}
+                            {e.documentNumber ? ` · ${e.documentNumber}` : ''}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>{e.beneficiary}</TableCell>
+                        <TableCell align="right">{money(e.amount)}</TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 700 }}>
+                          {money(e.balance)}
+                        </TableCell>
+                        {canAssign && (
+                          <TableCell align="right">
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={() => {
+                                setSelected(e);
+                                setSupplier(null);
+                              }}
+                            >
+                              Asignar proveedor
+                            </Button>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
             </>
           )}
           {selected && (

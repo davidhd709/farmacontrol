@@ -71,7 +71,7 @@ export function AccountingAuditPage() {
   const unbalanced = view === 'DESCUADRADOS';
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ py: { xs: 1, md: 2 } }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
         <HomeBackButton />
         <Box>

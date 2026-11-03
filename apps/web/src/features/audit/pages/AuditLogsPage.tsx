@@ -155,13 +155,13 @@ export const AuditLogsPage = () => {
   ].filter(Boolean).length;
 
   return (
-    <Box sx={{ p: { xs: 2, md: 3 } }}>
+    <Box sx={{ py: { xs: 1, md: 2 } }}>
       <HomeBackButton />
 
       {/* Encabezado */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3, flexWrap: 'wrap', gap: 2 }}>
         <Box>
-          <Typography variant="h4" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography component="h1" variant="h4" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
             <HistoryIcon fontSize="large" color="primary" />
             Auditoría y Trazabilidad
           </Typography>
@@ -336,7 +336,7 @@ export const AuditLogsPage = () => {
               }}
             />
           </Grid>
-          <Grid size={{ xs: 12, sm: 6, md: 1 }}>
+          <Grid size={{ xs: 12, sm: 6, md: 'auto' }} sx={{ ml: { md: 'auto' } }}>
             <Button
               fullWidth
               variant="outlined"

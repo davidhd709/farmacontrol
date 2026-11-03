@@ -114,7 +114,7 @@ export function ProductsPage() {
   const total = data?.total ?? 0;
 
   return (
-    <Box sx={{ p: { xs: 2, md: 3 }, maxWidth: 1400, margin: '0 auto' }}>
+    <Box sx={{ py: { xs: 1, md: 2 }, maxWidth: 1400, margin: '0 auto' }}>
       <Stack spacing={3}>
         {/* Encabezado y Acciones */}
         <Box
@@ -175,9 +175,9 @@ export function ProductsPage() {
             sx={{
               display: 'grid',
               gridTemplateColumns: {
-                xs: '1fr',
-                sm: '1fr 1fr',
-                md: '2fr 1.5fr 1fr 1fr',
+                xs: 'minmax(0, 1fr)',
+                sm: 'minmax(0, 1fr) minmax(0, 1fr)',
+                md: '2fr 1.5fr minmax(0, 1fr) minmax(0, 1fr)',
               },
               gap: 2,
               alignItems: 'center',

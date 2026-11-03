@@ -173,7 +173,7 @@ export function ExpirationAlertsPage() {
   };
 
   return (
-    <Box sx={{ p: { xs: 2, md: 3 }, maxWidth: 1400, margin: '0 auto' }}>
+    <Box sx={{ py: { xs: 1, md: 2 }, maxWidth: 1400, margin: '0 auto' }}>
       <Stack spacing={3}>
         {/* Cabecera con navegación y botón de acción */}
         <Box
@@ -228,7 +228,7 @@ export function ExpirationAlertsPage() {
         <Box
           sx={{
             display: 'grid',
-            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(5, 1fr)' },
+            gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))', md: 'repeat(5, minmax(0, 1fr))' },
             gap: 2,
           }}
         >

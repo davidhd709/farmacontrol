@@ -6,6 +6,7 @@ import {
   DialogActions,
   Button,
   Table,
+  TableContainer,
   TableHead,
   TableRow,
   TableCell,
@@ -181,62 +182,64 @@ export const ExpenseCategoriesModal: React.FC<Props> = ({ open, onClose, onCateg
             <CircularProgress size={32} />
           </Box>
         ) : (
-          <Table size="small">
-            <TableHead>
-              <TableRow sx={{ backgroundColor: 'action.hover' }}>
-                <TableCell sx={{ fontWeight: 'bold' }}>Nombre</TableCell>
-                <TableCell sx={{ fontWeight: 'bold' }}>Descripción</TableCell>
-                <TableCell sx={{ fontWeight: 'bold' }}>Cuenta Contable (PUC)</TableCell>
-                <TableCell sx={{ fontWeight: 'bold', textAlign: 'center' }}>Estado</TableCell>
-                <TableCell sx={{ fontWeight: 'bold', textAlign: 'right' }}>Acciones</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {categories.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} sx={{ textAlign: 'center', py: 3 }}>
-                    No hay categorías de gastos configuradas.
-                  </TableCell>
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow sx={{ backgroundColor: 'action.hover' }}>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Nombre</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Descripción</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>Cuenta Contable (PUC)</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', textAlign: 'center' }}>Estado</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', textAlign: 'right' }}>Acciones</TableCell>
                 </TableRow>
-              ) : (
-                categories.map((c) => (
-                  <TableRow key={c.id} hover>
-                    <TableCell sx={{ fontWeight: 600 }}>{c.name}</TableCell>
-                    <TableCell>{c.description || '—'}</TableCell>
-                    <TableCell>
-                      <Typography
-                        variant="body2"
-                        sx={{ fontFamily: 'monospace', fontWeight: 'bold' }}
-                      >
-                        {c.accountCode}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {c.accountName}
-                      </Typography>
-                    </TableCell>
-                    <TableCell sx={{ textAlign: 'center' }}>
-                      <Chip
-                        label={c.isActive ? 'Activa' : 'Inactiva'}
-                        color={c.isActive ? 'success' : 'default'}
-                        size="small"
-                        variant={c.isActive ? 'filled' : 'outlined'}
-                      />
-                    </TableCell>
-                    <TableCell sx={{ textAlign: 'right' }}>
-                      <IconButton
-                        size="small"
-                        onClick={() => handleOpenEdit(c)}
-                        color="primary"
-                        aria-label={`Editar categoría ${c.name}`}
-                      >
-                        <EditIcon fontSize="small" />
-                      </IconButton>
+              </TableHead>
+              <TableBody>
+                {categories.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} sx={{ textAlign: 'center', py: 3 }}>
+                      No hay categorías de gastos configuradas.
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                ) : (
+                  categories.map((c) => (
+                    <TableRow key={c.id} hover>
+                      <TableCell sx={{ fontWeight: 600 }}>{c.name}</TableCell>
+                      <TableCell>{c.description || '—'}</TableCell>
+                      <TableCell>
+                        <Typography
+                          variant="body2"
+                          sx={{ fontFamily: 'monospace', fontWeight: 'bold' }}
+                        >
+                          {c.accountCode}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {c.accountName}
+                        </Typography>
+                      </TableCell>
+                      <TableCell sx={{ textAlign: 'center' }}>
+                        <Chip
+                          label={c.isActive ? 'Activa' : 'Inactiva'}
+                          color={c.isActive ? 'success' : 'default'}
+                          size="small"
+                          variant={c.isActive ? 'filled' : 'outlined'}
+                        />
+                      </TableCell>
+                      <TableCell sx={{ textAlign: 'right' }}>
+                        <IconButton
+                          size="small"
+                          onClick={() => handleOpenEdit(c)}
+                          color="primary"
+                          aria-label={`Editar categoría ${c.name}`}
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
         )}
 
         {/* Modal interno para Crear / Editar Categoría */}

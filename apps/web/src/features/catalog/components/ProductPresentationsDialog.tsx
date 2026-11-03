@@ -518,8 +518,8 @@ export function ProductPresentationsDialog({
                   sx={{
                     display: 'grid',
                     gridTemplateColumns: {
-                      xs: '1fr',
-                      sm: '1.5fr 1.5fr 1fr auto',
+                      xs: 'minmax(0, 1fr)',
+                      sm: '1.5fr 1.5fr minmax(0, 1fr) auto',
                     },
                     gap: 2,
                     alignItems: 'center',

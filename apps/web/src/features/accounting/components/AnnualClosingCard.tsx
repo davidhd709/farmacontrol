@@ -6,6 +6,7 @@ import {
   Paper,
   Stack,
   Table,
+  TableContainer,
   TableBody,
   TableCell,
   TableHead,
@@ -120,45 +121,47 @@ export function AnnualClosingCard({ canManage }: { canManage: boolean }) {
               </Alert>
             )}
             {data.lines.length > 0 && (
-              <Table size="small" aria-label={`Asiento de cierre ${data.year}`}>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Cuenta</TableCell>
-                    <TableCell align="right">Débito</TableCell>
-                    <TableCell align="right">Crédito</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {data.lines.map((line) => (
-                    <TableRow key={line.accountId}>
-                      <TableCell>
-                        {line.accountCode} {line.accountName}
-                      </TableCell>
-                      <TableCell align="right">
-                        {Number(line.debit) ? money(line.debit) : ''}
-                      </TableCell>
-                      <TableCell align="right">
-                        {Number(line.credit) ? money(line.credit) : ''}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {net !== 0 && (
+              <TableContainer>
+                <Table size="small" aria-label={`Asiento de cierre ${data.year}`}>
+                  <TableHead>
                     <TableRow>
-                      <TableCell sx={{ fontWeight: 700 }}>
-                        {data.destinationAccount
-                          ? `${data.destinationAccount.code} ${data.destinationAccount.name}`
-                          : data.destinationPurpose}
-                      </TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 700 }}>
-                        {net < 0 ? money(String(-net)) : ''}
-                      </TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 700 }}>
-                        {net > 0 ? money(String(net)) : ''}
-                      </TableCell>
+                      <TableCell>Cuenta</TableCell>
+                      <TableCell align="right">Débito</TableCell>
+                      <TableCell align="right">Crédito</TableCell>
                     </TableRow>
-                  )}
-                </TableBody>
-              </Table>
+                  </TableHead>
+                  <TableBody>
+                    {data.lines.map((line) => (
+                      <TableRow key={line.accountId}>
+                        <TableCell>
+                          {line.accountCode} {line.accountName}
+                        </TableCell>
+                        <TableCell align="right">
+                          {Number(line.debit) ? money(line.debit) : ''}
+                        </TableCell>
+                        <TableCell align="right">
+                          {Number(line.credit) ? money(line.credit) : ''}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {net !== 0 && (
+                      <TableRow>
+                        <TableCell sx={{ fontWeight: 700 }}>
+                          {data.destinationAccount
+                            ? `${data.destinationAccount.code} ${data.destinationAccount.name}`
+                            : data.destinationPurpose}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 700 }}>
+                          {net < 0 ? money(String(-net)) : ''}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 700 }}>
+                          {net > 0 ? money(String(net)) : ''}
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
             )}
             {mutation.isError && (
               <Alert severity="error">{(mutation.error as Error).message}</Alert>

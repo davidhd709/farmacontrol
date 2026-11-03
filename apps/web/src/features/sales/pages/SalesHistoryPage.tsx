@@ -34,6 +34,7 @@ import { CreditNoteDialog } from '../components/CreditNoteDialog';
 import { SaleCreditNotesDialog } from '../components/SaleCreditNotesDialog';
 import { businessDayEnd, businessDayStart } from '../../../utils/business-date';
 import { formatDateTime } from '../../../utils/date-format';
+import { FilterBar } from '../../../components/layout/FilterBar';
 
 export const SalesHistoryPage: React.FC = () => {
   const navigate = useNavigate();
@@ -121,7 +122,7 @@ export const SalesHistoryPage: React.FC = () => {
   };
 
   return (
-    <Box sx={{ p: 3, maxWidth: 1400, margin: '0 auto' }}>
+    <Box sx={{ py: { xs: 1, md: 2 }, maxWidth: 1400, margin: '0 auto' }}>
       {/* Encabezado y Navegación rápida */}
       <Box
         sx={{
@@ -169,79 +170,83 @@ export const SalesHistoryPage: React.FC = () => {
       )}
 
       {/* Barra de Filtros */}
-      <Paper sx={{ p: 2, mb: 3 }}>
-        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
-          <TextField
-            label="Buscar por N° Comprobante"
-            variant="outlined"
-            size="small"
-            value={invoiceNumberFilter}
-            onChange={(e) => setInvoiceNumberFilter(e.target.value)}
-            placeholder="Ej: VEN-202609..."
-            sx={{ minWidth: 260 }}
-            data-testid="filter-invoice-input"
-          />
-
-          <TextField
-            select
-            label="Estado"
-            variant="outlined"
-            size="small"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as 'ALL' | SaleStatus)}
-            sx={{ minWidth: 160 }}
-            data-testid="filter-status-select"
-          >
-            <MenuItem value="ALL">Todos los Estados</MenuItem>
-            <MenuItem value="COMPLETED">Completada</MenuItem>
-            <MenuItem value="CANCELLED">Anulada</MenuItem>
-          </TextField>
-
-          <TextField
-            label="Desde"
-            type="date"
-            size="small"
-            value={fromDateFilter}
-            onChange={(e) => setFromDateFilter(e.target.value)}
-            slotProps={{ inputLabel: { shrink: true } }}
-            data-testid="filter-from-date"
-          />
-
-          <TextField
-            label="Hasta"
-            type="date"
-            size="small"
-            value={toDateFilter}
-            onChange={(e) => setToDateFilter(e.target.value)}
-            slotProps={{ inputLabel: { shrink: true } }}
-            data-testid="filter-to-date"
-          />
-
-          <Button
-            variant="outlined"
-            onClick={loadSales}
-            disabled={loading}
-            data-testid="filter-refresh-btn"
-          >
-            Actualizar
-          </Button>
-
-          {(invoiceNumberFilter || statusFilter !== 'ALL' || fromDateFilter || toDateFilter) && (
+      <FilterBar
+        sx={{ mb: 3 }}
+        actions={
+          <>
             <Button
-              variant="text"
-              color="inherit"
-              onClick={() => {
-                setInvoiceNumberFilter('');
-                setStatusFilter('ALL');
-                setFromDateFilter('');
-                setToDateFilter('');
-              }}
+              variant="outlined"
+              onClick={loadSales}
+              disabled={loading}
+              data-testid="filter-refresh-btn"
             >
-              Limpiar Filtros
+              Actualizar
             </Button>
-          )}
-        </Box>
-      </Paper>
+
+            {(invoiceNumberFilter || statusFilter !== 'ALL' || fromDateFilter || toDateFilter) && (
+              <Button
+                variant="text"
+                color="inherit"
+                onClick={() => {
+                  setInvoiceNumberFilter('');
+                  setStatusFilter('ALL');
+                  setFromDateFilter('');
+                  setToDateFilter('');
+                }}
+              >
+                Limpiar Filtros
+              </Button>
+            )}
+          </>
+        }
+      >
+        <TextField
+          label="Buscar por N° Comprobante"
+          variant="outlined"
+          size="small"
+          value={invoiceNumberFilter}
+          onChange={(e) => setInvoiceNumberFilter(e.target.value)}
+          placeholder="Ej: VEN-202609..."
+          sx={{ minWidth: 260 }}
+          data-testid="filter-invoice-input"
+        />
+
+        <TextField
+          select
+          label="Estado"
+          variant="outlined"
+          size="small"
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as 'ALL' | SaleStatus)}
+          sx={{ minWidth: 160 }}
+          data-testid="filter-status-select"
+        >
+          <MenuItem value="ALL">Todos los Estados</MenuItem>
+          <MenuItem value="COMPLETED">Completada</MenuItem>
+          <MenuItem value="CANCELLED">Anulada</MenuItem>
+        </TextField>
+
+        <TextField
+          label="Desde"
+          type="date"
+          size="small"
+          value={fromDateFilter}
+          onChange={(e) => setFromDateFilter(e.target.value)}
+          slotProps={{ inputLabel: { shrink: true } }}
+          data-testid="filter-from-date"
+        />
+
+        <TextField
+          label="Hasta"
+          type="date"
+          size="small"
+          value={toDateFilter}
+          onChange={(e) => setToDateFilter(e.target.value)}
+          slotProps={{ inputLabel: { shrink: true } }}
+          data-testid="filter-to-date"
+        />
+
+      </FilterBar>
 
       {/* Tabla de Ventas */}
       <TableContainer component={Paper}>

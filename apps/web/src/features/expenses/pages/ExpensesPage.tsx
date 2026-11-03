@@ -16,6 +16,7 @@ import {
   TextField,
   MenuItem,
   Table,
+  TableContainer,
   TableHead,
   TableRow,
   TableCell,
@@ -55,6 +56,7 @@ import { ExpenseCategoriesModal } from '../components/ExpenseCategoriesModal';
 import { localIsoDate } from '../../../components/QuickDateRange';
 import { calendarMonthBounds } from '../../../utils/business-date';
 import { formatDate } from '../../../utils/date-format';
+import { PageHeader } from '../../../components/layout/PageHeader';
 
 function formatCurrency(val: string | number | undefined): string {
   if (val === undefined || val === null) return '$0.00';
@@ -214,39 +216,36 @@ export const ExpensesPage: React.FC = () => {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ py: { xs: 1, md: 2 } }}>
       {/* Header */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Box>
-          <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
-            Causación de Gastos
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Causación, control presupuestal, registro de desembolsos y contabilidad automática
-          </Typography>
-        </Box>
-        <Box sx={{ display: 'flex', gap: 1.5 }}>
-          <Button variant="outlined" color="warning" onClick={() => setNoSupplierOpen(true)}>
-            Sin proveedor
-          </Button>
-          <Button
-            variant="outlined"
-            color="primary"
-            startIcon={<CategoryIcon />}
-            onClick={() => setCategoriesModalOpen(true)}
-          >
-            Categorías
-          </Button>
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<AddIcon />}
-            onClick={handleOpenCreate}
-          >
-            Causar Gasto
-          </Button>
-        </Box>
-      </Box>
+      <PageHeader
+        backButton={false}
+        title="Causación de Gastos"
+        description="Causación, control presupuestal, registro de desembolsos y contabilidad automática"
+        actions={
+          <>
+            <Button variant="outlined" color="warning" onClick={() => setNoSupplierOpen(true)}>
+              Sin proveedor
+            </Button>
+            <Button
+              variant="outlined"
+              color="primary"
+              startIcon={<CategoryIcon />}
+              onClick={() => setCategoriesModalOpen(true)}
+            >
+              Categorías
+            </Button>
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<AddIcon />}
+              onClick={handleOpenCreate}
+            >
+              Causar Gasto
+            </Button>
+          </>
+        }
+      />
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
@@ -414,106 +413,108 @@ export const ExpensesPage: React.FC = () => {
 
       {/* Tabla de Gastos */}
       <Card elevation={1}>
-        <Table size="small">
-          <TableHead>
-            <TableRow sx={{ backgroundColor: 'action.hover' }}>
-              <TableCell sx={{ fontWeight: 'bold' }}>Fecha</TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>Categoría</TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>Beneficiario</TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>Concepto & Comprobante</TableCell>
-              <TableCell sx={{ fontWeight: 'bold' }}>Vence</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', textAlign: 'right' }}>Total ($)</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', textAlign: 'right' }}>
-                Saldo Pendiente ($)
-              </TableCell>
-              <TableCell sx={{ fontWeight: 'bold', textAlign: 'center' }}>Acciones</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={9} sx={{ textAlign: 'center', py: 4 }}>
-                  <CircularProgress size={32} />
+        <TableContainer>
+          <Table size="small">
+            <TableHead>
+              <TableRow sx={{ backgroundColor: 'action.hover' }}>
+                <TableCell sx={{ fontWeight: 'bold' }}>Fecha</TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>Categoría</TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>Beneficiario</TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>Concepto & Comprobante</TableCell>
+                <TableCell sx={{ fontWeight: 'bold' }}>Vence</TableCell>
+                <TableCell sx={{ fontWeight: 'bold', textAlign: 'right' }}>Total ($)</TableCell>
+                <TableCell sx={{ fontWeight: 'bold', textAlign: 'right' }}>
+                  Saldo Pendiente ($)
                 </TableCell>
+                <TableCell sx={{ fontWeight: 'bold', textAlign: 'center' }}>Acciones</TableCell>
               </TableRow>
-            ) : expenses.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={8} sx={{ textAlign: 'center', py: 4 }}>
-                  No se encontraron registros de gastos con los filtros aplicados.
-                </TableCell>
-              </TableRow>
-            ) : (
-              expenses.map((e) => {
-                const isPending = e.status === 'PENDIENTE';
-                const isCancelled = e.status === 'ANULADO';
+            </TableHead>
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={9} sx={{ textAlign: 'center', py: 4 }}>
+                    <CircularProgress size={32} />
+                  </TableCell>
+                </TableRow>
+              ) : expenses.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} sx={{ textAlign: 'center', py: 4 }}>
+                    No se encontraron registros de gastos con los filtros aplicados.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                expenses.map((e) => {
+                  const isPending = e.status === 'PENDIENTE';
+                  const isCancelled = e.status === 'ANULADO';
 
-                return (
-                  <TableRow
-                    key={e.id}
-                    hover
-                    sx={isCancelled ? { opacity: 0.6, backgroundColor: 'action.hover' } : {}}
-                  >
-                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatDate(e.expenseDate)}</TableCell>
-                    <TableCell>
-                      <Chip label={e.categoryName} size="small" variant="outlined" />
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>{e.beneficiary}</TableCell>
-                    <TableCell>
-                      <Typography variant="body2">{e.description}</Typography>
-                      {e.documentNumber && (
-                        <Typography variant="caption" color="text.secondary">
-                          Doc: {e.documentNumber}
-                        </Typography>
-                      )}
-                    </TableCell>
-                    <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                      {e.dueDate ?? e.expenseDate}
-                    </TableCell>
-                    <TableCell sx={{ textAlign: 'right', fontWeight: 'bold' }}>
-                      {formatCurrency(e.amount)}
-                    </TableCell>
-                    <TableCell
-                      sx={{
-                        textAlign: 'right',
-                        fontWeight: 'bold',
-                        color: isPending ? 'warning.main' : 'text.secondary',
-                      }}
+                  return (
+                    <TableRow
+                      key={e.id}
+                      hover
+                      sx={isCancelled ? { opacity: 0.6, backgroundColor: 'action.hover' } : {}}
                     >
-                      {isCancelled ? 'Anulada' : formatCurrency(e.balance)}
-                    </TableCell>
-                    <TableCell sx={{ textAlign: 'center' }}>
-                      <Tooltip title="Ver Detalle / Historial">
-                        <IconButton
-                          aria-label="Ver detalle del gasto"
-                          size="small"
-                          color="primary"
-                          onClick={() => {
-                            setSelectedExpense(e);
-                            setDetailModalOpen(true);
-                          }}
-                        >
-                          <VisibilityIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                      {!isCancelled && (
-                        <Tooltip title="Anular Gasto">
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatDate(e.expenseDate)}</TableCell>
+                      <TableCell>
+                        <Chip label={e.categoryName} size="small" variant="outlined" />
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>{e.beneficiary}</TableCell>
+                      <TableCell>
+                        <Typography variant="body2">{e.description}</Typography>
+                        {e.documentNumber && (
+                          <Typography variant="caption" color="text.secondary">
+                            Doc: {e.documentNumber}
+                          </Typography>
+                        )}
+                      </TableCell>
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                        {e.dueDate ?? e.expenseDate}
+                      </TableCell>
+                      <TableCell sx={{ textAlign: 'right', fontWeight: 'bold' }}>
+                        {formatCurrency(e.amount)}
+                      </TableCell>
+                      <TableCell
+                        sx={{
+                          textAlign: 'right',
+                          fontWeight: 'bold',
+                          color: isPending ? 'warning.main' : 'text.secondary',
+                        }}
+                      >
+                        {isCancelled ? 'Anulada' : formatCurrency(e.balance)}
+                      </TableCell>
+                      <TableCell sx={{ textAlign: 'center' }}>
+                        <Tooltip title="Ver Detalle / Historial">
                           <IconButton
-                            aria-label="Anular gasto"
+                            aria-label="Ver detalle del gasto"
                             size="small"
-                            color="error"
-                            onClick={() => handleOpenCancel(e)}
+                            color="primary"
+                            onClick={() => {
+                              setSelectedExpense(e);
+                              setDetailModalOpen(true);
+                            }}
                           >
-                            <BlockIcon fontSize="small" />
+                            <VisibilityIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })
-            )}
-          </TableBody>
-        </Table>
+                        {!isCancelled && (
+                          <Tooltip title="Anular Gasto">
+                            <IconButton
+                              aria-label="Anular gasto"
+                              size="small"
+                              color="error"
+                              onClick={() => handleOpenCancel(e)}
+                            >
+                              <BlockIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
 
         {totalPages > 1 && (
           <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
@@ -649,73 +650,75 @@ export const ExpensesPage: React.FC = () => {
                 <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
                   Historial de Pagos y Abonos
                 </Typography>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow sx={{ backgroundColor: 'action.hover' }}>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Fecha</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Medio</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Cuenta / Origen</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold', textAlign: 'right' }}>
-                        Valor Pagado
-                      </TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Registrado Por</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold', textAlign: 'center' }}>Estado</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold', textAlign: 'right' }}>Acción</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {selectedExpense.payments.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={7} sx={{ textAlign: 'center', py: 2 }}>
-                          No hay pagos o abonos registrados para este gasto.
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow sx={{ backgroundColor: 'action.hover' }}>
+                        <TableCell sx={{ fontWeight: 'bold' }}>Fecha</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold' }}>Medio</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold' }}>Cuenta / Origen</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', textAlign: 'right' }}>
+                          Valor Pagado
                         </TableCell>
+                        <TableCell sx={{ fontWeight: 'bold' }}>Registrado Por</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', textAlign: 'center' }}>Estado</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', textAlign: 'right' }}>Acción</TableCell>
                       </TableRow>
-                    ) : (
-                      selectedExpense.payments.map((p) => (
-                        <TableRow key={p.id} hover sx={p.isReversed ? { opacity: 0.5 } : {}}>
-                          <TableCell>{formatDate(p.paymentDate)}</TableCell>
-                          <TableCell>{p.paymentMethod}</TableCell>
-                          <TableCell>{p.bankAccountName || 'Caja General'}</TableCell>
-                          <TableCell sx={{ textAlign: 'right', fontWeight: 'bold' }}>
-                            {formatCurrency(p.amount)}
-                          </TableCell>
-                          <TableCell>{p.createdByName || '—'}</TableCell>
-                          <TableCell sx={{ textAlign: 'center' }}>
-                            <Chip
-                              label={p.isReversed ? 'Revertido' : 'Activo'}
-                              size="small"
-                              color={p.isReversed ? 'default' : 'success'}
-                              variant={p.isReversed ? 'outlined' : 'filled'}
-                            />
-                            {p.reversalReason && (
-                              <Typography
-                                variant="caption"
-                                color="text.secondary"
-                                sx={{ display: 'block' }}
-                              >
-                                {p.reversalReason}
-                              </Typography>
-                            )}
-                          </TableCell>
-                          <TableCell sx={{ textAlign: 'right' }}>
-                            {!p.isReversed && (
-                              <Tooltip title="Revertir Pago">
-                                <IconButton
-                                  aria-label="Revertir pago"
-                                  size="small"
-                                  color="warning"
-                                  onClick={() => handleOpenReversePayment(p.id)}
-                                >
-                                  <UndoIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
-                            )}
+                    </TableHead>
+                    <TableBody>
+                      {selectedExpense.payments.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={7} sx={{ textAlign: 'center', py: 2 }}>
+                            No hay pagos o abonos registrados para este gasto.
                           </TableCell>
                         </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
+                      ) : (
+                        selectedExpense.payments.map((p) => (
+                          <TableRow key={p.id} hover sx={p.isReversed ? { opacity: 0.5 } : {}}>
+                            <TableCell>{formatDate(p.paymentDate)}</TableCell>
+                            <TableCell>{p.paymentMethod}</TableCell>
+                            <TableCell>{p.bankAccountName || 'Caja General'}</TableCell>
+                            <TableCell sx={{ textAlign: 'right', fontWeight: 'bold' }}>
+                              {formatCurrency(p.amount)}
+                            </TableCell>
+                            <TableCell>{p.createdByName || '—'}</TableCell>
+                            <TableCell sx={{ textAlign: 'center' }}>
+                              <Chip
+                                label={p.isReversed ? 'Revertido' : 'Activo'}
+                                size="small"
+                                color={p.isReversed ? 'default' : 'success'}
+                                variant={p.isReversed ? 'outlined' : 'filled'}
+                              />
+                              {p.reversalReason && (
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                  sx={{ display: 'block' }}
+                                >
+                                  {p.reversalReason}
+                                </Typography>
+                              )}
+                            </TableCell>
+                            <TableCell sx={{ textAlign: 'right' }}>
+                              {!p.isReversed && (
+                                <Tooltip title="Revertir Pago">
+                                  <IconButton
+                                    aria-label="Revertir pago"
+                                    size="small"
+                                    color="warning"
+                                    onClick={() => handleOpenReversePayment(p.id)}
+                                  >
+                                    <UndoIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
               </Box>
             </Box>
           )}

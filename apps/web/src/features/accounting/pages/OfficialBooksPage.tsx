@@ -43,7 +43,7 @@ export function OfficialBooksPage() {
   const active = tab === 'journal' ? journal : ledger;
 
   return (
-    <Container component="main" maxWidth="lg" sx={{ py: 3 }}>
+    <Container component="main" maxWidth="lg" sx={{ py: { xs: 1, md: 2 } }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
         <HomeBackButton />
         <Typography variant="h5" component="h1">

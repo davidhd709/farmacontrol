@@ -8,6 +8,7 @@ import {
   DialogTitle,
   Stack,
   Table,
+  TableContainer,
   TableBody,
   TableCell,
   TableHead,
@@ -108,59 +109,61 @@ export const DebitNoteDialog: React.FC<Props> = ({ open, purchase, onClose, onCr
             {errors.quantities?.root?.message && (
               <Alert severity="error">{errors.quantities.root.message}</Alert>
             )}
-            <Table size="small" aria-label="Líneas a devolver al proveedor">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Producto</TableCell>
-                  <TableCell>Lote</TableCell>
-                  <TableCell align="right">Comprado</TableCell>
-                  <TableCell align="right">Costo unit.</TableCell>
-                  <TableCell align="right" sx={{ width: 140 }}>
-                    Cant. a devolver
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {purchase.lines.map((line) => {
-                  return (
-                    <TableRow key={line.id}>
-                      <TableCell>{line.productName || line.productId}</TableCell>
-                      <TableCell sx={{ fontFamily: 'monospace' }}>
-                        {lotNumberLabel(line.lotNumber)}
-                      </TableCell>
-                      <TableCell align="right">{Number(line.quantityCommercial)}</TableCell>
-                      <TableCell align="right">{money(Number(line.unitCost))}</TableCell>
-                      <TableCell align="right">
-                        <Controller
-                          name={`quantities.${line.id}`}
-                          control={control}
-                          defaultValue=""
-                          render={({ field: { ref, ...field }, fieldState }) => (
-                            <TextField
-                              {...field}
-                              inputRef={ref}
-                              size="small"
-                              type="number"
-                              disabled={submitting}
-                              error={Boolean(fieldState.error)}
-                              helperText={fieldState.error?.message}
-                              slotProps={{
-                                htmlInput: {
-                                  min: 0,
-                                  max: Number(line.quantityCommercial),
-                                  step: 'any',
-                                  'aria-label': `Cantidad a devolver de ${line.productName ?? 'producto'}`,
-                                },
-                              }}
-                            />
-                          )}
-                        />
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+            <TableContainer>
+              <Table size="small" aria-label="Líneas a devolver al proveedor">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Producto</TableCell>
+                    <TableCell>Lote</TableCell>
+                    <TableCell align="right">Comprado</TableCell>
+                    <TableCell align="right">Costo unit.</TableCell>
+                    <TableCell align="right" sx={{ width: 140 }}>
+                      Cant. a devolver
+                    </TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {purchase.lines.map((line) => {
+                    return (
+                      <TableRow key={line.id}>
+                        <TableCell>{line.productName || line.productId}</TableCell>
+                        <TableCell sx={{ fontFamily: 'monospace' }}>
+                          {lotNumberLabel(line.lotNumber)}
+                        </TableCell>
+                        <TableCell align="right">{Number(line.quantityCommercial)}</TableCell>
+                        <TableCell align="right">{money(Number(line.unitCost))}</TableCell>
+                        <TableCell align="right">
+                          <Controller
+                            name={`quantities.${line.id}`}
+                            control={control}
+                            defaultValue=""
+                            render={({ field: { ref, ...field }, fieldState }) => (
+                              <TextField
+                                {...field}
+                                inputRef={ref}
+                                size="small"
+                                type="number"
+                                disabled={submitting}
+                                error={Boolean(fieldState.error)}
+                                helperText={fieldState.error?.message}
+                                slotProps={{
+                                  htmlInput: {
+                                    min: 0,
+                                    max: Number(line.quantityCommercial),
+                                    step: 'any',
+                                    'aria-label': `Cantidad a devolver de ${line.productName ?? 'producto'}`,
+                                  },
+                                }}
+                              />
+                            )}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
 
             <Controller
               name="reason"

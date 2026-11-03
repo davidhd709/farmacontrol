@@ -26,6 +26,7 @@ import { PurchaseDetailDialog } from '../components/PurchaseDetailDialog';
 import { PermissionGate } from '../../auth/components/PermissionGate';
 import { DebitNoteDialog } from '../components/DebitNoteDialog';
 import { formatDate } from '../../../utils/date-format';
+import { FilterBar } from '../../../components/layout/FilterBar';
 
 export const PurchasesListPage: React.FC = () => {
   const [purchases, setPurchases] = useState<PurchaseDto[]>([]);
@@ -74,7 +75,7 @@ export const PurchasesListPage: React.FC = () => {
   };
 
   return (
-    <Box sx={{ p: { xs: 2, md: 4 }, maxWidth: 1400, mx: 'auto' }}>
+    <Box sx={{ py: { xs: 1, md: 2 }, maxWidth: 1400, mx: 'auto' }}>
       {/* Encabezado */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3, flexWrap: 'wrap', gap: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -117,7 +118,27 @@ export const PurchasesListPage: React.FC = () => {
       )}
 
       {/* Barra de Filtros */}
-      <Paper variant="outlined" sx={{ p: 2, mb: 3, borderRadius: 2, display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+      <FilterBar
+        sx={{ mb: 3 }}
+        actions={
+          <>
+            <Button
+              variant="outlined"
+              onClick={loadData}
+              disabled={loading}
+              size="medium"
+              sx={{
+                textTransform: 'none',
+                fontWeight: 600,
+                transition: 'transform 0.1s ease',
+                '&:active': { transform: 'scale(0.98)' },
+              }}
+            >
+              Actualizar
+            </Button>
+          </>
+        }
+      >
         <TextField
           select
           label="Filtrar por Proveedor"
@@ -143,21 +164,7 @@ export const PurchasesListPage: React.FC = () => {
           sx={{ minWidth: 240, flexGrow: 1 }}
         />
 
-        <Button
-          variant="outlined"
-          onClick={loadData}
-          disabled={loading}
-          size="medium"
-          sx={{
-            textTransform: 'none',
-            fontWeight: 600,
-            transition: 'transform 0.1s ease',
-            '&:active': { transform: 'scale(0.98)' },
-          }}
-        >
-          Actualizar
-        </Button>
-      </Paper>
+      </FilterBar>
 
       {/* Tabla de Compras */}
       {loading ? (

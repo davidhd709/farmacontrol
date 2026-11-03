@@ -143,7 +143,7 @@ export const FiscalPeriodsPage = () => {
 
   if (!hasPermission(SYSTEM_PERMISSIONS.ACCOUNTING_READ)) {
     return (
-      <Container component="main" sx={{ py: 4 }}>
+      <Container component="main" sx={{ py: { xs: 1, md: 2 } }}>
         <Alert severity="warning">No tienes permiso para consultar períodos fiscales.</Alert>
       </Container>
     );
@@ -152,7 +152,7 @@ export const FiscalPeriodsPage = () => {
   const canManage = hasPermission(SYSTEM_PERMISSIONS.ACCOUNTING_MANAGE);
 
   return (
-    <Container component="main" maxWidth="xl" sx={{ py: 4 }}>
+    <Container component="main" maxWidth="xl" sx={{ py: { xs: 1, md: 2 } }}>
       <Stack spacing={3}>
         {/* Cabecera */}
         <Box

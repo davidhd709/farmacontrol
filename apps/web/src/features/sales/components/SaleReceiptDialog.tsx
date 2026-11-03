@@ -9,6 +9,7 @@ import {
   Box,
   Divider,
   Table,
+  TableContainer,
   TableHead,
   TableRow,
   TableCell,
@@ -111,61 +112,63 @@ export const SaleReceiptDialog: React.FC<SaleReceiptDialogProps> = ({
         </Box>
 
         {/* Detalle de Artículos y Lotes FEFO */}
-        <Table size="small" aria-label="detalle comprobante">
-          <TableHead sx={{ bgcolor: 'action.hover' }}>
-            <TableRow>
-              <TableCell sx={{ fontWeight: 600 }}>Descripción / Lotes FEFO</TableCell>
-              <TableCell align="right" sx={{ fontWeight: 600 }}>
-                Cant.
-              </TableCell>
-              <TableCell align="right" sx={{ fontWeight: 600 }}>
-                V. Unit
-              </TableCell>
-              <TableCell align="right" sx={{ fontWeight: 600 }}>
-                Descuento
-              </TableCell>
-              <TableCell align="right" sx={{ fontWeight: 600 }}>
-                Total línea
-              </TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {sale.lines.map((line) => (
-              <TableRow key={line.id} sx={{ verticalAlign: 'top' }}>
-                <TableCell>
-                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                    {line.productName}
-                  </Typography>
-                  {line.presentationName && (
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                      Pres: {line.presentationName} (Factor: {line.presentationFactorHistorical})
-                    </Typography>
-                  )}
-                  {/* Desglose de Lotes Asignados */}
-                  {line.lotAllocations && line.lotAllocations.length > 0 && (
-                    <Box sx={{ mt: 0.5 }}>
-                      {line.lotAllocations.map((alloc) => (
-                        <Typography
-                          key={alloc.id}
-                          variant="caption"
-                          sx={{ display: 'block', color: 'text.secondary', fontSize: '0.75rem' }}
-                        >
-                          • Lote: <strong>{lotNumberLabel(alloc.lotNumber)}</strong> (Vence:{' '}
-                          {expirationDateLabel(alloc.expirationDate)}) → {alloc.quantityBaseUnits}{' '}
-                          un. base
-                        </Typography>
-                      ))}
-                    </Box>
-                  )}
+        <TableContainer>
+          <Table size="small" aria-label="detalle comprobante">
+            <TableHead sx={{ bgcolor: 'action.hover' }}>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 600 }}>Descripción / Lotes FEFO</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 600 }}>
+                  Cant.
                 </TableCell>
-                <TableCell align="right">{line.quantityCommercial}</TableCell>
-                <TableCell align="right">${line.unitPrice.toLocaleString('es-CO')}</TableCell>
-                <TableCell align="right">${line.discount.toLocaleString('es-CO')}</TableCell>
-                <TableCell align="right">${line.total.toLocaleString('es-CO')}</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 600 }}>
+                  V. Unit
+                </TableCell>
+                <TableCell align="right" sx={{ fontWeight: 600 }}>
+                  Descuento
+                </TableCell>
+                <TableCell align="right" sx={{ fontWeight: 600 }}>
+                  Total línea
+                </TableCell>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHead>
+            <TableBody>
+              {sale.lines.map((line) => (
+                <TableRow key={line.id} sx={{ verticalAlign: 'top' }}>
+                  <TableCell>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {line.productName}
+                    </Typography>
+                    {line.presentationName && (
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                        Pres: {line.presentationName} (Factor: {line.presentationFactorHistorical})
+                      </Typography>
+                    )}
+                    {/* Desglose de Lotes Asignados */}
+                    {line.lotAllocations && line.lotAllocations.length > 0 && (
+                      <Box sx={{ mt: 0.5 }}>
+                        {line.lotAllocations.map((alloc) => (
+                          <Typography
+                            key={alloc.id}
+                            variant="caption"
+                            sx={{ display: 'block', color: 'text.secondary', fontSize: '0.75rem' }}
+                          >
+                            • Lote: <strong>{lotNumberLabel(alloc.lotNumber)}</strong> (Vence:{' '}
+                            {expirationDateLabel(alloc.expirationDate)}) → {alloc.quantityBaseUnits}{' '}
+                            un. base
+                          </Typography>
+                        ))}
+                      </Box>
+                    )}
+                  </TableCell>
+                  <TableCell align="right">{line.quantityCommercial}</TableCell>
+                  <TableCell align="right">${line.unitPrice.toLocaleString('es-CO')}</TableCell>
+                  <TableCell align="right">${line.discount.toLocaleString('es-CO')}</TableCell>
+                  <TableCell align="right">${line.total.toLocaleString('es-CO')}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
 
         <Divider sx={{ my: 2 }} />
 

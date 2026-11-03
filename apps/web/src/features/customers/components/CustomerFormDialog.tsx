@@ -143,7 +143,7 @@ export const CustomerFormDialog: React.FC<CustomerFormDialogProps> = ({
             </Alert>
           )}
 
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 2fr' }, gap: 2, mb: 2 }}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'minmax(0, 1fr) 2fr' }, gap: 2, mb: 2 }}>
             <TextField
               select
               label="Tipo Documento"
@@ -182,7 +182,7 @@ export const CustomerFormDialog: React.FC<CustomerFormDialogProps> = ({
             placeholder="Ej. Juan Pérez"
           />
 
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mb: 2 }}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'minmax(0, 1fr) minmax(0, 1fr)' }, gap: 2, mb: 2 }}>
             <TextField
               label="Teléfono / Celular"
               value={phone}

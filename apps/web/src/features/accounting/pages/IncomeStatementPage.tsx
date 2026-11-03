@@ -26,6 +26,7 @@ import { SYSTEM_PERMISSIONS } from '@farmacia/contracts';
 import { usePermissions } from '../../auth/hooks/usePermissions';
 import { fetchIncomeStatement, exportIncomeStatementExcel } from '../api/accounting.api';
 import { QuickDateRange, quickRange } from '../../../components/QuickDateRange';
+import { FilterBar } from '../../../components/layout/FilterBar';
 
 function formatMoney(value: string | number | undefined | null): string {
   if (value === undefined || value === null) return '$0.00';
@@ -64,7 +65,7 @@ export const IncomeStatementPage = () => {
 
   if (!hasPermission(SYSTEM_PERMISSIONS.ACCOUNTING_READ)) {
     return (
-      <Container component="main" sx={{ py: 4 }}>
+      <Container component="main" sx={{ py: { xs: 1, md: 2 } }}>
         <Alert severity="warning">No tienes permiso para consultar reportes contables.</Alert>
       </Container>
     );
@@ -73,7 +74,7 @@ export const IncomeStatementPage = () => {
   const isNetIncomePositive = data ? Number(data.netIncome) >= 0 : true;
 
   return (
-    <Container component="main" maxWidth="xl" sx={{ py: 4 }}>
+    <Container component="main" maxWidth="xl" sx={{ py: { xs: 1, md: 2 } }}>
       <Stack spacing={3}>
         {/* Cabecera y Título */}
         <Box
@@ -107,46 +108,39 @@ export const IncomeStatementPage = () => {
         {exportError && <Alert severity="error">{exportError}</Alert>}
 
         {/* Barra de Filtros y Atajos */}
-        <Paper sx={{ p: 2 }}>
-          <Stack
-            direction={{ xs: 'column', md: 'row' }}
-            spacing={2}
-            sx={{ alignItems: { md: 'center' }, justifyContent: 'space-between' }}
-          >
-            <Stack
-              direction={{ xs: 'column', sm: 'row' }}
-              spacing={2}
-              sx={{ alignItems: 'center' }}
-            >
-              <TextField
-                label="Fecha Desde"
-                type="date"
-                size="small"
-                value={fromDate}
-                onChange={(e) => setFromDate(e.target.value)}
-                slotProps={{ inputLabel: { shrink: true } }}
-              />
-              <TextField
-                label="Fecha Hasta"
-                type="date"
-                size="small"
-                value={toDate}
-                onChange={(e) => setToDate(e.target.value)}
-                slotProps={{ inputLabel: { shrink: true } }}
-              />
-              <Button variant="contained" onClick={() => refetch()} disabled={isLoading}>
-                Consultar
-              </Button>
-            </Stack>
-
+        <FilterBar
+          onSubmit={() => refetch()}
+          actions={
+            <Button type="submit" variant="contained" disabled={isLoading}>
+              Consultar
+            </Button>
+          }
+          footer={
             <QuickDateRange
               onSelect={({ from, to }) => {
                 setFromDate(from);
                 setToDate(to);
               }}
             />
-          </Stack>
-        </Paper>
+          }
+        >
+          <TextField
+            label="Fecha Desde"
+            type="date"
+            size="small"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            slotProps={{ inputLabel: { shrink: true } }}
+          />
+          <TextField
+            label="Fecha Hasta"
+            type="date"
+            size="small"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+            slotProps={{ inputLabel: { shrink: true } }}
+          />
+        </FilterBar>
 
         {isLoading && (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>

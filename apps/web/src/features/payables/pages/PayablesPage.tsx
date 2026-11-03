@@ -18,7 +18,8 @@ import type {
   ThirdPartyDto,
 } from '@farmacia/contracts';
 import { fetchPayableStatement } from '../api/payables.api';
-import { HomeBackButton } from '../../../components/HomeBackButton';
+import { PageHeader } from '../../../components/layout/PageHeader';
+import { FilterBar } from '../../../components/layout/FilterBar';
 import { AgingSummaryCards } from '../../../components/AgingSummaryCards';
 import { ThirdPartyAutocomplete } from '../../third-parties/components/ThirdPartyAutocomplete';
 import { PayableStatementTable } from '../components/PayableStatementTable';
@@ -68,73 +69,54 @@ export function PayablesPage() {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-        <HomeBackButton />
-        <Box>
-          <Typography variant="h5" component="h1" sx={{ fontWeight: 700 }}>
-            Cuentas por Pagar
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Facturas de compra y causaciones de gasto por proveedor. Los pagos se registran con un
-            comprobante de egreso.
-          </Typography>
-        </Box>
-      </Box>
+    <Box sx={{ py: { xs: 1, md: 2 } }}>
+      <PageHeader
+        title="Cuentas por Pagar"
+        description="Facturas de compra y causaciones de gasto por proveedor. Los pagos se registran con un comprobante de egreso."
+      />
 
-      <Paper variant="outlined" sx={{ p: 2, mb: 3, borderRadius: 2 }}>
-        <Stack
-          component="form"
-          direction={{ xs: 'column', md: 'row' }}
-          spacing={2}
-          sx={{ alignItems: { md: 'flex-start' } }}
-          onSubmit={(e) => {
-            e.preventDefault();
-            consult();
-          }}
-        >
-          <Box sx={{ flex: 2, minWidth: 260 }}>
-            <ThirdPartyAutocomplete
-              value={supplier}
-              onChange={setSupplier}
-              role="SUPPLIER"
-              label="Proveedor"
-              showQuickCreate={false}
-            />
-          </Box>
-          <TextField
-            label="Fecha desde"
-            type="date"
-            size="small"
-            value={fromDate}
-            onChange={(e) => setFromDate(e.target.value)}
-            slotProps={{ inputLabel: { shrink: true } }}
-          />
-          <TextField
-            label="Fecha hasta"
-            type="date"
-            size="small"
-            value={toDate}
-            onChange={(e) => setToDate(e.target.value)}
-            slotProps={{ inputLabel: { shrink: true } }}
-          />
-          <FormControlLabel
-            control={
-              <Checkbox checked={includePaid} onChange={(e) => setIncludePaid(e.target.checked)} />
-            }
-            label="Incluir saldadas"
-            sx={{ whiteSpace: 'nowrap' }}
-          />
-          <Button type="submit" variant="contained" sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
+      <FilterBar
+        sx={{ mb: 3 }}
+        onSubmit={consult}
+        actions={
+          <Button type="submit" variant="contained">
             Consultar
           </Button>
-        </Stack>
-        {formError && (
-          <Alert severity="warning" sx={{ mt: 2 }}>
-            {formError}
-          </Alert>
-        )}
-      </Paper>
+        }
+        footer={formError && <Alert severity="warning">{formError}</Alert>}
+      >
+        <Box sx={{ gridColumn: { md: 'span 2' } }}>
+          <ThirdPartyAutocomplete
+            value={supplier}
+            onChange={setSupplier}
+            role="SUPPLIER"
+            label="Proveedor"
+            showQuickCreate={false}
+          />
+        </Box>
+        <TextField
+          label="Fecha desde"
+          type="date"
+          size="small"
+          value={fromDate}
+          onChange={(e) => setFromDate(e.target.value)}
+          slotProps={{ inputLabel: { shrink: true } }}
+        />
+        <TextField
+          label="Fecha hasta"
+          type="date"
+          size="small"
+          value={toDate}
+          onChange={(e) => setToDate(e.target.value)}
+          slotProps={{ inputLabel: { shrink: true } }}
+        />
+        <FormControlLabel
+          control={
+            <Checkbox checked={includePaid} onChange={(e) => setIncludePaid(e.target.checked)} />
+          }
+          label="Incluir saldadas"
+        />
+      </FilterBar>
 
       {query === null ? (
         <Paper variant="outlined" sx={{ p: 4, textAlign: 'center', borderRadius: 2 }}>

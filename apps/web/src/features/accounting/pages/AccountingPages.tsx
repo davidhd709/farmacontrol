@@ -55,7 +55,7 @@ function AccountingAccess({ children }: { children: React.ReactNode }) {
   return hasPermission(SYSTEM_PERMISSIONS.ACCOUNTING_READ) ? (
     <>{children}</>
   ) : (
-    <Container component="main" sx={{ py: 4 }}>
+    <Container component="main" sx={{ py: { xs: 1, md: 2 } }}>
       <Alert severity="warning">No tienes permiso para consultar la configuración contable.</Alert>
     </Container>
   );
@@ -189,7 +189,7 @@ export function AccountsPage() {
   };
   return (
     <AccountingAccess>
-      <Container component="main" maxWidth="lg" sx={{ py: 4 }}>
+      <Container component="main" maxWidth="lg" sx={{ py: { xs: 1, md: 2 } }}>
         <Stack spacing={3}>
           <PageHeading
             title="Plan de Cuentas"
@@ -428,7 +428,7 @@ export function PurposesPage() {
   };
   return (
     <AccountingAccess>
-      <Container component="main" maxWidth="lg" sx={{ py: 4 }}>
+      <Container component="main" maxWidth="lg" sx={{ py: { xs: 1, md: 2 } }}>
         <Stack spacing={3}>
           <PageHeading
             title="Propósitos Contables"
@@ -613,7 +613,7 @@ export function ImportAccountsPage() {
   };
   return (
     <AccountingAccess>
-      <Container component="main" maxWidth="lg" sx={{ py: 4 }}>
+      <Container component="main" maxWidth="lg" sx={{ py: { xs: 1, md: 2 } }}>
         <Stack spacing={3}>
           <PageHeading
             title="Importar Plan de Cuentas"

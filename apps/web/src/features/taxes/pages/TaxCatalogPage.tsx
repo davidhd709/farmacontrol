@@ -9,6 +9,7 @@ import {
   Container,
   Stack,
   Table,
+  TableContainer,
   TableBody,
   TableCell,
   TableHead,
@@ -51,7 +52,7 @@ export function TaxCatalogPage() {
     return <Alert severity="error">No se pudo cargar el catálogo normativo.</Alert>;
   }
   return (
-    <Container component="main" maxWidth="lg" sx={{ py: 3 }}>
+    <Container component="main" maxWidth="lg" sx={{ py: { xs: 1, md: 2 } }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
         <HomeBackButton />
         <Box>
@@ -120,28 +121,30 @@ export function TaxCatalogPage() {
             <Typography variant="h6" component="h2" gutterBottom>
               Unidad de Valor Tributario (UVT)
             </Typography>
-            <Table size="small" aria-label="Valores de la UVT">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Año</TableCell>
-                  <TableCell>Valor</TableCell>
-                  <TableCell>Referencia legal</TableCell>
-                  <TableCell>Revisión</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {data.uvt.map((u) => (
-                  <TableRow key={u.year}>
-                    <TableCell>{u.year}</TableCell>
-                    <TableCell>${Number(u.value).toLocaleString('es-CO')}</TableCell>
-                    <TableCell>{u.legalReference}</TableCell>
-                    <TableCell>
-                      {u.reviewStatus === 'REVIEWED' ? 'Revisada' : 'Pendiente'}
-                    </TableCell>
+            <TableContainer>
+              <Table size="small" aria-label="Valores de la UVT">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Año</TableCell>
+                    <TableCell>Valor</TableCell>
+                    <TableCell>Referencia legal</TableCell>
+                    <TableCell>Revisión</TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHead>
+                <TableBody>
+                  {data.uvt.map((u) => (
+                    <TableRow key={u.year}>
+                      <TableCell>{u.year}</TableCell>
+                      <TableCell>${Number(u.value).toLocaleString('es-CO')}</TableCell>
+                      <TableCell>{u.legalReference}</TableCell>
+                      <TableCell>
+                        {u.reviewStatus === 'REVIEWED' ? 'Revisada' : 'Pendiente'}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
           </CardContent>
         </Card>
       </Stack>

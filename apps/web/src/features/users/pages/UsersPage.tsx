@@ -211,7 +211,7 @@ export function UsersPage() {
   });
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
+    <Container maxWidth="lg" sx={{ py: { xs: 1, md: 2 } }}>
       <Stack spacing={3}>
         {/* Cabecera Principal */}
         <Box
@@ -282,7 +282,7 @@ export function UsersPage() {
             border: 1,
             borderColor: 'divider',
             borderRadius: 2,
-            overflow: 'hidden',
+            overflowX: 'auto',
           }}
         >
           {usersQuery.isLoading ? (

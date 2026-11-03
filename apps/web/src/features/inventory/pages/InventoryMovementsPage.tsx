@@ -28,6 +28,7 @@ import { fetchInventoryMovements } from '../api/inventory.api';
 import { fetchProducts } from '../../catalog/api/products.api';
 import { formatSignedQuantity, movementDirection } from '../movement-direction';
 import { formatDateTime } from '../../../utils/date-format';
+import { FilterBar } from '../../../components/layout/FilterBar';
 
 export const InventoryMovementsPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -102,7 +103,7 @@ export const InventoryMovementsPage = () => {
   };
 
   return (
-    <Box sx={{ p: { xs: 2, md: 3 }, maxWidth: 1400, margin: '0 auto' }}>
+    <Box sx={{ py: { xs: 1, md: 2 }, maxWidth: 1400, margin: '0 auto' }}>
       {/* Encabezado y Acciones */}
       <Box
         sx={{
@@ -181,46 +182,46 @@ export const InventoryMovementsPage = () => {
         </Alert>
       )}
       {/* Filtros */}
-      <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
-          <TextField
-            select
-            label="Filtrar por Producto"
-            value={selectedProductId}
-            onChange={(e) => {
-              setSelectedProductId(e.target.value);
-              setPage(0);
-            }}
-            sx={{ minWidth: 260 }}
-            size="small"
-          >
-            <MenuItem value="">Todos los productos</MenuItem>
-            {products.map((p) => (
-              <MenuItem key={p.id} value={p.id}>
-                {p.code} — {p.name}
-              </MenuItem>
-            ))}
-          </TextField>
+      <FilterBar
+        sx={{ mb: 3 }}
+      >
+        <TextField
+          select
+          label="Filtrar por Producto"
+          value={selectedProductId}
+          onChange={(e) => {
+            setSelectedProductId(e.target.value);
+            setPage(0);
+          }}
+          sx={{ minWidth: 260 }}
+          size="small"
+        >
+          <MenuItem value="">Todos los productos</MenuItem>
+          {products.map((p) => (
+            <MenuItem key={p.id} value={p.id}>
+              {p.code} — {p.name}
+            </MenuItem>
+          ))}
+        </TextField>
 
-          <TextField
-            select
-            label="Tipo de Movimiento"
-            value={selectedType}
-            onChange={(e) => {
-              setSelectedType(e.target.value);
-              setPage(0);
-            }}
-            sx={{ minWidth: 200 }}
-            size="small"
-          >
-            <MenuItem value="">Todos los tipos</MenuItem>
-            <MenuItem value="ENTRADA_COMPRA">Entrada por Compra</MenuItem>
-            <MenuItem value="SALIDA_VENTA">Salida por Venta</MenuItem>
-            <MenuItem value="AJUSTE_POSITIVO">Ajuste Positivo (+)</MenuItem>
-            <MenuItem value="AJUSTE_NEGATIVO">Ajuste Negativo (-)</MenuItem>
-          </TextField>
-        </Box>
-      </Paper>
+        <TextField
+          select
+          label="Tipo de Movimiento"
+          value={selectedType}
+          onChange={(e) => {
+            setSelectedType(e.target.value);
+            setPage(0);
+          }}
+          sx={{ minWidth: 200 }}
+          size="small"
+        >
+          <MenuItem value="">Todos los tipos</MenuItem>
+          <MenuItem value="ENTRADA_COMPRA">Entrada por Compra</MenuItem>
+          <MenuItem value="SALIDA_VENTA">Salida por Venta</MenuItem>
+          <MenuItem value="AJUSTE_POSITIVO">Ajuste Positivo (+)</MenuItem>
+          <MenuItem value="AJUSTE_NEGATIVO">Ajuste Negativo (-)</MenuItem>
+        </TextField>
+      </FilterBar>
 
       {errorMessage && (
         <Alert severity="error" sx={{ mb: 3 }}>

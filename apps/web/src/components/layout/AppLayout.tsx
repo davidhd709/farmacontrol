@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Box, CircularProgress, useMediaQuery, useTheme } from '@mui/material';
 import { Outlet } from 'react-router-dom';
 import { AppNavbar } from './AppNavbar';
@@ -6,8 +6,12 @@ import { AppSidebar, SIDEBAR_WIDTH } from './AppSidebar';
 
 export const AppLayout: React.FC = () => {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  // Móvil y tablet: el menú empieza cerrado y se abre con el botón; escritorio: abierto
+  const isMobile = useMediaQuery(theme.breakpoints.down('lg'), { noSsr: true });
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(!isMobile);
+  useEffect(() => {
+    setSidebarOpen(!isMobile);
+  }, [isMobile]);
 
   const handleToggleSidebar = () => {
     setSidebarOpen((prev) => !prev);
@@ -35,7 +39,7 @@ export const AppLayout: React.FC = () => {
             minWidth: 0,
             width: {
               xs: '100%',
-              md: sidebarOpen ? `calc(100% - ${SIDEBAR_WIDTH}px)` : '100%',
+              lg: sidebarOpen ? `calc(100% - ${SIDEBAR_WIDTH}px)` : '100%',
             },
             p: { xs: 2, sm: 3 },
             maxWidth: '100%',

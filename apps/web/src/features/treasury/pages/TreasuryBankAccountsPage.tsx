@@ -94,7 +94,7 @@ export function TreasuryBankAccountsPage() {
 
   if (!canRead) {
     return (
-      <Container component="main" sx={{ py: 4 }}>
+      <Container component="main" sx={{ py: { xs: 1, md: 2 } }}>
         <Alert severity="warning">
           No tienes permisos para consultar la tesorería ni las cuentas bancarias.
         </Alert>
@@ -130,7 +130,7 @@ export function TreasuryBankAccountsPage() {
   const totalBalanceNumber = parseFloat(summary?.totalBalance ?? '0');
 
   return (
-    <Container component="main" maxWidth="xl" sx={{ py: 3 }}>
+    <Container component="main" maxWidth="xl" sx={{ py: { xs: 1, md: 2 } }}>
       {/* Encabezado y Acción */}
       <Stack
         direction={{ xs: 'column', sm: 'row' }}

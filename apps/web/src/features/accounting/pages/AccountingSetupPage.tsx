@@ -18,6 +18,7 @@ import {
   MenuItem,
   Stack,
   Table,
+  TableContainer,
   TableBody,
   TableCell,
   TableHead,
@@ -149,7 +150,7 @@ export function AccountingSetupPage() {
   const openingData = opening.data && opening.data.journalEntryId ? opening.data : null;
 
   return (
-    <Container component="main" maxWidth="lg" sx={{ py: 3 }}>
+    <Container component="main" maxWidth="lg" sx={{ py: { xs: 1, md: 2 } }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
         <HomeBackButton />
         <Box>
@@ -278,26 +279,28 @@ export function AccountingSetupPage() {
                   Registrados con fecha {formatDate(openingData.entryDate)}. Para cambiarlos, reverse el asiento
                   de apertura en el libro diario y registre otros.
                 </Typography>
-                <Table size="small" aria-label="Saldos de apertura registrados">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Cuenta</TableCell>
-                      <TableCell align="right">Débito</TableCell>
-                      <TableCell align="right">Crédito</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {openingData.lines.map((l, i) => (
-                      <TableRow key={`${l.accountId}-${i}`}>
-                        <TableCell>
-                          {l.accountCode} · {l.accountName}
-                        </TableCell>
-                        <TableCell align="right">{formatMoney(toCents(l.debit))}</TableCell>
-                        <TableCell align="right">{formatMoney(toCents(l.credit))}</TableCell>
+                <TableContainer>
+                  <Table size="small" aria-label="Saldos de apertura registrados">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Cuenta</TableCell>
+                        <TableCell align="right">Débito</TableCell>
+                        <TableCell align="right">Crédito</TableCell>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHead>
+                    <TableBody>
+                      {openingData.lines.map((l, i) => (
+                        <TableRow key={`${l.accountId}-${i}`}>
+                          <TableCell>
+                            {l.accountCode} · {l.accountName}
+                          </TableCell>
+                          <TableCell align="right">{formatMoney(toCents(l.debit))}</TableCell>
+                          <TableCell align="right">{formatMoney(toCents(l.credit))}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
               </>
             ) : canManage ? (
               <Stack spacing={2}>

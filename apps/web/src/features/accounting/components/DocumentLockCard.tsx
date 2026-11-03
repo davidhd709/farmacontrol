@@ -6,6 +6,7 @@ import {
   Paper,
   Stack,
   Table,
+  TableContainer,
   TableBody,
   TableCell,
   TableHead,
@@ -119,28 +120,30 @@ export function DocumentLockCard({ canManage }: { canManage: boolean }) {
         {error && <Alert severity="error">{error}</Alert>}
 
         {data && data.history.length > 0 && (
-          <Table size="small" aria-label="Historial de bloqueos">
-            <TableHead>
-              <TableRow>
-                <TableCell>Fecha del cambio</TableCell>
-                <TableCell>Bloqueado hasta</TableCell>
-                <TableCell>Motivo</TableCell>
-                <TableCell>Usuario</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {data.history.map((lock) => (
-                <TableRow key={lock.id}>
-                  <TableCell>{formatDateTime(lock.createdAt)}</TableCell>
-                  <TableCell>
-                    {lock.lockedThrough ? formatDate(lock.lockedThrough) : 'Sin bloqueo'}
-                  </TableCell>
-                  <TableCell>{lock.reason}</TableCell>
-                  <TableCell>{lock.createdByName ?? '—'}</TableCell>
+          <TableContainer>
+            <Table size="small" aria-label="Historial de bloqueos">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Fecha del cambio</TableCell>
+                  <TableCell>Bloqueado hasta</TableCell>
+                  <TableCell>Motivo</TableCell>
+                  <TableCell>Usuario</TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHead>
+              <TableBody>
+                {data.history.map((lock) => (
+                  <TableRow key={lock.id}>
+                    <TableCell>{formatDateTime(lock.createdAt)}</TableCell>
+                    <TableCell>
+                      {lock.lockedThrough ? formatDate(lock.lockedThrough) : 'Sin bloqueo'}
+                    </TableCell>
+                    <TableCell>{lock.reason}</TableCell>
+                    <TableCell>{lock.createdByName ?? '—'}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
         )}
       </Stack>
     </Paper>

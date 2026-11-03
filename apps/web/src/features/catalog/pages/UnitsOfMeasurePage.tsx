@@ -182,7 +182,7 @@ export const UnitsOfMeasurePage: React.FC = () => {
   };
 
   return (
-    <Box sx={{ p: { xs: 2, md: 3 }, maxWidth: 1300, margin: '0 auto' }}>
+    <Box sx={{ py: { xs: 1, md: 2 }, maxWidth: 1300, margin: '0 auto' }}>
       {/* Encabezado */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>

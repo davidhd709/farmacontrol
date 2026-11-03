@@ -101,7 +101,7 @@ export function CategoriesPage() {
   const total = data?.total ?? 0;
 
   return (
-    <Box sx={{ p: { xs: 2, md: 3 }, maxWidth: 1400, margin: '0 auto' }}>
+    <Box sx={{ py: { xs: 1, md: 2 }, maxWidth: 1400, margin: '0 auto' }}>
       <Stack spacing={3}>
         {/* Encabezado y Acciones */}
         <Box

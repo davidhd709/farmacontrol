@@ -10,6 +10,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Link,
   Paper,
   Stack,
   Table,
@@ -181,7 +182,7 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
   };
 
   return (
-    <Container component="main" maxWidth="xl" sx={{ py: 4 }}>
+    <Container component="main" maxWidth="xl" sx={{ py: { xs: 1, md: 2 } }}>
       <Stack spacing={3}>
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
@@ -295,13 +296,15 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
                     onClick={() => setSelected(doc)}
                   >
                     <TableCell sx={{ fontWeight: 700, fontFamily: 'monospace' }}>
-                      <Button
-                        size="small"
+                      <Link
+                        component="button"
+                        type="button"
+                        underline="hover"
                         onClick={() => setSelected(doc)}
-                        sx={{ p: 0, minWidth: 0 }}
+                        sx={{ fontWeight: 700, fontFamily: 'monospace' }}
                       >
                         {doc.documentNumber}
-                      </Button>
+                      </Link>
                     </TableCell>
                     <TableCell>{formatDate(doc.documentDate)}</TableCell>
                     <TableCell>{doc.thirdPartyName ?? '—'}</TableCell>
@@ -384,25 +387,27 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
                   </Typography>
                 )}
                 {selected.applications.length > 0 ? (
-                  <Table size="small" aria-label="Facturas aplicadas">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Documento</TableCell>
-                        <TableCell align="right">Valor</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {selected.applications.map((a) => (
-                        <TableRow key={`${a.documentType}-${a.documentId}`}>
-                          <TableCell>
-                            {APPLICATION_LABELS[a.documentType]} {a.documentNumber ?? ''}
-                            {a.isReversed ? ' (revertido)' : ''}
-                          </TableCell>
-                          <TableCell align="right">{money(a.amount)}</TableCell>
+                  <TableContainer>
+                    <Table size="small" aria-label="Facturas aplicadas">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Documento</TableCell>
+                          <TableCell align="right">Valor</TableCell>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHead>
+                      <TableBody>
+                        {selected.applications.map((a) => (
+                          <TableRow key={`${a.documentType}-${a.documentId}`}>
+                            <TableCell>
+                              {APPLICATION_LABELS[a.documentType]} {a.documentNumber ?? ''}
+                              {a.isReversed ? ' (revertido)' : ''}
+                            </TableCell>
+                            <TableCell align="right">{money(a.amount)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
                 ) : (
                   <Typography>
                     <strong>Documento origen:</strong> {originOf(selected)}

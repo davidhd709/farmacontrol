@@ -313,7 +313,7 @@ export function PresentationFormDialog({
                 <Box
                   sx={{
                     display: 'grid',
-                    gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+                    gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'minmax(0, 1fr) minmax(0, 1fr)' },
                     gap: 2,
                   }}
                 >
@@ -368,7 +368,7 @@ export function PresentationFormDialog({
                 <Box
                   sx={{
                     display: 'grid',
-                    gridTemplateColumns: { xs: '1fr', sm: '1fr 1.5fr' },
+                    gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'minmax(0, 1fr) 1.5fr' },
                     gap: 2,
                     alignItems: 'flex-start',
                   }}
@@ -489,7 +489,7 @@ export function PresentationFormDialog({
             <Box
               sx={{
                 display: 'grid',
-                gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+                gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'minmax(0, 1fr) minmax(0, 1fr)' },
                 gap: 2,
               }}
             >
@@ -564,7 +564,7 @@ export function PresentationFormDialog({
             <Box
               sx={{
                 display: 'grid',
-                gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+                gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'minmax(0, 1fr) minmax(0, 1fr)' },
                 gap: 1.5,
               }}
             >

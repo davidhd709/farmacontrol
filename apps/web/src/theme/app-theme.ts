@@ -59,6 +59,8 @@ export const appTheme = createTheme(
       },
     },
     components: {
+      // Revisión responsive (2026-11-02): el texto de un botón nunca se corta ni se desborda y el
+      // botón no se encoge por el contenido vecino; el relleno es el mismo en toda la app
       MuiButton: {
         defaultProps: {
           disableElevation: true,
@@ -67,7 +69,44 @@ export const appTheme = createTheme(
           root: {
             minHeight: 44,
             borderRadius: 8,
+            whiteSpace: 'nowrap',
+            flexShrink: 0,
+            paddingInline: 16,
           },
+          sizeSmall: {
+            minHeight: 36,
+            paddingInline: 12,
+          },
+        },
+      },
+      // Títulos de página: todo h1 tiene el mismo tamaño en todas las pantallas (más chico en móvil)
+      MuiTypography: {
+        styleOverrides: {
+          root: {
+            '&:is(h1)': {
+              fontSize: '1.75rem',
+              fontWeight: 700,
+              lineHeight: 1.2,
+              '@media (max-width: 599.95px)': { fontSize: '1.375rem' },
+            },
+          },
+        },
+      },
+      // Las tablas desplazan horizontalmente dentro de su contenedor, nunca la página
+      MuiTableContainer: {
+        styleOverrides: {
+          root: { overflowX: 'auto', maxWidth: '100%' },
+        },
+      },
+      MuiTableCell: {
+        styleOverrides: {
+          head: { whiteSpace: 'nowrap', fontWeight: 700 },
+        },
+      },
+      // El layout ya da el margen lateral: los Container de cada página no lo duplican
+      MuiContainer: {
+        defaultProps: {
+          disableGutters: true,
         },
       },
       MuiTextField: {

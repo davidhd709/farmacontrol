@@ -18,6 +18,7 @@ import {
   Select,
   Stack,
   Table,
+  TableContainer,
   TableBody,
   TableCell,
   TableHead,
@@ -439,72 +440,74 @@ export function VoucherFormDialog({
               ) : !items.length ? (
                 <Alert severity="info">{labels.empty}</Alert>
               ) : (
-                <Table
-                  size="small"
-                  aria-label={isReceipt ? 'Facturas a abonar' : 'Facturas a pagar'}
-                >
-                  <TableHead>
-                    <TableRow>
-                      <TableCell padding="checkbox" />
-                      <TableCell>Documento</TableCell>
-                      <TableCell>Fecha</TableCell>
-                      <TableCell>Vence</TableCell>
-                      <TableCell align="right">Saldo</TableCell>
-                      <TableCell align="right" sx={{ width: 170 }}>
-                        Valor a aplicar
-                      </TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {items.map((item) => {
-                      const checked = item.documentId in selected;
-                      const name = item.documentNumber ?? item.label;
-                      return (
-                        <TableRow key={item.documentId} selected={checked}>
-                          <TableCell padding="checkbox">
-                            <Checkbox
-                              checked={checked}
-                              onChange={(e) => toggle(item, e.target.checked)}
-                              slotProps={{ input: { 'aria-label': `Seleccionar ${name}` } }}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                              {item.documentNumber ?? '—'}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              {item.label}
-                            </Typography>
-                          </TableCell>
-                          <TableCell>{formatDate(item.documentDate)}</TableCell>
-                          <TableCell>{item.dueDate ?? '—'}</TableCell>
-                          <TableCell align="right">{formatMoney(centsOf(item.balance))}</TableCell>
-                          <TableCell align="right">
-                            <TextField
-                              size="small"
-                              type="number"
-                              disabled={!checked}
-                              value={checked ? selected[item.documentId] : ''}
-                              onChange={(e) =>
-                                setSelected((current) => ({
-                                  ...current,
-                                  [item.documentId]: e.target.value,
-                                }))
-                              }
-                              slotProps={{
-                                htmlInput: {
-                                  min: 0.01,
-                                  step: 'any',
-                                  'aria-label': `Valor a aplicar a ${name}`,
-                                },
-                              }}
-                            />
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+                <TableContainer>
+                  <Table
+                    size="small"
+                    aria-label={isReceipt ? 'Facturas a abonar' : 'Facturas a pagar'}
+                  >
+                    <TableHead>
+                      <TableRow>
+                        <TableCell padding="checkbox" />
+                        <TableCell>Documento</TableCell>
+                        <TableCell>Fecha</TableCell>
+                        <TableCell>Vence</TableCell>
+                        <TableCell align="right">Saldo</TableCell>
+                        <TableCell align="right" sx={{ width: 170 }}>
+                          Valor a aplicar
+                        </TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {items.map((item) => {
+                        const checked = item.documentId in selected;
+                        const name = item.documentNumber ?? item.label;
+                        return (
+                          <TableRow key={item.documentId} selected={checked}>
+                            <TableCell padding="checkbox">
+                              <Checkbox
+                                checked={checked}
+                                onChange={(e) => toggle(item, e.target.checked)}
+                                slotProps={{ input: { 'aria-label': `Seleccionar ${name}` } }}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                {item.documentNumber ?? '—'}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {item.label}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>{formatDate(item.documentDate)}</TableCell>
+                            <TableCell>{item.dueDate ?? '—'}</TableCell>
+                            <TableCell align="right">{formatMoney(centsOf(item.balance))}</TableCell>
+                            <TableCell align="right">
+                              <TextField
+                                size="small"
+                                type="number"
+                                disabled={!checked}
+                                value={checked ? selected[item.documentId] : ''}
+                                onChange={(e) =>
+                                  setSelected((current) => ({
+                                    ...current,
+                                    [item.documentId]: e.target.value,
+                                  }))
+                                }
+                                slotProps={{
+                                  htmlInput: {
+                                    min: 0.01,
+                                    step: 'any',
+                                    'aria-label': `Valor a aplicar a ${name}`,
+                                  },
+                                }}
+                              />
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
               )}
             </Box>
           )}

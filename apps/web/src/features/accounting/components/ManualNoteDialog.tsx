@@ -11,6 +11,7 @@ import {
   IconButton,
   Stack,
   Table,
+  TableContainer,
   TableBody,
   TableCell,
   TableFooter,
@@ -157,87 +158,89 @@ export function ManualNoteDialog({
             />
           </Stack>
 
-          <Table size="small" aria-label="Líneas de la nota contable">
-            <TableHead>
-              <TableRow>
-                <TableCell sx={{ width: '55%' }}>Cuenta</TableCell>
-                <TableCell align="right">Débito</TableCell>
-                <TableCell align="right">Crédito</TableCell>
-                <TableCell />
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {lines.map((line, index) => (
-                <TableRow key={line.key}>
-                  <TableCell>
-                    <Autocomplete<AccountDto>
-                      options={postable}
-                      value={line.accountId ? (byId.get(line.accountId) ?? null) : null}
-                      onChange={(_, value) =>
-                        updateLine(line.key, { accountId: value?.id ?? null })
-                      }
-                      getOptionLabel={(a) => `${a.code} — ${a.name}`}
-                      isOptionEqualToValue={(a, b) => a.id === b.id}
-                      renderInput={(params) => (
-                        <TextField {...params} size="small" label={`Cuenta línea ${index + 1}`} />
-                      )}
-                    />
-                  </TableCell>
-                  {(['debit', 'credit'] as const).map((side) => (
-                    <TableCell key={side} align="right">
-                      <TextField
-                        size="small"
-                        value={line[side]}
-                        onChange={(e) => {
-                          const value = e.target.value.replace(',', '.');
-                          if (AMOUNT_RE.test(value)) updateLine(line.key, { [side]: value });
-                        }}
-                        slotProps={{
-                          htmlInput: {
-                            inputMode: 'decimal',
-                            'aria-label': `${side === 'debit' ? 'Débito' : 'Crédito'} línea ${index + 1}`,
-                            style: { textAlign: 'right' },
-                          },
-                        }}
-                        sx={{ width: 160 }}
+          <TableContainer>
+            <Table size="small" aria-label="Líneas de la nota contable">
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ width: '55%' }}>Cuenta</TableCell>
+                  <TableCell align="right">Débito</TableCell>
+                  <TableCell align="right">Crédito</TableCell>
+                  <TableCell />
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {lines.map((line, index) => (
+                  <TableRow key={line.key}>
+                    <TableCell>
+                      <Autocomplete<AccountDto>
+                        options={postable}
+                        value={line.accountId ? (byId.get(line.accountId) ?? null) : null}
+                        onChange={(_, value) =>
+                          updateLine(line.key, { accountId: value?.id ?? null })
+                        }
+                        getOptionLabel={(a) => `${a.code} — ${a.name}`}
+                        isOptionEqualToValue={(a, b) => a.id === b.id}
+                        renderInput={(params) => (
+                          <TextField {...params} size="small" label={`Cuenta línea ${index + 1}`} />
+                        )}
                       />
                     </TableCell>
-                  ))}
+                    {(['debit', 'credit'] as const).map((side) => (
+                      <TableCell key={side} align="right">
+                        <TextField
+                          size="small"
+                          value={line[side]}
+                          onChange={(e) => {
+                            const value = e.target.value.replace(',', '.');
+                            if (AMOUNT_RE.test(value)) updateLine(line.key, { [side]: value });
+                          }}
+                          slotProps={{
+                            htmlInput: {
+                              inputMode: 'decimal',
+                              'aria-label': `${side === 'debit' ? 'Débito' : 'Crédito'} línea ${index + 1}`,
+                              style: { textAlign: 'right' },
+                            },
+                          }}
+                          sx={{ width: 160 }}
+                        />
+                      </TableCell>
+                    ))}
+                    <TableCell>
+                      <IconButton
+                        aria-label={`Quitar línea ${index + 1}`}
+                        disabled={lines.length <= 2}
+                        onClick={() =>
+                          setLines((current) => current.filter((l) => l.key !== line.key))
+                        }
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+              <TableFooter>
+                <TableRow>
                   <TableCell>
-                    <IconButton
-                      aria-label={`Quitar línea ${index + 1}`}
-                      disabled={lines.length <= 2}
+                    <Button
                       onClick={() =>
-                        setLines((current) => current.filter((l) => l.key !== line.key))
+                        setLines((current) => [...current, emptyLine(nextKey.current++)])
                       }
                     >
-                      <DeleteIcon />
-                    </IconButton>
+                      Agregar línea
+                    </Button>
                   </TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700 }}>
+                    {formatCents(totalDebit)}
+                  </TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700 }}>
+                    {formatCents(totalCredit)}
+                  </TableCell>
+                  <TableCell />
                 </TableRow>
-              ))}
-            </TableBody>
-            <TableFooter>
-              <TableRow>
-                <TableCell>
-                  <Button
-                    onClick={() =>
-                      setLines((current) => [...current, emptyLine(nextKey.current++)])
-                    }
-                  >
-                    Agregar línea
-                  </Button>
-                </TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>
-                  {formatCents(totalDebit)}
-                </TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>
-                  {formatCents(totalCredit)}
-                </TableCell>
-                <TableCell />
-              </TableRow>
-            </TableFooter>
-          </Table>
+              </TableFooter>
+            </Table>
+          </TableContainer>
 
           <Box>
             {difference === 0n ? (

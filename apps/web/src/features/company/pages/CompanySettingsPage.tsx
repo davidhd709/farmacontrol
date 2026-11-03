@@ -12,6 +12,7 @@ import {
   MenuItem,
   Stack,
   Table,
+  TableContainer,
   TableBody,
   TableCell,
   TableHead,
@@ -419,7 +420,7 @@ export const CompanySettingsPage = () => {
 
   if (!hasPermission(SYSTEM_PERMISSIONS.COMPANY_READ)) {
     return (
-      <Container component="main" sx={{ py: 4 }}>
+      <Container component="main" sx={{ py: { xs: 1, md: 2 } }}>
         <Alert severity="warning">
           No tienes permiso para consultar la configuración de la empresa.
         </Alert>
@@ -443,7 +444,7 @@ export const CompanySettingsPage = () => {
 
   const { company, currentPolicy, policyHistory, availableCostingMethods } = data;
   return (
-    <Container component="main" maxWidth="lg" sx={{ py: 3 }}>
+    <Container component="main" maxWidth="lg" sx={{ py: { xs: 1, md: 2 } }}>
       <Typography variant="h5" component="h1" gutterBottom>
         Empresa y política contable
       </Typography>
@@ -464,29 +465,31 @@ export const CompanySettingsPage = () => {
                 NIT {company.taxId}-{company.taxIdCheckDigit}
                 {company.tradeName ? ` · ${company.tradeName}` : ''} · Perfil farmacia
               </Typography>
-              <Table size="small" aria-label="Sucursales">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Código</TableCell>
-                    <TableCell>Sucursal</TableCell>
-                    <TableCell>Municipio</TableCell>
-                    <TableCell>Estado</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {company.branches.map((b) => (
-                    <TableRow key={b.id}>
-                      <TableCell>{b.code}</TableCell>
-                      <TableCell>
-                        {b.name}{' '}
-                        {b.isDefault && <Chip size="small" label="Principal" sx={{ ml: 1 }} />}
-                      </TableCell>
-                      <TableCell>{b.municipalityCode ?? '—'}</TableCell>
-                      <TableCell>{b.isActive ? 'Activa' : 'Inactiva'}</TableCell>
+              <TableContainer>
+                <Table size="small" aria-label="Sucursales">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Código</TableCell>
+                      <TableCell>Sucursal</TableCell>
+                      <TableCell>Municipio</TableCell>
+                      <TableCell>Estado</TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHead>
+                  <TableBody>
+                    {company.branches.map((b) => (
+                      <TableRow key={b.id}>
+                        <TableCell>{b.code}</TableCell>
+                        <TableCell>
+                          {b.name}{' '}
+                          {b.isDefault && <Chip size="small" label="Principal" sx={{ ml: 1 }} />}
+                        </TableCell>
+                        <TableCell>{b.municipalityCode ?? '—'}</TableCell>
+                        <TableCell>{b.isActive ? 'Activa' : 'Inactiva'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
               {canManage && (
                 <Box sx={{ mt: 2 }}>
                   <BranchForm onDone={refresh} />
@@ -538,28 +541,30 @@ export const CompanySettingsPage = () => {
               <Typography variant="h6" component="h2" gutterBottom>
                 Historial de versiones
               </Typography>
-              <Table size="small" aria-label="Historial de la política contable">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Vigente desde</TableCell>
-                    <TableCell>Método de costeo</TableCell>
-                    <TableCell>Diferencias en devoluciones</TableCell>
-                    <TableCell>Motivo</TableCell>
-                    <TableCell>Registró</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {policyHistory.map((p) => (
-                    <TableRow key={p.id}>
-                      <TableCell>{p.effectiveFrom}</TableCell>
-                      <TableCell>{COSTING_LABELS[p.costingMethod]}</TableCell>
-                      <TableCell>{VARIANCE_LABELS[p.purchaseReturnVariancePurpose]}</TableCell>
-                      <TableCell>{p.reason}</TableCell>
-                      <TableCell>{p.createdByName ?? '—'}</TableCell>
+              <TableContainer>
+                <Table size="small" aria-label="Historial de la política contable">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Vigente desde</TableCell>
+                      <TableCell>Método de costeo</TableCell>
+                      <TableCell>Diferencias en devoluciones</TableCell>
+                      <TableCell>Motivo</TableCell>
+                      <TableCell>Registró</TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHead>
+                  <TableBody>
+                    {policyHistory.map((p) => (
+                      <TableRow key={p.id}>
+                        <TableCell>{p.effectiveFrom}</TableCell>
+                        <TableCell>{COSTING_LABELS[p.costingMethod]}</TableCell>
+                        <TableCell>{VARIANCE_LABELS[p.purchaseReturnVariancePurpose]}</TableCell>
+                        <TableCell>{p.reason}</TableCell>
+                        <TableCell>{p.createdByName ?? '—'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
             </CardContent>
           </Card>
         )}

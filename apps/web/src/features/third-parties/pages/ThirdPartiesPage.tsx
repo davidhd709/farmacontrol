@@ -156,7 +156,7 @@ export const ThirdPartiesPage: React.FC = () => {
   };
 
   return (
-    <Box sx={{ p: 3, display: 'flex', flexDirection: 'column', gap: 3 }}>
+    <Box sx={{ py: { xs: 1, md: 2 }, display: 'flex', flexDirection: 'column', gap: 3 }}>
       {/* Encabezado */}
       <Box
         sx={{
@@ -170,7 +170,7 @@ export const ThirdPartiesPage: React.FC = () => {
         <Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
             <PeopleIcon color="primary" sx={{ fontSize: 32 }} />
-            <Typography variant="h5" sx={{ fontWeight: 700 }} color="text.primary">
+            <Typography component="h1" variant="h5" sx={{ fontWeight: 700 }} color="text.primary">
               Directorio de Terceros
             </Typography>
           </Box>

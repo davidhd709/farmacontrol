@@ -33,6 +33,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import { HomeBackButton } from '../../../components/HomeBackButton';
 import { SortByDateButton } from '../../../components/SortByDateButton';
 import { formatDateTime } from '../../../utils/date-format';
+import { FilterBar } from '../../../components/layout/FilterBar';
 
 export const CashPage: React.FC = () => {
   const [balance, setBalance] = useState<CashBalanceDto>({
@@ -112,7 +113,7 @@ export const CashPage: React.FC = () => {
   };
 
   return (
-    <Box sx={{ p: { xs: 2, md: 3 }, maxWidth: 1400, mx: 'auto' }}>
+    <Box sx={{ py: { xs: 1, md: 2 }, maxWidth: 1400, mx: 'auto' }}>
       {/* Encabezado */}
       <Box
         sx={{
@@ -137,7 +138,7 @@ export const CashPage: React.FC = () => {
           </Box>
         </Box>
 
-        <Box sx={{ display: 'flex', gap: 1.5 }}>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
           <Button variant="outlined" size="small" onClick={loadData} disabled={loading}>
             Actualizar
           </Button>
@@ -166,7 +167,7 @@ export const CashPage: React.FC = () => {
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: 'repeat(4, 1fr)' },
+          gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'minmax(0, 1fr) minmax(0, 1fr)', md: 'repeat(4, minmax(0, 1fr))' },
           gap: 2.5,
           mb: 4,
         }}
@@ -266,77 +267,81 @@ export const CashPage: React.FC = () => {
       </Box>
 
       {/* Barra de Filtros */}
-      <Card sx={{ p: 2, mb: 3, borderRadius: 2 }}>
-        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-          <FormControl size="small" sx={{ minWidth: 200 }}>
-            <InputLabel id="filter-type-label">Tipo de Movimiento</InputLabel>
-            <Select
-              labelId="filter-type-label"
-              value={selectedType}
-              label="Tipo de Movimiento"
-              onChange={(e) => {
-                setSelectedType(e.target.value);
-                setPage(0);
-              }}
-            >
-              <MenuItem value="">Todos los tipos</MenuItem>
-              <MenuItem value="INGRESO_VENTA">Venta POS (Ingreso)</MenuItem>
-              <MenuItem value="INGRESO_MANUAL">Recibo de caja</MenuItem>
-              <MenuItem value="EGRESO_MANUAL">Egreso Manual</MenuItem>
-              <MenuItem value="EGRESO_PAGO_PROVEEDOR">Pago a Proveedor (Egreso)</MenuItem>
-            </Select>
-          </FormControl>
-
-          <TextField
-            label="Desde"
-            type="date"
-            size="small"
-            value={startDate}
+      <FilterBar
+        sx={{ mb: 3 }}
+        actions={
+          <>
+            {(selectedType || startDate || endDate) && (
+              <Button
+                variant="text"
+                size="small"
+                onClick={() => {
+                  setSelectedType('');
+                  setStartDate('');
+                  setEndDate('');
+                  setPage(0);
+                }}
+              >
+                Limpiar Filtros
+              </Button>
+            )}
+          </>
+        }
+      >
+        <FormControl size="small" sx={{ minWidth: 200 }}>
+          <InputLabel id="filter-type-label">Tipo de Movimiento</InputLabel>
+          <Select
+            labelId="filter-type-label"
+            value={selectedType}
+            label="Tipo de Movimiento"
             onChange={(e) => {
-              setStartDate(e.target.value);
+              setSelectedType(e.target.value);
               setPage(0);
             }}
-            slotProps={{ inputLabel: { shrink: true } }}
-            sx={{ minWidth: 160 }}
-          />
+          >
+            <MenuItem value="">Todos los tipos</MenuItem>
+            <MenuItem value="INGRESO_VENTA">Venta POS (Ingreso)</MenuItem>
+            <MenuItem value="INGRESO_MANUAL">Recibo de caja</MenuItem>
+            <MenuItem value="EGRESO_MANUAL">Egreso Manual</MenuItem>
+            <MenuItem value="EGRESO_PAGO_PROVEEDOR">Pago a Proveedor (Egreso)</MenuItem>
+          </Select>
+        </FormControl>
 
-          <TextField
-            label="Hasta"
-            type="date"
-            size="small"
-            value={endDate}
-            onChange={(e) => {
-              setEndDate(e.target.value);
-              setPage(0);
-            }}
-            slotProps={{ inputLabel: { shrink: true } }}
-            sx={{ minWidth: 160 }}
-          />
+        <TextField
+          label="Desde"
+          type="date"
+          size="small"
+          value={startDate}
+          onChange={(e) => {
+            setStartDate(e.target.value);
+            setPage(0);
+          }}
+          slotProps={{ inputLabel: { shrink: true } }}
+          sx={{ minWidth: 160 }}
+        />
 
-          <SortByDateButton
-            value={sortOrder}
-            onChange={(next) => {
-              setSortOrder(next);
-              setPage(0);
-            }}
-          />
+        <TextField
+          label="Hasta"
+          type="date"
+          size="small"
+          value={endDate}
+          onChange={(e) => {
+            setEndDate(e.target.value);
+            setPage(0);
+          }}
+          slotProps={{ inputLabel: { shrink: true } }}
+          sx={{ minWidth: 160 }}
+        />
 
-          {(selectedType || startDate || endDate) && (
-            <Button
-              variant="text"
-              size="small"
-              onClick={() => {
-                setSelectedType('');
-                setStartDate('');
-                setEndDate('');
-                setPage(0);
-              }}
-            >
-              Limpiar Filtros
-            </Button>
-          )}
-        </Box>
-      </Card>
+        <SortByDateButton
+          value={sortOrder}
+          onChange={(next) => {
+            setSortOrder(next);
+            setPage(0);
+          }}
+        />
+
+      </FilterBar>
 
       {/* Tabla de Movimientos */}
       <TableContainer component={Paper} sx={{ borderRadius: 2, boxShadow: 1 }}>

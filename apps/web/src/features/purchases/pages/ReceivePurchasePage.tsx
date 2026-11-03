@@ -277,7 +277,7 @@ export const ReceivePurchasePage: React.FC = () => {
   }
 
   return (
-    <Box sx={{ p: { xs: 2, md: 4 }, maxWidth: 1400, mx: 'auto' }}>
+    <Box sx={{ py: { xs: 1, md: 2 }, maxWidth: 1400, mx: 'auto' }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
           <Typography
@@ -312,7 +312,7 @@ export const ReceivePurchasePage: React.FC = () => {
           <Box
             sx={{
               display: 'grid',
-              gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' },
+              gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)' },
               gap: 2.5,
             }}
           >
@@ -611,7 +611,7 @@ export const ReceivePurchasePage: React.FC = () => {
                     <Box
                       sx={{
                         display: 'grid',
-                        gridTemplateColumns: { xs: '1fr', md: '1.2fr 1fr' },
+                        gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: '1.2fr minmax(0, 1fr)' },
                         gap: 2.5,
                         mb: 2,
                       }}
@@ -679,9 +679,9 @@ export const ReceivePurchasePage: React.FC = () => {
                       sx={{
                         display: 'grid',
                         gridTemplateColumns: {
-                          xs: '1fr',
-                          sm: '1fr 1fr',
-                          md: '1.2fr 1.2fr 1fr 1.2fr',
+                          xs: 'minmax(0, 1fr)',
+                          sm: 'minmax(0, 1fr) minmax(0, 1fr)',
+                          md: '1.2fr 1.2fr minmax(0, 1fr) 1.2fr',
                         },
                         gap: 2.5,
                       }}

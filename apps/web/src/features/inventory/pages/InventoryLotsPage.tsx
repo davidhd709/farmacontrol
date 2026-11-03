@@ -31,6 +31,7 @@ import { fetchProducts } from '../../catalog/api/products.api';
 import { CreateLotDialog } from '../components/CreateLotDialog';
 import { AdjustInventoryDialog } from '../components/AdjustInventoryDialog';
 import { expirationDateLabel, lotNumberLabel } from '../../catalog/utils/inventory-control';
+import { FilterBar } from '../../../components/layout/FilterBar';
 
 export const InventoryLotsPage = () => {
   const [lots, setLots] = useState<InventoryLotDto[]>([]);
@@ -152,7 +153,7 @@ export const InventoryLotsPage = () => {
   };
 
   return (
-    <Box sx={{ p: { xs: 2, md: 3 }, maxWidth: 1400, margin: '0 auto' }}>
+    <Box sx={{ py: { xs: 1, md: 2 }, maxWidth: 1400, margin: '0 auto' }}>
       {/* Encabezado y Acciones */}
       <Box
         sx={{
@@ -238,74 +239,74 @@ export const InventoryLotsPage = () => {
       </Box>
 
       {/* Filtros */}
-      <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
-          <TextField
-            select
-            label="Filtrar por Producto"
-            value={selectedProductId}
-            onChange={(e) => {
-              setSelectedProductId(e.target.value);
-              setPage(0);
-            }}
-            sx={{ minWidth: 240 }}
-            size="small"
-          >
-            <MenuItem value="">Todos los productos</MenuItem>
-            {products.map((p) => (
-              <MenuItem key={p.id} value={p.id}>
-                {p.code} — {p.name}
-              </MenuItem>
-            ))}
-          </TextField>
+      <FilterBar
+        sx={{ mb: 3 }}
+      >
+        <TextField
+          select
+          label="Filtrar por Producto"
+          value={selectedProductId}
+          onChange={(e) => {
+            setSelectedProductId(e.target.value);
+            setPage(0);
+          }}
+          sx={{ minWidth: 240 }}
+          size="small"
+        >
+          <MenuItem value="">Todos los productos</MenuItem>
+          {products.map((p) => (
+            <MenuItem key={p.id} value={p.id}>
+              {p.code} — {p.name}
+            </MenuItem>
+          ))}
+        </TextField>
 
-          <TextField
-            select
-            label="Ubicación"
-            value={selectedLocationId}
-            onChange={(e) => {
-              setSelectedLocationId(e.target.value);
-              setPage(0);
-            }}
-            sx={{ minWidth: 180 }}
-            size="small"
-          >
-            <MenuItem value="">Todas las ubicaciones</MenuItem>
-            {locations.map((loc) => (
-              <MenuItem key={loc.id} value={loc.id}>
-                {loc.name}
-              </MenuItem>
-            ))}
-          </TextField>
+        <TextField
+          select
+          label="Ubicación"
+          value={selectedLocationId}
+          onChange={(e) => {
+            setSelectedLocationId(e.target.value);
+            setPage(0);
+          }}
+          sx={{ minWidth: 180 }}
+          size="small"
+        >
+          <MenuItem value="">Todas las ubicaciones</MenuItem>
+          {locations.map((loc) => (
+            <MenuItem key={loc.id} value={loc.id}>
+              {loc.name}
+            </MenuItem>
+          ))}
+        </TextField>
 
-          <TextField
-            label="Número de Lote"
-            value={lotNumberSearch}
-            onChange={(e) => {
-              setLotNumberSearch(e.target.value);
-              setPage(0);
-            }}
-            placeholder="Buscar lote..."
-            size="small"
-            sx={{ minWidth: 180 }}
-          />
+        <TextField
+          label="Número de Lote"
+          value={lotNumberSearch}
+          onChange={(e) => {
+            setLotNumberSearch(e.target.value);
+            setPage(0);
+          }}
+          placeholder="Buscar lote..."
+          size="small"
+          sx={{ minWidth: 180 }}
+        />
 
-          <TextField
-            select
-            label="Disponibilidad"
-            value={hasStockOnly ? 'stock' : 'all'}
-            onChange={(e) => {
-              setHasStockOnly(e.target.value === 'stock');
-              setPage(0);
-            }}
-            size="small"
-            sx={{ minWidth: 160 }}
-          >
-            <MenuItem value="all">Todos los saldos</MenuItem>
-            <MenuItem value="stock">Con existencias (&gt;0)</MenuItem>
-          </TextField>
-        </Box>
-      </Paper>
+        <TextField
+          select
+          label="Disponibilidad"
+          value={hasStockOnly ? 'stock' : 'all'}
+          onChange={(e) => {
+            setHasStockOnly(e.target.value === 'stock');
+            setPage(0);
+          }}
+          size="small"
+          sx={{ minWidth: 160 }}
+        >
+          <MenuItem value="all">Todos los saldos</MenuItem>
+          <MenuItem value="stock">Con existencias (&gt;0)</MenuItem>
+        </TextField>
+      </FilterBar>
 
       {errorMessage && (
         <Alert severity="error" sx={{ mb: 3 }}>

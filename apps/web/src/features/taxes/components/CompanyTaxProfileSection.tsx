@@ -15,6 +15,7 @@ import {
   MenuItem,
   Stack,
   Table,
+  TableContainer,
   TableBody,
   TableCell,
   TableHead,
@@ -228,32 +229,34 @@ export function CompanyTaxProfileSection({ canManage }: { canManage: boolean }) 
         )}
 
         {data && data.history.length > 0 && (
-          <Table size="small" aria-label="Historial del perfil tributario" sx={{ mt: 3 }}>
-            <TableHead>
-              <TableRow>
-                <TableCell>Vigente desde</TableCell>
-                <TableCell>Responsabilidades</TableCell>
-                <TableCell>ICA</TableCell>
-                <TableCell>Motivo</TableCell>
-                <TableCell>Registró</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {data.history.map((p) => (
-                <TableRow key={p.id}>
-                  <TableCell>{p.effectiveFrom}</TableCell>
-                  <TableCell>{p.responsibilities.join(', ')}</TableCell>
-                  <TableCell>
-                    {p.icaActivity
-                      ? `${ICA_ACTIVITY_LABELS[p.icaActivity]} ${Number(p.icaRatePerMil)} ‰`
-                      : '—'}
-                  </TableCell>
-                  <TableCell>{p.reason}</TableCell>
-                  <TableCell>{p.createdByUsername ?? '—'}</TableCell>
+          <TableContainer>
+            <Table size="small" aria-label="Historial del perfil tributario" sx={{ mt: 3 }}>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Vigente desde</TableCell>
+                  <TableCell>Responsabilidades</TableCell>
+                  <TableCell>ICA</TableCell>
+                  <TableCell>Motivo</TableCell>
+                  <TableCell>Registró</TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHead>
+              <TableBody>
+                {data.history.map((p) => (
+                  <TableRow key={p.id}>
+                    <TableCell>{p.effectiveFrom}</TableCell>
+                    <TableCell>{p.responsibilities.join(', ')}</TableCell>
+                    <TableCell>
+                      {p.icaActivity
+                        ? `${ICA_ACTIVITY_LABELS[p.icaActivity]} ${Number(p.icaRatePerMil)} ‰`
+                        : '—'}
+                    </TableCell>
+                    <TableCell>{p.reason}</TableCell>
+                    <TableCell>{p.createdByUsername ?? '—'}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
         )}
       </CardContent>
     </Card>

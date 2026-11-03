@@ -11,6 +11,7 @@ import {
   Grid,
   MenuItem,
   Table,
+  TableContainer,
   TableBody,
   TableCell,
   TableHead,
@@ -157,46 +158,48 @@ export function ProductTaxClassificationDialog({
         <Typography variant="subtitle2" gutterBottom>
           Clasificaciones registradas
         </Typography>
-        <Table size="small" aria-label="Clasificaciones tributarias del producto">
-          <TableHead>
-            <TableRow>
-              <TableCell>Operación</TableCell>
-              <TableCell>Impuesto</TableCell>
-              <TableCell>Regla</TableCell>
-              <TableCell>Tarifa</TableCell>
-              <TableCell>Vigencia</TableCell>
-              <TableCell>Estado</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {(profiles.data ?? []).map((p) => (
-              <TableRow key={p.id}>
-                <TableCell>{OPERATION_LABELS[p.operation]}</TableCell>
-                <TableCell>{p.taxType}</TableCell>
-                <TableCell>{p.taxRuleCode ?? 'Manual (anterior al catálogo)'}</TableCell>
-                <TableCell>{p.ratePct !== null ? `${Number(p.ratePct)} %` : '—'}</TableCell>
-                <TableCell>
-                  {p.effectiveFrom}
-                  {p.effectiveTo ? ` a ${p.effectiveTo}` : ' en adelante'}
-                </TableCell>
-                <TableCell>
-                  <Chip
-                    size="small"
-                    variant="outlined"
-                    label={p.status === 'ACTIVE' ? 'Activa' : 'Borrador'}
-                  />
-                </TableCell>
-              </TableRow>
-            ))}
-            {profiles.data?.length === 0 && (
+        <TableContainer>
+          <Table size="small" aria-label="Clasificaciones tributarias del producto">
+            <TableHead>
               <TableRow>
-                <TableCell colSpan={6}>
-                  Sin clasificación: con perfil tributario no podrá venderse.
-                </TableCell>
+                <TableCell>Operación</TableCell>
+                <TableCell>Impuesto</TableCell>
+                <TableCell>Regla</TableCell>
+                <TableCell>Tarifa</TableCell>
+                <TableCell>Vigencia</TableCell>
+                <TableCell>Estado</TableCell>
               </TableRow>
-            )}
-          </TableBody>
-        </Table>
+            </TableHead>
+            <TableBody>
+              {(profiles.data ?? []).map((p) => (
+                <TableRow key={p.id}>
+                  <TableCell>{OPERATION_LABELS[p.operation]}</TableCell>
+                  <TableCell>{p.taxType}</TableCell>
+                  <TableCell>{p.taxRuleCode ?? 'Manual (anterior al catálogo)'}</TableCell>
+                  <TableCell>{p.ratePct !== null ? `${Number(p.ratePct)} %` : '—'}</TableCell>
+                  <TableCell>
+                    {p.effectiveFrom}
+                    {p.effectiveTo ? ` a ${p.effectiveTo}` : ' en adelante'}
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      label={p.status === 'ACTIVE' ? 'Activa' : 'Borrador'}
+                    />
+                  </TableCell>
+                </TableRow>
+              ))}
+              {profiles.data?.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={6}>
+                    Sin clasificación: con perfil tributario no podrá venderse.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} color="inherit">

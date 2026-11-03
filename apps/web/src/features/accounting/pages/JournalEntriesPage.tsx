@@ -39,6 +39,7 @@ import {
 import { ManualNoteDialog } from '../components/ManualNoteDialog';
 import { QuickDateRange, localIsoDate } from '../../../components/QuickDateRange';
 import { formatDate } from '../../../utils/date-format';
+import { FilterBar } from '../../../components/layout/FilterBar';
 
 const sourceTypeLabels: Record<
   string,
@@ -163,7 +164,7 @@ export const JournalEntriesPage = () => {
 
   if (!hasPermission(SYSTEM_PERMISSIONS.ACCOUNTING_READ)) {
     return (
-      <Container component="main" sx={{ py: 4 }}>
+      <Container component="main" sx={{ py: { xs: 1, md: 2 } }}>
         <Alert severity="warning">No tienes permiso para consultar el Libro Diario.</Alert>
       </Container>
     );
@@ -196,7 +197,7 @@ export const JournalEntriesPage = () => {
     !entry.reversedByEntryId;
 
   return (
-    <Container component="main" maxWidth="xl" sx={{ py: 4 }}>
+    <Container component="main" maxWidth="xl" sx={{ py: { xs: 1, md: 2 } }}>
       <Stack spacing={3}>
         {/* Cabecera */}
         <Box
@@ -240,71 +241,28 @@ export const JournalEntriesPage = () => {
         />
 
         {/* Barra de Filtros */}
-        <Paper sx={{ p: 2 }}>
-          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ alignItems: 'center' }}>
-            <TextField
-              label="Desde"
-              type="date"
-              size="small"
-              value={fromDate}
-              onChange={(e) => setFromDate(e.target.value)}
-              slotProps={{ inputLabel: { shrink: true } }}
-              sx={{ minWidth: 150 }}
-            />
-            <TextField
-              label="Hasta"
-              type="date"
-              size="small"
-              value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
-              slotProps={{ inputLabel: { shrink: true } }}
-              sx={{ minWidth: 150 }}
-            />
-            <FormControl size="small" sx={{ minWidth: 170 }}>
-              <InputLabel>Origen</InputLabel>
-              <Select
-                value={sourceType}
-                label="Origen"
-                onChange={(e) => setSourceType(e.target.value)}
+        <FilterBar
+          onSubmit={() => refetch()}
+          actions={
+            <>
+              <Button
+                variant="outlined"
+                onClick={() => {
+                  setFromDate('');
+                  setToDate('');
+                  setSourceType('');
+                  setSearch('');
+                  setPage(0);
+                }}
               >
-                <MenuItem value="">Todos los orígenes</MenuItem>
-                <MenuItem value="SALE">Ventas (POS)</MenuItem>
-                <MenuItem value="PURCHASE">Compras</MenuItem>
-                <MenuItem value="RECEIVABLE_PAYMENT">Cobro de Cartera</MenuItem>
-                <MenuItem value="PAYABLE_PAYMENT">Pago Proveedores</MenuItem>
-                <MenuItem value="CREDIT_NOTE">Devoluciones</MenuItem>
-                <MenuItem value="EXPENSE">Causaciones</MenuItem>
-                <MenuItem value="EXPENSE_PAYMENT">Pagos de causaciones</MenuItem>
-                <MenuItem value="CASH_MOVEMENT">Recibos y egresos de caja</MenuItem>
-                <MenuItem value="BANK_MOVEMENT">Recibos y egresos bancarios</MenuItem>
-                <MenuItem value="REVERSAL">Anulaciones</MenuItem>
-                <MenuItem value="MANUAL_NOTE">Notas contables</MenuItem>
-              </Select>
-            </FormControl>
-            <TextField
-              label="Buscar descripción o documento"
-              size="small"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              sx={{ flexGrow: 1 }}
-            />
-            <Button
-              variant="outlined"
-              onClick={() => {
-                setFromDate('');
-                setToDate('');
-                setSourceType('');
-                setSearch('');
-                setPage(0);
-              }}
-            >
-              Limpiar
-            </Button>
-            <Button variant="contained" onClick={() => refetch()}>
-              Filtrar
-            </Button>
-          </Stack>
-          <Box sx={{ mt: 1.5 }}>
+                Limpiar
+              </Button>
+              <Button type="submit" variant="contained">
+                Filtrar
+              </Button>
+            </>
+          }
+          footer={
             <QuickDateRange
               onSelect={({ from, to }) => {
                 setFromDate(from);
@@ -312,8 +270,53 @@ export const JournalEntriesPage = () => {
                 setPage(0);
               }}
             />
-          </Box>
-        </Paper>
+          }
+        >
+          <TextField
+            label="Desde"
+            type="date"
+            size="small"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            slotProps={{ inputLabel: { shrink: true } }}
+          />
+          <TextField
+            label="Hasta"
+            type="date"
+            size="small"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+            slotProps={{ inputLabel: { shrink: true } }}
+          />
+        <FormControl size="small" fullWidth>
+          <InputLabel>Origen</InputLabel>
+          <Select
+            value={sourceType}
+            label="Origen"
+            onChange={(e) => setSourceType(e.target.value)}
+          >
+            <MenuItem value="">Todos los orígenes</MenuItem>
+            <MenuItem value="SALE">Ventas (POS)</MenuItem>
+            <MenuItem value="PURCHASE">Compras</MenuItem>
+            <MenuItem value="RECEIVABLE_PAYMENT">Cobro de Cartera</MenuItem>
+            <MenuItem value="PAYABLE_PAYMENT">Pago Proveedores</MenuItem>
+            <MenuItem value="CREDIT_NOTE">Devoluciones</MenuItem>
+            <MenuItem value="EXPENSE">Causaciones</MenuItem>
+            <MenuItem value="EXPENSE_PAYMENT">Pagos de causaciones</MenuItem>
+            <MenuItem value="CASH_MOVEMENT">Recibos y egresos de caja</MenuItem>
+            <MenuItem value="BANK_MOVEMENT">Recibos y egresos bancarios</MenuItem>
+            <MenuItem value="REVERSAL">Anulaciones</MenuItem>
+            <MenuItem value="MANUAL_NOTE">Notas contables</MenuItem>
+          </Select>
+        </FormControl>
+          <TextField
+            label="Buscar descripción o documento"
+            size="small"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            sx={{ gridColumn: { sm: 'span 2' } }}
+          />
+        </FilterBar>
 
         {/* Tabla de Asientos */}
         <Paper sx={{ width: '100%', overflow: 'hidden' }}>
@@ -364,7 +367,7 @@ export const JournalEntriesPage = () => {
                             <TableCell sx={{ whiteSpace: 'nowrap' }}>
                               <SourceDocument entry={entry} />
                             </TableCell>
-                            <TableCell sx={{ maxWidth: 350 }}>
+                            <TableCell sx={{ maxWidth: 260 }}>
                               <Typography variant="body2" noWrap title={entry.description}>
                                 {entry.description}
                               </Typography>

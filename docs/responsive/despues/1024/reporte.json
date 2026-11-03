@@ -1,0 +1,207 @@
+{
+  "inicio": {
+    "pageOverflowX": 0,
+    "buttons": [],
+    "clipped": []
+  },
+  "pos": {
+    "pageOverflowX": 0,
+    "buttons": [],
+    "clipped": []
+  },
+  "ventas": {
+    "pageOverflowX": 0,
+    "buttons": [],
+    "clipped": []
+  },
+  "productos": {
+    "pageOverflowX": 0,
+    "buttons": [],
+    "clipped": []
+  },
+  "categorias": {
+    "pageOverflowX": 0,
+    "buttons": [],
+    "clipped": []
+  },
+  "unidades": {
+    "pageOverflowX": 0,
+    "buttons": [],
+    "clipped": []
+  },
+  "lotes": {
+    "pageOverflowX": 0,
+    "buttons": [],
+    "clipped": []
+  },
+  "movimientos-inventario": {
+    "pageOverflowX": 0,
+    "buttons": [],
+    "clipped": []
+  },
+  "compras": {
+    "pageOverflowX": 0,
+    "buttons": [],
+    "clipped": []
+  },
+  "recibir-compra": {
+    "pageOverflowX": 0,
+    "buttons": [],
+    "clipped": []
+  },
+  "clientes": {
+    "pageOverflowX": 0,
+    "buttons": [],
+    "clipped": []
+  },
+  "proveedores": {
+    "pageOverflowX": 0,
+    "buttons": [],
+    "clipped": []
+  },
+  "terceros": {
+    "pageOverflowX": 0,
+    "buttons": [],
+    "clipped": []
+  },
+  "cuentas-por-cobrar": {
+    "pageOverflowX": 0,
+    "buttons": [],
+    "clipped": []
+  },
+  "cuentas-por-pagar": {
+    "pageOverflowX": 0,
+    "buttons": [],
+    "clipped": []
+  },
+  "caja": {
+    "pageOverflowX": 0,
+    "buttons": [],
+    "clipped": []
+  },
+  "bancos": {
+    "pageOverflowX": 0,
+    "buttons": [],
+    "clipped": []
+  },
+  "recibos-de-caja": {
+    "pageOverflowX": 0,
+    "buttons": [],
+    "clipped": []
+  },
+  "comprobantes-de-egreso": {
+    "pageOverflowX": 0,
+    "buttons": [],
+    "clipped": []
+  },
+  "gastos": {
+    "pageOverflowX": 0,
+    "buttons": [],
+    "clipped": []
+  },
+  "alertas": {
+    "pageOverflowX": 0,
+    "buttons": [],
+    "clipped": []
+  },
+  "reportes": {
+    "pageOverflowX": 0,
+    "buttons": [],
+    "clipped": []
+  },
+  "reportes-tributarios": {
+    "pageOverflowX": 0,
+    "buttons": [],
+    "clipped": []
+  },
+  "catalogo-tributario": {
+    "pageOverflowX": 0,
+    "buttons": [],
+    "clipped": []
+  },
+  "empresa": {
+    "pageOverflowX": 0,
+    "buttons": [],
+    "clipped": []
+  },
+  "usuarios": {
+    "pageOverflowX": 0,
+    "buttons": [],
+    "clipped": []
+  },
+  "auditoria": {
+    "pageOverflowX": 0,
+    "buttons": [],
+    "clipped": []
+  },
+  "respaldos": {
+    "pageOverflowX": 0,
+    "buttons": [],
+    "clipped": []
+  },
+  "plan-de-cuentas": {
+    "pageOverflowX": 0,
+    "buttons": [],
+    "clipped": []
+  },
+  "mapeo-contable": {
+    "pageOverflowX": 0,
+    "buttons": [],
+    "clipped": []
+  },
+  "importar-puc": {
+    "pageOverflowX": 0,
+    "buttons": [],
+    "clipped": []
+  },
+  "asistente-contable": {
+    "pageOverflowX": 0,
+    "buttons": [],
+    "clipped": []
+  },
+  "libro-diario": {
+    "pageOverflowX": 0,
+    "buttons": [],
+    "clipped": []
+  },
+  "libros-oficiales": {
+    "pageOverflowX": 0,
+    "buttons": [],
+    "clipped": []
+  },
+  "balance-de-prueba": {
+    "pageOverflowX": 0,
+    "buttons": [],
+    "clipped": []
+  },
+  "balance-general": {
+    "pageOverflowX": 0,
+    "buttons": [],
+    "clipped": []
+  },
+  "estado-de-resultados": {
+    "pageOverflowX": 0,
+    "buttons": [],
+    "clipped": []
+  },
+  "consulta-contable": {
+    "pageOverflowX": 0,
+    "buttons": [],
+    "clipped": []
+  },
+  "conciliacion": {
+    "pageOverflowX": 0,
+    "buttons": [],
+    "clipped": []
+  },
+  "periodos-fiscales": {
+    "pageOverflowX": 0,
+    "buttons": [],
+    "clipped": []
+  },
+  "auditoria-contable": {
+    "pageOverflowX": 0,
+    "buttons": [],
+    "clipped": []
+  }
+}
