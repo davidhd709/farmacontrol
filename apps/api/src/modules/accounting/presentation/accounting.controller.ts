@@ -41,7 +41,10 @@ import {
 } from '../domain/accounting-rules';
 import { SessionAuthGuard } from '../../identity/presentation/guards/session-auth.guard';
 import { PermissionsGuard } from '../../identity/presentation/guards/permissions.guard';
-import { RequirePermissions } from '../../identity/presentation/decorators/require-permissions.decorator';
+import {
+  RequireAnyPermissions,
+  RequirePermissions,
+} from '../../identity/presentation/decorators/require-permissions.decorator';
 import { CurrentUser } from '../../identity/presentation/decorators/current-user.decorator';
 import type { AuthenticatedUserContext } from '../../identity/presentation/guards/session-auth.guard';
 
@@ -73,6 +76,16 @@ export class AccountsController {
   @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_READ)
   list(): Promise<AccountDto[]> {
     return this.service.listAccounts();
+  }
+
+  /**
+   * Cuentas imputables y activas para la contrapartida de un recibo manual. Tesorería la usa
+   * sin el permiso contable: solo códigos y nombres del PUC, sin saldos ni movimientos.
+   */
+  @Get('counterparts')
+  @RequireAnyPermissions(SYSTEM_PERMISSIONS.ACCOUNTING_READ, SYSTEM_PERMISSIONS.CASH_RECEIPTS_MANUAL)
+  async counterparts(): Promise<AccountDto[]> {
+    return (await this.service.listAccounts()).filter((a) => a.isActive && a.allowsMovement);
   }
 
   @Post()

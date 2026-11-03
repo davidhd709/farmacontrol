@@ -123,12 +123,12 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
   const [annulling, setAnnulling] = useState(false);
   const queryClient = useQueryClient();
   const { hasPermission, hasAnyPermission } = usePermissions();
-  // El recibo se registra con abono a cartera o manual (permiso contable); el egreso con su permiso
+  // El recibo se registra con abono a cartera o manual; el egreso con su permiso
   const canCreate =
     type === 'RECIBO_CAJA'
       ? hasAnyPermission([
           SYSTEM_PERMISSIONS.CASH_RECEIPTS_COLLECT,
-          SYSTEM_PERMISSIONS.ACCOUNTING_READ,
+          SYSTEM_PERMISSIONS.CASH_RECEIPTS_MANUAL,
         ])
       : hasPermission(SYSTEM_PERMISSIONS.DISBURSEMENTS_CREATE);
 

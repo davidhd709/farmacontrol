@@ -93,6 +93,7 @@ export const BASE_PERMISSIONS: PermissionDefinition[] = [
   { name: SYSTEM_PERMISSIONS.TREASURY_MANAGE, description: 'Gestionar cuentas bancarias y registrar movimientos de tesorería' },
   { name: SYSTEM_PERMISSIONS.CASH_RECEIPTS_COLLECT, description: 'Registrar recibos de caja de abono a cartera (el asiento automático no exige permiso contable)' },
   { name: SYSTEM_PERMISSIONS.DISBURSEMENTS_CREATE, description: 'Registrar comprobantes de egreso: pago a proveedores y causaciones (el manual exige además el permiso contable)' },
+  { name: SYSTEM_PERMISSIONS.CASH_RECEIPTS_MANUAL, description: 'Registrar recibos de caja manuales (otros ingresos) contra una cuenta de contrapartida' },
   { name: SYSTEM_PERMISSIONS.CASH_RECEIPTS_ANNUL, description: 'Anular recibos de caja (el manual exige además el permiso contable)' },
   { name: SYSTEM_PERMISSIONS.DISBURSEMENTS_ANNUL, description: 'Anular comprobantes de egreso (el manual exige además el permiso contable)' },
 
@@ -106,10 +107,12 @@ export const BASE_PERMISSIONS: PermissionDefinition[] = [
  * contable (correcciones del cliente, 2026-11-02); cartera conserva la creación de abonos.
  */
 const ANNUL_PERMISSIONS = [SYSTEM_PERMISSIONS.CASH_RECEIPTS_ANNUL, SYSTEM_PERMISSIONS.DISBURSEMENTS_ANNUL];
+// El recibo manual era del permiso contable: quien lo tenga conserva poder registrarlo
+const ACCOUNTING_DOCUMENTS = [...ANNUL_PERMISSIONS, SYSTEM_PERMISSIONS.CASH_RECEIPTS_MANUAL];
 
 const withAccountingAnnulments = (role: RoleDefinition): RoleDefinition =>
   role.permissions.includes(SYSTEM_PERMISSIONS.ACCOUNTING_READ)
-    ? { ...role, permissions: [...new Set([...role.permissions, ...ANNUL_PERMISSIONS])] }
+    ? { ...role, permissions: [...new Set([...role.permissions, ...ACCOUNTING_DOCUMENTS])] }
     : role;
 
 export const BASE_ROLES: RoleDefinition[] = ([
@@ -235,6 +238,21 @@ export const BASE_ROLES: RoleDefinition[] = ([
       SYSTEM_PERMISSIONS.CASH_RECEIPTS_COLLECT,
       SYSTEM_PERMISSIONS.TREASURY_ACCOUNTS_SELECT,
       SYSTEM_PERMISSIONS.SALES_READ,
+    ],
+  },
+  {
+    name: SYSTEM_ROLES.TESORERIA,
+    description:
+      'Tesorería: paga proveedores con comprobantes de egreso y registra recibos de caja manuales; consulta caja, bancos y cartera. No causa, no compra, no anula ni accede a la contabilidad general.',
+    permissions: [
+      SYSTEM_PERMISSIONS.DISBURSEMENTS_CREATE,
+      SYSTEM_PERMISSIONS.CASH_RECEIPTS_MANUAL,
+      SYSTEM_PERMISSIONS.CASH_READ,
+      SYSTEM_PERMISSIONS.TREASURY_READ,
+      SYSTEM_PERMISSIONS.TREASURY_ACCOUNTS_SELECT,
+      // Estado de cuenta del proveedor, facturas de compra y causaciones a pagar (solo lectura)
+      SYSTEM_PERMISSIONS.PAYABLES_READ,
+      SYSTEM_PERMISSIONS.RECEIVABLES_READ,
     ],
   },
 ] satisfies RoleDefinition[]).map(withAccountingAnnulments);

@@ -314,9 +314,16 @@ describe('Recibos de caja y comprobantes de egreso', () => {
       expect(screen.queryByRole('button', { name: 'Nuevo comprobante de egreso' })).toBeNull();
     });
 
-    it('con permiso contable sin recibo_caja.crear_abono el recibo solo es manual', async () => {
+    it('accounting:read solo consulta: registrar un recibo manual exige recibo_caja.crear_manual', async () => {
       vi.spyOn(treasuryApi, 'getTreasuryDocuments').mockResolvedValue(empty);
       renderPage(<CashReceiptsPage />, [SYSTEM_PERMISSIONS.ACCOUNTING_READ]);
+      expect(await screen.findByText(/Recibos de Caja/i)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Nuevo recibo de caja' })).toBeNull();
+    });
+
+    it('tesorería (recibo_caja.crear_manual, sin contabilidad) registra solo recibos manuales', async () => {
+      vi.spyOn(treasuryApi, 'getTreasuryDocuments').mockResolvedValue(empty);
+      renderPage(<CashReceiptsPage />, [SYSTEM_PERMISSIONS.CASH_RECEIPTS_MANUAL]);
       fireEvent.click(await screen.findByRole('button', { name: 'Nuevo recibo de caja' }));
       const dialog = await screen.findByRole('dialog', { name: 'Nuevo recibo de caja' });
       expect(within(dialog).queryByRole('button', { name: 'Abono a cartera' })).toBeNull();

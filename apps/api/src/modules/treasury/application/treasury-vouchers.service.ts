@@ -95,7 +95,7 @@ export class TreasuryVouchersService {
     user: VoucherUser,
     idempotencyKey?: string,
   ): Promise<TreasuryDocumentDto> {
-    const base = this.validateBase(payload, user);
+    const base = this.validateBase(payload, user, 'RECIBO_CAJA');
     if (payload.kind === 'CARTERA') {
       // Lo autoriza recibo_caja.crear_abono en la ruta; el asiento no exige permiso contable
       const customerId = this.uuid(payload.customerId, 'Cliente');
@@ -144,7 +144,7 @@ export class TreasuryVouchersService {
     user: VoucherUser,
     idempotencyKey?: string,
   ): Promise<TreasuryDocumentDto> {
-    const base = this.validateBase(payload, user);
+    const base = this.validateBase(payload, user, 'COMPROBANTE_EGRESO');
     if (payload.kind === 'PROVEEDOR') {
       const supplierId = this.uuid(payload.supplierId, 'Proveedor');
       const applications = this.applications(payload.applications, (a) => {
@@ -391,6 +391,7 @@ export class TreasuryVouchersService {
   private validateBase(
     payload: CreateCashReceiptPayload | CreateDisbursementPayload,
     user: VoucherUser,
+    documentType: 'RECIBO_CAJA' | 'COMPROBANTE_EGRESO',
   ) {
     if (!payload || typeof payload !== 'object') {
       throw new BadRequestException('El cuerpo de la solicitud debe ser un objeto JSON válido.');
@@ -399,9 +400,17 @@ export class TreasuryVouchersService {
     if (method !== 'EFECTIVO' && method !== 'TRANSFERENCIA') {
       throw new BadRequestException('El medio de pago debe ser EFECTIVO o TRANSFERENCIA.');
     }
-    // En un documento manual el usuario elige la contrapartida (permiso contable) y mueve caja
+    // Recibo manual: lo autoriza recibo_caja.crear_manual (tesorería, sin contabilidad), que
+    // cubre también el ingreso a caja o banco, como el abono a cartera (2026-11-03).
+    // Egreso manual: el usuario elige la contrapartida (permiso contable) y saca dinero de caja
     // o bancos directamente (permiso del auxiliar según el medio)
-    if (payload.kind === 'MANUAL') {
+    if (payload.kind === 'MANUAL' && documentType === 'RECIBO_CAJA') {
+      this.requirePermission(
+        user,
+        SYSTEM_PERMISSIONS.CASH_RECEIPTS_MANUAL,
+        'registrar recibos de caja manuales',
+      );
+    } else if (payload.kind === 'MANUAL') {
       this.requirePermission(
         user,
         SYSTEM_PERMISSIONS.ACCOUNTING_READ,

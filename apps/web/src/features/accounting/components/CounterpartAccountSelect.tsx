@@ -21,6 +21,7 @@ export function CounterpartAccountSelect({
       onChange={(account) => onChange(account?.id ?? '')}
       label="Cuenta de contrapartida"
       postableOnly
+      counterpartsOnly
       required
       disabled={disabled}
       helperText={helperText}

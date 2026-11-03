@@ -154,13 +154,14 @@ export const menuGroups: MenuGroupConfig[] = [
         title: 'Recibos de Caja',
         path: '/treasury/receipts',
         icon: <ReceiptLongIcon fontSize="small" />,
-        permission: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
+        // Tesorería los consulta y registra sin el permiso contable (2026-11-03)
+        permission: [SYSTEM_PERMISSIONS.ACCOUNTING_READ, SYSTEM_PERMISSIONS.CASH_RECEIPTS_MANUAL],
       },
       {
         title: 'Comprobantes de Egreso',
         path: '/treasury/disbursements',
         icon: <PaymentsIcon fontSize="small" />,
-        permission: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
+        permission: [SYSTEM_PERMISSIONS.ACCOUNTING_READ, SYSTEM_PERMISSIONS.DISBURSEMENTS_CREATE],
       },
       {
         title: 'Cuentas por Cobrar',

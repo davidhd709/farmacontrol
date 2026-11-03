@@ -55,7 +55,7 @@ export class TreasuryVouchersController {
   /** Recibo de caja manual (otros ingresos) contra la contrapartida elegida. */
   @Post('cash-receipts')
   @HttpCode(HttpStatus.CREATED)
-  @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_READ)
+  @RequirePermissions(SYSTEM_PERMISSIONS.CASH_RECEIPTS_MANUAL)
   createCashReceipt(
     @Body() payload: CreateCashReceiptPayload,
     @Headers('idempotency-key') idempotencyKey: string | undefined,

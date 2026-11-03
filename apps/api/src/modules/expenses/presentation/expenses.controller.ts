@@ -33,7 +33,10 @@ import {
   AuthenticatedUserContext,
 } from '../../identity/presentation/guards/session-auth.guard';
 import { PermissionsGuard } from '../../identity/presentation/guards/permissions.guard';
-import { RequirePermissions } from '../../identity/presentation/decorators/require-permissions.decorator';
+import {
+  RequireAnyPermissions,
+  RequirePermissions,
+} from '../../identity/presentation/decorators/require-permissions.decorator';
 import { CurrentUser } from '../../identity/presentation/decorators/current-user.decorator';
 import { retiredRoute, DISBURSEMENT_REPLACEMENT } from '../../../common/http/retired-route';
 
@@ -99,8 +102,12 @@ export class ExpensesController {
     return this.service.assignSupplier(id, payload.supplierId, user.id);
   }
 
+  /**
+   * Detalle de una causación. También lo abre Cuentas por pagar (estado de cuenta del
+   * proveedor): quien consulta cuentas por pagar ve la causación que debe pagar, solo lectura.
+   */
   @Get(':id/movements')
-  @RequirePermissions(SYSTEM_PERMISSIONS.EXPENSES_READ)
+  @RequireAnyPermissions(SYSTEM_PERMISSIONS.EXPENSES_READ, SYSTEM_PERMISSIONS.PAYABLES_READ)
   async getMovements(@Param('id', ParseUUIDPipe) id: string): Promise<ExpenseMovementsDto> {
     return this.service.getMovements(id);
   }

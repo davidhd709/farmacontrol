@@ -264,7 +264,7 @@ Pantallas ajustadas:
 
 Resultado del reporte: 0 pantallas con scroll horizontal de página, 0 botones cortados o sin relleno y 0 elementos recortados en los cuatro anchos.
 
-## 3.11 Permiso propio para anular recibos y egresos; permisos API vs. web (2026-11-02)
+## 3.11 Permiso propio para anular recibos y egresos; permisos API vs. web (2026-11-02, actualizada 2026-11-03)
 
 Anular ya no usa el permiso de creación. Dos permisos nuevos: `recibo_caja.anular` y `comprobante_egreso.anular`. El seed los asigna a todo rol con permiso contable (`accounting:read`); hoy solo lo tiene admin. Cartera conserva `recibo_caja.crear_abono`.
 
@@ -316,6 +316,28 @@ Pruebas: `document-annulments` (integración: cartera crea el abono y recibe 403
 - Pruebas: `third-party-scope` (integración por rol: cajero, cartera, compras, inventario, supervisor y admin; seed que retira permisos), `authorization-matrix`, `permissions.guard` (unidad) y en la web `third-parties-scope`.
 
 Los casos de bajo riesgo (trabajos de alertas, ubicaciones) quedan como están.
+
+**Rol tesorería y comprobantes de egreso (decisión del cliente, 2026-11-03).**
+
+| | Tesorería | Ruta y permiso |
+|---|---|---|
+| Crear comprobante de egreso a proveedor (estado de cuenta, selección de facturas y causaciones) | Sí | `POST /treasury/disbursements` (`kind: PROVEEDOR`), `comprobante_egreso.crear` |
+| Crear recibo de caja manual (efectivo o transferencia) | Sí | `POST /treasury/cash-receipts`, `recibo_caja.crear_manual` (nuevo; antes `accounting:read` + permiso del medio) |
+| Elegir la contrapartida del recibo manual | Sí | `GET /accounts/counterparts` (nuevo): solo cuentas imputables activas, sin saldos; `accounting:read` o `recibo_caja.crear_manual` |
+| Elegir el tercero del documento | Sí, solo lectura | `GET /third-parties`: proveedores (`comprobante_egreso.crear`) y clientes o proveedores (`recibo_caja.crear_manual`); no ve el directorio |
+| Consultar recibos y egresos | Sí | `GET /treasury/documents` y `/:id`: `accounting:read`, o el permiso del tipo de documento |
+| Control de caja, Tesorería y bancos, Cuentas por cobrar, Cuentas por pagar | Consulta | `cash:read`, `treasury:read`, `treasury:accounts:select`, `receivables:read`, `payables:read` |
+| Detalle de facturas de compra y causaciones a pagar | Consulta, desde Cuentas por pagar | `GET /payables/:id/movements`; `GET /expenses/:id/movements` acepta ahora `payables:read` |
+| Egreso manual | No | Sigue exigiendo `accounting:read` + permiso del medio |
+| Abono a cartera | No | `recibo_caja.crear_abono` |
+| Anular egresos, recibos, revertir pagos o abonos | No | `comprobante_egreso.anular` / `recibo_caja.anular`: solo admin y contable |
+| Causar gastos, registrar compras, gestionar cuentas bancarias, terceros | No | `expenses:manage`, `purchases:*`, `treasury:manage`, `*:manage` |
+| Contabilidad general (plan de cuentas, Libro Diario, balances, reportes contables) | No | `accounting:read` |
+
+- **Compras** no crea comprobantes de egreso: no tiene `comprobante_egreso.crear` en la API (403, con prueba) ni ve Comprobantes de egreso en la web. Ya no lo tenía; ahora queda cubierto por pruebas. Conserva registrar compras (la factura entra a Cuentas por pagar). Hoy no tiene permisos de causación de gastos (`expenses:*`), y no se le agregaron.
+- El recibo manual dejó de exigir el permiso del medio (`cash:movements` o `treasury:manage`): `recibo_caja.crear_manual` autoriza el ingreso, como el abono a cartera. Así tesorería no necesita gestionar cuentas bancarias. El seed da `recibo_caja.crear_manual` también a los roles con `accounting:read` (admin).
+- En la web, Recibos de caja y Comprobantes de egreso aparecen con su permiso de documento. Con solo `accounting:read` se consultan, pero no se registra un recibo manual. El menú de tesorería muestra solo: Control de caja, Tesorería y bancos, Recibos de caja, Comprobantes de egreso, Cuentas por cobrar y Cuentas por pagar.
+- Pruebas: `treasury-vouchers` (integración, tesorería puede / no puede; compras no paga), `authorization-matrix` (incluye el rol tesorería), `rbac` y en la web `tesoreria-navigation` y `treasury-documents`.
 
 ## 3.12 Selector de fecha compartido (2026-11-02)
 

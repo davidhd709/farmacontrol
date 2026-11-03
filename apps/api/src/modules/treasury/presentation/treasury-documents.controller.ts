@@ -3,6 +3,7 @@ import { parsePaginationValue } from '../../../common/pagination/pagination';
 import {
   BadRequestException,
   Controller,
+  ForbiddenException,
   Get,
   NotFoundException,
   Param,
@@ -18,9 +19,33 @@ import {
 } from '@farmacia/contracts';
 import { TreasuryDocumentsService } from '../application/treasury-documents.service';
 import { TreasuryNotFoundError, TreasuryValidationError } from '../domain/treasury-rules';
-import { SessionAuthGuard } from '../../identity/presentation/guards/session-auth.guard';
+import {
+  SessionAuthGuard,
+  type AuthenticatedUserContext,
+} from '../../identity/presentation/guards/session-auth.guard';
 import { PermissionsGuard } from '../../identity/presentation/guards/permissions.guard';
-import { RequirePermissions } from '../../identity/presentation/decorators/require-permissions.decorator';
+import { RequireAnyPermissions } from '../../identity/presentation/decorators/require-permissions.decorator';
+import { CurrentUser } from '../../identity/presentation/decorators/current-user.decorator';
+
+/**
+ * Quién consulta cada tipo (2026-11-03): el permiso contable ve ambos; tesorería ve los recibos
+ * por `recibo_caja.crear_manual` y los egresos por `comprobante_egreso.crear`, sin contabilidad.
+ */
+function canReadDocumentType(permissions: readonly string[], type: string | undefined): boolean {
+  if (permissions.includes(SYSTEM_PERMISSIONS.ACCOUNTING_READ)) return true;
+  const receipts = permissions.includes(SYSTEM_PERMISSIONS.CASH_RECEIPTS_MANUAL);
+  const disbursements = permissions.includes(SYSTEM_PERMISSIONS.DISBURSEMENTS_CREATE);
+  if (type === 'RECIBO_CAJA') return receipts;
+  if (type === 'COMPROBANTE_EGRESO') return disbursements;
+  // Sin filtro de tipo: solo quien puede leer los dos
+  return receipts && disbursements;
+}
+
+const READ_DOCUMENTS = [
+  SYSTEM_PERMISSIONS.ACCOUNTING_READ,
+  SYSTEM_PERMISSIONS.CASH_RECEIPTS_MANUAL,
+  SYSTEM_PERMISSIONS.DISBURSEMENTS_CREATE,
+];
 
 function toHttp(error: unknown): never {
   if (error instanceof TreasuryValidationError) throw new BadRequestException(error.message);
@@ -35,8 +60,9 @@ export class TreasuryDocumentsController {
   constructor(private readonly documentsService: TreasuryDocumentsService) {}
 
   @Get()
-  @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_READ)
+  @RequireAnyPermissions(...READ_DOCUMENTS)
   async list(
+    @CurrentUser() user: AuthenticatedUserContext,
     @Query('type', new QueryFieldValidationPipe('type', 'text?')) type?: TreasuryDocumentType,
     @Query('fromDate', new QueryFieldValidationPipe('fromDate', 'date?')) fromDate?: string,
     @Query('toDate', new QueryFieldValidationPipe('toDate', 'date?')) toDate?: string,
@@ -44,6 +70,9 @@ export class TreasuryDocumentsController {
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
   ): Promise<PaginatedResponse<TreasuryDocumentDto>> {
+    if (!canReadDocumentType(user.permissions, type)) {
+      throw new ForbiddenException('No tiene permiso para consultar ese tipo de documento.');
+    }
     try {
       return await this.documentsService.list({
         type,
@@ -59,12 +88,15 @@ export class TreasuryDocumentsController {
   }
 
   @Get(':id')
-  @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_READ)
-  async getById(@Param('id', ParseUUIDPipe) id: string): Promise<TreasuryDocumentDto> {
-    try {
-      return await this.documentsService.getById(id);
-    } catch (error) {
-      toHttp(error);
+  @RequireAnyPermissions(...READ_DOCUMENTS)
+  async getById(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUserContext,
+  ): Promise<TreasuryDocumentDto> {
+    const doc = await this.documentsService.getById(id).catch(toHttp);
+    if (!canReadDocumentType(user.permissions, doc.documentType)) {
+      throw new ForbiddenException('No tiene permiso para consultar ese tipo de documento.');
     }
+    return doc;
   }
 }

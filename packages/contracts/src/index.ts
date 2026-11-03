@@ -41,6 +41,8 @@ export const SYSTEM_ROLES = {
   INVENTARIO: 'inventario',
   COMPRAS: 'compras',
   CARTERA: 'cartera',
+  // Paga proveedores y registra recibos manuales; no anula ni causa (decisión del cliente, 2026-11-03)
+  TESORERIA: 'tesoreria',
 } as const;
 
 export type SystemRole = (typeof SYSTEM_ROLES)[keyof typeof SYSTEM_ROLES];
@@ -136,6 +138,8 @@ export const SYSTEM_PERMISSIONS = {
   DISBURSEMENTS_CREATE: 'comprobante_egreso.crear',
   // Anular un recibo o egreso exige su propio permiso: crear no basta (2026-11-02).
   CASH_RECEIPTS_ANNUL: 'recibo_caja.anular',
+  // Recibo de caja manual (otros ingresos contra una contrapartida): ya no exige accounting:read
+  CASH_RECEIPTS_MANUAL: 'recibo_caja.crear_manual',
   DISBURSEMENTS_ANNUL: 'comprobante_egreso.anular',
 
   // Gastos

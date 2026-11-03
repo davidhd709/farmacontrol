@@ -66,6 +66,8 @@ export interface ImportPreview {
 }
 
 export const fetchAccounts = () => apiRequest<AccountDto[]>('accounts');
+/** Cuentas imputables para la contrapartida de un recibo manual (también para tesorería). */
+export const fetchCounterpartAccounts = () => apiRequest<AccountDto[]>('accounts/counterparts');
 export const createAccount = (payload: AccountPayload) =>
   apiRequest<AccountDto>('accounts', { method: 'POST', body: JSON.stringify(payload) });
 export const updateAccount = (id: string, payload: Partial<AccountPayload>) =>

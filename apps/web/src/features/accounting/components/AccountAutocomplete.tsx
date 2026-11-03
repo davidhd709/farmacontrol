@@ -1,6 +1,6 @@
 import { Autocomplete, TextField } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
-import { fetchAccounts, type AccountDto } from '../api/accounting.api';
+import { fetchAccounts, fetchCounterpartAccounts, type AccountDto } from '../api/accounting.api';
 
 /** El texto escrito coincide con el inicio del código o con cualquier parte del nombre. */
 export function matchesAccount(account: AccountDto, text: string) {
@@ -19,6 +19,7 @@ export function AccountAutocomplete({
   disabled,
   helperText,
   error,
+  counterpartsOnly = false,
 }: {
   value: string | null;
   onChange: (account: AccountDto | null) => void;
@@ -29,8 +30,13 @@ export function AccountAutocomplete({
   disabled?: boolean;
   helperText?: string;
   error?: boolean;
+  /** Solo las cuentas de contrapartida (no exige el permiso contable). */
+  counterpartsOnly?: boolean;
 }) {
-  const accounts = useQuery({ queryKey: ['accounting', 'accounts'], queryFn: fetchAccounts });
+  const accounts = useQuery({
+    queryKey: ['accounting', counterpartsOnly ? 'counterpart-accounts' : 'accounts'],
+    queryFn: counterpartsOnly ? fetchCounterpartAccounts : fetchAccounts,
+  });
   const options = (accounts.data ?? []).filter(
     (a) => !postableOnly || (a.isActive && a.allowsMovement),
   );

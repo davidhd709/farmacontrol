@@ -23,10 +23,23 @@ export function thirdPartyAccess(
   const all = has(
     mode === 'read' ? SYSTEM_PERMISSIONS.THIRD_PARTIES_READ : SYSTEM_PERMISSIONS.THIRD_PARTIES_MANAGE,
   );
-  const roles: ScopedThirdPartyRole[] = [];
-  if (has(SYSTEM_PERMISSIONS.CUSTOMERS_MANAGE)) roles.push('CUSTOMER');
-  if (has(SYSTEM_PERMISSIONS.SUPPLIERS_MANAGE)) roles.push('SUPPLIER');
-  return { all, roles, canChangeActive: has(SYSTEM_PERMISSIONS.THIRD_PARTIES_DEACTIVATE) };
+  const roles = new Set<ScopedThirdPartyRole>();
+  if (has(SYSTEM_PERMISSIONS.CUSTOMERS_MANAGE)) roles.add('CUSTOMER');
+  if (has(SYSTEM_PERMISSIONS.SUPPLIERS_MANAGE)) roles.add('SUPPLIER');
+  if (mode === 'read') {
+    // Tesorería elige el tercero de sus documentos sin ver el directorio: el egreso, un
+    // proveedor; el recibo manual, un cliente o un proveedor (2026-11-03). Solo lectura.
+    if (has(SYSTEM_PERMISSIONS.DISBURSEMENTS_CREATE)) roles.add('SUPPLIER');
+    if (has(SYSTEM_PERMISSIONS.CASH_RECEIPTS_MANUAL)) {
+      roles.add('CUSTOMER');
+      roles.add('SUPPLIER');
+    }
+  }
+  return {
+    all,
+    roles: (['CUSTOMER', 'SUPPLIER'] as const).filter((role) => roles.has(role)),
+    canChangeActive: has(SYSTEM_PERMISSIONS.THIRD_PARTIES_DEACTIVATE),
+  };
 }
 
 /** Un tercero está al alcance si tiene alguno de los tipos permitidos. */

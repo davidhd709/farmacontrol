@@ -97,9 +97,12 @@ export function VoucherFormDialog({
   const canInvoices = hasPermission(
     isReceipt ? SYSTEM_PERMISSIONS.CASH_RECEIPTS_COLLECT : SYSTEM_PERMISSIONS.DISBURSEMENTS_CREATE,
   );
-  const canManual =
-    hasPermission(SYSTEM_PERMISSIONS.ACCOUNTING_READ) &&
-    (isReceipt || hasPermission(SYSTEM_PERMISSIONS.DISBURSEMENTS_CREATE));
+  // Recibo manual: su propio permiso (tesorería, sin contabilidad). Egreso manual: permiso
+  // contable, porque saca dinero contra una contrapartida (2026-11-03)
+  const canManual = isReceipt
+    ? hasPermission(SYSTEM_PERMISSIONS.CASH_RECEIPTS_MANUAL)
+    : hasPermission(SYSTEM_PERMISSIONS.ACCOUNTING_READ) &&
+      hasPermission(SYSTEM_PERMISSIONS.DISBURSEMENTS_CREATE);
   const initialMode: Mode = canInvoices ? 'FACTURAS' : 'MANUAL';
   const [mode, setMode] = useState<Mode>(initialMode);
   const [paymentMethod, setPaymentMethod] = useState<TreasuryVoucherPaymentMethod>('EFECTIVO');
