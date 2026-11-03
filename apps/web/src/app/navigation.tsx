@@ -32,8 +32,21 @@ interface MenuItemConfig {
   title: string;
   path: string;
   icon: React.ReactNode;
-  permission: string;
+  /** Permiso requerido; con una lista basta cualquiera de ellos. */
+  permission: string | string[];
 }
+
+/** Permisos que habilitan una entrada (cualquiera de ellos). */
+export function entryPermissions(entry: { permission: string | string[] }): string[] {
+  return Array.isArray(entry.permission) ? entry.permission : [entry.permission];
+}
+
+// Cartera ve el directorio filtrado a clientes y compras a proveedores (2026-11-03)
+const THIRD_PARTY_DIRECTORY = [
+  SYSTEM_PERMISSIONS.THIRD_PARTIES_READ,
+  SYSTEM_PERMISSIONS.CUSTOMERS_MANAGE,
+  SYSTEM_PERMISSIONS.SUPPLIERS_MANAGE,
+];
 
 interface MenuGroupConfig {
   category: string;
@@ -118,7 +131,7 @@ export const menuGroups: MenuGroupConfig[] = [
         title: 'Directorio de Terceros',
         path: '/third-parties',
         icon: <PeopleAltIcon fontSize="small" />,
-        permission: SYSTEM_PERMISSIONS.THIRD_PARTIES_READ,
+        permission: THIRD_PARTY_DIRECTORY,
       },
     ],
   },
@@ -308,8 +321,16 @@ export const menuGroups: MenuGroupConfig[] = [
 
 export const routeNavigation = [
   ...menuGroups.flatMap((group) => group.items),
-  { title: 'Clientes', path: '/customers', permission: SYSTEM_PERMISSIONS.THIRD_PARTIES_READ },
-  { title: 'Proveedores', path: '/suppliers', permission: SYSTEM_PERMISSIONS.THIRD_PARTIES_READ },
+  {
+    title: 'Clientes',
+    path: '/customers',
+    permission: [SYSTEM_PERMISSIONS.THIRD_PARTIES_READ, SYSTEM_PERMISSIONS.CUSTOMERS_MANAGE],
+  },
+  {
+    title: 'Proveedores',
+    path: '/suppliers',
+    permission: [SYSTEM_PERMISSIONS.THIRD_PARTIES_READ, SYSTEM_PERMISSIONS.SUPPLIERS_MANAGE],
+  },
 ];
 
 export function navigationForPath(pathname: string) {

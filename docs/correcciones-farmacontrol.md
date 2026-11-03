@@ -287,13 +287,35 @@ Pruebas: `document-annulments` (integración: cartera crea el abono y recibe 403
 |---|---|---|---|
 | cartera | Anular recibos de abono; reversar abonos | Recibos de caja no está en su menú; "Revertir" sí se le mostraba | **Corregido** (tabla de arriba) |
 | supervisor | Reversar abonos (`receivables:manage`) | "Revertir" en Ver abonos | **Corregido** |
-| cartera | Crear, editar y desactivar clientes (`customers:manage`) | No tiene POS ni Terceros: ninguna pantalla de clientes | Pendiente de decisión |
-| cajero | Editar y desactivar clientes (`PUT`/`DELETE /customers/:id`) | El POS solo crea clientes | Pendiente de decisión |
-| compras | Crear, editar y desactivar proveedores (`suppliers:manage` en `/suppliers`) | Sin `third_parties:read` no ve Terceros | Pendiente de decisión |
+| cartera | Crear, editar y desactivar clientes (`customers:manage`) | No tiene POS ni Terceros: ninguna pantalla de clientes | **Corregido** (2026-11-03): ve el directorio de terceros filtrado a clientes, crea y edita; no desactiva |
+| cajero | Editar y desactivar clientes (`PUT`/`DELETE /customers/:id`) | El POS solo crea clientes | **Corregido** (2026-11-03): solo `customers:create` |
+| compras | Crear, editar y desactivar proveedores (`suppliers:manage` en `/suppliers`) | Sin `third_parties:read` no ve Terceros | **Corregido** (2026-11-03): ve el directorio filtrado a proveedores, crea y edita; no desactiva |
+| supervisor | Desactivar terceros (`third_parties:manage`) | "Desactivar" en Terceros | **Corregido** (2026-11-03): desactivar es solo de admin |
 | compras, supervisor | Reversar pagos a proveedores (`payables:manage`) | "Revertir" en Cuentas por pagar | **Corregido**: exige `comprobante_egreso.anular` (2026-11-03) |
 | supervisor | Reversar pagos de causaciones (`expenses:manage`) | "Revertir pago" en Causación de gastos | **Corregido**: exige `comprobante_egreso.anular` (2026-11-03) |
 | inventario, supervisor | Encolar y consultar trabajos de alertas (`POST`/`GET /alerts/jobs`) | Solo "Escanear lotes ahora" (`/alerts/evaluate`) | Bajo riesgo; no se cambió |
 | inventario, supervisor | Crear ubicaciones (`POST /inventory/locations`) | Ninguna pantalla crea ubicaciones | Bajo riesgo; no se cambió |
+
+**Permisos de terceros (decisión del cliente, 2026-11-03).** Regla: lo que un rol no tiene en pantalla no lo puede hacer por la API.
+
+| Acción | Ruta | Permiso | Roles |
+|---|---|---|---|
+| Ver el directorio de terceros | `GET /third-parties`, `GET /third-parties/:id` | `third_parties:read` (todos los tipos), o `customers:manage` (solo clientes) o `suppliers:manage` (solo proveedores) | admin, supervisor; cartera (clientes); compras (proveedores) |
+| Crear y editar en el directorio | `POST /third-parties`, `PUT /third-parties/:id` | `third_parties:manage` (todos), o `customers:manage` / `suppliers:manage` con el mismo alcance | admin, supervisor; cartera; compras |
+| Crear cliente desde el POS | `POST /customers` | `customers:create` (nuevo) | admin, supervisor, cajero, cartera |
+| Editar cliente | `PUT /customers/:id` | `customers:manage` | admin, supervisor, cartera |
+| Crear y editar proveedor | `POST`, `PUT /suppliers/:id` | `suppliers:manage` | admin, supervisor, compras |
+| Desactivar y reactivar | `PATCH /third-parties/:id/deactivate` y `/activate`, `DELETE /customers/:id`, `DELETE /suppliers/:id` y `isActive` en cualquier `PUT` | `third_parties:deactivate` (nuevo) | admin |
+
+- **El alcance lo aplica la API**, no solo la web: con alcance de clientes, el listado devuelve solo clientes aunque se pida `role=ALL`; pedir `role=SUPPLIER` (u otro tipo) responde 403; un proveedor por id responde 404 (no revela que existe). Crear o editar no puede asignar ni quitar tipos fuera del alcance (403), y el tercero debe conservar su tipo.
+- Un `PUT` con `isActive` igual al estado actual no es un cambio y se acepta; cambiarlo exige `third_parties:deactivate`.
+- En la web, cartera y compras ven "Directorio de Terceros" con una sola pestaña (Clientes o Proveedores); el formulario deja fijo su tipo y bloquea los demás. "Desactivar"/"Activar" solo aparecen con `third_parties:deactivate`; "Datos tributarios" del proveedor, con `suppliers:manage`. El POS ofrece "Nuevo cliente" con `customers:create`.
+- **Compra con proveedor nuevo:** la recepción de compras no crea proveedores en línea; se elige de la lista (`GET /suppliers`). Compras los registra en el directorio.
+- **Seed:** los roles base ahora se sincronizan: un permiso retirado de la definición se borra también en bases existentes (p. ej. `customers:manage` del cajero). Hay que ejecutar `pnpm db:seed:rbac` después de desplegar.
+- `@RequireAnyPermissions` (nuevo) en el guard: basta uno de los permisos; la matriz de autorización lo entiende.
+- Pruebas: `third-party-scope` (integración por rol: cajero, cartera, compras, inventario, supervisor y admin; seed que retira permisos), `authorization-matrix`, `permissions.guard` (unidad) y en la web `third-parties-scope`.
+
+Los casos de bajo riesgo (trabajos de alertas, ubicaciones) quedan como están.
 
 ## 3.12 Selector de fecha compartido (2026-11-02)
 

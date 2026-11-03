@@ -58,7 +58,7 @@ export function PosCustomerSelector({
         />
       )}
       {query.isError && <Alert severity="warning">No se pudieron buscar los clientes.</Alert>}
-      <PermissionGate permission={SYSTEM_PERMISSIONS.CUSTOMERS_MANAGE}>
+      <PermissionGate permission={SYSTEM_PERMISSIONS.CUSTOMERS_CREATE}>
         <Button onClick={onCreate}>Crear cliente nuevo</Button>
       </PermissionGate>
       <Button

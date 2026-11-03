@@ -56,13 +56,15 @@ export const BASE_PERMISSIONS: PermissionDefinition[] = [
 
   // Clientes y proveedores
   { name: SYSTEM_PERMISSIONS.CUSTOMERS_READ, description: 'Consultar directorio de clientes' },
-  { name: SYSTEM_PERMISSIONS.CUSTOMERS_MANAGE, description: 'Registrar y editar clientes' },
+  { name: SYSTEM_PERMISSIONS.CUSTOMERS_MANAGE, description: 'Registrar y editar clientes (directorio de terceros filtrado a clientes)' },
+  { name: SYSTEM_PERMISSIONS.CUSTOMERS_CREATE, description: 'Registrar clientes desde el punto de venta, sin editarlos' },
   { name: SYSTEM_PERMISSIONS.SUPPLIERS_READ, description: 'Consultar directorio de proveedores' },
-  { name: SYSTEM_PERMISSIONS.SUPPLIERS_MANAGE, description: 'Registrar y editar proveedores' },
+  { name: SYSTEM_PERMISSIONS.SUPPLIERS_MANAGE, description: 'Registrar y editar proveedores (directorio de terceros filtrado a proveedores)' },
 
   // Terceros unificados
   { name: SYSTEM_PERMISSIONS.THIRD_PARTIES_READ, description: 'Consultar directorio unificado de terceros (clientes, proveedores, empleados)' },
-  { name: SYSTEM_PERMISSIONS.THIRD_PARTIES_MANAGE, description: 'Crear, editar, activar e inactivar terceros unificados' },
+  { name: SYSTEM_PERMISSIONS.THIRD_PARTIES_MANAGE, description: 'Crear y editar terceros unificados de cualquier tipo' },
+  { name: SYSTEM_PERMISSIONS.THIRD_PARTIES_DEACTIVATE, description: 'Desactivar y reactivar terceros, clientes y proveedores' },
 
   // Cartera
   { name: SYSTEM_PERMISSIONS.RECEIVABLES_READ, description: 'Consultar cuentas por cobrar' },
@@ -147,6 +149,7 @@ export const BASE_ROLES: RoleDefinition[] = ([
       SYSTEM_PERMISSIONS.PURCHASES_DEBIT_NOTE,
       SYSTEM_PERMISSIONS.CUSTOMERS_READ,
       SYSTEM_PERMISSIONS.CUSTOMERS_MANAGE,
+      SYSTEM_PERMISSIONS.CUSTOMERS_CREATE,
       SYSTEM_PERMISSIONS.SUPPLIERS_READ,
       SYSTEM_PERMISSIONS.SUPPLIERS_MANAGE,
       SYSTEM_PERMISSIONS.THIRD_PARTIES_READ,
@@ -181,7 +184,8 @@ export const BASE_ROLES: RoleDefinition[] = ([
       SYSTEM_PERMISSIONS.CASH_CLOSE,
       SYSTEM_PERMISSIONS.CASH_MOVEMENTS,
       SYSTEM_PERMISSIONS.CUSTOMERS_READ,
-      SYSTEM_PERMISSIONS.CUSTOMERS_MANAGE,
+      // Solo crea clientes desde el POS: editar y desactivar no están en su pantalla
+      SYSTEM_PERMISSIONS.CUSTOMERS_CREATE,
       SYSTEM_PERMISSIONS.TREASURY_ACCOUNTS_SELECT,
     ],
   },
@@ -225,6 +229,7 @@ export const BASE_ROLES: RoleDefinition[] = ([
     permissions: [
       SYSTEM_PERMISSIONS.CUSTOMERS_READ,
       SYSTEM_PERMISSIONS.CUSTOMERS_MANAGE,
+      SYSTEM_PERMISSIONS.CUSTOMERS_CREATE,
       SYSTEM_PERMISSIONS.RECEIVABLES_READ,
       SYSTEM_PERMISSIONS.RECEIVABLES_MANAGE,
       SYSTEM_PERMISSIONS.CASH_RECEIPTS_COLLECT,
@@ -238,6 +243,8 @@ export interface SeedRbacResult {
   permissionsCount: number;
   rolesCount: number;
   rolePermissionsCount: number;
+  /** Asignaciones retiradas de los roles base porque ya no están en su definición. */
+  rolePermissionsRemoved: number;
 }
 
 /**
@@ -261,6 +268,7 @@ export async function seedRbac(client: PrismaClient = defaultPrisma): Promise<Se
 
   // 2. Sembrar Roles y Mapear Permisos
   let rolePermissionsCreatedOrUpdated = 0;
+  let permissionsRemoved = 0;
   for (const roleDef of BASE_ROLES) {
     const role = await client.role.upsert({
       where: { name: roleDef.name },
@@ -273,6 +281,13 @@ export async function seedRbac(client: PrismaClient = defaultPrisma): Promise<Se
         description: roleDef.description,
       },
     });
+
+    // Los roles base son fijos (no se editan desde la aplicación): un permiso que se retiró de
+    // su definición también se retira en las bases existentes (p. ej. cajero sin editar clientes)
+    const removed = await client.rolePermission.deleteMany({
+      where: { roleId: role.id, permission: { name: { notIn: roleDef.permissions } } },
+    });
+    permissionsRemoved += removed.count;
 
     // Mapear permisos asociados a cada rol
     for (const permissionName of roleDef.permissions) {
@@ -303,5 +318,6 @@ export async function seedRbac(client: PrismaClient = defaultPrisma): Promise<Se
     permissionsCount: BASE_PERMISSIONS.length,
     rolesCount: BASE_ROLES.length,
     rolePermissionsCount: rolePermissionsCreatedOrUpdated,
+    rolePermissionsRemoved: permissionsRemoved,
   };
 }

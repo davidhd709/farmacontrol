@@ -15,6 +15,7 @@ import {
 } from '@mui/material';
 import type { CustomerDto, CustomerDocumentType, UpdateCustomerPayload } from '@farmacia/contracts';
 import { createCustomer, updateCustomer } from '../api/customers.api';
+import { SYSTEM_PERMISSIONS } from '@farmacia/contracts';
 import { usePermissions } from '../../auth/hooks/usePermissions';
 
 interface CustomerFormDialogProps {
@@ -41,7 +42,8 @@ export const CustomerFormDialog: React.FC<CustomerFormDialogProps> = ({
   customerToEdit,
 }) => {
   const isEditing = Boolean(customerToEdit);
-  const { isAdmin } = usePermissions();
+  const { isAdmin, hasPermission } = usePermissions();
+  const canChangeActive = hasPermission(SYSTEM_PERMISSIONS.THIRD_PARTIES_DEACTIVATE);
 
   const [documentType, setDocumentType] = useState<CustomerDocumentType>('CC');
   const [documentNumber, setDocumentNumber] = useState('');
@@ -101,7 +103,7 @@ export const CustomerFormDialog: React.FC<CustomerFormDialogProps> = ({
           phone: phone.trim() || null,
           email: email.trim() || null,
           address: address.trim() || null,
-          isActive,
+          ...(canChangeActive ? { isActive } : {}),
         };
         const updated = await updateCustomer(customerToEdit.id, payload);
         if (onCustomerCreated) onCustomerCreated(updated);
@@ -214,7 +216,7 @@ export const CustomerFormDialog: React.FC<CustomerFormDialogProps> = ({
             placeholder="Ej. Calle 10 # 5-20"
           />
 
-          {isEditing && !customerToEdit?.isDefault && (
+          {isEditing && !customerToEdit?.isDefault && canChangeActive && (
             <FormControlLabel
               control={
                 <Switch

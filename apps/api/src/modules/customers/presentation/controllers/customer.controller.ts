@@ -48,9 +48,10 @@ import {
 export class CustomerController {
   constructor(private readonly customerService: CustomerService) {}
 
+  /** Crear clientes (también el cajero, desde el POS). Editar exige customers:manage. */
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @RequirePermissions(SYSTEM_PERMISSIONS.CUSTOMERS_MANAGE)
+  @RequirePermissions(SYSTEM_PERMISSIONS.CUSTOMERS_CREATE)
   public async create(
     @Body(CreateCustomerValidationPipe) dto: CreateCustomerDto,
     @CurrentUser() user: AuthenticatedUserContext,
@@ -120,6 +121,14 @@ export class CustomerController {
     @Req() req: Request,
   ): Promise<CustomerDto> {
     try {
+      // Activar o desactivar por esta vía exige el mismo permiso que DELETE
+      if (
+        dto.isActive !== undefined &&
+        !user.permissions.includes(SYSTEM_PERMISSIONS.THIRD_PARTIES_DEACTIVATE) &&
+        (await this.customerService.getCustomerById(id)).isActive !== dto.isActive
+      ) {
+        throw new ForbiddenException('Solo un administrador puede desactivar o reactivar clientes.');
+      }
       const customer = await this.customerService.updateCustomer(id, dto, {
         userId: user.id,
         roles: user.roles,
@@ -145,7 +154,7 @@ export class CustomerController {
   }
 
   @Delete(':id')
-  @RequirePermissions(SYSTEM_PERMISSIONS.CUSTOMERS_MANAGE)
+  @RequirePermissions(SYSTEM_PERMISSIONS.THIRD_PARTIES_DEACTIVATE)
   public async remove(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: AuthenticatedUserContext,

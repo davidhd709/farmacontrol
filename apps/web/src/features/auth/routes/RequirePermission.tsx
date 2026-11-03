@@ -1,5 +1,5 @@
 import { Outlet, useLocation } from 'react-router-dom';
-import { navigationForPath } from '../../../app/navigation';
+import { entryPermissions, navigationForPath } from '../../../app/navigation';
 import { NoPermissionState } from '../../../components/NoPermissionState';
 import { PermissionGate } from '../components/PermissionGate';
 
@@ -9,7 +9,7 @@ export function RequirePermission() {
   const route = navigationForPath(pathname);
   if (!route?.permission) return <NoPermissionState />;
   return (
-    <PermissionGate permission={route.permission} fallback={<NoPermissionState />}>
+    <PermissionGate anyOf={entryPermissions(route)} fallback={<NoPermissionState />}>
       <Outlet />
     </PermissionGate>
   );

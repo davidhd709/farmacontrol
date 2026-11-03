@@ -39,7 +39,11 @@ import {
   AuthenticatedUserContext,
 } from '../../../identity/presentation/guards/session-auth.guard';
 import { PermissionsGuard } from '../../../identity/presentation/guards/permissions.guard';
-import { RequirePermissions } from '../../../identity/presentation/decorators/require-permissions.decorator';
+import {
+  RequireAnyPermissions,
+  RequirePermissions,
+} from '../../../identity/presentation/decorators/require-permissions.decorator';
+import { thirdPartyAccess } from '../../application/third-party-access';
 import { CurrentUser } from '../../../identity/presentation/decorators/current-user.decorator';
 import {
   ThirdPartyNotFoundException,
@@ -47,6 +51,23 @@ import {
   ThirdPartyDocumentChangeForbiddenException,
 } from '../../domain/third-party.exceptions';
 
+/** Lectura y escritura con todo tipo de tercero, o limitadas a clientes o a proveedores. */
+const READ_ANY = [
+  SYSTEM_PERMISSIONS.THIRD_PARTIES_READ,
+  SYSTEM_PERMISSIONS.CUSTOMERS_MANAGE,
+  SYSTEM_PERMISSIONS.SUPPLIERS_MANAGE,
+];
+const WRITE_ANY = [
+  SYSTEM_PERMISSIONS.THIRD_PARTIES_MANAGE,
+  SYSTEM_PERMISSIONS.CUSTOMERS_MANAGE,
+  SYSTEM_PERMISSIONS.SUPPLIERS_MANAGE,
+];
+
+/**
+ * Directorio de terceros (correcciones del cliente, 2026-11-03): cartera ve y edita solo
+ * clientes, compras solo proveedores; el servicio aplica ese alcance aunque se cambie el filtro.
+ * Desactivar y reactivar exige `third_parties:deactivate` (solo admin).
+ */
 @Controller('third-parties')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
 export class ThirdPartyController {
@@ -54,18 +75,22 @@ export class ThirdPartyController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @RequirePermissions(SYSTEM_PERMISSIONS.THIRD_PARTIES_MANAGE)
+  @RequireAnyPermissions(...WRITE_ANY)
   public async create(
     @Body(CreateThirdPartyValidationPipe) dto: CreateThirdPartyDto,
     @CurrentUser() user: AuthenticatedUserContext,
     @Req() req: Request,
   ): Promise<ThirdPartyDto> {
     try {
-      const thirdParty = await this.thirdPartyService.createThirdParty(dto, {
-        userId: user.id,
-        ipAddress: req.ip,
-        correlationId: req.headers['x-correlation-id'] as string | undefined,
-      });
+      const thirdParty = await this.thirdPartyService.createThirdParty(
+        dto,
+        {
+          userId: user.id,
+          ipAddress: req.ip,
+          correlationId: req.headers['x-correlation-id'] as string | undefined,
+        },
+        thirdPartyAccess(user.permissions, 'write'),
+      );
       return thirdParty.toDto();
     } catch (error) {
       if (error instanceof ThirdPartyAlreadyExistsException) {
@@ -76,22 +101,29 @@ export class ThirdPartyController {
   }
 
   @Get()
-  @RequirePermissions(SYSTEM_PERMISSIONS.THIRD_PARTIES_READ)
+  @RequireAnyPermissions(...READ_ANY)
   public async findPaginated(
     @Query(
       new QueryShapeValidationPipe({ search: 'text?', role: 'text?', isActive: 'booleanString?' }),
       ThirdPartyQueryValidationPipe,
     )
     filters: ThirdPartyQueryFilters,
+    @CurrentUser() user: AuthenticatedUserContext,
   ): Promise<PaginatedResponse<ThirdPartyDto>> {
-    return this.thirdPartyService.findPaginated(filters);
+    return this.thirdPartyService.findPaginated(filters, thirdPartyAccess(user.permissions, 'read'));
   }
 
   @Get(':id')
-  @RequirePermissions(SYSTEM_PERMISSIONS.THIRD_PARTIES_READ)
-  public async getById(@Param('id', ParseUUIDPipe) id: string): Promise<ThirdPartyDto> {
+  @RequireAnyPermissions(...READ_ANY)
+  public async getById(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUserContext,
+  ): Promise<ThirdPartyDto> {
     try {
-      const thirdParty = await this.thirdPartyService.getThirdPartyById(id);
+      const thirdParty = await this.thirdPartyService.getThirdPartyById(
+        id,
+        thirdPartyAccess(user.permissions, 'read'),
+      );
       return thirdParty.toDto();
     } catch (error) {
       if (error instanceof ThirdPartyNotFoundException) {
@@ -102,7 +134,7 @@ export class ThirdPartyController {
   }
 
   @Put(':id')
-  @RequirePermissions(SYSTEM_PERMISSIONS.THIRD_PARTIES_MANAGE)
+  @RequireAnyPermissions(...WRITE_ANY)
   public async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body(UpdateThirdPartyValidationPipe) dto: UpdateThirdPartyDto,
@@ -110,11 +142,16 @@ export class ThirdPartyController {
     @Req() req: Request,
   ): Promise<ThirdPartyDto> {
     try {
-      const thirdParty = await this.thirdPartyService.updateThirdParty(id, dto, {
-        userId: user.id,
-        ipAddress: req.ip,
-        correlationId: req.headers['x-correlation-id'] as string | undefined,
-      });
+      const thirdParty = await this.thirdPartyService.updateThirdParty(
+        id,
+        dto,
+        {
+          userId: user.id,
+          ipAddress: req.ip,
+          correlationId: req.headers['x-correlation-id'] as string | undefined,
+        },
+        thirdPartyAccess(user.permissions, 'write'),
+      );
       return thirdParty.toDto();
     } catch (error) {
       if (error instanceof ThirdPartyNotFoundException) {
@@ -128,7 +165,7 @@ export class ThirdPartyController {
   }
 
   @Patch(':id/deactivate')
-  @RequirePermissions(SYSTEM_PERMISSIONS.THIRD_PARTIES_MANAGE)
+  @RequirePermissions(SYSTEM_PERMISSIONS.THIRD_PARTIES_DEACTIVATE)
   public async deactivate(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: AuthenticatedUserContext,
@@ -150,7 +187,7 @@ export class ThirdPartyController {
   }
 
   @Patch(':id/activate')
-  @RequirePermissions(SYSTEM_PERMISSIONS.THIRD_PARTIES_MANAGE)
+  @RequirePermissions(SYSTEM_PERMISSIONS.THIRD_PARTIES_DEACTIVATE)
   public async activate(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: AuthenticatedUserContext,

@@ -31,6 +31,11 @@ interface ThirdPartyFormDialogProps {
   onClose: () => void;
   onSaved?: () => void;
   thirdPartyToEdit?: ThirdPartyDto | null;
+  /**
+   * Tipos que el usuario puede asignar (cartera: clientes; compras: proveedores). Sin valor,
+   * todos. Los demás tipos se muestran pero no se pueden cambiar; la API aplica la misma regla.
+   */
+  allowedRoles?: Array<'CUSTOMER' | 'SUPPLIER'>;
 }
 
 const DOCUMENT_TYPES: Array<{ value: ThirdPartyDocumentType; label: string }> = [
@@ -70,8 +75,13 @@ export const ThirdPartyFormDialog: React.FC<ThirdPartyFormDialogProps> = ({
   onClose,
   onSaved,
   thirdPartyToEdit,
+  allowedRoles,
 }) => {
   const isEditing = Boolean(thirdPartyToEdit);
+  const scoped = allowedRoles !== undefined;
+  // Con un solo tipo permitido, ese tipo queda fijo; con alcance, los demás no se tocan
+  const lockCustomer = scoped && (!allowedRoles.includes('CUSTOMER') || allowedRoles.length === 1);
+  const lockSupplier = scoped && (!allowedRoles.includes('SUPPLIER') || allowedRoles.length === 1);
 
   const [personType, setPersonType] = useState<ThirdPartyPersonType>('NATURAL');
   const [documentType, setDocumentType] = useState<ThirdPartyDocumentType>('CC');
@@ -131,8 +141,8 @@ export const ThirdPartyFormDialog: React.FC<ThirdPartyFormDialogProps> = ({
       setCity('');
       setDepartment('');
       setTaxRegime('NO_RESPONSABLE_IVA');
-      setIsCustomer(true);
-      setIsSupplier(false);
+      setIsCustomer(!scoped || allowedRoles.includes('CUSTOMER'));
+      setIsSupplier(scoped && !allowedRoles.includes('CUSTOMER'));
       setIsEmployee(false);
       setIsOther(false);
       setNotes('');
@@ -370,19 +380,19 @@ export const ThirdPartyFormDialog: React.FC<ThirdPartyFormDialogProps> = ({
 
           <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap', mb: 2.5, bgcolor: 'action.hover', p: 1.5, borderRadius: 1.5 }}>
             <FormControlLabel
-              control={<Checkbox checked={isCustomer} onChange={(e) => setIsCustomer(e.target.checked)} color="primary" />}
+              control={<Checkbox checked={isCustomer} disabled={lockCustomer} onChange={(e) => setIsCustomer(e.target.checked)} color="primary" />}
               label={<Typography variant="body2" sx={{ fontWeight: 600 }}>Cliente (Facturación y Cartera)</Typography>}
             />
             <FormControlLabel
-              control={<Checkbox checked={isSupplier} onChange={(e) => setIsSupplier(e.target.checked)} color="secondary" />}
+              control={<Checkbox checked={isSupplier} disabled={lockSupplier} onChange={(e) => setIsSupplier(e.target.checked)} color="secondary" />}
               label={<Typography variant="body2" sx={{ fontWeight: 600 }}>Proveedor (Compras y CxP)</Typography>}
             />
             <FormControlLabel
-              control={<Checkbox checked={isEmployee} onChange={(e) => setIsEmployee(e.target.checked)} color="info" />}
+              control={<Checkbox checked={isEmployee} disabled={scoped} onChange={(e) => setIsEmployee(e.target.checked)} color="info" />}
               label={<Typography variant="body2" sx={{ fontWeight: 600 }}>Empleado / Colaborador</Typography>}
             />
             <FormControlLabel
-              control={<Checkbox checked={isOther} onChange={(e) => setIsOther(e.target.checked)} />}
+              control={<Checkbox checked={isOther} disabled={scoped} onChange={(e) => setIsOther(e.target.checked)} />}
               label={<Typography variant="body2" sx={{ fontWeight: 600 }}>Otro / Beneficiario</Typography>}
             />
           </Box>

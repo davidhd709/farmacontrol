@@ -88,13 +88,19 @@ export const SYSTEM_PERMISSIONS = {
 
   // Clientes y proveedores
   CUSTOMERS_READ: 'customers:read',
+  // Crear y editar clientes; con él, el directorio de terceros muestra solo clientes
   CUSTOMERS_MANAGE: 'customers:manage',
+  // Solo crear clientes (POS), sin editarlos (2026-11-03)
+  CUSTOMERS_CREATE: 'customers:create',
   SUPPLIERS_READ: 'suppliers:read',
+  // Crear y editar proveedores; con él, el directorio de terceros muestra solo proveedores
   SUPPLIERS_MANAGE: 'suppliers:manage',
 
   // Terceros unificados
   THIRD_PARTIES_READ: 'third_parties:read',
   THIRD_PARTIES_MANAGE: 'third_parties:manage',
+  // Desactivar y reactivar terceros, clientes y proveedores: solo admin (2026-11-03)
+  THIRD_PARTIES_DEACTIVATE: 'third_parties:deactivate',
 
   // Cartera
   RECEIVABLES_READ: 'receivables:read',

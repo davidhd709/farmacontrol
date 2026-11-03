@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
-import { PERMISSIONS_KEY } from '../decorators/require-permissions.decorator';
+import { ANY_PERMISSIONS_KEY, PERMISSIONS_KEY } from '../decorators/require-permissions.decorator';
 import { AuthenticatedUserContext } from './session-auth.guard';
 
 /**
@@ -18,7 +18,8 @@ import { AuthenticatedUserContext } from './session-auth.guard';
  * 2. Si no se declararon permisos, permitir el acceso automáticamente (return true).
  * 3. Si se declararon permisos, verificar que la petición cuente con contexto autenticado (request.user).
  *    Si no existe usuario autenticado, lanzar 401 Unauthorized.
- * 4. Verificar que el usuario posea todos y cada uno de los permisos requeridos.
+ * 4. Verificar que el usuario posea todos y cada uno de los permisos requeridos y, si la ruta
+ *    declara @RequireAnyPermissions(), al menos uno de esos.
  * 5. Si falta al menos un permiso, denegar el acceso lanzando 403 Forbidden estandarizado.
  */
 @Injectable()
@@ -31,8 +32,13 @@ export class PermissionsGuard implements CanActivate {
       [context.getHandler(), context.getClass()]
     );
 
+    const anyPermissions = this.reflector.getAllAndOverride<string[]>(ANY_PERMISSIONS_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+
     // Si la ruta no especifica requerimientos de permisos RBAC, permitir acceso
-    if (!requiredPermissions || requiredPermissions.length === 0) {
+    if (!requiredPermissions?.length && !anyPermissions?.length) {
       return true;
     }
 
@@ -44,11 +50,13 @@ export class PermissionsGuard implements CanActivate {
     }
 
     const userPermissions = new Set(user.permissions ?? []);
-    const hasAllPermissions = requiredPermissions.every((perm) =>
+    const hasAllPermissions = (requiredPermissions ?? []).every((perm) =>
       userPermissions.has(perm)
     );
+    const hasAnyPermission =
+      !anyPermissions?.length || anyPermissions.some((perm) => userPermissions.has(perm));
 
-    if (!hasAllPermissions) {
+    if (!hasAllPermissions || !hasAnyPermission) {
       throw new ForbiddenException('Acceso denegado. Permisos insuficientes.');
     }
 

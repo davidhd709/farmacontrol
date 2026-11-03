@@ -7,6 +7,7 @@ async function main() {
   console.log(`  - Permisos asegurados: ${result.permissionsCount}`);
   console.log(`  - Roles asegurados: ${result.rolesCount}`);
   console.log(`  - Asignaciones Rol-Permiso aseguradas: ${result.rolePermissionsCount}`);
+  console.log(`  - Asignaciones retiradas de roles base: ${result.rolePermissionsRemoved}`);
 }
 
 main()

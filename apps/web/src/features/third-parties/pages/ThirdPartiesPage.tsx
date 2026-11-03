@@ -34,7 +34,7 @@ import {
   CheckCircle as CheckCircleIcon,
   People as PeopleIcon,
 } from '@mui/icons-material';
-import type { ThirdPartyDto } from '@farmacia/contracts';
+import { SYSTEM_PERMISSIONS, type ThirdPartyDto } from '@farmacia/contracts';
 import { usePermissions } from '../../auth/hooks/usePermissions';
 import {
   fetchThirdParties,
@@ -46,13 +46,39 @@ import GavelIcon from '@mui/icons-material/Gavel';
 import { SupplierFiscalDialog } from '../../taxes/components/SupplierFiscalDialog';
 
 type RoleTab = 'ALL' | 'CUSTOMER' | 'SUPPLIER' | 'EMPLOYEE' | 'OTHER';
+type ScopedRole = 'CUSTOMER' | 'SUPPLIER';
+
+const ROLE_TABS: Array<{ value: RoleTab; label: string }> = [
+  { value: 'ALL', label: 'Todos los Terceros' },
+  { value: 'CUSTOMER', label: 'Clientes' },
+  { value: 'SUPPLIER', label: 'Proveedores' },
+  { value: 'EMPLOYEE', label: 'Empleados / Colaboradores' },
+  { value: 'OTHER', label: 'Otros Beneficiarios' },
+];
 
 export const ThirdPartiesPage: React.FC = () => {
-  const { hasPermission, isAdmin } = usePermissions();
-  const canManage = isAdmin || hasPermission('third_parties:manage');
+  const { hasPermission } = usePermissions();
+  // Sin third_parties:read, cartera ve solo clientes y compras solo proveedores (la API aplica
+  // el mismo alcance); desactivar es solo de admin (2026-11-03)
+  const fullRead = hasPermission(SYSTEM_PERMISSIONS.THIRD_PARTIES_READ);
+  const fullManage = hasPermission(SYSTEM_PERMISSIONS.THIRD_PARTIES_MANAGE);
+  const managedRoles: ScopedRole[] = [
+    ...(hasPermission(SYSTEM_PERMISSIONS.CUSTOMERS_MANAGE) ? (['CUSTOMER'] as const) : []),
+    ...(hasPermission(SYSTEM_PERMISSIONS.SUPPLIERS_MANAGE) ? (['SUPPLIER'] as const) : []),
+  ];
+  const visibleTabs = fullRead
+    ? ROLE_TABS
+    : ROLE_TABS.filter(
+        (tab) =>
+          (managedRoles as RoleTab[]).includes(tab.value) ||
+          (tab.value === 'ALL' && managedRoles.length > 1),
+      );
+  const canManage = fullManage || managedRoles.length > 0;
+  const canDeactivate = hasPermission(SYSTEM_PERMISSIONS.THIRD_PARTIES_DEACTIVATE);
+  const canEditFiscal = hasPermission(SYSTEM_PERMISSIONS.SUPPLIERS_MANAGE);
 
   // Estados de consulta y filtros
-  const [activeTab, setActiveTab] = useState<RoleTab>('ALL');
+  const [activeTab, setActiveTab] = useState<RoleTab>(visibleTabs[0]?.value ?? 'ALL');
   const [search, setSearch] = useState('');
   const [fiscalSupplier, setFiscalSupplier] = useState<{ id: string; name: string } | null>(null);
   const [page, setPage] = useState(1);
@@ -201,11 +227,9 @@ export const ThirdPartiesPage: React.FC = () => {
             variant="scrollable"
             scrollButtons="auto"
           >
-            <Tab label="Todos los Terceros" value="ALL" />
-            <Tab label="Clientes" value="CUSTOMER" />
-            <Tab label="Proveedores" value="SUPPLIER" />
-            <Tab label="Empleados / Colaboradores" value="EMPLOYEE" />
-            <Tab label="Otros Beneficiarios" value="OTHER" />
+            {visibleTabs.map((tab) => (
+              <Tab key={tab.value} label={tab.label} value={tab.value} />
+            ))}
           </Tabs>
         </Box>
 
@@ -428,7 +452,7 @@ export const ThirdPartiesPage: React.FC = () => {
                               <EditIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
-                          {tp.isSupplier && tp.supplierId && (
+                          {tp.isSupplier && tp.supplierId && canEditFiscal && (
                             <Tooltip title="Datos tributarios del proveedor">
                               <IconButton
                                 size="small"
@@ -442,7 +466,7 @@ export const ThirdPartiesPage: React.FC = () => {
                             </Tooltip>
                           )}
 
-                          {tp.isActive ? (
+                          {!canDeactivate ? null : tp.isActive ? (
                             <Tooltip title="Desactivar Tercero">
                               <IconButton
                                 size="small"
@@ -500,6 +524,7 @@ export const ThirdPartiesPage: React.FC = () => {
         onClose={() => setFormDialogOpen(false)}
         onSaved={loadThirdParties}
         thirdPartyToEdit={editingThirdParty}
+        allowedRoles={fullManage ? undefined : managedRoles}
       />
 
       {/* Diálogo de Confirmación Desactivación / Activación */}

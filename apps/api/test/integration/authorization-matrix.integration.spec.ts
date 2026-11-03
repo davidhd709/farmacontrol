@@ -10,7 +10,10 @@ import { SYSTEM_ROLES } from '@farmacia/contracts';
 import { AppModule } from '../../src/app.module';
 import { SessionAuthGuard } from '../../src/modules/identity/presentation/guards/session-auth.guard';
 import { PermissionsGuard } from '../../src/modules/identity/presentation/guards/permissions.guard';
-import { PERMISSIONS_KEY } from '../../src/modules/identity/presentation/decorators/require-permissions.decorator';
+import {
+  ANY_PERMISSIONS_KEY,
+  PERMISSIONS_KEY,
+} from '../../src/modules/identity/presentation/decorators/require-permissions.decorator';
 import { Argon2PasswordHasherAdapter } from '../../src/modules/identity/infrastructure/adapters/argon2-password-hasher.adapter';
 import { PrismaUserRepository } from '../../src/modules/identity/infrastructure/adapters/prisma-user.repository';
 import { User } from '../../src/modules/identity/domain/entities/user.entity';
@@ -40,6 +43,8 @@ interface RouteInfo {
   path: string;
   key: string;
   permissions: string[];
+  /** @RequireAnyPermissions: basta uno de estos (además de todos los de `permissions`). */
+  anyPermissions: string[];
   hasSession: boolean;
 }
 
@@ -82,6 +87,8 @@ function collectRoutes(module: TestingModule): RouteInfo[] {
       ];
       const permissions =
         reflector.getAllAndOverride<string[]>(PERMISSIONS_KEY, [handler, metatype]) ?? [];
+      const anyPermissions =
+        reflector.getAllAndOverride<string[]>(ANY_PERMISSIONS_KEY, [handler, metatype]) ?? [];
       const hasPermissionGuard = guards.includes(PermissionsGuard);
 
       for (const controllerPath of controllerPaths) {
@@ -94,6 +101,7 @@ function collectRoutes(module: TestingModule): RouteInfo[] {
             key: `${method} ${path}`,
             // Sin PermissionsGuard el decorador no tendría efecto: se trata como sin permiso
             permissions: hasPermissionGuard ? permissions : [],
+            anyPermissions: hasPermissionGuard ? anyPermissions : [],
             hasSession: guards.includes(SessionAuthGuard),
           });
         }
@@ -193,7 +201,13 @@ describe('Matriz de autorización endpoint × rol (PostgreSQL real)', () => {
 
   it('toda ruta con sesión exige un permiso explícito, salvo las de uso general', () => {
     const withoutPermission = routes
-      .filter((r) => r.hasSession && r.permissions.length === 0 && !SESSION_ONLY_ROUTES.has(r.key))
+      .filter(
+        (r) =>
+          r.hasSession &&
+          r.permissions.length === 0 &&
+          r.anyPermissions.length === 0 &&
+          !SESSION_ONLY_ROUTES.has(r.key),
+      )
       .map((r) => r.key);
     expect(withoutPermission).toEqual([]);
   });
@@ -205,14 +219,16 @@ describe('Matriz de autorización endpoint × rol (PostgreSQL real)', () => {
       const cookie = roleCookies.get(roleName)!;
       const mismatches: string[] = [];
 
-      for (const route of routes.filter((r) => r.permissions.length > 0)) {
-        const allowed = route.permissions.every((p) => granted.has(p));
+      for (const route of routes.filter((r) => r.permissions.length || r.anyPermissions.length)) {
+        const allowed =
+          route.permissions.every((p) => granted.has(p)) &&
+          (!route.anyPermissions.length || route.anyPermissions.some((p) => granted.has(p)));
         // Una ruta permitida solo se ejecuta si es de lectura: evita efectos con datos falsos
         if (allowed && route.method !== 'GET') continue;
         const res = await send(app, route, cookie);
         if (allowed ? res.status === 403 || res.status === 401 : res.status !== 403) {
           mismatches.push(
-            `${route.key} [${route.permissions.join(', ')}] → ${res.status} (esperado ${allowed ? 'acceso' : '403'})`,
+            `${route.key} [${route.permissions.join(', ')}${route.anyPermissions.length ? ` alguno de ${route.anyPermissions.join('|')}` : ''}] → ${res.status} (esperado ${allowed ? 'acceso' : '403'})`,
           );
         }
       }

@@ -7,5 +7,9 @@ export interface IThirdPartyRepository {
   /** `tx` es la transacción del caso de uso, opaca para el dominio. */
   save(thirdParty: ThirdParty, tx?: unknown): Promise<void>;
   update(thirdParty: ThirdParty, tx?: unknown): Promise<void>;
-  findPaginated(filters: ThirdPartyQueryFilters): Promise<PaginatedResponse<ThirdParty>>;
+  /** `scopeRoles`: limita a terceros con alguno de esos tipos (alcance del usuario). */
+  findPaginated(
+    filters: ThirdPartyQueryFilters,
+    scopeRoles?: Array<'CUSTOMER' | 'SUPPLIER'>,
+  ): Promise<PaginatedResponse<ThirdParty>>;
 }

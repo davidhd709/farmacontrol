@@ -2,7 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ExecutionContext, ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { PermissionsGuard } from '../../src/modules/identity/presentation/guards/permissions.guard';
-import { PERMISSIONS_KEY } from '../../src/modules/identity/presentation/decorators/require-permissions.decorator';
+import {
+  ANY_PERMISSIONS_KEY,
+  PERMISSIONS_KEY,
+} from '../../src/modules/identity/presentation/decorators/require-permissions.decorator';
 import { AuthenticatedUserContext } from '../../src/modules/identity/presentation/guards/session-auth.guard';
 
 describe('PermissionsGuard (Unit)', () => {
@@ -94,5 +97,37 @@ describe('PermissionsGuard (Unit)', () => {
     const result = guard.canActivate(context);
 
     expect(result).toBe(true);
+  });
+
+  describe('@RequireAnyPermissions: basta uno de los permisos', () => {
+    const withMetadata = (all: string[] | undefined, any: string[] | undefined) =>
+      vi
+        .spyOn(reflector, 'getAllAndOverride')
+        .mockImplementation((key) =>
+          key === PERMISSIONS_KEY ? all : key === ANY_PERMISSIONS_KEY ? any : undefined,
+        );
+    const user = (permissions: string[]) =>
+      createMockExecutionContext({
+        id: 'u',
+        username: 'cartera1',
+        sessionId: 's',
+        roles: [],
+        permissions,
+      } as unknown as AuthenticatedUserContext);
+
+    it('permite con cualquiera de ellos y rechaza 403 sin ninguno', () => {
+      withMetadata(undefined, ['third_parties:read', 'customers:manage']);
+      expect(guard.canActivate(user(['customers:manage']))).toBe(true);
+      expect(() => guard.canActivate(user(['customers:read']))).toThrow(ForbiddenException);
+    });
+
+    it('combinado con @RequirePermissions exige todos esos y uno de los alternativos', () => {
+      withMetadata(['payables:read'], ['accounting:read', 'comprobante_egreso.crear']);
+      expect(guard.canActivate(user(['payables:read', 'comprobante_egreso.crear']))).toBe(true);
+      expect(() => guard.canActivate(user(['comprobante_egreso.crear']))).toThrow(
+        ForbiddenException,
+      );
+      expect(() => guard.canActivate(user(['payables:read']))).toThrow(ForbiddenException);
+    });
   });
 });

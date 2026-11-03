@@ -99,6 +99,14 @@ export class SupplierController {
     @Req() req: Request,
   ): Promise<SupplierDto> {
     try {
+      // Activar o desactivar por esta vía exige el mismo permiso que DELETE
+      if (
+        dto.isActive !== undefined &&
+        !user.permissions.includes(SYSTEM_PERMISSIONS.THIRD_PARTIES_DEACTIVATE) &&
+        (await this.supplierService.getSupplierById(id)).isActive !== dto.isActive
+      ) {
+        throw new ForbiddenException('Solo un administrador puede desactivar o reactivar proveedores.');
+      }
       const supplier = await this.supplierService.updateSupplier(id, dto, {
         userId: user.id,
         roles: user.roles,
@@ -122,7 +130,7 @@ export class SupplierController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
-  @RequirePermissions(SYSTEM_PERMISSIONS.SUPPLIERS_MANAGE)
+  @RequirePermissions(SYSTEM_PERMISSIONS.THIRD_PARTIES_DEACTIVATE)
   public async deactivate(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: AuthenticatedUserContext,

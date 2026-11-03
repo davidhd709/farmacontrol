@@ -15,7 +15,7 @@ import {
 } from '@mui/material';
 import { useLocation, useNavigate } from 'react-router-dom';
 import DashboardIcon from '@mui/icons-material/Dashboard';
-import { menuGroups } from '../../app/navigation';
+import { entryPermissions, menuGroups } from '../../app/navigation';
 import { usePermissions } from '../../features/auth/hooks/usePermissions';
 
 export const SIDEBAR_WIDTH = 260;
@@ -31,7 +31,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ open, onClose }) => {
   const isMobile = useMediaQuery(theme.breakpoints.down('lg'), { noSsr: true });
   const location = useLocation();
   const navigate = useNavigate();
-  const { hasPermission } = usePermissions();
+  const { hasAnyPermission } = usePermissions();
 
   const handleNavigate = (path: string) => {
     navigate(path);
@@ -97,7 +97,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ open, onClose }) => {
         {menuGroups.map((group) => {
           // Filtrar items según permisos del usuario
           const visibleItems = group.items.filter((item) => {
-            if (item.permission) return hasPermission(item.permission);
+            if (item.permission) return hasAnyPermission(entryPermissions(item));
             return true;
           });
 

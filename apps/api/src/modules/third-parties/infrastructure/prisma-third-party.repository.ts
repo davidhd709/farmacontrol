@@ -89,7 +89,10 @@ export class PrismaThirdPartyRepository implements IThirdPartyRepository {
     return this.mapToDomain(raw);
   }
 
-  async findPaginated(filters: ThirdPartyQueryFilters): Promise<PaginatedResponse<ThirdParty>> {
+  async findPaginated(
+    filters: ThirdPartyQueryFilters,
+    scopeRoles?: Array<'CUSTOMER' | 'SUPPLIER'>,
+  ): Promise<PaginatedResponse<ThirdParty>> {
     const page = filters.page && filters.page > 0 ? filters.page : 1;
     const limit = filters.limit && filters.limit > 0 ? filters.limit : (filters.pageSize || 20);
     const skip = (page - 1) * limit;
@@ -105,6 +108,16 @@ export class PrismaThirdPartyRepository implements IThirdPartyRepository {
       else if (filters.role === 'SUPPLIER') where.isSupplier = true;
       else if (filters.role === 'EMPLOYEE') where.isEmployee = true;
       else if (filters.role === 'OTHER') where.isOther = true;
+    }
+
+    if (scopeRoles) {
+      where.AND = [
+        {
+          OR: scopeRoles.map((role) =>
+            role === 'CUSTOMER' ? { isCustomer: true } : { isSupplier: true },
+          ),
+        },
+      ];
     }
 
     if (filters.search && filters.search.trim().length > 0) {

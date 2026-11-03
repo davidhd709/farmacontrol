@@ -26,3 +26,11 @@ export class ThirdPartyDocumentChangeForbiddenException extends DomainError {
     this.name = 'ThirdPartyDocumentChangeForbiddenException';
   }
 }
+
+/** El tercero o el cambio pedido está fuera del alcance del usuario (p. ej. cartera y proveedores). */
+export class ThirdPartyAccessDeniedException extends DomainError {
+  constructor(message: string) {
+    super(message, 'forbidden');
+    this.name = 'ThirdPartyAccessDeniedException';
+  }
+}

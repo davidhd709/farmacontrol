@@ -13,7 +13,13 @@ import {
   ThirdPartyNotFoundException,
   ThirdPartyAlreadyExistsException,
   ThirdPartyDocumentChangeForbiddenException,
+  ThirdPartyAccessDeniedException,
 } from '../domain/third-party.exceptions';
+import {
+  canReachThirdParty,
+  roleChangeOutsideScope,
+  type ThirdPartyAccess,
+} from './third-party-access';
 import { AuditService } from '../../audit/application/services/audit.service';
 import {
   CustomersLedger,
@@ -81,7 +87,12 @@ export class ThirdPartyService {
   async createThirdParty(
     input: CreateThirdPartyPayload,
     auditCtx?: AuditContext,
+    access?: ThirdPartyAccess,
   ): Promise<ThirdParty> {
+    if (access) {
+      const denied = roleChangeOutsideScope(access, input);
+      if (denied) throw new ThirdPartyAccessDeniedException(denied);
+    }
     const docNumber = input.documentNumber.trim();
     const existing = await this.thirdPartyRepository.findByDocumentNumber(docNumber);
     if (existing) {
@@ -205,10 +216,27 @@ export class ThirdPartyService {
     id: string,
     input: UpdateThirdPartyPayload,
     auditCtx?: AuditContext,
+    access?: ThirdPartyAccess,
   ): Promise<ThirdParty> {
     const thirdParty = await this.thirdPartyRepository.findById(id);
-    if (!thirdParty) {
+    if (!thirdParty || (access && !canReachThirdParty(access, thirdParty))) {
       throw new ThirdPartyNotFoundException(id);
+    }
+    if (access) {
+      const denied = roleChangeOutsideScope(access, input, {
+        isCustomer: thirdParty.isCustomer,
+        isSupplier: thirdParty.isSupplier,
+        isEmployee: thirdParty.isEmployee,
+        isOther: thirdParty.isOther,
+      });
+      if (denied) throw new ThirdPartyAccessDeniedException(denied);
+      if (
+        input.isActive !== undefined &&
+        input.isActive !== thirdParty.isActive &&
+        !access.canChangeActive
+      ) {
+        throw new ThirdPartyAccessDeniedException('Solo un administrador puede desactivar o reactivar terceros.');
+      }
     }
 
     if (input.documentNumber && input.documentNumber.trim() !== thirdParty.documentNumber) {
@@ -340,16 +368,29 @@ export class ThirdPartyService {
     return thirdParty;
   }
 
-  async getThirdPartyById(id: string): Promise<ThirdParty> {
+  async getThirdPartyById(id: string, access?: ThirdPartyAccess): Promise<ThirdParty> {
     const thirdParty = await this.thirdPartyRepository.findById(id);
-    if (!thirdParty) {
+    // Fuera de alcance responde como inexistente: no revela que el tercero existe
+    if (!thirdParty || (access && !canReachThirdParty(access, thirdParty))) {
       throw new ThirdPartyNotFoundException(id);
     }
     return thirdParty;
   }
 
-  async findPaginated(filters: ThirdPartyQueryFilters): Promise<PaginatedResponse<ThirdPartyDto>> {
-    const res = await this.thirdPartyRepository.findPaginated(filters);
+  async findPaginated(
+    filters: ThirdPartyQueryFilters,
+    access?: ThirdPartyAccess,
+  ): Promise<PaginatedResponse<ThirdPartyDto>> {
+    if (access && !access.all) {
+      const requested = filters.role && filters.role !== 'ALL' ? filters.role : null;
+      if (requested && !(access.roles as string[]).includes(requested)) {
+        throw new ThirdPartyAccessDeniedException('No tiene acceso a ese tipo de tercero.');
+      }
+    }
+    const res = await this.thirdPartyRepository.findPaginated(
+      filters,
+      access && !access.all ? access.roles : undefined,
+    );
     return {
       items: res.items.map((tp) => tp.toDto()),
       total: res.total,
