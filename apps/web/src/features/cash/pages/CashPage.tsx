@@ -20,7 +20,6 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  TextField,
 } from '@mui/material';
 import type {
   CashMovementDto,
@@ -34,6 +33,7 @@ import { HomeBackButton } from '../../../components/HomeBackButton';
 import { SortByDateButton } from '../../../components/SortByDateButton';
 import { formatDateTime } from '../../../utils/date-format';
 import { FilterBar } from '../../../components/layout/FilterBar';
+import { DateField } from '../../../components/DateField';
 
 export const CashPage: React.FC = () => {
   const [balance, setBalance] = useState<CashBalanceDto>({
@@ -307,29 +307,25 @@ export const CashPage: React.FC = () => {
           </Select>
         </FormControl>
 
-        <TextField
+        <DateField
           label="Desde"
-          type="date"
           size="small"
           value={startDate}
-          onChange={(e) => {
-            setStartDate(e.target.value);
+          onChange={(value) => {
+            setStartDate(value);
             setPage(0);
           }}
-          slotProps={{ inputLabel: { shrink: true } }}
           sx={{ minWidth: 160 }}
         />
 
-        <TextField
+        <DateField
           label="Hasta"
-          type="date"
           size="small"
           value={endDate}
-          onChange={(e) => {
-            setEndDate(e.target.value);
+          onChange={(value) => {
+            setEndDate(value);
             setPage(0);
           }}
-          slotProps={{ inputLabel: { shrink: true } }}
           sx={{ minWidth: 160 }}
         />
 

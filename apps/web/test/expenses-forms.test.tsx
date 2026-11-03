@@ -23,6 +23,7 @@ import * as payables from '../src/features/payables/api/payables.api';
 import * as parties from '../src/features/third-parties/api/third-parties.api';
 import { appTheme } from '../src/theme/app-theme';
 
+import { setDateField } from './support-date';
 const expense = {
   id: 'expense',
   beneficiary: 'Proveedor',
@@ -120,13 +121,13 @@ describe('Causación de gastos', () => {
     change(/Valor Total/, '0.30');
     change(/Nº Factura/, ' DOC-1 ');
     change('Notas / Observaciones', ' soporte ');
-    change(/Fecha de Gasto/, '2026-10-18');
+    setDateField(/Fecha de Gasto/, '2026-10-18');
     expect(screen.queryByLabelText('Forma de Pago')).not.toBeInTheDocument();
-    change(/Fecha de Vencimiento/, '2026-10-01');
+    setDateField(/Fecha de Vencimiento/, '2026-10-01');
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar Gasto' }));
     expect(await screen.findByText(/no puede ser anterior/)).toBeInTheDocument();
     expect(spy).not.toHaveBeenCalled();
-    change(/Fecha de Vencimiento/, '2026-11-18');
+    setDateField(/Fecha de Vencimiento/, '2026-11-18');
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar Gasto' }));
     expect(await screen.findByText('Sin conexión')).toBeInTheDocument();
     const expected = {

@@ -1,5 +1,6 @@
-import { Stack, TextField } from '@mui/material';
+import { Stack } from '@mui/material';
 import { businessToday } from '../../../utils/business-date';
+import { DateField } from '../../../components/DateField';
 
 /** Rango de fechas (YYYY-MM-DD) de un reporte. */
 export function PeriodFilter({
@@ -13,20 +14,8 @@ export function PeriodFilter({
 }) {
   return (
     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-      <TextField
-        type="date"
-        label="Desde"
-        value={from}
-        onChange={(e) => onChange({ from: e.target.value, to })}
-        slotProps={{ inputLabel: { shrink: true } }}
-      />
-      <TextField
-        type="date"
-        label="Hasta"
-        value={to}
-        onChange={(e) => onChange({ from, to: e.target.value })}
-        slotProps={{ inputLabel: { shrink: true } }}
-      />
+      <DateField label="Desde" value={from} onChange={(value) => onChange({ from: value, to })} />
+      <DateField label="Hasta" value={to} onChange={(value) => onChange({ from, to: value })} />
     </Stack>
   );
 }

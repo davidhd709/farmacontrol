@@ -236,7 +236,7 @@ El botón **"Reversar"** salió de la tabla del Libro Diario (queda solo **"Deta
 - **Estado en español**: "Contabilizado" (antes POSTED), "Borrador", "Anulado" (asiento que ya fue anulado) y "Anulación" (el asiento que anula a otro). Los orígenes también salen en español (Venta, Devolución, Cobro de cartera, Causación, Saldos iniciales, Cierre anual…), nunca el código interno.
 - **Documento Ref.** muestra el número legible (FAC-000007, NC-000001, RC-000003, CE-000002, la factura de compra, NTC-000001) con enlace a la pantalla donde se consulta, que abre ya filtrada (`?buscar=`): historial de ventas, recibos de caja, comprobantes de egreso, compras y gastos. Una anulación muestra el documento del asiento que anula. Lo resuelve la API (`sourceDocument` en `JournalEntryDto`, consulta de solo lectura en `journal-source-documents.ts`).
 - **Paginación en español en toda la aplicación**: el tema de Material UI aplica el locale `esES` de forma global ("Filas por página:", "1–1 de 1", "Ir a la página siguiente"); se quitaron las etiquetas puestas tabla por tabla.
-- **Fechas dd/mm/aaaa** en todas las tablas y vistas con `formatDate` / `formatDateTime` (`apps/web/src/utils/date-format.ts`): una fecha calendario se muestra tal cual y un instante se convierte al día de Bogotá (una venta de las 23:30 no aparece al día siguiente). Los campos de fecha de los formularios siguen siendo selectores nativos y muestran el formato del navegador.
+- **Fechas dd/mm/aaaa** en todas las tablas y vistas con `formatDate` / `formatDateTime` (`apps/web/src/utils/date-format.ts`): una fecha calendario se muestra tal cual y un instante se convierte al día de Bogotá (una venta de las 23:30 no aparece al día siguiente). Los campos de fecha de formularios y filtros usan el selector compartido `DateField` (ver 3.12).
 - **Subtítulo** del Libro Diario: "Registro cronológico de los asientos contables generados por los documentos del sistema."
 - Pruebas: `journal-entries.test` (enlace, estados, fechas, paginación, subtítulo), `date-format.test` (también cerca de medianoche y con `TZ=Asia/Tokyo`) y `accounting-audit-statement` (número legible de venta y recibo).
 
@@ -292,6 +292,16 @@ Pruebas: `document-annulments` (integración: cartera crea el abono y recibe 403
 | supervisor | Reversar pagos de causaciones (`expenses:manage`) | "Revertir pago" en Causación de gastos | En espera: rol tesorería (no se tocó) |
 | inventario, supervisor | Encolar y consultar trabajos de alertas (`POST`/`GET /alerts/jobs`) | Solo "Escanear lotes ahora" (`/alerts/evaluate`) | Bajo riesgo; no se cambió |
 | inventario, supervisor | Crear ubicaciones (`POST /inventory/locations`) | Ninguna pantalla crea ubicaciones | Bajo riesgo; no se cambió |
+
+## 3.12 Selector de fecha compartido (2026-11-02)
+
+Los 49 campos de fecha nativos (`<input type="date">`) de formularios y filtros se reemplazaron por un solo componente, `apps/web/src/components/DateField.tsx`, sobre el date picker de MUI X (`@mui/x-date-pickers` 9.15.0 con `dayjs`): español (es), formato **dd/mm/aaaa** y zona **America/Bogota**. Un cambio en ese componente llega a todas las pantallas; la recepción de compras lo usa a través de `PurchaseFormField`.
+
+- **Mismo contrato que el input nativo:** recibe y entrega la fecha calendario `YYYY-MM-DD` como texto, sin convertirla a un instante, así que la API recibe exactamente el día elegido. Una fecha incompleta, inválida (30/02) o borrada se entrega como `''`.
+- **Zona:** el "hoy" del calendario es el día de Bogotá, también desde un equipo en otra zona. La conversión se ancla al mediodía, porque `dayjs.tz` corre el día cuando la medianoche no existe en la zona del equipo (cambio de horario, p. ej. Santiago de Chile el 6 de septiembre).
+- **Accesibilidad:** cada sección (día, mes, año) es un `spinbutton` con nombre; los campos sin etiqueta visible (líneas de compra) llevan `aria-label`. Los campos opcionales se pueden borrar con el botón de limpiar.
+- **Pruebas:** `date-field.test` (ida y vuelta sin cambio de día con el equipo en Bogotá, UTC, Kiritimati +14, Pago Pago −11, Tokio y Santiago; escribir a las 23:59:59 y a las 00:00:01 de Bogotá; el "hoy" del calendario a las 22:30 de Bogotá con el equipo ya en el día siguiente; placeholder dd/mm/aaaa). Las pruebas web que escribían fechas usan `test/support-date.ts` y la E2E de compras `tests/e2e/support/date-field.ts`, que teclean la fecha como el usuario. Del lado de la API, el día de Bogotá ya estaba cubierto por `business-date-midnight` (3.7).
+- **Responsive:** el selector es más ancho que el input nativo; en Balance General la fila "Fecha de corte + Consultar" ahora se envuelve a 360 px.
 
 ## 3.13 Diagnóstico de saldos bancarios, solo lectura (2026-11-02)
 

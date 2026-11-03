@@ -46,6 +46,7 @@ import {
   type PolicyFormData,
 } from '../validation/company.schema';
 import { CompanyTaxProfileSection } from '../../taxes/components/CompanyTaxProfileSection';
+import { DateField } from '../../../components/DateField';
 
 const COSTING_LABELS: Record<CostingMethod, string> = {
   WEIGHTED_AVERAGE: 'Promedio ponderado móvil',
@@ -320,12 +321,10 @@ function PolicyForm({
             name="effectiveFrom"
             control={control}
             render={({ field, fieldState }) => (
-              <TextField
+              <DateField
                 {...field}
-                type="date"
                 label="Vigente desde"
                 fullWidth
-                slotProps={{ inputLabel: { shrink: true } }}
                 error={!!fieldState.error}
                 helperText={
                   fieldState.error?.message ?? 'Hoy o una fecha futura: el pasado no cambia'

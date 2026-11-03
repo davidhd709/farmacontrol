@@ -14,6 +14,8 @@ import * as reportsApi from '../src/features/reports/api/reports.api';
 import { ReportsPage } from '../src/features/reports/pages/ReportsPage';
 import { appTheme } from '../src/theme/app-theme';
 
+import { dateFieldText, setDateField } from './support-date';
+import { businessToday } from '../src/utils/business-date';
 const mockValuation: InventoryValuationReportDto = {
   generatedAt: '2026-09-26T22:00:00.000Z',
   totalProducts: 2,
@@ -335,8 +337,8 @@ describe('Reportes T-32 y T-34', () => {
     fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Ordenar por' }));
     fireEvent.click(screen.getByRole('option', { name: 'Valor' }));
     fireEvent.change(screen.getByLabelText('Límite'), { target: { value: '5' } });
-    fireEvent.change(screen.getByLabelText('Desde'), { target: { value: '2026-10-01' } });
-    fireEvent.change(screen.getByLabelText('Hasta'), { target: { value: '2026-10-18' } });
+    setDateField('Desde', '2026-10-01');
+    setDateField('Hasta', '2026-10-18');
     const filters = { fromDate: '2026-10-01', toDate: '2026-10-18', sortBy: 'value', limit: 5 };
     await waitFor(() => expect(reportsApi.fetchTopProductsReport).toHaveBeenCalledWith(filters));
     fireEvent.click(screen.getByRole('button', { name: 'Exportar productos más vendidos a CSV' }));
@@ -346,12 +348,13 @@ describe('Reportes T-32 y T-34', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Hoy' }));
     await waitFor(() =>
       expect(reportsApi.fetchTopProductsReport).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          fromDate: screen.getByLabelText('Desde').getAttribute('value'),
-          toDate: screen.getByLabelText('Hasta').getAttribute('value'),
-        }),
+        expect.objectContaining({ fromDate: businessToday(), toDate: businessToday() }),
       ),
     );
+    // El selector muestra la misma fecha en dd/mm/aaaa
+    const [year, month, day] = businessToday().split('-');
+    expect(dateFieldText('Desde')).toBe(`${day}/${month}/${year}`);
+    expect(dateFieldText('Hasta')).toBe(`${day}/${month}/${year}`);
   });
 
   it('muestra vacío sin una tabla de ceros', async () => {
@@ -395,8 +398,8 @@ describe('Reportes T-32 y T-34', () => {
       screen.getByRole('button', { name: 'Exportar productos más vendidos a CSV' }),
     ).toBeDisabled();
     expect(reportsApi.fetchTopProductsReport).toHaveBeenCalledTimes(calls);
-    fireEvent.change(screen.getByLabelText('Desde'), { target: { value: '2026-10-18' } });
-    fireEvent.change(screen.getByLabelText('Hasta'), { target: { value: '2026-10-01' } });
+    setDateField('Desde', '2026-10-18');
+    setDateField('Hasta', '2026-10-01');
     expect(
       screen.getByText('La fecha inicial debe ser anterior o igual a la final.'),
     ).toBeInTheDocument();

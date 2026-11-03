@@ -16,7 +16,6 @@ import {
   TableCell,
   TableContainer,
   TableRow,
-  TextField,
   Typography,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
@@ -25,6 +24,7 @@ import { usePermissions } from '../../auth/hooks/usePermissions';
 import { fetchBalanceSheet, exportBalanceSheetExcel } from '../api/accounting.api';
 import { localIsoDate } from '../../../components/QuickDateRange';
 import { calendarMonthBounds } from '../../../utils/business-date';
+import { DateField } from '../../../components/DateField';
 
 function formatMoney(value: string | number | undefined | null): string {
   if (value === undefined || value === null) return '$0.00';
@@ -159,14 +159,17 @@ export const BalanceSheetPage = () => {
             spacing={2}
             sx={{ alignItems: 'center', justifyContent: 'space-between' }}
           >
-            <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-              <TextField
+            <Stack
+              direction="row"
+              spacing={2}
+              useFlexGap
+              sx={{ alignItems: 'center', flexWrap: 'wrap' }}
+            >
+              <DateField
                 label="Fecha de Corte"
-                type="date"
                 size="small"
                 value={asOfDate}
-                onChange={(e) => setAsOfDate(e.target.value)}
-                slotProps={{ inputLabel: { shrink: true } }}
+                onChange={(value) => setAsOfDate(value)}
               />
               <Button variant="contained" onClick={() => refetch()} disabled={isLoading}>
                 Consultar

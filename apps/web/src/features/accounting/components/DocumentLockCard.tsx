@@ -17,6 +17,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchDocumentLock, setDocumentLock } from '../api/accounting.api';
 import { formatDate, formatDateTime } from '../../../utils/date-format';
+import { DateField } from '../../../components/DateField';
 
 /**
  * Bloqueo de documentos por fecha: distinto del cierre de período. Impide registrar o
@@ -82,12 +83,10 @@ export function DocumentLockCard({ canManage }: { canManage: boolean }) {
               mutation.mutate({ lockedThrough: lockedThrough || null, reason: reason.trim() });
             }}
           >
-            <TextField
+            <DateField
               label="Bloquear hasta (incluida)"
-              type="date"
               value={lockedThrough}
-              onChange={(e) => setLockedThrough(e.target.value)}
-              slotProps={{ inputLabel: { shrink: true } }}
+              onChange={(value) => setLockedThrough(value)}
               helperText="Vacío para retirar el bloqueo. Debe ser anterior a hoy."
               sx={{ minWidth: 220 }}
             />

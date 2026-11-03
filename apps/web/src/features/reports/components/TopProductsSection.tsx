@@ -19,6 +19,7 @@ import {
 import type { TopProductsSortBy } from '@farmacia/contracts';
 import { QuickDateRange } from '../../../components/QuickDateRange';
 import { downloadReportCsv, fetchTopProductsReport } from '../api/reports.api';
+import { DateField } from '../../../components/DateField';
 
 const currency = (value: number) =>
   `$ ${value.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -64,21 +65,17 @@ export function TopProductsSection() {
       </Typography>
       <Paper variant="outlined" sx={{ p: 2 }}>
         <Stack direction={{ xs: 'column', sm: 'row' }} sx={{ flexWrap: 'wrap', gap: 2, mb: 2 }}>
-          <TextField
+          <DateField
             label="Desde"
-            type="date"
             size="small"
             value={fromDate}
-            onChange={(e) => setFromDate(e.target.value)}
-            slotProps={{ inputLabel: { shrink: true } }}
+            onChange={(value) => setFromDate(value)}
           />
-          <TextField
+          <DateField
             label="Hasta"
-            type="date"
             size="small"
             value={toDate}
-            onChange={(e) => setToDate(e.target.value)}
-            slotProps={{ inputLabel: { shrink: true } }}
+            onChange={(value) => setToDate(value)}
           />
           <TextField
             select

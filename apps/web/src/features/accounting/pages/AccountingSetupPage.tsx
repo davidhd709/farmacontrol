@@ -43,6 +43,7 @@ import {
 import { formatMoney, toCents } from '../../../utils/money';
 import { businessToday } from '../../../utils/business-date';
 import { formatDate } from '../../../utils/date-format';
+import { DateField } from '../../../components/DateField';
 
 interface OpeningLine {
   accountId: string;
@@ -305,12 +306,10 @@ export function AccountingSetupPage() {
             ) : canManage ? (
               <Stack spacing={2}>
                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-                  <TextField
-                    type="date"
+                  <DateField
                     label="Fecha de corte"
                     value={entryDate}
-                    onChange={(e) => setEntryDate(e.target.value)}
-                    slotProps={{ inputLabel: { shrink: true } }}
+                    onChange={(value) => setEntryDate(value)}
                   />
                   <TextField
                     fullWidth

@@ -42,6 +42,7 @@ import { HomeBackButton } from '../../../components/HomeBackButton';
 import type { AuditEventDto, AuditMetadataDto } from '@farmacia/contracts';
 import { fetchAuditEvents, fetchAuditMetadata } from '../api/audit.api';
 import { formatDateTime } from '../../../utils/date-format';
+import { DateField } from '../../../components/DateField';
 
 export const AuditLogsPage = () => {
   const [events, setEvents] = useState<AuditEventDto[]>([]);
@@ -309,29 +310,25 @@ export const AuditLogsPage = () => {
             </TextField>
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 2 }}>
-            <TextField
+            <DateField
               fullWidth
               size="small"
-              type="date"
               label="Fecha Desde"
-              slotProps={{ inputLabel: { shrink: true } }}
               value={fromDate}
-              onChange={(e) => {
-                setFromDate(e.target.value);
+              onChange={(value) => {
+                setFromDate(value);
                 setPage(0);
               }}
             />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 2 }}>
-            <TextField
+            <DateField
               fullWidth
               size="small"
-              type="date"
               label="Fecha Hasta"
-              slotProps={{ inputLabel: { shrink: true } }}
               value={toDate}
-              onChange={(e) => {
-                setToDate(e.target.value);
+              onChange={(value) => {
+                setToDate(value);
                 setPage(0);
               }}
             />

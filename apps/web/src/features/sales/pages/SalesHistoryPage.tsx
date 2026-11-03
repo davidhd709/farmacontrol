@@ -35,6 +35,7 @@ import { SaleCreditNotesDialog } from '../components/SaleCreditNotesDialog';
 import { businessDayEnd, businessDayStart } from '../../../utils/business-date';
 import { formatDateTime } from '../../../utils/date-format';
 import { FilterBar } from '../../../components/layout/FilterBar';
+import { DateField } from '../../../components/DateField';
 
 export const SalesHistoryPage: React.FC = () => {
   const navigate = useNavigate();
@@ -226,23 +227,19 @@ export const SalesHistoryPage: React.FC = () => {
           <MenuItem value="CANCELLED">Anulada</MenuItem>
         </TextField>
 
-        <TextField
+        <DateField
           label="Desde"
-          type="date"
           size="small"
           value={fromDateFilter}
-          onChange={(e) => setFromDateFilter(e.target.value)}
-          slotProps={{ inputLabel: { shrink: true } }}
+          onChange={(value) => setFromDateFilter(value)}
           data-testid="filter-from-date"
         />
 
-        <TextField
+        <DateField
           label="Hasta"
-          type="date"
           size="small"
           value={toDateFilter}
-          onChange={(e) => setToDateFilter(e.target.value)}
-          slotProps={{ inputLabel: { shrink: true } }}
+          onChange={(value) => setToDateFilter(value)}
           data-testid="filter-to-date"
         />
 

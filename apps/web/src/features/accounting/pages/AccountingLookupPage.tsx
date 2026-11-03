@@ -11,7 +11,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TextField,
   Typography,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
@@ -24,6 +23,7 @@ import { AGING_LABELS, AgingSummaryCards } from '../../../components/AgingSummar
 import { HomeBackButton } from '../../../components/HomeBackButton';
 import { quickRange } from '../../../components/QuickDateRange';
 import { formatDate } from '../../../utils/date-format';
+import { DateField } from '../../../components/DateField';
 
 const money = (value: string) =>
   `$${Number(value).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -57,21 +57,17 @@ function AccountLedger({ accountId }: { accountId: string }) {
   return (
     <Stack spacing={2}>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-        <TextField
+        <DateField
           label="Desde"
-          type="date"
           size="small"
           value={fromDate}
-          onChange={(e) => setFromDate(e.target.value)}
-          slotProps={{ inputLabel: { shrink: true } }}
+          onChange={(value) => setFromDate(value)}
         />
-        <TextField
+        <DateField
           label="Hasta"
-          type="date"
           size="small"
           value={toDate}
-          onChange={(e) => setToDate(e.target.value)}
-          slotProps={{ inputLabel: { shrink: true } }}
+          onChange={(value) => setToDate(value)}
         />
       </Stack>
       {isLoading && <CircularProgress size={24} />}

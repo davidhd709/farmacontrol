@@ -21,7 +21,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TextField,
   Typography,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
@@ -30,6 +29,7 @@ import { usePermissions } from '../../auth/hooks/usePermissions';
 import { fetchTrialBalance, fetchGeneralLedger } from '../api/accounting.api';
 import { QuickDateRange, quickRange } from '../../../components/QuickDateRange';
 import { formatDate } from '../../../utils/date-format';
+import { DateField } from '../../../components/DateField';
 
 const accountTypeNames: Record<AccountType, string> = {
   ASSET: 'Activo',
@@ -96,22 +96,18 @@ export const TrialBalancePage = () => {
         {/* Filtros de Período */}
         <Paper sx={{ p: 2 }}>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: 'center' }}>
-            <TextField
+            <DateField
               label="Fecha Desde"
-              type="date"
               size="small"
               value={fromDate}
-              onChange={(e) => setFromDate(e.target.value)}
-              slotProps={{ inputLabel: { shrink: true } }}
+              onChange={(value) => setFromDate(value)}
               sx={{ minWidth: 170 }}
             />
-            <TextField
+            <DateField
               label="Fecha Hasta"
-              type="date"
               size="small"
               value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
-              slotProps={{ inputLabel: { shrink: true } }}
+              onChange={(value) => setToDate(value)}
               sx={{ minWidth: 170 }}
             />
             <Button variant="contained" onClick={() => refetch()}>

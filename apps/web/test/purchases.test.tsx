@@ -21,6 +21,7 @@ import * as accountingApi from '../src/features/accounting/api/accounting.api';
 import { businessToday, addDaysToDate } from '../src/utils/business-date';
 import { appTheme } from '../src/theme/app-theme';
 
+import { setDateField } from './support-date';
 const mockSuppliers: SupplierDto[] = [
   {
     id: 'sup-1',
@@ -218,9 +219,7 @@ describe('Purchases Frontend (UX-15 & UX-16)', () => {
     fireEvent.change(screen.getByLabelText(/Número de Factura/), { target: { value: ' fac-42 ' } });
     await choose(user, /^Producto/, /Amoxicilina/);
     fireEvent.change(screen.getByLabelText(/Número de Lote/), { target: { value: ' lote-42 ' } });
-    fireEvent.change(screen.getByLabelText(/^Fecha de Vencimiento \*/), {
-      target: { value: '2099-12-31' },
-    });
+    setDateField(/^Fecha de Vencimiento \*/, '2099-12-31');
     fireEvent.change(screen.getByLabelText(/^Cantidad/), { target: { value: '2' } });
     fireEvent.change(screen.getByLabelText(/Observaciones/), {
       target: { value: ' Entrega completa ' },

@@ -13,6 +13,7 @@ import {
 import type { LocationDto, ProductDto } from '@farmacia/contracts';
 import { createInventoryLot } from '../api/inventory.api';
 import { INVENTORY_CONTROL_MODE_INFO } from '../../catalog/utils/inventory-control';
+import { DateField } from '../../../components/DateField';
 
 interface CreateLotDialogProps {
   open: boolean;
@@ -169,12 +170,10 @@ export const CreateLotDialog = ({
             )}
 
             {needsExpiration && (
-              <TextField
+              <DateField
                 label="Fecha de Vencimiento"
-                type="date"
                 value={expirationDate}
-                onChange={(e) => setExpirationDate(e.target.value)}
-                slotProps={{ inputLabel: { shrink: true } }}
+                onChange={(value) => setExpirationDate(value)}
                 required
                 fullWidth
                 disabled={isSubmitting}

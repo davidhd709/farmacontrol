@@ -28,6 +28,7 @@ import {
 } from '../api/taxes.api';
 import { REVIEW_PENDING_TEXT } from './tax-labels';
 import { businessToday } from '../../../utils/business-date';
+import { DateField } from '../../../components/DateField';
 
 /** Fecha calendario del instante en Bogotá (zona del negocio, no la del equipo). */
 function localIsoDate(date: Date): string {
@@ -135,13 +136,11 @@ export function ProductTaxClassificationDialog({
             </TextField>
           </Grid>
           <Grid size={{ xs: 12, md: 4 }}>
-            <TextField
-              type="date"
+            <DateField
               fullWidth
               label="Vigente desde"
               value={effectiveFrom}
-              onChange={(e) => setEffectiveFrom(e.target.value)}
-              slotProps={{ inputLabel: { shrink: true } }}
+              onChange={(value) => setEffectiveFrom(value)}
             />
           </Grid>
           <Grid size={{ xs: 12 }}>

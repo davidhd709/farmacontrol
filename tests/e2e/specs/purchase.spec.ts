@@ -8,6 +8,7 @@ import {
   lotQuantities,
   uniqueCode,
 } from '../support/api';
+import { fillDateField } from '../support/date-field';
 
 const fixtures = loadFixtures();
 test.use({ storageState: adminStateFile });
@@ -39,10 +40,10 @@ test('recibir una compra desde la web crea el lote con su existencia', async ({ 
     .getByLabel(/Número de Lote/)
     .first()
     .fill(lotNumber);
-  await page
-    .getByLabel(/Fecha de Vencimiento \*/)
-    .first()
-    .fill(businessDay(365));
+  await fillDateField(
+    page.getByRole('group', { name: /Fecha de Vencimiento \*/ }).first(),
+    businessDay(365),
+  );
   await page
     .getByLabel(/^Cantidad/)
     .first()

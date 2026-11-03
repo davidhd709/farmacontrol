@@ -10,6 +10,7 @@ import { PayablesPage } from '../src/features/payables/pages/PayablesPage';
 import { appTheme } from '../src/theme/app-theme';
 import { withAuth } from './support-auth';
 
+import { setDateField } from './support-date';
 const statement: PayableStatementDto = {
   items: [
     {
@@ -111,8 +112,8 @@ describe('PayablesPage: consulta por proveedor y fechas con edades', () => {
     renderPage();
     fireEvent.mouseDown(screen.getByRole('combobox', { name: /Proveedor/ }));
     fireEvent.click(await screen.findByRole('option', { name: /Distribuciones del Valle/ }));
-    fireEvent.change(screen.getByLabelText('Fecha desde'), { target: { value: '2026-08-01' } });
-    fireEvent.change(screen.getByLabelText('Fecha hasta'), { target: { value: '2026-10-31' } });
+    setDateField('Fecha desde', '2026-08-01');
+    setDateField('Fecha hasta', '2026-10-31');
     fireEvent.click(screen.getByRole('button', { name: 'Consultar' }));
 
     await waitFor(() =>

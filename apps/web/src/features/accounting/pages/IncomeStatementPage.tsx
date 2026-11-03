@@ -18,7 +18,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TextField,
   Typography,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
@@ -27,6 +26,7 @@ import { usePermissions } from '../../auth/hooks/usePermissions';
 import { fetchIncomeStatement, exportIncomeStatementExcel } from '../api/accounting.api';
 import { QuickDateRange, quickRange } from '../../../components/QuickDateRange';
 import { FilterBar } from '../../../components/layout/FilterBar';
+import { DateField } from '../../../components/DateField';
 
 function formatMoney(value: string | number | undefined | null): string {
   if (value === undefined || value === null) return '$0.00';
@@ -124,21 +124,17 @@ export const IncomeStatementPage = () => {
             />
           }
         >
-          <TextField
+          <DateField
             label="Fecha Desde"
-            type="date"
             size="small"
             value={fromDate}
-            onChange={(e) => setFromDate(e.target.value)}
-            slotProps={{ inputLabel: { shrink: true } }}
+            onChange={(value) => setFromDate(value)}
           />
-          <TextField
+          <DateField
             label="Fecha Hasta"
-            type="date"
             size="small"
             value={toDate}
-            onChange={(e) => setToDate(e.target.value)}
-            slotProps={{ inputLabel: { shrink: true } }}
+            onChange={(value) => setToDate(value)}
           />
         </FilterBar>
 

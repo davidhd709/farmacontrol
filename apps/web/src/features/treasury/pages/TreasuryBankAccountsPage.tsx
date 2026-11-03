@@ -47,6 +47,7 @@ import { BankAccountDialog } from '../components/BankAccountDialog';
 import { SweetModal } from '../../../components/SweetModal';
 import { SortByDateButton } from '../../../components/SortByDateButton';
 import { formatDateTime } from '../../../utils/date-format';
+import { DateField } from '../../../components/DateField';
 
 const ACCOUNT_TYPE_LABELS: Record<string, string> = {
   AHORROS: 'Ahorros',
@@ -335,21 +336,17 @@ export function TreasuryBankAccountsPage() {
               spacing={1.5}
               sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1 }}
             >
-              <TextField
+              <DateField
                 size="small"
-                type="date"
                 label="Desde"
-                slotProps={{ inputLabel: { shrink: true } }}
                 value={fromDateFilter}
-                onChange={(e) => setFromDateFilter(e.target.value)}
+                onChange={(value) => setFromDateFilter(value)}
               />
-              <TextField
+              <DateField
                 size="small"
-                type="date"
                 label="Hasta"
-                slotProps={{ inputLabel: { shrink: true } }}
                 value={toDateFilter}
-                onChange={(e) => setToDateFilter(e.target.value)}
+                onChange={(value) => setToDateFilter(value)}
               />
 
               <FormControl size="small" sx={{ minWidth: 160 }}>

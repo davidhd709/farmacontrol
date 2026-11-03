@@ -37,6 +37,7 @@ import { SweetModal } from '../../../components/SweetModal';
 import { VoucherFormDialog } from '../components/VoucherFormDialog';
 import { usePermissions } from '../../auth/hooks/usePermissions';
 import { formatDate } from '../../../utils/date-format';
+import { DateField } from '../../../components/DateField';
 
 const LABELS: Record<
   TreasuryDocumentType,
@@ -213,27 +214,23 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
 
         <Paper sx={{ p: 2 }}>
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-            <TextField
+            <DateField
               label="Desde"
-              type="date"
               size="small"
               value={fromDate}
-              onChange={(e) => {
-                setFromDate(e.target.value);
+              onChange={(value) => {
+                setFromDate(value);
                 setPage(0);
               }}
-              slotProps={{ inputLabel: { shrink: true } }}
             />
-            <TextField
+            <DateField
               label="Hasta"
-              type="date"
               size="small"
               value={toDate}
-              onChange={(e) => {
-                setToDate(e.target.value);
+              onChange={(value) => {
+                setToDate(value);
                 setPage(0);
               }}
-              slotProps={{ inputLabel: { shrink: true } }}
             />
             <TextField
               label="Buscar número, concepto o documento"

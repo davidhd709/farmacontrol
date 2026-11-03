@@ -34,6 +34,7 @@ import { formatMoney, toCents } from '../../../utils/money';
 import { isOverdue, getStatusDisplay } from '../utils/status';
 import { formatDate } from '../../../utils/date-format';
 import { FilterBar } from '../../../components/layout/FilterBar';
+import { DateField } from '../../../components/DateField';
 
 export function ReceivablesPage() {
   const [page, setPage] = useState(0);
@@ -169,31 +170,27 @@ export function ReceivablesPage() {
           </Select>
         </FormControl>
 
-        <TextField
+        <DateField
           id="receivables-from-date"
           label="Desde"
-          type="date"
           size="small"
           value={fromDate}
-          onChange={(e) => {
-            setFromDate(e.target.value);
+          onChange={(value) => {
+            setFromDate(value);
             setPage(0);
           }}
-          slotProps={{ inputLabel: { shrink: true } }}
           sx={{ minWidth: 140 }}
         />
 
-        <TextField
+        <DateField
           id="receivables-to-date"
           label="Hasta"
-          type="date"
           size="small"
           value={toDate}
-          onChange={(e) => {
-            setToDate(e.target.value);
+          onChange={(value) => {
+            setToDate(value);
             setPage(0);
           }}
-          slotProps={{ inputLabel: { shrink: true } }}
           sx={{ minWidth: 140 }}
         />
 

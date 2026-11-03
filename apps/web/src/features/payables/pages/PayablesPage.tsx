@@ -8,7 +8,6 @@ import {
   FormControlLabel,
   Paper,
   Stack,
-  TextField,
   Typography,
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
@@ -25,6 +24,7 @@ import { ThirdPartyAutocomplete } from '../../third-parties/components/ThirdPart
 import { PayableStatementTable } from '../components/PayableStatementTable';
 import { PayableMovementsDialog } from '../components/PayableMovementsDialog';
 import { ExpenseMovementsDialog } from '../../expenses/components/ExpenseMovementsDialog';
+import { DateField } from '../../../components/DateField';
 
 /**
  * Cuentas por pagar: facturas de compra y causaciones de gasto. No muestra nada hasta que se
@@ -94,21 +94,17 @@ export function PayablesPage() {
             showQuickCreate={false}
           />
         </Box>
-        <TextField
+        <DateField
           label="Fecha desde"
-          type="date"
           size="small"
           value={fromDate}
-          onChange={(e) => setFromDate(e.target.value)}
-          slotProps={{ inputLabel: { shrink: true } }}
+          onChange={(value) => setFromDate(value)}
         />
-        <TextField
+        <DateField
           label="Fecha hasta"
-          type="date"
           size="small"
           value={toDate}
-          onChange={(e) => setToDate(e.target.value)}
-          slotProps={{ inputLabel: { shrink: true } }}
+          onChange={(value) => setToDate(value)}
         />
         <FormControlLabel
           control={

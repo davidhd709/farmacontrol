@@ -23,6 +23,7 @@ import { fetchAccountingAudit } from '../api/accounting.api';
 import { HomeBackButton } from '../../../components/HomeBackButton';
 import { QuickDateRange } from '../../../components/QuickDateRange';
 import { formatDate } from '../../../utils/date-format';
+import { DateField } from '../../../components/DateField';
 
 /** Tipo de documento de origen de un asiento, en español. */
 export const DOCUMENT_TYPE_LABELS: Record<string, string> = {
@@ -96,21 +97,17 @@ export function AccountingAuditPage() {
         </Tabs>
         <Box sx={{ p: 2 }}>
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-            <TextField
+            <DateField
               label="Desde"
-              type="date"
               size="small"
               value={fromDate}
-              onChange={(e) => setFromDate(e.target.value)}
-              slotProps={{ inputLabel: { shrink: true } }}
+              onChange={(value) => setFromDate(value)}
             />
-            <TextField
+            <DateField
               label="Hasta"
-              type="date"
               size="small"
               value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
-              slotProps={{ inputLabel: { shrink: true } }}
+              onChange={(value) => setToDate(value)}
             />
             <TextField
               select

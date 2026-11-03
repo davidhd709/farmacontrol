@@ -57,6 +57,7 @@ import { localIsoDate } from '../../../components/QuickDateRange';
 import { calendarMonthBounds } from '../../../utils/business-date';
 import { formatDate } from '../../../utils/date-format';
 import { PageHeader } from '../../../components/layout/PageHeader';
+import { DateField } from '../../../components/DateField';
 
 function formatCurrency(val: string | number | undefined): string {
   if (val === undefined || val === null) return '$0.00';
@@ -326,29 +327,25 @@ export const ExpensesPage: React.FC = () => {
       <Card elevation={1} sx={{ mb: 3, p: 2 }}>
         <Grid container spacing={2} sx={{ alignItems: 'center' }}>
           <Grid size={{ xs: 12, sm: 6, md: 2.5 }}>
-            <TextField
+            <DateField
               label="Desde"
-              type="date"
               size="small"
               fullWidth
-              slotProps={{ inputLabel: { shrink: true } }}
               value={startDate}
-              onChange={(e) => {
-                setStartDate(e.target.value);
+              onChange={(value) => {
+                setStartDate(value);
                 setPage(1);
               }}
             />
           </Grid>
           <Grid size={{ xs: 12, sm: 6, md: 2.5 }}>
-            <TextField
+            <DateField
               label="Hasta"
-              type="date"
               size="small"
               fullWidth
-              slotProps={{ inputLabel: { shrink: true } }}
               value={endDate}
-              onChange={(e) => {
-                setEndDate(e.target.value);
+              onChange={(value) => {
+                setEndDate(value);
                 setPage(1);
               }}
             />

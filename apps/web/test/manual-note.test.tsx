@@ -6,6 +6,7 @@ import { appTheme } from '../src/theme/app-theme';
 import { ManualNoteDialog } from '../src/features/accounting/components/ManualNoteDialog';
 import * as api from '../src/features/accounting/api/accounting.api';
 
+import { setDateField } from './support-date';
 const base = {
   type: 'EXPENSE' as const,
   nature: 'DEBIT' as const,
@@ -50,7 +51,7 @@ describe('Nota contable manual', () => {
     const onCreated = renderDialog();
     const submit = screen.getByRole('button', { name: 'Registrar nota' });
 
-    fireEvent.change(screen.getByLabelText(/Fecha contable/), { target: { value: '2026-07-15' } });
+    setDateField(/Fecha contable/, '2026-07-15');
     fireEvent.change(screen.getByLabelText(/Descripción/), { target: { value: 'Energía de julio' } });
     await pickAccount(1, '513525 — Energía');
     await pickAccount(2, '110505 — Caja');
@@ -85,7 +86,7 @@ describe('Nota contable manual', () => {
       .mockRejectedValueOnce(new Error('Sin conexión'))
       .mockResolvedValueOnce({ journalEntryId: 'je-1', noteNumber: 'NTC-000001' });
     renderDialog();
-    fireEvent.change(screen.getByLabelText(/Fecha contable/), { target: { value: '2026-07-15' } });
+    setDateField(/Fecha contable/, '2026-07-15');
     fireEvent.change(screen.getByLabelText(/Descripción/), { target: { value: 'Energía de julio' } });
     await pickAccount(1, '513525 — Energía');
     await pickAccount(2, '110505 — Caja');

@@ -346,8 +346,8 @@ export const ReceivePurchasePage: React.FC = () => {
               control={control}
               label="Fecha de Emisión / Factura *"
               type="date"
-              onChange={(e) => {
-                const newDate = e.target.value;
+              onDateChange={(value) => {
+                const newDate = value;
                 setValue('purchaseDate', newDate);
                 if (paymentCondition === 'CONTADO') {
                   setValue('dueDate', newDate);
@@ -355,7 +355,6 @@ export const ReceivePurchasePage: React.FC = () => {
                   setValue('dueDate', calculateDefaultDueDate(newDate, Number(creditDays) || 30));
                 }
               }}
-              slotProps={{ inputLabel: { shrink: true } }}
               required
               fullWidth
             />
@@ -414,8 +413,7 @@ export const ReceivePurchasePage: React.FC = () => {
               control={control}
               label="Fecha de Vencimiento de Factura *"
               type="date"
-              onChange={(e) => setValue('dueDate', e.target.value)}
-              slotProps={{ inputLabel: { shrink: true } }}
+              onDateChange={(value) => setValue('dueDate', value)}
               helperText="Fecha límite para el pago al proveedor"
               required
               fullWidth
@@ -723,10 +721,9 @@ export const ReceivePurchasePage: React.FC = () => {
                               type="date"
                               label="Fecha de Vencimiento *"
                               fullWidth
-                              onChange={(e) =>
-                                handleLineChange(idx, 'expirationDate', e.target.value)
+                              onDateChange={(value) =>
+                                handleLineChange(idx, 'expirationDate', value)
                               }
-                              slotProps={{ inputLabel: { shrink: true } }}
                               helperText="Vencimiento sanitario (FEFO)"
                               required
                             />
@@ -1032,10 +1029,9 @@ export const ReceivePurchasePage: React.FC = () => {
                                   size="small"
                                   type="date"
                                   fullWidth
-                                  onChange={(e) =>
-                                    handleLineChange(idx, 'expirationDate', e.target.value)
+                                  onDateChange={(value) =>
+                                    handleLineChange(idx, 'expirationDate', value)
                                   }
-                                  slotProps={{ inputLabel: { shrink: true } }}
                                   required
                                 />
                               ) : (

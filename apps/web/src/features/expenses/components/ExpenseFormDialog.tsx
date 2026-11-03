@@ -18,6 +18,7 @@ import { localIsoDate } from '../../../components/QuickDateRange';
 import { ThirdPartyAutocomplete } from '../../third-parties/components/ThirdPartyAutocomplete';
 import { createExpense } from '../api/expenses.api';
 import { expenseSchema, type ExpenseFormData } from '../validation/expense.schema';
+import { DateField } from '../../../components/DateField';
 
 interface Props {
   categories: ExpenseCategoryDto[];
@@ -221,9 +222,8 @@ export function ExpenseFormDialog({ categories, onClose, onSuccess }: Props) {
                   name="expenseDate"
                   control={control}
                   render={({ field: { ref, ...field } }) => (
-                    <TextField
+                    <DateField
                       label="Fecha de Gasto"
-                      type="date"
                       {...field}
                       inputRef={ref}
                       error={!!errors.expenseDate}
@@ -231,7 +231,6 @@ export function ExpenseFormDialog({ categories, onClose, onSuccess }: Props) {
                       required
                       fullWidth
                       size="small"
-                      slotProps={{ inputLabel: { shrink: true } }}
                     />
                   )}
                 />
@@ -241,9 +240,8 @@ export function ExpenseFormDialog({ categories, onClose, onSuccess }: Props) {
                   name="dueDate"
                   control={control}
                   render={({ field: { ref, ...field } }) => (
-                    <TextField
+                    <DateField
                       label="Fecha de Vencimiento"
-                      type="date"
                       {...field}
                       inputRef={ref}
                       error={!!errors.dueDate}
@@ -252,7 +250,6 @@ export function ExpenseFormDialog({ categories, onClose, onSuccess }: Props) {
                       }
                       fullWidth
                       size="small"
-                      slotProps={{ inputLabel: { shrink: true } }}
                     />
                   )}
                 />

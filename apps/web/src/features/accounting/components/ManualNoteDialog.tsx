@@ -23,6 +23,7 @@ import {
 import DeleteIcon from '@mui/icons-material/Delete';
 import { createManualNote, type AccountDto } from '../api/accounting.api';
 import { useAccounts } from '../hooks/useAccounting';
+import { DateField } from '../../../components/DateField';
 
 interface LineDraft {
   key: number;
@@ -138,13 +139,11 @@ export function ManualNoteDialog({
       <DialogContent dividers>
         <Stack spacing={2}>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-            <TextField
+            <DateField
               label="Fecha contable"
-              type="date"
               required
               value={entryDate}
-              onChange={(e) => setEntryDate(e.target.value)}
-              slotProps={{ inputLabel: { shrink: true } }}
+              onChange={(value) => setEntryDate(value)}
               helperText="Puede ser una fecha anterior, si no está cerrada ni bloqueada."
               sx={{ minWidth: 220 }}
             />

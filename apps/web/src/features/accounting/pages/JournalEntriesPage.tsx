@@ -40,6 +40,7 @@ import { ManualNoteDialog } from '../components/ManualNoteDialog';
 import { QuickDateRange, localIsoDate } from '../../../components/QuickDateRange';
 import { formatDate } from '../../../utils/date-format';
 import { FilterBar } from '../../../components/layout/FilterBar';
+import { DateField } from '../../../components/DateField';
 
 const sourceTypeLabels: Record<
   string,
@@ -272,21 +273,17 @@ export const JournalEntriesPage = () => {
             />
           }
         >
-          <TextField
+          <DateField
             label="Desde"
-            type="date"
             size="small"
             value={fromDate}
-            onChange={(e) => setFromDate(e.target.value)}
-            slotProps={{ inputLabel: { shrink: true } }}
+            onChange={(value) => setFromDate(value)}
           />
-          <TextField
+          <DateField
             label="Hasta"
-            type="date"
             size="small"
             value={toDate}
-            onChange={(e) => setToDate(e.target.value)}
-            slotProps={{ inputLabel: { shrink: true } }}
+            onChange={(value) => setToDate(value)}
           />
         <FormControl size="small" fullWidth>
           <InputLabel>Origen</InputLabel>
@@ -578,13 +575,11 @@ export const JournalEntriesPage = () => {
               asiento. El original se conserva. Esta acción no se puede deshacer.
             </Alert>
             {actionError && <Alert severity="error">{actionError}</Alert>}
-            <TextField
+            <DateField
               label="Fecha de la anulación"
-              type="date"
               size="small"
               value={annulDate}
-              onChange={(e) => setAnnulDate(e.target.value)}
-              slotProps={{ inputLabel: { shrink: true } }}
+              onChange={(value) => setAnnulDate(value)}
               fullWidth
             />
             <TextField

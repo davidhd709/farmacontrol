@@ -23,7 +23,6 @@ import {
   TableHead,
   TableRow,
   Tabs,
-  TextField,
   Typography,
 } from '@mui/material';
 import {
@@ -37,6 +36,7 @@ import {
 import { QuickDateRange } from '../../../components/QuickDateRange';
 import type { SupplierReturnStatus } from '@farmacia/contracts';
 import { formatDate, formatDateTime } from '../../../utils/date-format';
+import { DateField } from '../../../components/DateField';
 
 type ReportTab =
   'valuation' | 'expirations' | 'supplier-returns' | 'sales' | 'cash' | 'top-products';
@@ -211,22 +211,18 @@ export function ReportsPage() {
               <Typography variant="body2" sx={{ fontWeight: 600 }}>
                 Rango de fechas:
               </Typography>
-              <TextField
+              <DateField
                 size="small"
                 label="Desde"
-                type="date"
                 value={fromDate}
-                onChange={(e) => setFromDate(e.target.value)}
-                slotProps={{ inputLabel: { shrink: true } }}
+                onChange={(value) => setFromDate(value)}
                 data-testid="from-date-input"
               />
-              <TextField
+              <DateField
                 size="small"
                 label="Hasta"
-                type="date"
                 value={toDate}
-                onChange={(e) => setToDate(e.target.value)}
-                slotProps={{ inputLabel: { shrink: true } }}
+                onChange={(value) => setToDate(value)}
                 data-testid="to-date-input"
               />
               {(fromDate || toDate) && (
