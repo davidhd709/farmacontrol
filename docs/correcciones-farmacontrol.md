@@ -293,6 +293,25 @@ Pruebas: `document-annulments` (integración: cartera crea el abono y recibe 403
 | inventario, supervisor | Encolar y consultar trabajos de alertas (`POST`/`GET /alerts/jobs`) | Solo "Escanear lotes ahora" (`/alerts/evaluate`) | Bajo riesgo; no se cambió |
 | inventario, supervisor | Crear ubicaciones (`POST /inventory/locations`) | Ninguna pantalla crea ubicaciones | Bajo riesgo; no se cambió |
 
+## 3.13 Diagnóstico de saldos bancarios, solo lectura (2026-11-02)
+
+`packages/database/src/diagnostics/bank-balances.ts`, con la CLI `pnpm db:diagnose:banks`. Complementa la consulta SQL de la sección 3.6 con un reporte en markdown o CSV. **Se ejecuta contra una copia de la base del cliente, nunca contra producción**; no se ha ejecutado contra ninguna base del cliente.
+
+```bash
+# Restaurar la copia en una base aparte (docs/runbooks/backup-restore.md) y luego:
+DIAGNOSTIC_DATABASE_URL=postgresql://usuario:clave@localhost:5434/farmacia_copia \
+  pnpm db:diagnose:banks --copia --salida diagnostico-bancos.md
+# CSV, un archivo por sección:
+DIAGNOSTIC_DATABASE_URL=... pnpm db:diagnose:banks --copia --formato csv --salida diagnostico-bancos/
+```
+
+- **Salvaguardas:** no lee `DATABASE_URL` ni el `.env` de la aplicación (exige `DIAGNOSTIC_DATABASE_URL` o `--url`), exige `--copia`, se niega con `NODE_ENV=production`, abre la sesión con `default_transaction_read_only=on` y consulta dentro de una transacción `READ ONLY` con instantánea `REPEATABLE READ`. Si la sesión no queda en solo lectura, no genera el reporte.
+- **1. Por cuenta bancaria:** saldo registrado (`current_balance`), saldo según sus movimientos, saldo contable de su subcuenta del PUC (débitos − créditos publicados) y las dos diferencias, más los saltos en la cadena de saldos de los movimientos. Las cuentas sin subcuenta propia se comparan en grupo contra la cuenta del propósito BANK, porque sus asientos no se pueden separar. Al final, el total registrado frente al total contable de bancos.
+- **2. Saldos iniciales:** cada saldo inicial de cuenta bancaria con su movimiento, si tiene asiento propio y el neto vigente de los saldos iniciales del asistente en esa cuenta contable. Estados: sin asiento, respaldado por el asistente, respaldo parcial (el asistente tiene otro valor), con asiento propio, sin movimiento.
+- **3. Asientos posiblemente duplicados:** asientos vigentes (ni reversados ni reversiones) que tocan cuentas de bancos y tienen la misma fecha y las mismas líneas; confianza ALTA si también coincide la descripción. Dos ventas iguales el mismo día también coinciden, así que son candidatos a revisar con el contador, no a borrar.
+- Todo el dinero se calcula en SQL con `numeric` y se reporta con dos decimales.
+- **Pruebas:** `bank-balance-diagnostic` (integración con PostgreSQL): diferencia contable por saldo inicial sin asiento, saldo inicial respaldado por el asistente, cuenta sin subcuenta y con la cadena rota, duplicados ALTA y MEDIA, un duplicado reversado que no cuenta, la sesión rechaza escrituras y los formatos markdown y CSV.
+
 ## 4. Pendientes y dudas abiertas
 
 - ⚠️ Pantalla del botón "Reservar" (sección 2, fase 1).

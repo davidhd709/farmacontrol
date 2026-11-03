@@ -24,6 +24,7 @@
     "db:seed:rbac": "pnpm --filter @farmacia/database db:seed:rbac",
     "db:seed:admin": "pnpm --filter @farmacia/api seed:admin",
     "db:seed:puc": "pnpm --filter @farmacia/database db:seed:puc",
+    "db:diagnose:banks": "pnpm --filter @farmacia/database db:diagnose:banks",
     "db:reset:admin-password": "pnpm --filter @farmacia/api reset:admin-password"
   },
   "devDependencies": {

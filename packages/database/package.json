@@ -18,7 +18,8 @@
     "db:test:assert": "tsx src/testing/assert-test-isolation.cli.ts",
     "db:test:migrate": "tsx src/testing/assert-test-isolation.cli.ts && NODE_ENV=test prisma migrate deploy",
     "db:seed:rbac": "tsx src/seed/run-rbac-seed.ts",
-    "db:seed:puc": "tsx src/seed/seed-puc.ts"
+    "db:seed:puc": "tsx src/seed/seed-puc.ts",
+    "db:diagnose:banks": "tsx src/diagnostics/run-bank-balances.ts"
   },
   "dependencies": {
     "@farmacia/contracts": "workspace:*",
