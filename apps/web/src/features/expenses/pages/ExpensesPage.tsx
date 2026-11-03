@@ -68,6 +68,10 @@ function formatCurrency(val: string | number | undefined): string {
 
 export const ExpensesPage: React.FC = () => {
   const { hasPermission } = usePermissions();
+  // Revertir un pago anula parte de su comprobante de egreso
+  const canReversePayment =
+    hasPermission(SYSTEM_PERMISSIONS.EXPENSES_MANAGE) &&
+    hasPermission(SYSTEM_PERMISSIONS.DISBURSEMENTS_ANNUL);
   // Filtros
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -697,7 +701,7 @@ export const ExpensesPage: React.FC = () => {
                               )}
                             </TableCell>
                             <TableCell sx={{ textAlign: 'right' }}>
-                              {!p.isReversed && (
+                              {!p.isReversed && canReversePayment && (
                                 <Tooltip title="Revertir Pago">
                                   <IconButton
                                     aria-label="Revertir pago"

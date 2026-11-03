@@ -7,10 +7,12 @@ import type { PayableStatementDto, ThirdPartyDto } from '@farmacia/contracts';
 import * as payablesApi from '../src/features/payables/api/payables.api';
 import * as thirdPartiesApi from '../src/features/third-parties/api/third-parties.api';
 import { PayablesPage } from '../src/features/payables/pages/PayablesPage';
+import { PayableMovementsDialog } from '../src/features/payables/components/PayableMovementsDialog';
+import { SYSTEM_PERMISSIONS } from '@farmacia/contracts';
 import { appTheme } from '../src/theme/app-theme';
 import { withAuth } from './support-auth';
-
 import { setDateField } from './support-date';
+
 const statement: PayableStatementDto = {
   items: [
     {
@@ -133,5 +135,53 @@ describe('PayablesPage: consulta por proveedor y fechas con edades', () => {
     const row = screen.getByText('FAC-PROV-101').closest('tr') as HTMLElement;
     fireEvent.click(within(row).getByRole('button', { name: 'Detalle' }));
     expect(await screen.findByText(/registra un comprobante de egreso/)).toBeInTheDocument();
+  });
+
+  it.each([
+    [
+      'compras (payables:manage sin comprobante_egreso.anular)',
+      [SYSTEM_PERMISSIONS.PAYABLES_MANAGE],
+      false,
+    ],
+    [
+      'con comprobante_egreso.anular',
+      [SYSTEM_PERMISSIONS.PAYABLES_MANAGE, SYSTEM_PERMISSIONS.DISBURSEMENTS_ANNUL],
+      true,
+    ],
+  ])('revertir un pago a proveedor anula parte del egreso: %s', async (_, permissions, visible) => {
+    vi.spyOn(payablesApi, 'fetchPayableMovements').mockResolvedValue({
+      payableId: 'pay-1',
+      invoiceNumber: 'FAC-PROV-101',
+      supplierName: 'Distribuciones del Valle',
+      totalAmount: '500000.00',
+      amountPaid: '200000.00',
+      balance: '300000.00',
+      status: 'PENDIENTE',
+      dueDate: '2026-08-31',
+      movements: [
+        {
+          date: '2026-08-10T10:00:00.000Z',
+          type: 'ABONO',
+          documentNumber: 'CE-000003',
+          description: 'Pago',
+          paymentMethod: 'EFECTIVO',
+          paymentId: 'pp-1',
+          isReversed: false,
+          charge: '0.00',
+          credit: '200000.00',
+          balance: '300000.00',
+        },
+      ],
+    } as never);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <ThemeProvider theme={appTheme}>
+        <QueryClientProvider client={queryClient}>
+          {withAuth(<PayableMovementsDialog payableId="pay-1" onClose={() => {}} />, permissions)}
+        </QueryClientProvider>
+      </ThemeProvider>,
+    );
+    expect(await screen.findByText('CE-000003')).toBeInTheDocument();
+    expect(Boolean(screen.queryByRole('button', { name: 'Revertir' }))).toBe(visible);
   });
 });

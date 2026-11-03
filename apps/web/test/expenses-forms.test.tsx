@@ -22,8 +22,8 @@ import * as receivables from '../src/features/receivables/api/receivables.api';
 import * as payables from '../src/features/payables/api/payables.api';
 import * as parties from '../src/features/third-parties/api/third-parties.api';
 import { appTheme } from '../src/theme/app-theme';
-
 import { setDateField } from './support-date';
+
 const expense = {
   id: 'expense',
   beneficiary: 'Proveedor',
@@ -108,7 +108,13 @@ describe('Causación de gastos', () => {
     form();
     vi.mocked(parties.fetchThirdParties).mockResolvedValue({
       items: [
-        { id: 'tp-1', documentType: 'NIT', documentNumber: '', name: 'Proveedor', supplierId: 'sup-1' } as never,
+        {
+          id: 'tp-1',
+          documentType: 'NIT',
+          documentNumber: '',
+          name: 'Proveedor',
+          supplierId: 'sup-1',
+        } as never,
       ],
       total: 1,
       page: 1,
@@ -225,7 +231,12 @@ it('integra los diálogos en gastos y conserva cancellationReason/reversalReason
   vi.spyOn(api, 'fetchExpenseCategories').mockResolvedValue(categories);
   const cancel = vi.spyOn(api, 'cancelExpense').mockResolvedValue(expense);
   const reverse = vi.spyOn(api, 'reverseExpensePayment').mockResolvedValue(expense);
-  mount(withAuth(<ExpensesPage />, [SYSTEM_PERMISSIONS.EXPENSES_MANAGE]));
+  mount(
+    withAuth(<ExpensesPage />, [
+      SYSTEM_PERMISSIONS.EXPENSES_MANAGE,
+      SYSTEM_PERMISSIONS.DISBURSEMENTS_ANNUL,
+    ]),
+  );
   fireEvent.click(await screen.findByRole('button', { name: 'Anular gasto' }));
   change(/Motivo de la Anulación/, ' Motivo válido ');
   fireEvent.click(screen.getByRole('button', { name: 'Confirmar Anulación' }));
@@ -239,6 +250,27 @@ it('integra los diálogos en gastos y conserva cancellationReason/reversalReason
   await waitFor(() =>
     expect(reverse).toHaveBeenCalledWith('payment', { reversalReason: 'Motivo válido' }),
   );
+});
+
+it('sin comprobante_egreso.anular (supervisor) el detalle no ofrece revertir el pago', async () => {
+  vi.spyOn(api, 'fetchExpenses').mockResolvedValue({
+    items: [expense],
+    total: 1,
+    page: 1,
+    pageSize: 15,
+    totalPages: 1,
+  });
+  vi.spyOn(api, 'fetchExpensesSummary').mockResolvedValue({
+    totalAmount: '0.30',
+    totalPaid: '0.00',
+    totalPending: '0.30',
+  } as never);
+  vi.spyOn(api, 'fetchExpenseCategories').mockResolvedValue(categories);
+  mount(withAuth(<ExpensesPage />, [SYSTEM_PERMISSIONS.EXPENSES_MANAGE]));
+  fireEvent.click(await screen.findByRole('button', { name: 'Ver detalle del gasto' }));
+  // La fila del pago vigente se muestra, sin la acción de revertir
+  expect(await screen.findByText('$0,10')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Revertir pago' })).toBeNull();
 });
 
 it('lista las causaciones sin proveedor y asigna uno con confirmación', async () => {
@@ -257,9 +289,21 @@ it('lista las causaciones sin proveedor y asigna uno con confirmación', async (
   ]);
   const assign = vi
     .spyOn(api, 'assignExpenseSupplier')
-    .mockResolvedValue({ ...expense, supplierName: 'Enel', description: 'Energía agosto' } as ExpenseDto);
+    .mockResolvedValue({
+      ...expense,
+      supplierName: 'Enel',
+      description: 'Energía agosto',
+    } as ExpenseDto);
   vi.mocked(parties.fetchThirdParties).mockResolvedValue({
-    items: [{ id: 'tp-1', documentType: 'NIT', documentNumber: '860', name: 'Enel', supplierId: 'sup-1' } as never],
+    items: [
+      {
+        id: 'tp-1',
+        documentType: 'NIT',
+        documentNumber: '860',
+        name: 'Enel',
+        supplierId: 'sup-1',
+      } as never,
+    ],
     total: 1,
     page: 1,
     pageSize: 20,

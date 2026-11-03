@@ -49,7 +49,12 @@ export function PayableMovementsDialog({
               ]
             : []
         }
-        onReverse={hasPermission(SYSTEM_PERMISSIONS.PAYABLES_MANAGE) ? setReversal : undefined}
+        onReverse={
+          hasPermission(SYSTEM_PERMISSIONS.PAYABLES_MANAGE) &&
+          hasPermission(SYSTEM_PERMISSIONS.DISBURSEMENTS_ANNUL)
+            ? setReversal
+            : undefined
+        }
         footer={
           data?.status === 'PENDIENTE' && (
             <Alert severity="info" variant="outlined">

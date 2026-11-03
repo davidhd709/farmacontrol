@@ -274,10 +274,12 @@ Anular ya no usa el permiso de creación. Dos permisos nuevos: `recibo_caja.anul
 | `POST /treasury/cash-receipts/:id/cancel` | `accounting:read` | `recibo_caja.anular` + `accounting:read` |
 | `POST /treasury/disbursements/:id/cancel` | `comprobante_egreso.crear` | `comprobante_egreso.anular` |
 | `POST /receivables/:id/payments/:paymentId/reverse` | `receivables:manage` (cartera y supervisor) | `receivables:manage` + `recibo_caja.anular`: reversar un abono anula parte de su recibo |
+| `POST /payables/:id/payments/:paymentId/reverse` | `payables:manage` (compras y supervisor) | `payables:manage` + `comprobante_egreso.anular`: revertir un pago anula parte de su egreso |
+| `POST /expenses/payments/:paymentId/reverse` | `expenses:manage` (supervisor) | `expenses:manage` + `comprobante_egreso.anular` |
 
-En la web, "Anular" (Recibos de caja, Comprobantes de egreso) y "Revertir" (Cuentas por cobrar → Ver abonos) siguen las mismas reglas. Cuentas por cobrar no tiene botón "Anular".
+En la web, "Anular" (Recibos de caja, Comprobantes de egreso), "Revertir" (Cuentas por cobrar → Ver abonos; Cuentas por pagar → detalle de la factura) y "Revertir pago" (Causación de gastos → detalle) siguen las mismas reglas. Cuentas por cobrar no tiene botón "Anular".
 
-Pruebas: `document-annulments` (integración: cartera crea el abono y recibe 403 al anularlo y al reversar un abono; admin anula), `rbac` (solo los roles con `accounting:read` reciben los permisos de anulación) y en la web `document-annulments` y `receivables`.
+Pruebas: `document-annulments` (integración: cartera crea el abono y recibe 403 al anularlo y al reversar un abono; compras y supervisor reciben 403 al revertir pagos a proveedores y de causaciones; admin anula), `rbac` (solo los roles con `accounting:read` reciben los permisos de anulación) y en la web `document-annulments` y `receivables`.
 
 **Cruce de permisos API vs. pantallas** (qué puede hacer cada rol por la API sin que la web se lo ofrezca). Las rutas de pago directo ya respondían 410. Lo que queda:
 
@@ -288,8 +290,8 @@ Pruebas: `document-annulments` (integración: cartera crea el abono y recibe 403
 | cartera | Crear, editar y desactivar clientes (`customers:manage`) | No tiene POS ni Terceros: ninguna pantalla de clientes | Pendiente de decisión |
 | cajero | Editar y desactivar clientes (`PUT`/`DELETE /customers/:id`) | El POS solo crea clientes | Pendiente de decisión |
 | compras | Crear, editar y desactivar proveedores (`suppliers:manage` en `/suppliers`) | Sin `third_parties:read` no ve Terceros | Pendiente de decisión |
-| compras, supervisor | Reversar pagos a proveedores (`payables:manage`) | "Revertir" en Cuentas por pagar | En espera: permisos de compras sobre egresos (no se tocó) |
-| supervisor | Reversar pagos de causaciones (`expenses:manage`) | "Revertir pago" en Causación de gastos | En espera: rol tesorería (no se tocó) |
+| compras, supervisor | Reversar pagos a proveedores (`payables:manage`) | "Revertir" en Cuentas por pagar | **Corregido**: exige `comprobante_egreso.anular` (2026-11-03) |
+| supervisor | Reversar pagos de causaciones (`expenses:manage`) | "Revertir pago" en Causación de gastos | **Corregido**: exige `comprobante_egreso.anular` (2026-11-03) |
 | inventario, supervisor | Encolar y consultar trabajos de alertas (`POST`/`GET /alerts/jobs`) | Solo "Escanear lotes ahora" (`/alerts/evaluate`) | Bajo riesgo; no se cambió |
 | inventario, supervisor | Crear ubicaciones (`POST /inventory/locations`) | Ninguna pantalla crea ubicaciones | Bajo riesgo; no se cambió |
 

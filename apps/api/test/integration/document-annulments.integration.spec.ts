@@ -42,7 +42,7 @@ describe('Anulación de nota crédito, recibo de caja y comprobante de egreso', 
     const adminRole = await prisma.role.findUniqueOrThrow({ where: { name: 'admin' } });
     await prisma.userRole.create({ data: { userId: adminId, roleId: adminRole.id } });
     adminCookie = `${SESSION_COOKIE_NAME}=${(await auth.login('anula_admin', 'AdminPassword#2026')).rawToken}`;
-    for (const roleName of ['cartera', 'compras', 'cajero']) {
+    for (const roleName of ['cartera', 'compras', 'cajero', 'supervisor']) {
       const user = await prisma.user.create({ data: { username: `anula_${roleName}`, passwordHash: admin.passwordHash } });
       const role = await prisma.role.findUniqueOrThrow({ where: { name: roleName } });
       await prisma.userRole.create({ data: { userId: user.id, roleId: role.id } });
@@ -366,6 +366,24 @@ describe('Anulación de nota crédito, recibo de caja y comprobante de egreso', 
       const cashBefore = Number(await cashBalance());
 
       await post(`treasury/disbursements/${disbursement.body.id}/cancel`, { reason: 'Error' }, roleCookies.compras).expect(403);
+      // Revertir un pago es anular parte del egreso: compras (payables:manage) y supervisor
+      // (expenses:manage) no tienen comprobante_egreso.anular
+      const payablePayment = await prisma.payablePayment.findFirstOrThrow({ where: { payableId: invoice.id } });
+      const expensePayment = await prisma.expensePayment.findFirstOrThrow({ where: { expenseId: expense.id } });
+      for (const cookie of [roleCookies.compras, roleCookies.supervisor]) {
+        await request(app.getHttpServer())
+          .post(`/api/v1/payables/${invoice.id}/payments/${payablePayment.id}/reverse`)
+          .set('Cookie', cookie)
+          .send({ reason: 'Pago equivocado' })
+          .expect(403);
+      }
+      await request(app.getHttpServer())
+        .post(`/api/v1/expenses/payments/${expensePayment.id}/reverse`)
+        .set('Cookie', roleCookies.supervisor)
+        .send({ reversalReason: 'Pago equivocado' })
+        .expect(403);
+      expect(await prisma.payablePayment.count({ where: { isReversed: true } })).toBe(0);
+      expect(await prisma.expensePayment.count({ where: { isReversed: true } })).toBe(0);
       const res = await post(`treasury/disbursements/${disbursement.body.id}/cancel`, { reason: 'Pago al proveedor equivocado' });
       expect(res.status, JSON.stringify(res.body)).toBe(200);
       expect(res.body.status).toBe('ANULADO');

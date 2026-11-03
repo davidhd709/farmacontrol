@@ -138,10 +138,11 @@ export class PayablesController {
 
   /**
    * POST /api/v1/payables/:id/payments/:paymentId/reverse
-   * Revierte de forma controlada un pago registrado previamente.
+   * Revierte de forma controlada un pago registrado previamente. Revertir un pago anula parte
+   * de su comprobante de egreso: exige también `comprobante_egreso.anular`.
    */
   @Post(':id/payments/:paymentId/reverse')
-  @RequirePermissions(SYSTEM_PERMISSIONS.PAYABLES_MANAGE)
+  @RequirePermissions(SYSTEM_PERMISSIONS.PAYABLES_MANAGE, SYSTEM_PERMISSIONS.DISBURSEMENTS_ANNUL)
   @HttpCode(HttpStatus.OK)
   async revertPayment(
     @Param('id', ParseUUIDPipe) id: string,

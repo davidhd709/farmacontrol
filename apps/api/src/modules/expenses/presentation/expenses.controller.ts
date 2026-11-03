@@ -156,8 +156,9 @@ export class ExpensesController {
     return this.service.cancelExpense(id, payload, user.id);
   }
 
+  /** Revertir el pago de una causación anula parte de su egreso: exige `comprobante_egreso.anular`. */
   @Post('payments/:paymentId/reverse')
-  @RequirePermissions(SYSTEM_PERMISSIONS.EXPENSES_MANAGE)
+  @RequirePermissions(SYSTEM_PERMISSIONS.EXPENSES_MANAGE, SYSTEM_PERMISSIONS.DISBURSEMENTS_ANNUL)
   async reversePayment(
     @Param('paymentId', ParseUUIDPipe) paymentId: string,
     @Body(new RequestShapeValidationPipe({ reversalReason: 'text' }))

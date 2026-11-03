@@ -5,8 +5,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { appTheme } from '../src/theme/app-theme';
 import { ManualNoteDialog } from '../src/features/accounting/components/ManualNoteDialog';
 import * as api from '../src/features/accounting/api/accounting.api';
-
 import { setDateField } from './support-date';
+
 const base = {
   type: 'EXPENSE' as const,
   nature: 'DEBIT' as const,
