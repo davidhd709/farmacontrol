@@ -36,6 +36,7 @@ import {
 } from '../api/reports.api';
 import { QuickDateRange } from '../../../components/QuickDateRange';
 import type { SupplierReturnStatus } from '@farmacia/contracts';
+import { formatDate, formatDateTime } from '../../../utils/date-format';
 
 type ReportTab =
   'valuation' | 'expirations' | 'supplier-returns' | 'sales' | 'cash' | 'top-products';
@@ -469,7 +470,7 @@ export function ReportsPage() {
                                 {item.productCode} — {item.productName}
                               </TableCell>
                               <TableCell sx={{ fontFamily: 'monospace' }}>{item.lotNumber}</TableCell>
-                              <TableCell>{item.expirationDate}</TableCell>
+                              <TableCell>{formatDate(item.expirationDate)}</TableCell>
                               <TableCell align="right">{item.daysRemaining}</TableCell>
                               <TableCell align="right">
                                 {item.currentQuantity} {item.baseUnit}
@@ -576,7 +577,7 @@ export function ReportsPage() {
                           <TableCell sx={{ fontWeight: 700 }}>{row.lotNumber}</TableCell>
                           <TableCell>{row.productName}</TableCell>
                           <TableCell>{row.categoryName}</TableCell>
-                          <TableCell>{row.expirationDate}</TableCell>
+                          <TableCell>{formatDate(row.expirationDate)}</TableCell>
                           <TableCell sx={{ fontWeight: 600 }}>
                             {row.daysRemaining <= 0 ? `Vencido (${Math.abs(row.daysRemaining)}d)` : `${row.daysRemaining} días`}
                           </TableCell>
@@ -680,7 +681,7 @@ export function ReportsPage() {
                       salesQuery.data?.items.map((row) => (
                         <TableRow key={row.saleId} hover data-testid={`sale-row-${row.invoiceNumber}`}>
                           <TableCell sx={{ fontWeight: 700 }}>{row.invoiceNumber}</TableCell>
-                          <TableCell>{new Date(row.soldAt).toLocaleString('es-CO')}</TableCell>
+                          <TableCell>{formatDateTime(row.soldAt)}</TableCell>
                           <TableCell>{row.customerName}</TableCell>
                           <TableCell>{row.paymentMethod}</TableCell>
                           <TableCell align="center">{row.itemsCount}</TableCell>
@@ -789,7 +790,7 @@ export function ReportsPage() {
                     ) : (
                       cashQuery.data?.items.map((row) => (
                         <TableRow key={row.id} hover data-testid={`cash-row-${row.id}`}>
-                          <TableCell>{new Date(row.createdAt).toLocaleString('es-CO')}</TableCell>
+                          <TableCell>{formatDateTime(row.createdAt)}</TableCell>
                           <TableCell>
                             <Typography
                               component="span"

@@ -29,6 +29,7 @@ import { useCategories } from '../hooks/useCategories';
 import { CategoryFormDialog } from '../components/CategoryFormDialog';
 import { DeactivateCategoryDialog } from '../components/DeactivateCategoryDialog';
 import { SweetModal } from '../../../components/SweetModal';
+import { formatDate } from '../../../utils/date-format';
 
 type StatusFilterOption = 'active' | 'inactive' | 'all';
 
@@ -261,11 +262,7 @@ export function CategoriesPage() {
                           />
                         </TableCell>
                         <TableCell sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>
-                          {new Date(category.updatedAt).toLocaleDateString('es-CO', {
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric',
-                          })}
+                          {formatDate(category.updatedAt)}
                         </TableCell>
                         <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
                           <PermissionGate permission={SYSTEM_PERMISSIONS.CATEGORIES_MANAGE}>
@@ -319,10 +316,6 @@ export function CategoriesPage() {
               page={page}
               onPageChange={handleChangePage}
               onRowsPerPageChange={handleChangeRowsPerPage}
-              labelRowsPerPage="Filas por página:"
-              labelDisplayedRows={({ from, to, count }) =>
-                `${from}–${to} de ${count !== -1 ? count : `más de ${to}`}`
-              }
             />
           </Paper>
         </Stack>

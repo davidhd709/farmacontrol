@@ -27,6 +27,7 @@ import type { InventoryMovementDto, ProductDto } from '@farmacia/contracts';
 import { fetchInventoryMovements } from '../api/inventory.api';
 import { fetchProducts } from '../../catalog/api/products.api';
 import { formatSignedQuantity, movementDirection } from '../movement-direction';
+import { formatDateTime } from '../../../utils/date-format';
 
 export const InventoryMovementsPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -261,7 +262,7 @@ export const InventoryMovementsPage = () => {
                   {movements.map((m) => (
                     <TableRow key={m.id} hover>
                       <TableCell sx={{ fontSize: '0.875rem' }}>
-                        {new Date(m.createdAt).toLocaleString()}
+                        {formatDateTime(m.createdAt)}
                       </TableCell>
                       <TableCell>
                         {(() => {
@@ -315,7 +316,6 @@ export const InventoryMovementsPage = () => {
                   setPageSize(parseInt(e.target.value, 10));
                   setPage(0);
                 }}
-                labelRowsPerPage="Filas por página:"
               />
             </>
           )}

@@ -125,6 +125,11 @@ export interface JournalEntryLineDto {
   credit: string;
 }
 
+export interface JournalSourceDocumentDto {
+  number: string;
+  href: string | null;
+}
+
 export interface JournalEntryDto {
   id: string;
   entryDate: string;
@@ -140,6 +145,8 @@ export interface JournalEntryDto {
   reversalReason?: string | null;
   /** Asiento que lo anuló (reversó), si existe */
   reversedByEntryId?: string | null;
+  /** Documento de origen legible (FAC-000007, RC-000003…) y la pantalla donde se consulta */
+  sourceDocument?: JournalSourceDocumentDto | null;
   lines: JournalEntryLineDto[];
   totalDebit: string;
   totalCredit: string;

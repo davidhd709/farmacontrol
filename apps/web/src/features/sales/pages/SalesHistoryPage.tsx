@@ -33,6 +33,7 @@ import { SweetModal } from '../../../components/SweetModal';
 import { CreditNoteDialog } from '../components/CreditNoteDialog';
 import { SaleCreditNotesDialog } from '../components/SaleCreditNotesDialog';
 import { businessDayEnd, businessDayStart } from '../../../utils/business-date';
+import { formatDateTime } from '../../../utils/date-format';
 
 export const SalesHistoryPage: React.FC = () => {
   const navigate = useNavigate();
@@ -287,13 +288,7 @@ export const SalesHistoryPage: React.FC = () => {
               sales.map((sale) => (
                 <TableRow key={sale.id} hover>
                   <TableCell>
-                    {new Date(sale.createdAt).toLocaleString('es-CO', {
-                      year: 'numeric',
-                      month: '2-digit',
-                      day: '2-digit',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
+                    {formatDateTime(sale.createdAt)}
                   </TableCell>
                   <TableCell sx={{ fontWeight: 'bold' }}>{sale.invoiceNumber}</TableCell>
                   <TableCell>

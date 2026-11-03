@@ -16,6 +16,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { closeYear, fetchAnnualClosingPreview } from '../api/accounting.api';
 import { businessYear } from '../../../utils/business-date';
+import { formatDate } from '../../../utils/date-format';
 
 const money = (value: string) =>
   `$${Number(value).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -115,7 +116,7 @@ export function AnnualClosingCard({ canManage }: { canManage: boolean }) {
                 {data.destinationAccount
                   ? `${data.destinationAccount.code} ${data.destinationAccount.name}`
                   : `la cuenta del propósito ${data.destinationPurpose} (sin configurar)`}
-                . Fecha del asiento: {data.entryDate}.
+                . Fecha del asiento: {formatDate(data.entryDate)}.
               </Alert>
             )}
             {data.lines.length > 0 && (

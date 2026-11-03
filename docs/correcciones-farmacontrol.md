@@ -231,6 +231,15 @@ El botón **"Reversar"** salió de la tabla del Libro Diario (queda solo **"Deta
 - Migraciones: `20261102130000_document_annulments` (estados, trigger, tipo del submayor) y `20261102130100_credit_note_annulment_kardex_type` (tipo del kardex). Solo agregan columnas y reglas; los datos existentes quedan CONFIRMADA / VIGENTE.
 - Pruebas: `document-annulments` (integración con PostgreSQL: devolución de contado y a cartera, bloqueos por lote y por cambio, recibo de abono con un abono ya revertido, egreso con factura y causación, recibo manual, documento automático, inmutabilidad, permisos), `accounting-engine-reports` (410 y 409 desde el libro, anulación de nota manual con y sin permiso) y en la web `journal-entries`, `document-annulments`.
 
+## 3.9 Ajustes del Libro Diario, paginación y fechas (2026-11-02)
+
+- **Estado en español**: "Contabilizado" (antes POSTED), "Borrador", "Anulado" (asiento que ya fue anulado) y "Anulación" (el asiento que anula a otro). Los orígenes también salen en español (Venta, Devolución, Cobro de cartera, Causación, Saldos iniciales, Cierre anual…), nunca el código interno.
+- **Documento Ref.** muestra el número legible (FAC-000007, NC-000001, RC-000003, CE-000002, la factura de compra, NTC-000001) con enlace a la pantalla donde se consulta, que abre ya filtrada (`?buscar=`): historial de ventas, recibos de caja, comprobantes de egreso, compras y gastos. Una anulación muestra el documento del asiento que anula. Lo resuelve la API (`sourceDocument` en `JournalEntryDto`, consulta de solo lectura en `journal-source-documents.ts`).
+- **Paginación en español en toda la aplicación**: el tema de Material UI aplica el locale `esES` de forma global ("Filas por página:", "1–1 de 1", "Ir a la página siguiente"); se quitaron las etiquetas puestas tabla por tabla.
+- **Fechas dd/mm/aaaa** en todas las tablas y vistas con `formatDate` / `formatDateTime` (`apps/web/src/utils/date-format.ts`): una fecha calendario se muestra tal cual y un instante se convierte al día de Bogotá (una venta de las 23:30 no aparece al día siguiente). Los campos de fecha de los formularios siguen siendo selectores nativos y muestran el formato del navegador.
+- **Subtítulo** del Libro Diario: "Registro cronológico de los asientos contables generados por los documentos del sistema."
+- Pruebas: `journal-entries.test` (enlace, estados, fechas, paginación, subtítulo), `date-format.test` (también cerca de medianoche y con `TZ=Asia/Tokyo`) y `accounting-audit-statement` (número legible de venta y recibo).
+
 ## 4. Pendientes y dudas abiertas
 
 - ⚠️ Pantalla del botón "Reservar" (sección 2, fase 1).

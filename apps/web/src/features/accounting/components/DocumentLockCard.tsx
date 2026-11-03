@@ -15,13 +15,7 @@ import {
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchDocumentLock, setDocumentLock } from '../api/accounting.api';
-
-const formatDate = (value: string) =>
-  new Date(`${value}T12:00:00`).toLocaleDateString('es-CO', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-  });
+import { formatDate, formatDateTime } from '../../../utils/date-format';
 
 /**
  * Bloqueo de documentos por fecha: distinto del cierre de período. Impide registrar o
@@ -137,7 +131,7 @@ export function DocumentLockCard({ canManage }: { canManage: boolean }) {
             <TableBody>
               {data.history.map((lock) => (
                 <TableRow key={lock.id}>
-                  <TableCell>{new Date(lock.createdAt).toLocaleString('es-CO')}</TableCell>
+                  <TableCell>{formatDateTime(lock.createdAt)}</TableCell>
                   <TableCell>
                     {lock.lockedThrough ? formatDate(lock.lockedThrough) : 'Sin bloqueo'}
                   </TableCell>

@@ -35,6 +35,7 @@ import { HomeBackButton } from '../../../components/HomeBackButton';
 import { SweetModal } from '../../../components/SweetModal';
 import { VoucherFormDialog } from '../components/VoucherFormDialog';
 import { usePermissions } from '../../auth/hooks/usePermissions';
+import { formatDate } from '../../../utils/date-format';
 
 const LABELS: Record<
   TreasuryDocumentType,
@@ -302,7 +303,7 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
                         {doc.documentNumber}
                       </Button>
                     </TableCell>
-                    <TableCell>{doc.documentDate}</TableCell>
+                    <TableCell>{formatDate(doc.documentDate)}</TableCell>
                     <TableCell>{doc.thirdPartyName ?? '—'}</TableCell>
                     <TableCell>{doc.concept}</TableCell>
                     <TableCell>
@@ -337,7 +338,6 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
               setPage(0);
             }}
             rowsPerPageOptions={[25, 50, 100]}
-            labelRowsPerPage="Filas por página"
           />
         </TableContainer>
       </Stack>
@@ -357,7 +357,7 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
             <DialogContent dividers>
               <Stack spacing={1}>
                 <Typography>
-                  <strong>Fecha:</strong> {selected.documentDate}
+                  <strong>Fecha:</strong> {formatDate(selected.documentDate)}
                 </Typography>
                 <Typography>
                   <strong>{type === 'RECIBO_CAJA' ? 'Recibido de' : 'Pagado a'}:</strong>{' '}

@@ -10,6 +10,7 @@ import {
   Typography,
 } from '@mui/material';
 import type { DocumentMovementDto, DocumentMovementType } from '@farmacia/contracts';
+import { formatDate } from '../utils/date-format';
 
 const TYPE_LABELS: Record<DocumentMovementType, string> = {
   CARGO: 'Factura',
@@ -70,7 +71,7 @@ export function DocumentMovementsTable({
           {movements.map((movement, index) => (
             <TableRow key={`${movement.type}-${movement.date}-${index}`}>
               <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                {new Date(movement.date).toLocaleDateString('es-CO')}
+                {formatDate(movement.date)}
               </TableCell>
               <TableCell>
                 <Chip size="small" variant="outlined" label={TYPE_LABELS[movement.type]} />

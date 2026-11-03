@@ -1,4 +1,5 @@
 import { businessDateOf, calendarDate } from '../../../common/utils/business-date';
+import { resolveSourceDocuments } from './journal-source-documents';
 import { Injectable } from '@nestjs/common';
 import { AccountingPurpose as DbPurpose, prisma, Prisma } from '@farmacia/database';
 import {
@@ -536,8 +537,12 @@ export class JournalService {
       prisma.journalEntry.count({ where }),
     ]);
 
+    const documents = await resolveSourceDocuments(items);
     return {
-      items: items.map(toJournalEntryDto),
+      items: items.map((entry) => ({
+        ...toJournalEntryDto(entry),
+        sourceDocument: documents.get(entry.id) ?? null,
+      })),
       total,
       page,
       pageSize,
@@ -551,6 +556,7 @@ export class JournalService {
       include: fullJournalInclude,
     });
     if (!entry) throw new AccountingNotFoundError('Comprobante contable no encontrado.');
-    return toJournalEntryDto(entry);
+    const documents = await resolveSourceDocuments([entry]);
+    return { ...toJournalEntryDto(entry), sourceDocument: documents.get(entry.id) ?? null };
   }
 }

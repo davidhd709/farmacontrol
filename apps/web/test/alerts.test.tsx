@@ -235,7 +235,7 @@ describe('ExpirationAlertsPage (UX-14 — Alertas de Vencimiento)', () => {
     });
     renderPage();
     await screen.findByText('LOT-CRIT-02');
-    fireEvent.click(screen.getByRole('button', { name: /page 2/i }));
+    fireEvent.click(screen.getByRole('button', { name: /página 2/i }));
     await waitFor(() =>
       expect(alertsApi.fetchExpirations).toHaveBeenLastCalledWith(
         expect.objectContaining({ page: 2 }),

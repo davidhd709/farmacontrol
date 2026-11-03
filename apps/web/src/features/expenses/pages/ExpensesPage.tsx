@@ -54,6 +54,7 @@ import {
 import { ExpenseCategoriesModal } from '../components/ExpenseCategoriesModal';
 import { localIsoDate } from '../../../components/QuickDateRange';
 import { calendarMonthBounds } from '../../../utils/business-date';
+import { formatDate } from '../../../utils/date-format';
 
 function formatCurrency(val: string | number | undefined): string {
   if (val === undefined || val === null) return '$0.00';
@@ -452,7 +453,7 @@ export const ExpensesPage: React.FC = () => {
                     hover
                     sx={isCancelled ? { opacity: 0.6, backgroundColor: 'action.hover' } : {}}
                   >
-                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{e.expenseDate}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatDate(e.expenseDate)}</TableCell>
                     <TableCell>
                       <Chip label={e.categoryName} size="small" variant="outlined" />
                     </TableCell>
@@ -563,7 +564,7 @@ export const ExpensesPage: React.FC = () => {
                     Fecha del Gasto
                   </Typography>
                   <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
-                    {selectedExpense.expenseDate}
+                    {formatDate(selectedExpense.expenseDate)}
                   </Typography>
                 </Grid>
                 <Grid size={{ xs: 6, sm: 4 }}>
@@ -672,7 +673,7 @@ export const ExpensesPage: React.FC = () => {
                     ) : (
                       selectedExpense.payments.map((p) => (
                         <TableRow key={p.id} hover sx={p.isReversed ? { opacity: 0.5 } : {}}>
-                          <TableCell>{p.paymentDate}</TableCell>
+                          <TableCell>{formatDate(p.paymentDate)}</TableCell>
                           <TableCell>{p.paymentMethod}</TableCell>
                           <TableCell>{p.bankAccountName || 'Caja General'}</TableCell>
                           <TableCell sx={{ textAlign: 'right', fontWeight: 'bold' }}>

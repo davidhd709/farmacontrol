@@ -23,6 +23,7 @@ import { PayableStatementTable } from '../../payables/components/PayableStatemen
 import { AGING_LABELS, AgingSummaryCards } from '../../../components/AgingSummaryCards';
 import { HomeBackButton } from '../../../components/HomeBackButton';
 import { quickRange } from '../../../components/QuickDateRange';
+import { formatDate } from '../../../utils/date-format';
 
 const money = (value: string) =>
   `$${Number(value).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -110,7 +111,7 @@ function AccountLedger({ accountId }: { accountId: string }) {
                 ) : (
                   data.movements.map((m) => (
                     <TableRow key={`${m.journalEntryId}-${m.debit}-${m.credit}`}>
-                      <TableCell sx={{ whiteSpace: 'nowrap' }}>{m.date}</TableCell>
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatDate(m.date)}</TableCell>
                       <TableCell>{m.description}</TableCell>
                       <TableCell align="right">{Number(m.debit) ? money(m.debit) : ''}</TableCell>
                       <TableCell align="right">{Number(m.credit) ? money(m.credit) : ''}</TableCell>
@@ -191,8 +192,8 @@ function ThirdPartyStatement({ thirdPartyId }: { thirdPartyId: string }) {
                     {data.receivables.items.map((r) => (
                       <TableRow key={r.receivableId}>
                         <TableCell sx={{ fontWeight: 600 }}>{r.invoiceNumber ?? '—'}</TableCell>
-                        <TableCell>{r.documentDate}</TableCell>
-                        <TableCell>{r.dueDate}</TableCell>
+                        <TableCell>{formatDate(r.documentDate)}</TableCell>
+                        <TableCell>{formatDate(r.dueDate)}</TableCell>
                         <TableCell>{AGING_LABELS[r.agingBucket]}</TableCell>
                         <TableCell align="right">{money(r.totalAmount)}</TableCell>
                         <TableCell align="right">{money(r.amountPaid)}</TableCell>

@@ -22,6 +22,7 @@ import type { ExpenseWithoutSupplierDto, ThirdPartyDto } from '@farmacia/contrac
 import { assignExpenseSupplier, fetchExpensesWithoutSupplier } from '../api/expenses.api';
 import { ThirdPartyAutocomplete } from '../../third-parties/components/ThirdPartyAutocomplete';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
+import { formatDate } from '../../../utils/date-format';
 
 const money = (value: string) =>
   `$${Number(value).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -136,7 +137,7 @@ export function ExpensesWithoutSupplierDialog({
                 <TableBody>
                   {list.data.map((e) => (
                     <TableRow key={e.id} selected={selected?.id === e.id}>
-                      <TableCell sx={{ whiteSpace: 'nowrap' }}>{e.expenseDate}</TableCell>
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatDate(e.expenseDate)}</TableCell>
                       <TableCell>
                         {e.description}
                         <Typography

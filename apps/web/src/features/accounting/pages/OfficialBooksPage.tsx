@@ -21,6 +21,7 @@ import { HomeBackButton } from '../../../components/HomeBackButton';
 import { formatMoney, toCents } from '../../../utils/money';
 import { fetchJournalBook, fetchLedgerBook } from '../api/accounting-books.api';
 import { PeriodFilter, localToday, monthStart } from '../components/PeriodFilter';
+import { formatDate } from '../../../utils/date-format';
 
 const m = (value: string) => formatMoney(toCents(value));
 
@@ -84,7 +85,7 @@ export function OfficialBooksPage() {
                 <TableBody>
                   {journal.data.entries.flatMap((entry) => [
                     <TableRow key={entry.id} sx={{ bgcolor: 'action.hover' }}>
-                      <TableCell>{entry.entryDate}</TableCell>
+                      <TableCell>{formatDate(entry.entryDate)}</TableCell>
                       <TableCell colSpan={3}>
                         <strong>{entry.description}</strong>
                       </TableCell>

@@ -49,6 +49,7 @@ import { useBankAccountOptions } from '../hooks/useTreasury';
 import { createCashReceipt, createDisbursement } from '../api/treasury.api';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { formatMoney, toCents } from '../../../utils/money';
+import { formatDate } from '../../../utils/date-format';
 
 type Mode = 'FACTURAS' | 'MANUAL';
 
@@ -475,7 +476,7 @@ export function VoucherFormDialog({
                               {item.label}
                             </Typography>
                           </TableCell>
-                          <TableCell>{item.documentDate}</TableCell>
+                          <TableCell>{formatDate(item.documentDate)}</TableCell>
                           <TableCell>{item.dueDate ?? '—'}</TableCell>
                           <TableCell align="right">{formatMoney(centsOf(item.balance))}</TableCell>
                           <TableCell align="right">

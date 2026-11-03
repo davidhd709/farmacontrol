@@ -8,6 +8,7 @@ import {
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import type { FefoPreviewDto } from '@farmacia/contracts';
+import { formatDate } from '../../../utils/date-format';
 
 export function FefoAllocationSummary({
   data,
@@ -51,10 +52,7 @@ export function FefoAllocationSummary({
                   <Typography key={allocation.lotId} variant="body2">
                     {allocation.lotNumber ? `Lote ${allocation.lotNumber}` : 'Sin lote'} ·{' '}
                     {allocation.expirationDate
-                      ? `Vencimiento: ${new Intl.DateTimeFormat('es-CO', {
-                          dateStyle: 'long',
-                          timeZone: 'UTC',
-                        }).format(new Date(`${allocation.expirationDate}T00:00:00Z`))}`
+                      ? `Vencimiento: ${formatDate(allocation.expirationDate)}`
                       : 'No vence'}{' '}
                     · {allocation.quantityBaseUnits} unidades base
                   </Typography>

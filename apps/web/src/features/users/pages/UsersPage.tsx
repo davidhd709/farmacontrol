@@ -38,6 +38,7 @@ import {
   updateSystemUserRoles,
   updateSystemUserStatus,
 } from '../api/users.api';
+import { formatDate } from '../../../utils/date-format';
 
 export function UsersPage() {
   const queryClient = useQueryClient();
@@ -371,11 +372,7 @@ export function UsersPage() {
 
                     <TableCell>
                       <Typography variant="body2" color="text.secondary">
-                        {new Date(u.createdAt).toLocaleDateString('es-CO', {
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric',
-                        })}
+                        {formatDate(u.createdAt)}
                       </Typography>
                     </TableCell>
 

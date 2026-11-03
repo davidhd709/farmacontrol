@@ -343,7 +343,6 @@ export const UnitsOfMeasurePage: React.FC = () => {
                 setPage(0);
               }}
               rowsPerPageOptions={[10, 15, 25, 50]}
-              labelRowsPerPage="Filas por página:"
             />
           </>
         )}

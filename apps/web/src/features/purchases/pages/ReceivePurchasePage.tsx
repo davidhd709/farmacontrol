@@ -49,6 +49,7 @@ import { BarcodeScanField } from '../../../components/BarcodeScanField';
 import { receivePurchase } from '../api/purchases.api';
 import { inventoryControlModeLabel } from '../../catalog/utils/inventory-control';
 import { addDaysToDate, businessToday } from '../../../utils/business-date';
+import { formatDate } from '../../../utils/date-format';
 
 export const ReceivePurchasePage: React.FC = () => {
   const navigate = useNavigate();
@@ -1244,10 +1245,10 @@ export const ReceivePurchasePage: React.FC = () => {
                 <strong>N° Factura:</strong> {invoiceNumber}
               </div>
               <div>
-                <strong>Fecha de Emisión:</strong> {purchaseDate}
+                <strong>Fecha de Emisión:</strong> {formatDate(purchaseDate)}
               </div>
               <div>
-                <strong>Fecha de Vencimiento Factura:</strong> {dueDate}
+                <strong>Fecha de Vencimiento Factura:</strong> {formatDate(dueDate)}
               </div>
               <div>
                 <strong>Líneas a Ingresar:</strong> {lines.length} líneas (

@@ -17,6 +17,7 @@ import {
 } from '@mui/material';
 import type { SaleDto } from '@farmacia/contracts';
 import { expirationDateLabel, lotNumberLabel } from '../../catalog/utils/inventory-control';
+import { formatDateTime } from '../../../utils/date-format';
 
 interface SaleReceiptDialogProps {
   open: boolean;
@@ -88,7 +89,7 @@ export const SaleReceiptDialog: React.FC<SaleReceiptDialogProps> = ({
             Comprobante N°: {sale.invoiceNumber}
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            Fecha: {new Date(sale.createdAt).toLocaleString('es-CO')}
+            Fecha: {formatDateTime(sale.createdAt)}
           </Typography>
         </Box>
 

@@ -19,6 +19,7 @@ import {
 } from '@mui/material';
 import type { PurchaseDto } from '@farmacia/contracts';
 import { expirationDateLabel, lotNumberLabel } from '../../catalog/utils/inventory-control';
+import { formatDate, formatDateTime } from '../../../utils/date-format';
 
 interface PurchaseDetailDialogProps {
   open: boolean;
@@ -114,7 +115,7 @@ export const PurchaseDetailDialog: React.FC<PurchaseDetailDialogProps> = ({
               Fecha de Emisión Factura
             </Typography>
             <Typography variant="body1" sx={{ fontWeight: 600 }}>
-              {purchase.purchaseDate}
+              {formatDate(purchase.purchaseDate)}
             </Typography>
           </Box>
 
@@ -153,7 +154,7 @@ export const PurchaseDetailDialog: React.FC<PurchaseDetailDialogProps> = ({
               Fecha de Registro en Kardex
             </Typography>
             <Typography variant="body2">
-              {new Date(purchase.createdAt).toLocaleString('es-CO')}
+              {formatDateTime(purchase.createdAt)}
             </Typography>
           </Box>
 

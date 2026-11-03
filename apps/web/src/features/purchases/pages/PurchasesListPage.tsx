@@ -25,6 +25,7 @@ import { fetchSuppliers } from '../../suppliers/api/suppliers.api';
 import { PurchaseDetailDialog } from '../components/PurchaseDetailDialog';
 import { PermissionGate } from '../../auth/components/PermissionGate';
 import { DebitNoteDialog } from '../components/DebitNoteDialog';
+import { formatDate } from '../../../utils/date-format';
 
 export const PurchasesListPage: React.FC = () => {
   const [purchases, setPurchases] = useState<PurchaseDto[]>([]);
@@ -219,7 +220,7 @@ export const PurchasesListPage: React.FC = () => {
                       </Typography>
                     )}
                   </TableCell>
-                  <TableCell>{purchase.purchaseDate}</TableCell>
+                  <TableCell>{formatDate(purchase.purchaseDate)}</TableCell>
                   <TableCell sx={{ textAlign: 'right', fontWeight: 800, color: 'text.primary', fontVariantNumeric: 'tabular-nums' }}>
                     ${Number(purchase.totalAmount).toLocaleString()}
                   </TableCell>

@@ -10,6 +10,7 @@ import {
 } from '@mui/material';
 import type { PayableStatementItemDto } from '@farmacia/contracts';
 import { AGING_LABELS } from '../../../components/AgingSummaryCards';
+import { formatDate } from '../../../utils/date-format';
 
 export const DOCUMENT_TYPE_LABELS: Record<PayableStatementItemDto['documentType'], string> = {
   FACTURA_COMPRA: 'Factura de compra',
@@ -71,7 +72,7 @@ export function PayableStatementTable({
                 </Typography>
               </TableCell>
               {showSupplier && <TableCell>{item.supplierName ?? '—'}</TableCell>}
-              <TableCell sx={{ whiteSpace: 'nowrap' }}>{item.documentDate}</TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatDate(item.documentDate)}</TableCell>
               <TableCell sx={{ whiteSpace: 'nowrap' }}>{item.dueDate ?? '—'}</TableCell>
               <TableCell>
                 {Number(item.balance) > 0 ? (

@@ -116,4 +116,33 @@ describe('Libro Diario', () => {
     await within(dialog).findByText('Nota manual');
     expect(within(dialog).queryByRole('button', { name: 'Anular' })).toBeNull();
   });
+
+  it('muestra fecha dd/mm/aaaa, estado en español, el documento legible con enlace y la paginación en español', async () => {
+    const withDoc = entry({
+      sourceDocument: { number: 'FAC-000007', href: '/sales?buscar=FAC-000007' },
+    });
+    const annulled = entry({ id: 'je-9', reversedByEntryId: 'je-10', sourceDocument: null });
+    vi.spyOn(accountingApi, 'fetchJournalEntries').mockResolvedValue({
+      items: [withDoc, annulled],
+      total: 2,
+      page: 1,
+      pageSize: 20,
+      totalPages: 1,
+    });
+    renderPage([SYSTEM_PERMISSIONS.ACCOUNTING_READ]);
+    const link = await screen.findByRole('link', { name: 'FAC-000007' });
+    expect(link).toHaveAttribute('href', '/sales?buscar=FAC-000007');
+    expect(screen.queryByText(withDoc.sourceId)).toBeNull();
+    expect(screen.getAllByText('02/11/2026')).toHaveLength(2);
+    expect(screen.getByText('Contabilizado')).toBeInTheDocument();
+    expect(screen.getByText('Anulado')).toBeInTheDocument();
+    expect(screen.queryByText('POSTED')).toBeNull();
+    expect(screen.getByText('Filas por página:')).toBeInTheDocument();
+    expect(screen.getByText('1–2 de 2')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /Registro cronológico de los asientos contables generados por los documentos/,
+      ),
+    ).toBeInTheDocument();
+  });
 });

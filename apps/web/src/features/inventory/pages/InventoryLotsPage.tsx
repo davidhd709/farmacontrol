@@ -407,7 +407,6 @@ export const InventoryLotsPage = () => {
                   setPageSize(parseInt(e.target.value, 10));
                   setPage(0);
                 }}
-                labelRowsPerPage="Filas por página:"
               />
             </>
           )}

@@ -22,6 +22,7 @@ import type { AccountingAuditView } from '@farmacia/contracts';
 import { fetchAccountingAudit } from '../api/accounting.api';
 import { HomeBackButton } from '../../../components/HomeBackButton';
 import { QuickDateRange } from '../../../components/QuickDateRange';
+import { formatDate } from '../../../utils/date-format';
 
 /** Tipo de documento de origen de un asiento, en español. */
 export const DOCUMENT_TYPE_LABELS: Record<string, string> = {
@@ -194,7 +195,7 @@ export function AccountingAuditPage() {
                   <TableRow
                     key={`${item.documentType}-${item.documentId}-${item.reversalEntryId ?? ''}`}
                   >
-                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{item.date}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatDate(item.date)}</TableCell>
                     <TableCell>
                       {typeLabel(item.documentType)}
                       {item.documentNumber && (

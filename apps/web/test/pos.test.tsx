@@ -514,7 +514,7 @@ describe('PosPage (Frontend POS UX-03 / HU-017)', () => {
     expect(screen.getByText('Asignación prevista; se confirma al cobrar')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Línea 1: 1 unidades base/ }));
     expect(
-      screen.getByText(/Lote FEFO-2027 · Vencimiento: 1 de enero de 2027 · 1 unidades base/),
+      screen.getByText(/Lote FEFO-2027 · Vencimiento: 01\/01\/2027 · 1 unidades base/),
     ).toBeVisible();
     expect(fetch).toHaveBeenCalledWith(
       expect.stringContaining('/sales/fefo-preview'),

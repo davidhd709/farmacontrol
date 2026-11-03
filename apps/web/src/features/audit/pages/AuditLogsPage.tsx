@@ -41,6 +41,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import { HomeBackButton } from '../../../components/HomeBackButton';
 import type { AuditEventDto, AuditMetadataDto } from '@farmacia/contracts';
 import { fetchAuditEvents, fetchAuditMetadata } from '../api/audit.api';
+import { formatDateTime } from '../../../utils/date-format';
 
 export const AuditLogsPage = () => {
   const [events, setEvents] = useState<AuditEventDto[]>([]);
@@ -143,22 +144,6 @@ export const AuditLogsPage = () => {
     return 'default';
   };
 
-  const formatDateTime = (isoString: string) => {
-    try {
-      const d = new Date(isoString);
-      return d.toLocaleString('es-CO', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false,
-      });
-    } catch {
-      return isoString;
-    }
-  };
 
   const activeFiltersCount = [
     selectedEntity,
@@ -523,8 +508,6 @@ export const AuditLogsPage = () => {
             setPageSize(parseInt(e.target.value, 10));
             setPage(0);
           }}
-          labelRowsPerPage="Filas por página:"
-          labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count !== -1 ? count : `más de ${to}`}`}
         />
       </Paper>
 
@@ -575,7 +558,7 @@ export const AuditLogsPage = () => {
                 <Grid size={{ xs: 12, sm: 6 }}>
                   <Typography variant="caption" color="text.secondary">FECHA Y HORA (UTC)</Typography>
                   <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-                    {selectedEvent.createdAt}
+                    {formatDateTime(selectedEvent.createdAt)}
                   </Typography>
                 </Grid>
                 <Grid size={{ xs: 12, sm: 4 }}>

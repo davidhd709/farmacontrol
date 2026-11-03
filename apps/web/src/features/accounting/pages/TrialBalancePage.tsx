@@ -29,6 +29,7 @@ import { SYSTEM_PERMISSIONS, type AccountType } from '@farmacia/contracts';
 import { usePermissions } from '../../auth/hooks/usePermissions';
 import { fetchTrialBalance, fetchGeneralLedger } from '../api/accounting.api';
 import { QuickDateRange, quickRange } from '../../../components/QuickDateRange';
+import { formatDate } from '../../../utils/date-format';
 
 const accountTypeNames: Record<AccountType, string> = {
   ASSET: 'Activo',
@@ -248,7 +249,7 @@ export const TrialBalancePage = () => {
                   {ledgerData.accountCode} — {ledgerData.accountName}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Período: {ledgerData.fromDate} a {ledgerData.toDate}
+                  Período: {formatDate(ledgerData.fromDate)} a {formatDate(ledgerData.toDate)}
                 </Typography>
               </Box>
 
@@ -320,7 +321,7 @@ export const TrialBalancePage = () => {
                     {ledgerData.movements.length > 0 ? (
                       ledgerData.movements.map((m, idx) => (
                         <TableRow key={`${m.journalEntryId}-${idx}`} hover>
-                          <TableCell sx={{ whiteSpace: 'nowrap' }}>{m.date}</TableCell>
+                          <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatDate(m.date)}</TableCell>
                           <TableCell>
                             <Chip size="small" variant="outlined" label={m.sourceType} />
                           </TableCell>

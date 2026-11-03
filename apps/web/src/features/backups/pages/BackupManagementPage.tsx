@@ -31,6 +31,7 @@ import {
   triggerCreateBackup,
   triggerVerifyBackup,
 } from '../api/backups.api';
+import { formatDateTime } from '../../../utils/date-format';
 
 export function BackupManagementPage() {
   const queryClient = useQueryClient();
@@ -208,7 +209,7 @@ export function BackupManagementPage() {
               </Typography>
               <Typography variant="body1" sx={{ fontWeight: 700, mt: 0.5 }}>
                 {status?.lastBackupAt
-                  ? new Date(status.lastBackupAt).toLocaleString('es-CO')
+                  ? formatDateTime(status.lastBackupAt)
                   : 'Sin registros'}
               </Typography>
               <Typography variant="caption" color="text.secondary">
@@ -293,7 +294,7 @@ export function BackupManagementPage() {
                         {row.filename}
                       </TableCell>
                       <TableCell>
-                        {new Date(row.createdAt).toLocaleString('es-CO')}
+                        {formatDateTime(row.createdAt)}
                       </TableCell>
                       <TableCell align="right">{formatBytes(row.sizeBytes)}</TableCell>
                       <TableCell>

@@ -32,6 +32,7 @@ import { fetchCashBalance, fetchCashMovements } from '../api/cash.api';
 import { Link as RouterLink } from 'react-router-dom';
 import { HomeBackButton } from '../../../components/HomeBackButton';
 import { SortByDateButton } from '../../../components/SortByDateButton';
+import { formatDateTime } from '../../../utils/date-format';
 
 export const CashPage: React.FC = () => {
   const [balance, setBalance] = useState<CashBalanceDto>({
@@ -90,10 +91,6 @@ export const CashPage: React.FC = () => {
     return `$${val.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
   };
 
-  const formatDateTime = (iso: string) => {
-    const d = new Date(iso);
-    return `${d.toLocaleDateString('es-CO')} ${d.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}`;
-  };
 
   const getMovementTypeChip = (type: CashMovementType) => {
     switch (type) {
@@ -430,7 +427,6 @@ export const CashPage: React.FC = () => {
             setPageSize(parseInt(e.target.value, 10));
             setPage(0);
           }}
-          labelRowsPerPage="Filas por página:"
         />
       </TableContainer>
     </Box>

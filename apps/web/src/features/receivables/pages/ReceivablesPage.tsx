@@ -32,6 +32,7 @@ import { VoucherFormDialog } from '../../treasury/components/VoucherFormDialog';
 import { PermissionGate } from '../../auth/components/PermissionGate';
 import { formatMoney, toCents } from '../../../utils/money';
 import { isOverdue, getStatusDisplay } from '../utils/status';
+import { formatDate } from '../../../utils/date-format';
 
 export function ReceivablesPage() {
   const [page, setPage] = useState(0);
@@ -281,11 +282,7 @@ export function ReceivablesPage() {
                           fontWeight: overdue ? 700 : 400,
                         }}
                       >
-                        {new Date(r.dueDate + 'T12:00:00').toLocaleDateString('es-CO', {
-                          day: '2-digit',
-                          month: 'short',
-                          year: 'numeric',
-                        })}
+                        {formatDate(r.dueDate)}
                       </Typography>
                     </TableCell>
                     <TableCell>
@@ -319,9 +316,6 @@ export function ReceivablesPage() {
           onPageChange={(_, p) => setPage(p)}
           rowsPerPage={pageSize}
           rowsPerPageOptions={[pageSize]}
-          labelDisplayedRows={({ from, to, count }) =>
-            `${from}–${to} de ${count !== -1 ? count : `+${to}`}`
-          }
         />
       </Paper>
 

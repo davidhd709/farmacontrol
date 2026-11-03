@@ -41,6 +41,7 @@ import {
 } from '../api/accounting-setup.api';
 import { formatMoney, toCents } from '../../../utils/money';
 import { businessToday } from '../../../utils/business-date';
+import { formatDate } from '../../../utils/date-format';
 
 interface OpeningLine {
   accountId: string;
@@ -274,7 +275,7 @@ export function AccountingSetupPage() {
             {openingData ? (
               <>
                 <Typography variant="body2" sx={{ mb: 1 }}>
-                  Registrados con fecha {openingData.entryDate}. Para cambiarlos, reverse el asiento
+                  Registrados con fecha {formatDate(openingData.entryDate)}. Para cambiarlos, reverse el asiento
                   de apertura en el libro diario y registre otros.
                 </Typography>
                 <Table size="small" aria-label="Saldos de apertura registrados">

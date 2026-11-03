@@ -266,7 +266,7 @@ it('lista las causaciones sin proveedor y asigna uno con confirmación', async (
   });
   mount(<ExpensesWithoutSupplierDialog canAssign onClose={vi.fn()} />);
   expect(await screen.findByText('Energía agosto')).toBeInTheDocument();
-  expect(screen.getByText('2026-08-10')).toBeInTheDocument();
+  expect(screen.getByText('10/08/2026')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Asignar proveedor' }));
   fireEvent.mouseDown(screen.getByRole('combobox', { name: /Proveedor/ }));
   fireEvent.click(await screen.findByRole('option', { name: /Enel/ }));

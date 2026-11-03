@@ -31,6 +31,7 @@ import {
 } from '@mui/material';
 import type { ExpirationSeverity, InventoryAlertDto } from '@farmacia/contracts';
 import { fetchExpirations, fetchAlertsSummary, triggerAlertsEvaluation } from '../api/alerts.api';
+import { formatDate } from '../../../utils/date-format';
 
 export function ExpirationAlertsPage() {
   const queryClient = useQueryClient();
@@ -527,7 +528,7 @@ export function ExpirationAlertsPage() {
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        <Typography variant="body2">{item.expirationDate}</Typography>
+                        <Typography variant="body2">{formatDate(item.expirationDate)}</Typography>
                         <Typography
                           variant="caption"
                           sx={{

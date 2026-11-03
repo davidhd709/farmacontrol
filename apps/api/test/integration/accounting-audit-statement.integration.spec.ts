@@ -108,8 +108,31 @@ describe('Auditoría contable y estado de cuenta por tercero', () => {
       applications: [{ receivableId: receivable.id, amount: '4000.00' }],
     });
     expect(receipt.status, JSON.stringify(receipt.body)).toBe(201);
-    return { receivable };
+    return { receivable, sale, receipt };
   }
+
+  it('el Libro Diario muestra el número legible del documento de origen, no el UUID', async () => {
+    const { sale, receipt } = await creditSaleAndReceipt();
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/journal-entries?pageSize=100')
+      .set('Cookie', cookie)
+      .expect(200);
+    const saleEntry = res.body.items.find((e: { sourceType: string }) => e.sourceType === 'SALE');
+    expect(saleEntry.sourceDocument).toEqual({
+      number: sale.body.invoiceNumber,
+      href: `/sales?buscar=${sale.body.invoiceNumber}`,
+    });
+    const payment = res.body.items.find((e: { sourceType: string }) => e.sourceType === 'RECEIVABLE_PAYMENT');
+    expect(payment.sourceDocument).toEqual({
+      number: receipt.body.documentNumber,
+      href: `/treasury/receipts?buscar=${receipt.body.documentNumber}`,
+    });
+    const detail = await request(app.getHttpServer())
+      .get(`/api/v1/journal-entries/${saleEntry.id}`)
+      .set('Cookie', cookie)
+      .expect(200);
+    expect(detail.body.sourceDocument.number).toBe(sale.body.invoiceNumber);
+  });
 
   it('los documentos nuevos no quedan descuadrados; un asiento histórico descuadrado y un recibo mal aplicado sí aparecen', async () => {
     await creditSaleAndReceipt();

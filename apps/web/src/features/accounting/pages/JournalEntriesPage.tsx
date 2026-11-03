@@ -12,6 +12,7 @@ import {
   DialogTitle,
   FormControl,
   InputLabel,
+  Link,
   MenuItem,
   Paper,
   Select,
@@ -27,6 +28,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Link as RouterLink } from 'react-router-dom';
 import { SYSTEM_PERMISSIONS, type JournalEntryDto } from '@farmacia/contracts';
 import { usePermissions } from '../../auth/hooks/usePermissions';
 import {
@@ -36,18 +38,65 @@ import {
 } from '../api/accounting.api';
 import { ManualNoteDialog } from '../components/ManualNoteDialog';
 import { QuickDateRange, localIsoDate } from '../../../components/QuickDateRange';
+import { formatDate } from '../../../utils/date-format';
 
 const sourceTypeLabels: Record<
   string,
   { label: string; color: 'primary' | 'secondary' | 'success' | 'warning' | 'info' | 'default' }
 > = {
   SALE: { label: 'Venta', color: 'success' },
+  SALE_CANCEL: { label: 'Anulación de venta', color: 'secondary' },
+  CREDIT_NOTE: { label: 'Devolución', color: 'warning' },
+  CREDIT_NOTE_CANCEL: { label: 'Anulación de devolución', color: 'secondary' },
   PURCHASE: { label: 'Compra', color: 'primary' },
-  RECEIVABLE_PAYMENT: { label: 'Cobro Cartera', color: 'info' },
-  PAYABLE_PAYMENT: { label: 'Pago Proveedor', color: 'warning' },
-  REVERSAL: { label: 'Reversión', color: 'secondary' },
+  DEBIT_NOTE: { label: 'Devolución a proveedor', color: 'primary' },
+  RECEIVABLE_PAYMENT: { label: 'Cobro de cartera', color: 'info' },
+  PAYABLE_PAYMENT: { label: 'Pago a proveedor', color: 'warning' },
+  EXPENSE: { label: 'Causación', color: 'warning' },
+  EXPENSE_PAYMENT: { label: 'Pago de causación', color: 'warning' },
+  CASH_MOVEMENT: { label: 'Recibo / egreso de caja', color: 'info' },
+  BANK_MOVEMENT: { label: 'Recibo / egreso bancario', color: 'info' },
+  INVENTORY_ADJUSTMENT: { label: 'Ajuste de inventario', color: 'default' },
+  INVENTORY_INITIAL: { label: 'Inventario inicial', color: 'default' },
+  LOT_INITIAL: { label: 'Inventario inicial', color: 'default' },
+  METHOD_CHANGE: { label: 'Cambio de método de costeo', color: 'default' },
+  OPENING_BALANCE: { label: 'Saldos iniciales', color: 'default' },
+  AUTO_OPENING: { label: 'Apertura', color: 'default' },
+  FISCAL_CLOSING: { label: 'Cierre mensual', color: 'default' },
+  ANNUAL_CLOSING: { label: 'Cierre anual', color: 'default' },
+  REVERSAL: { label: 'Anulación', color: 'secondary' },
   MANUAL_NOTE: { label: 'Nota contable', color: 'default' },
 };
+
+/** Estado del asiento en palabras del usuario (no se depende solo del color). */
+function statusOf(entry: JournalEntryDto): {
+  label: string;
+  color: 'success' | 'secondary' | 'default';
+} {
+  if (entry.reversalOfId) return { label: 'Anulación', color: 'secondary' };
+  if (entry.reversedByEntryId) return { label: 'Anulado', color: 'default' };
+  return entry.status === 'POSTED'
+    ? { label: 'Contabilizado', color: 'success' }
+    : { label: 'Borrador', color: 'default' };
+}
+
+const originOf = (sourceType: string) =>
+  sourceTypeLabels[sourceType] ?? { label: 'Otro documento', color: 'default' as const };
+
+/** Documento de origen legible, con enlace a la pantalla donde se consulta. */
+function SourceDocument({ entry }: { entry: JournalEntryDto }) {
+  const doc = entry.sourceDocument;
+  if (!doc) return <>—</>;
+  return doc.href ? (
+    <Link component={RouterLink} to={doc.href} underline="hover" sx={{ fontWeight: 600 }}>
+      {doc.number}
+    </Link>
+  ) : (
+    <Box component="span" sx={{ fontWeight: 600 }}>
+      {doc.number}
+    </Box>
+  );
+}
 
 /**
  * Asientos que se anulan desde su detalle (no nacen de un documento). Los de ventas,
@@ -164,7 +213,8 @@ export const JournalEntriesPage = () => {
               Libro Diario
             </Typography>
             <Typography color="text.secondary">
-              Registro cronológico inmutable de comprobantes contables y motor de partida doble.
+              Registro cronológico de los asientos contables generados por los documentos del
+              sistema.
             </Typography>
           </Box>
           {hasPermission(SYSTEM_PERMISSIONS.ACCOUNTING_MANAGE) && (
@@ -222,7 +272,12 @@ export const JournalEntriesPage = () => {
                 <MenuItem value="PURCHASE">Compras</MenuItem>
                 <MenuItem value="RECEIVABLE_PAYMENT">Cobro de Cartera</MenuItem>
                 <MenuItem value="PAYABLE_PAYMENT">Pago Proveedores</MenuItem>
-                <MenuItem value="REVERSAL">Reversiones</MenuItem>
+                <MenuItem value="CREDIT_NOTE">Devoluciones</MenuItem>
+                <MenuItem value="EXPENSE">Causaciones</MenuItem>
+                <MenuItem value="EXPENSE_PAYMENT">Pagos de causaciones</MenuItem>
+                <MenuItem value="CASH_MOVEMENT">Recibos y egresos de caja</MenuItem>
+                <MenuItem value="BANK_MOVEMENT">Recibos y egresos bancarios</MenuItem>
+                <MenuItem value="REVERSAL">Anulaciones</MenuItem>
                 <MenuItem value="MANUAL_NOTE">Notas contables</MenuItem>
               </Select>
             </FormControl>
@@ -289,15 +344,15 @@ export const JournalEntriesPage = () => {
                   <TableBody>
                     {data?.items && data.items.length > 0 ? (
                       data.items.map((entry) => {
-                        const origin = sourceTypeLabels[entry.sourceType] ?? {
-                          label: entry.sourceType,
-                          color: 'default',
-                        };
+                        const origin = originOf(entry.sourceType);
+                        const status = statusOf(entry);
                         const isReversal = Boolean(entry.reversalOfId);
 
                         return (
                           <TableRow key={entry.id} hover>
-                            <TableCell sx={{ whiteSpace: 'nowrap' }}>{entry.entryDate}</TableCell>
+                            <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                              {formatDate(entry.entryDate)}
+                            </TableCell>
                             <TableCell>
                               <Chip
                                 size="small"
@@ -306,8 +361,8 @@ export const JournalEntriesPage = () => {
                                 variant={isReversal ? 'filled' : 'outlined'}
                               />
                             </TableCell>
-                            <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
-                              {entry.sourceId ? entry.sourceId.slice(0, 16) : '-'}
+                            <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                              <SourceDocument entry={entry} />
                             </TableCell>
                             <TableCell sx={{ maxWidth: 350 }}>
                               <Typography variant="body2" noWrap title={entry.description}>
@@ -336,11 +391,7 @@ export const JournalEntriesPage = () => {
                               })}
                             </TableCell>
                             <TableCell align="center">
-                              <Chip
-                                size="small"
-                                label={isReversal ? 'REVERSIÓN' : entry.status}
-                                color={isReversal ? 'secondary' : 'success'}
-                              />
+                              <Chip size="small" label={status.label} color={status.color} />
                             </TableCell>
                             <TableCell align="center">
                               <Button
@@ -375,7 +426,6 @@ export const JournalEntriesPage = () => {
                   setPageSize(parseInt(e.target.value, 10));
                   setPage(0);
                 }}
-                labelRowsPerPage="Filas por página:"
               />
             </>
           )}
@@ -403,23 +453,31 @@ export const JournalEntriesPage = () => {
                 </Typography>
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 1 }}>
                   <Typography variant="body2" color="text.secondary">
-                    <strong>Fecha:</strong> {entryDetail.entryDate}
+                    <strong>Fecha:</strong> {formatDate(entryDetail.entryDate)}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    <strong>Origen:</strong> {entryDetail.sourceType}
+                    <strong>Origen:</strong> {originOf(entryDetail.sourceType).label}
+                    {entryDetail.sourceDocument && (
+                      <>
+                        {' '}
+                        <SourceDocument entry={entryDetail} />
+                      </>
+                    )}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
                     <strong>Usuario:</strong> {entryDetail.createdByName || 'Sistema'}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    <strong>Estado:</strong> {entryDetail.status}
+                    <strong>Estado:</strong> {statusOf(entryDetail).label}
                   </Typography>
                 </Stack>
                 {entryDetail.reversalOfId && (
                   <Alert severity="info" sx={{ mt: 1 }}>
-                    Este asiento es una reversión del comprobante{' '}
-                    <code>{entryDetail.reversalOfId}</code>.
-                    {entryDetail.reversalReason && ` Motivo: ${entryDetail.reversalReason}`}
+                    Este asiento anula otro asiento
+                    {entryDetail.sourceDocument
+                      ? ` del documento ${entryDetail.sourceDocument.number}`
+                      : ''}
+                    .{entryDetail.reversalReason && ` Motivo: ${entryDetail.reversalReason}`}
                   </Alert>
                 )}
               </Box>

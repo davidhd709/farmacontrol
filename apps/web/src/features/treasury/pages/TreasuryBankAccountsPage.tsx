@@ -46,6 +46,7 @@ import {
 import { BankAccountDialog } from '../components/BankAccountDialog';
 import { SweetModal } from '../../../components/SweetModal';
 import { SortByDateButton } from '../../../components/SortByDateButton';
+import { formatDateTime } from '../../../utils/date-format';
 
 const ACCOUNT_TYPE_LABELS: Record<string, string> = {
   AHORROS: 'Ahorros',
@@ -421,13 +422,7 @@ export function TreasuryBankAccountsPage() {
                     return (
                       <TableRow key={mov.id} hover>
                         <TableCell>
-                          {new Date(mov.movementDate).toLocaleDateString('es-CO', {
-                            year: 'numeric',
-                            month: 'short',
-                            day: '2-digit',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
+                          {formatDateTime(mov.movementDate)}
                         </TableCell>
                         <TableCell>
                           <Chip

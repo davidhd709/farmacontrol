@@ -44,6 +44,7 @@ import {
 import { DocumentLockCard } from '../components/DocumentLockCard';
 import { AnnualClosingCard } from '../components/AnnualClosingCard';
 import { businessYear } from '../../../utils/business-date';
+import { formatDate } from '../../../utils/date-format';
 
 function formatMoney(value: string | number): string {
   const num = typeof value === 'number' ? value : Number(value);
@@ -328,7 +329,7 @@ export const FiscalPeriodsPage = () => {
                       <TableCell sx={{ fontWeight: 600 }}>{period.name}</TableCell>
                       <TableCell>
                         <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-                          {period.startDate} al {period.endDate}
+                          {formatDate(period.startDate)} al {formatDate(period.endDate)}
                         </Typography>
                       </TableCell>
                       <TableCell>
@@ -350,7 +351,7 @@ export const FiscalPeriodsPage = () => {
                         {isClosed ? (
                           <Box>
                             <Typography variant="caption" component="div" color="text.secondary">
-                              Cerrado el {period.closedAt?.slice(0, 10)} por{' '}
+                              Cerrado el {formatDate(period.closedAt)} por{' '}
                               <b>{period.closedByName || 'Sistema'}</b>
                             </Typography>
                             {period.closingEntryId && (
@@ -371,7 +372,7 @@ export const FiscalPeriodsPage = () => {
                         ) : period.reopenedAt ? (
                           <Box>
                             <Typography variant="caption" component="div" color="warning.main">
-                              Reabierto el {period.reopenedAt?.slice(0, 10)} por{' '}
+                              Reabierto el {formatDate(period.reopenedAt)} por{' '}
                               <b>{period.reopenedByName || 'Admin'}</b>
                             </Typography>
                             <Typography
@@ -441,7 +442,7 @@ export const FiscalPeriodsPage = () => {
             <Alert severity="warning">
               <b>Bloqueo histórico de seguridad:</b> Al cerrar este período, no se permitirá crear,
               editar ni reversar ningún asiento contable cuya fecha pertenezca al intervalo{' '}
-              <b>{closingPeriod?.startDate}</b> al <b>{closingPeriod?.endDate}</b>.
+              <b>{formatDate(closingPeriod?.startDate)}</b> al <b>{formatDate(closingPeriod?.endDate)}</b>.
             </Alert>
 
             <FormControlLabel
