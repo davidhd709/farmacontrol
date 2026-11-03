@@ -7,11 +7,11 @@ import { AppModule } from '../../src/app.module';
 import { UserProvisioningService } from '../../src/modules/identity/application/services/user-provisioning.service';
 import { AuthService } from '../../src/modules/identity/application/services/auth.service';
 import { SESSION_COOKIE_NAME } from '../../src/modules/identity/presentation/utils/session-cookie.util';
+import { addCalendarDays, businessToday } from '../../src/common/utils/business-date';
 
+// Días de negocio (Bogotá): de noche la fecha UTC ya es la de mañana
 function dayFromNow(days: number): string {
-  const date = new Date();
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
+  return addCalendarDays(businessToday(), days);
 }
 
 describe('Product tax profiles 11.3a PostgreSQL', () => {

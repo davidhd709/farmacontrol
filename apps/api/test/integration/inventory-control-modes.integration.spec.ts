@@ -9,6 +9,7 @@ import { UserProvisioningService } from '../../src/modules/identity/application/
 import { AuthService } from '../../src/modules/identity/application/services/auth.service';
 import { SESSION_COOKIE_NAME } from '../../src/modules/identity/presentation/utils/session-cookie.util';
 import { seedPurposeMappings } from './support/accounting-fixtures';
+import { addCalendarDays, businessToday } from '../../src/common/utils/business-date';
 
 describe('F4: modos de control de catálogo e inventario (PostgreSQL)', () => {
   let app: INestApplication;
@@ -18,11 +19,8 @@ describe('F4: modos de control de catálogo e inventario (PostgreSQL)', () => {
   let locationId: string;
 
   const today = () => new Date().toISOString().slice(0, 10);
-  const inDays = (days: number) => {
-    const date = new Date();
-    date.setUTCDate(date.getUTCDate() + days);
-    return date.toISOString().slice(0, 10);
-  };
+  // Días de negocio (Bogotá): de noche la fecha UTC ya es la de mañana
+  const inDays = (days: number) => addCalendarDays(businessToday(), days);
 
   const createProduct = async (
     inventoryControlMode?: string,
