@@ -389,5 +389,24 @@ describe('RBAC — Integridad de Persistencia y Modelos Relacionales (Integratio
       expect(countPermissions).toBe(BASE_PERMISSIONS.length);
       expect(countRolePermissions).toBe(firstRun.rolePermissionsCount);
     });
+
+    it('la anulación de recibos y egresos queda solo en roles con permiso contable; cartera conserva el abono', async () => {
+      await seedRbac(prisma);
+      const roles = await prisma.role.findMany({
+        include: { rolePermissions: { include: { permission: true } } },
+      });
+      const annul = [SYSTEM_PERMISSIONS.CASH_RECEIPTS_ANNUL, SYSTEM_PERMISSIONS.DISBURSEMENTS_ANNUL];
+      for (const role of roles) {
+        const names = role.rolePermissions.map((rp) => rp.permission.name);
+        const accounting = names.includes(SYSTEM_PERMISSIONS.ACCOUNTING_READ);
+        for (const permission of annul) {
+          expect(names.includes(permission), `${role.name} → ${permission}`).toBe(accounting);
+        }
+      }
+      const byName = (name: string) =>
+        roles.find((r) => r.name === name)!.rolePermissions.map((rp) => rp.permission.name);
+      expect(byName(SYSTEM_ROLES.ADMIN)).toEqual(expect.arrayContaining(annul));
+      expect(byName(SYSTEM_ROLES.CARTERA)).toContain(SYSTEM_PERMISSIONS.CASH_RECEIPTS_COLLECT);
+    });
   });
 });

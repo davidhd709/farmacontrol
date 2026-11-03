@@ -281,6 +281,12 @@ describe('Anulación de nota crédito, recibo de caja y comprobante de egreso', 
       expect(receipt.status, JSON.stringify(receipt.body)).toBe(201);
       // Uno de los abonos ya se había revertido por su cuenta
       const p2 = await prisma.receivablePayment.findFirstOrThrow({ where: { receivableId: r2.id } });
+      // Cartera registra abonos pero no los reversa: sería anular parte del recibo
+      await request(app.getHttpServer())
+        .post(`/api/v1/receivables/${r2.id}/payments/${p2.id}/reverse`)
+        .set('Cookie', roleCookies.cartera)
+        .send({ reason: 'Abono duplicado' })
+        .expect(403);
       await request(app.getHttpServer())
         .post(`/api/v1/receivables/${r2.id}/payments/${p2.id}/reverse`)
         .set('Cookie', adminCookie)
@@ -291,12 +297,12 @@ describe('Anulación de nota crédito, recibo de caja y comprobante de egreso', 
       const manualRoute = await post(`treasury/cash-receipts/${receipt.body.id}/cancel`, { reason: 'Error' });
       expect(manualRoute.status).toBe(400);
       await post(`treasury/cash-receipts/collections/${receipt.body.id}/cancel`, { reason: 'Error' }, roleCookies.cajero).expect(403);
+      // Cartera crea el recibo de abono pero anularlo exige recibo_caja.anular (admin o contable)
+      await post(`treasury/cash-receipts/collections/${receipt.body.id}/cancel`, { reason: 'Error' }, roleCookies.cartera).expect(403);
 
-      const res = await post(
-        `treasury/cash-receipts/collections/${receipt.body.id}/cancel`,
-        { reason: 'Recibo registrado al cliente equivocado' },
-        roleCookies.cartera,
-      );
+      const res = await post(`treasury/cash-receipts/collections/${receipt.body.id}/cancel`, {
+        reason: 'Recibo registrado al cliente equivocado',
+      });
       expect(res.status, JSON.stringify(res.body)).toBe(200);
       expect(res.body).toMatchObject({ status: 'ANULADO', cancellationReason: 'Recibo registrado al cliente equivocado' });
       expect((await prisma.receivable.findUniqueOrThrow({ where: { id: r1.id } })).balance.toFixed(2)).toBe('10000.00');

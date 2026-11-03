@@ -109,10 +109,12 @@ export class ReceivablesController {
 
   /**
    * POST /api/v1/receivables/:id/payments/:paymentId/reverse
-   * Revierte de forma controlada un abono registrado previamente.
+   * Revierte de forma controlada un abono registrado previamente. Reversar un abono anula
+   * parte de su recibo de caja, así que exige también `recibo_caja.anular`: cartera registra
+   * abonos pero no los anula (correcciones del cliente, 2026-11-02).
    */
   @Post(':id/payments/:paymentId/reverse')
-  @RequirePermissions(SYSTEM_PERMISSIONS.RECEIVABLES_MANAGE)
+  @RequirePermissions(SYSTEM_PERMISSIONS.RECEIVABLES_MANAGE, SYSTEM_PERMISSIONS.CASH_RECEIPTS_ANNUL)
   @HttpCode(HttpStatus.OK)
   async revertPayment(
     @Param('id', ParseUUIDPipe) id: string,

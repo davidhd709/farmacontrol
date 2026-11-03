@@ -218,9 +218,9 @@ El botón **"Reversar"** salió de la tabla del Libro Diario (queda solo **"Deta
 |---|---|---|---|
 | Venta | ya existía | `POST /sales/:id/cancel` (`sales:cancel`) | Sin cambios. Ahora solo la bloquean las notas crédito **vigentes** |
 | **Nota crédito (devolución)** | **nueva** | `POST /credit-notes/:id/cancel` (`sales:cancel`) | La mercancía reintegrada vuelve a salir de los mismos lotes (kardex `SALIDA_ANULACION_DEVOLUCION`, submayor `SALE_RETURN_CANCELLATION`); el reembolso vuelve a caja o banco, o la factura vuelve a deberse en cartera; se reversa el asiento y, si la mercancía sale a un costo distinto del que entró, se registra la diferencia entre inventario y costo de ventas (mayor = submayor). Se rechaza si el lote ya no tiene las unidades o si la devolución entregó un cambio vigente (primero se anula esa venta). En la web: Historial de ventas → **Notas crédito** → Anular |
-| **Recibo de caja de abono** | **nueva** | `POST /treasury/cash-receipts/collections/:id/cancel` (`recibo_caja.crear_abono`) | Reversa cada abono vigente con su asiento y saca de caja o banco, en **un solo movimiento**, lo que seguía aplicado (los abonos revertidos antes uno a uno no se tocan) |
-| **Recibo de caja manual** | **nueva** | `POST /treasury/cash-receipts/:id/cancel` (`accounting:read` + permiso del medio) | Reversa el asiento contra la contrapartida y saca el dinero |
-| **Comprobante de egreso** (proveedor o manual) | **nueva** | `POST /treasury/disbursements/:id/cancel` (`comprobante_egreso.crear`; el manual además `accounting:read` + medio) | Reversa cada pago vigente (facturas de compra y causaciones) o el asiento manual y devuelve el dinero en un solo movimiento |
+| **Recibo de caja de abono** | **nueva** | `POST /treasury/cash-receipts/collections/:id/cancel` (`recibo_caja.anular`, ver 3.7) | Reversa cada abono vigente con su asiento y saca de caja o banco, en **un solo movimiento**, lo que seguía aplicado (los abonos revertidos antes uno a uno no se tocan) |
+| **Recibo de caja manual** | **nueva** | `POST /treasury/cash-receipts/:id/cancel` (`recibo_caja.anular` + `accounting:read` + permiso del medio) | Reversa el asiento contra la contrapartida y saca el dinero |
+| **Comprobante de egreso** (proveedor o manual) | **nueva** | `POST /treasury/disbursements/:id/cancel` (`comprobante_egreso.anular`; el manual además `accounting:read` + medio) | Reversa cada pago vigente (facturas de compra y causaciones) o el asiento manual y devuelve el dinero en un solo movimiento |
 | Causación | ya existía | `POST /expenses/:id/cancel` (`expenses:manage`) | Sin cambios |
 | **Nota contable manual**, saldos iniciales y cierre anual | **nueva ruta** | `POST /journal-entries/:id/annul` (`accounting:manage`) | Desde el **detalle** del asiento en el Libro Diario → Anular. Rechaza (409) cualquier asiento generado por un documento |
 
@@ -263,6 +263,35 @@ Pantallas ajustadas:
 - **Todas**: título, margen vertical, botones y menú lateral (tema y layout).
 
 Resultado del reporte: 0 pantallas con scroll horizontal de página, 0 botones cortados o sin relleno y 0 elementos recortados en los cuatro anchos.
+
+## 3.7 Permiso propio para anular recibos y egresos; permisos API vs. web (2026-11-02)
+
+Anular ya no usa el permiso de creación. Dos permisos nuevos: `recibo_caja.anular` y `comprobante_egreso.anular`. El seed los asigna a todo rol con permiso contable (`accounting:read`); hoy solo lo tiene admin. Cartera conserva `recibo_caja.crear_abono`.
+
+| Ruta | Antes | Ahora |
+|---|---|---|
+| `POST /treasury/cash-receipts/collections/:id/cancel` | `recibo_caja.crear_abono` (cartera anulaba) | `recibo_caja.anular` |
+| `POST /treasury/cash-receipts/:id/cancel` | `accounting:read` | `recibo_caja.anular` + `accounting:read` |
+| `POST /treasury/disbursements/:id/cancel` | `comprobante_egreso.crear` | `comprobante_egreso.anular` |
+| `POST /receivables/:id/payments/:paymentId/reverse` | `receivables:manage` (cartera y supervisor) | `receivables:manage` + `recibo_caja.anular`: reversar un abono anula parte de su recibo |
+
+En la web, "Anular" (Recibos de caja, Comprobantes de egreso) y "Revertir" (Cuentas por cobrar → Ver abonos) siguen las mismas reglas. Cuentas por cobrar no tiene botón "Anular".
+
+Pruebas: `document-annulments` (integración: cartera crea el abono y recibe 403 al anularlo y al reversar un abono; admin anula), `rbac` (solo los roles con `accounting:read` reciben los permisos de anulación) y en la web `document-annulments` y `receivables`.
+
+**Cruce de permisos API vs. pantallas** (qué puede hacer cada rol por la API sin que la web se lo ofrezca). Las rutas de pago directo ya respondían 410. Lo que queda:
+
+| Rol | Por la API puede | En la web | Estado |
+|---|---|---|---|
+| cartera | Anular recibos de abono; reversar abonos | Recibos de caja no está en su menú; "Revertir" sí se le mostraba | **Corregido** (tabla de arriba) |
+| supervisor | Reversar abonos (`receivables:manage`) | "Revertir" en Ver abonos | **Corregido** |
+| cartera | Crear, editar y desactivar clientes (`customers:manage`) | No tiene POS ni Terceros: ninguna pantalla de clientes | Pendiente de decisión |
+| cajero | Editar y desactivar clientes (`PUT`/`DELETE /customers/:id`) | El POS solo crea clientes | Pendiente de decisión |
+| compras | Crear, editar y desactivar proveedores (`suppliers:manage` en `/suppliers`) | Sin `third_parties:read` no ve Terceros | Pendiente de decisión |
+| compras, supervisor | Reversar pagos a proveedores (`payables:manage`) | "Revertir" en Cuentas por pagar | En espera: permisos de compras sobre egresos (no se tocó) |
+| supervisor | Reversar pagos de causaciones (`expenses:manage`) | "Revertir pago" en Causación de gastos | En espera: rol tesorería (no se tocó) |
+| inventario, supervisor | Encolar y consultar trabajos de alertas (`POST`/`GET /alerts/jobs`) | Solo "Escanear lotes ahora" (`/alerts/evaluate`) | Bajo riesgo; no se cambió |
+| inventario, supervisor | Crear ubicaciones (`POST /inventory/locations`) | Ninguna pantalla crea ubicaciones | Bajo riesgo; no se cambió |
 
 ## 4. Pendientes y dudas abiertas
 

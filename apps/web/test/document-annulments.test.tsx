@@ -113,7 +113,24 @@ describe('Anulación de documentos en la web', () => {
     expect(screen.queryByRole('button', { name: 'Anular' })).toBeNull();
   });
 
-  it('el recibo de abono se anula desde su detalle con el permiso de abono', async () => {
+  it('crear el recibo de abono no basta para anularlo: cartera no ve el botón', async () => {
+    vi.spyOn(treasuryApi, 'getTreasuryDocuments').mockResolvedValue({
+      items: [receipt],
+      total: 1,
+      page: 1,
+      pageSize: 25,
+      totalPages: 1,
+    });
+    renderWith(<CashReceiptsPage />, [
+      SYSTEM_PERMISSIONS.ACCOUNTING_READ,
+      SYSTEM_PERMISSIONS.CASH_RECEIPTS_COLLECT,
+    ]);
+    fireEvent.click(await screen.findByRole('button', { name: 'RC-000001' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).queryByRole('button', { name: 'Anular' })).toBeNull();
+  });
+
+  it('el recibo de abono se anula desde su detalle con el permiso de anulación', async () => {
     vi.spyOn(treasuryApi, 'getTreasuryDocuments').mockResolvedValue({
       items: [receipt],
       total: 1,
@@ -130,7 +147,7 @@ describe('Anulación de documentos en la web', () => {
       });
     renderWith(<CashReceiptsPage />, [
       SYSTEM_PERMISSIONS.ACCOUNTING_READ,
-      SYSTEM_PERMISSIONS.CASH_RECEIPTS_COLLECT,
+      SYSTEM_PERMISSIONS.CASH_RECEIPTS_ANNUL,
     ]);
     fireEvent.click(await screen.findByRole('button', { name: 'RC-000001' }));
     const dialog = await screen.findByRole('dialog');

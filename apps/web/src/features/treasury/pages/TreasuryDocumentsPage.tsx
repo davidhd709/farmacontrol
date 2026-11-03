@@ -144,16 +144,16 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
       }),
   });
 
-  // Se anula con el mismo permiso con que se registra; los automáticos, desde su documento
+  // Anular exige su propio permiso (el manual, además el contable); los automáticos, desde su documento
   const canAnnul = (doc: TreasuryDocumentDto) =>
     doc.status === 'VIGENTE' &&
     doc.origin !== 'AUTOMATICO' &&
-    (doc.documentType === 'COMPROBANTE_EGRESO'
-      ? hasPermission(SYSTEM_PERMISSIONS.DISBURSEMENTS_CREATE) &&
-        (doc.origin !== 'MANUAL' || hasPermission(SYSTEM_PERMISSIONS.ACCOUNTING_READ))
-      : doc.origin === 'CARTERA'
-        ? hasPermission(SYSTEM_PERMISSIONS.CASH_RECEIPTS_COLLECT)
-        : hasPermission(SYSTEM_PERMISSIONS.ACCOUNTING_READ));
+    hasPermission(
+      doc.documentType === 'COMPROBANTE_EGRESO'
+        ? SYSTEM_PERMISSIONS.DISBURSEMENTS_ANNUL
+        : SYSTEM_PERMISSIONS.CASH_RECEIPTS_ANNUL,
+    ) &&
+    (doc.origin !== 'MANUAL' || hasPermission(SYSTEM_PERMISSIONS.ACCOUNTING_READ));
 
   const annul = async () => {
     if (!selected) return;

@@ -91,13 +91,26 @@ export const BASE_PERMISSIONS: PermissionDefinition[] = [
   { name: SYSTEM_PERMISSIONS.TREASURY_MANAGE, description: 'Gestionar cuentas bancarias y registrar movimientos de tesorería' },
   { name: SYSTEM_PERMISSIONS.CASH_RECEIPTS_COLLECT, description: 'Registrar recibos de caja de abono a cartera (el asiento automático no exige permiso contable)' },
   { name: SYSTEM_PERMISSIONS.DISBURSEMENTS_CREATE, description: 'Registrar comprobantes de egreso: pago a proveedores y causaciones (el manual exige además el permiso contable)' },
+  { name: SYSTEM_PERMISSIONS.CASH_RECEIPTS_ANNUL, description: 'Anular recibos de caja (el manual exige además el permiso contable)' },
+  { name: SYSTEM_PERMISSIONS.DISBURSEMENTS_ANNUL, description: 'Anular comprobantes de egreso (el manual exige además el permiso contable)' },
 
   // Gastos
   { name: SYSTEM_PERMISSIONS.EXPENSES_READ, description: 'Consultar categorías y registros de gastos operativos' },
   { name: SYSTEM_PERMISSIONS.EXPENSES_MANAGE, description: 'Registrar, pagar y anular gastos y categorías de gasto' },
 ];
 
-export const BASE_ROLES: RoleDefinition[] = [
+/**
+ * La anulación de recibos y egresos se asigna, por ahora, solo a quien tiene el permiso
+ * contable (correcciones del cliente, 2026-11-02); cartera conserva la creación de abonos.
+ */
+const ANNUL_PERMISSIONS = [SYSTEM_PERMISSIONS.CASH_RECEIPTS_ANNUL, SYSTEM_PERMISSIONS.DISBURSEMENTS_ANNUL];
+
+const withAccountingAnnulments = (role: RoleDefinition): RoleDefinition =>
+  role.permissions.includes(SYSTEM_PERMISSIONS.ACCOUNTING_READ)
+    ? { ...role, permissions: [...new Set([...role.permissions, ...ANNUL_PERMISSIONS])] }
+    : role;
+
+export const BASE_ROLES: RoleDefinition[] = ([
   {
     name: SYSTEM_ROLES.ADMIN,
     description: 'Administrador general del sistema con acceso completo a todos los módulos y operaciones.',
@@ -219,7 +232,7 @@ export const BASE_ROLES: RoleDefinition[] = [
       SYSTEM_PERMISSIONS.SALES_READ,
     ],
   },
-];
+] satisfies RoleDefinition[]).map(withAccountingAnnulments);
 
 export interface SeedRbacResult {
   permissionsCount: number;

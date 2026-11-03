@@ -46,7 +46,12 @@ export function ReceivableMovementsDialog({
               ]
             : []
         }
-        onReverse={hasPermission(SYSTEM_PERMISSIONS.RECEIVABLES_MANAGE) ? setReversal : undefined}
+        onReverse={
+          hasPermission(SYSTEM_PERMISSIONS.RECEIVABLES_MANAGE) &&
+          hasPermission(SYSTEM_PERMISSIONS.CASH_RECEIPTS_ANNUL)
+            ? setReversal
+            : undefined
+        }
         footer={
           data?.status === 'PENDIENTE' && (
             <Alert severity="info" variant="outlined">

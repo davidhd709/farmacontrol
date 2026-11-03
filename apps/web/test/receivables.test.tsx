@@ -44,7 +44,12 @@ const mockReceivables: ReceivableDto[] = [
   },
 ];
 
-const renderPage = () => {
+const renderPage = (
+  permissions: string[] = [
+    SYSTEM_PERMISSIONS.RECEIVABLES_MANAGE,
+    SYSTEM_PERMISSIONS.CASH_RECEIPTS_ANNUL,
+  ],
+) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -52,7 +57,7 @@ const renderPage = () => {
     <ThemeProvider theme={appTheme}>
       <QueryClientProvider client={queryClient}>
         <MemoryRouter>
-          {withAuth(<ReceivablesPage />, [SYSTEM_PERMISSIONS.RECEIVABLES_MANAGE])}
+          {withAuth(<ReceivablesPage />, permissions)}
         </MemoryRouter>
       </QueryClientProvider>
     </ThemeProvider>,
@@ -84,7 +89,7 @@ describe('ReceivablesPage (Frontend Cuentas por Cobrar — UX-21)', () => {
     });
   });
 
-  it('no registra abonos en cartera: "Ver abonos" muestra los movimientos con su recibo de caja y saldo', async () => {
+  const movementsWithPayment = () =>
     vi.spyOn(receivablesApi, 'fetchReceivableMovements').mockResolvedValue({
       receivableId: 'rec-1',
       invoiceNumber: 'FAC-001',
@@ -99,6 +104,9 @@ describe('ReceivablesPage (Frontend Cuentas por Cobrar — UX-21)', () => {
         { date: '2026-09-10T10:00:00.000Z', type: 'ABONO', documentNumber: 'RC-000007', description: 'Abono', paymentMethod: 'EFECTIVO', paymentId: 'pay-1', isReversed: false, charge: '0.00', credit: '50000.00', balance: '100000.00' },
       ],
     });
+
+  it('no registra abonos en cartera: "Ver abonos" muestra los movimientos con su recibo de caja y saldo', async () => {
+    movementsWithPayment();
     renderPage();
     await waitFor(() => expect(screen.getByText('Carlos Gómez')).toBeInTheDocument());
     expect(screen.queryByRole('button', { name: /^Abonar$/i })).not.toBeInTheDocument();
@@ -109,5 +117,18 @@ describe('ReceivablesPage (Frontend Cuentas por Cobrar — UX-21)', () => {
     expect(screen.queryByLabelText(/Monto del abono/i)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Revertir' }));
     expect(await screen.findByText('Revertir Abono de Cliente')).toBeInTheDocument();
+  });
+
+  it('cartera (sin recibo_caja.anular) ve los abonos pero no puede revertirlos', async () => {
+    movementsWithPayment();
+    renderPage([
+      SYSTEM_PERMISSIONS.RECEIVABLES_READ,
+      SYSTEM_PERMISSIONS.RECEIVABLES_MANAGE,
+      SYSTEM_PERMISSIONS.CASH_RECEIPTS_COLLECT,
+    ]);
+    await waitFor(() => expect(screen.getByText('Carlos Gómez')).toBeInTheDocument());
+    fireEvent.click(screen.getAllByRole('button', { name: /Ver Abonos/i })[0]);
+    expect(await screen.findByText('RC-000007')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Revertir' })).not.toBeInTheDocument();
   });
 });

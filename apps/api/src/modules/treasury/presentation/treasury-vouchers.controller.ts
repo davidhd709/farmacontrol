@@ -32,6 +32,8 @@ import { RequirePermissions } from '../../identity/presentation/decorators/requi
  * y el comprobante de egreso `comprobante_egreso.crear`. El asiento automático que generan no
  * exige el permiso contable; un recibo o egreso manual sí, porque el usuario elige la
  * contrapartida, además del permiso de caja o bancos según el medio (lo valida el servicio).
+ * Anular exige su propio permiso (`recibo_caja.anular` / `comprobante_egreso.anular`): crear no
+ * basta, y cartera registra abonos pero no los anula.
  */
 @Controller('treasury')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
@@ -81,7 +83,7 @@ export class TreasuryVouchersController {
   /** Anula un recibo de abono a cartera: reversa sus abonos y saca el dinero recibido. */
   @Post('cash-receipts/collections/:id/cancel')
   @HttpCode(HttpStatus.OK)
-  @RequirePermissions(SYSTEM_PERMISSIONS.CASH_RECEIPTS_COLLECT)
+  @RequirePermissions(SYSTEM_PERMISSIONS.CASH_RECEIPTS_ANNUL)
   cancelCollectionReceipt(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() payload: CancelTreasuryDocumentPayload,
@@ -96,7 +98,7 @@ export class TreasuryVouchersController {
   /** Anula un recibo manual: reversa su asiento y saca el dinero recibido. */
   @Post('cash-receipts/:id/cancel')
   @HttpCode(HttpStatus.OK)
-  @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_READ)
+  @RequirePermissions(SYSTEM_PERMISSIONS.CASH_RECEIPTS_ANNUL, SYSTEM_PERMISSIONS.ACCOUNTING_READ)
   cancelCashReceipt(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() payload: CancelTreasuryDocumentPayload,
@@ -111,7 +113,7 @@ export class TreasuryVouchersController {
   /** Anula un comprobante de egreso: reversa sus pagos (o su asiento manual) y devuelve el dinero. */
   @Post('disbursements/:id/cancel')
   @HttpCode(HttpStatus.OK)
-  @RequirePermissions(SYSTEM_PERMISSIONS.DISBURSEMENTS_CREATE)
+  @RequirePermissions(SYSTEM_PERMISSIONS.DISBURSEMENTS_ANNUL)
   cancelDisbursement(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() payload: CancelTreasuryDocumentPayload,

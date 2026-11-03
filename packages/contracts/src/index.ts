@@ -128,6 +128,9 @@ export const SYSTEM_PERMISSIONS = {
   // El asiento automático que generan no exige el permiso contable al usuario.
   CASH_RECEIPTS_COLLECT: 'recibo_caja.crear_abono',
   DISBURSEMENTS_CREATE: 'comprobante_egreso.crear',
+  // Anular un recibo o egreso exige su propio permiso: crear no basta (2026-11-02).
+  CASH_RECEIPTS_ANNUL: 'recibo_caja.anular',
+  DISBURSEMENTS_ANNUL: 'comprobante_egreso.anular',
 
   // Gastos
   EXPENSES_READ: 'expenses:read',
