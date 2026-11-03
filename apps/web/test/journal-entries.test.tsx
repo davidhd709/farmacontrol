@@ -37,33 +37,46 @@ function renderPage(permissions: string[]) {
   );
 }
 
+/**
+ * Espera a que la tabla muestre sus filas (consulta de texto, barata) y devuelve la tabla para
+ * consultar roles dentro de ella de forma síncrona: polling de `findAllByRole` sobre todo el
+ * documento es lo que se pasaba del plazo bajo carga.
+ */
+async function loadedTable(rowText: string) {
+  await screen.findByText(rowText);
+  return within(screen.getByRole('table'));
+}
+
 beforeEach(() => vi.restoreAllMocks());
 
 describe('Libro Diario', () => {
-  const sale = entry({});
-  const manual = entry({
-    id: 'je-2',
-    sourceType: 'MANUAL_NOTE',
-    sourceId: 'NCM-000001',
-    description: 'Nota manual',
-  });
+  // Datos nuevos en cada prueba: ninguna depende de lo que otra haya hecho
+  const sale = () => entry({});
+  const manual = () =>
+    entry({
+      id: 'je-2',
+      sourceType: 'MANUAL_NOTE',
+      sourceId: 'NCM-000001',
+      description: 'Nota manual',
+    });
 
   it('no ofrece "Reversar" en la tabla: cada fila solo tiene Detalle', async () => {
     vi.spyOn(accountingApi, 'fetchJournalEntries').mockResolvedValue({
-      items: [sale, manual],
+      items: [sale(), manual()],
       total: 2,
       page: 1,
       pageSize: 20,
       totalPages: 1,
     });
     renderPage(Object.values(SYSTEM_PERMISSIONS));
-    expect(await screen.findAllByRole('button', { name: 'Detalle' })).toHaveLength(2);
-    expect(screen.queryByRole('button', { name: /Reversar/ })).toBeNull();
+    const table = await loadedTable('Nota manual');
+    expect(table.getAllByRole('button', { name: 'Detalle' })).toHaveLength(2);
+    expect(table.queryByRole('button', { name: /Reversar/ })).toBeNull();
   });
 
   it('una nota contable manual se anula desde su detalle; un asiento de venta no', async () => {
     vi.spyOn(accountingApi, 'fetchJournalEntries').mockResolvedValue({
-      items: [sale, manual],
+      items: [sale(), manual()],
       total: 2,
       page: 1,
       pageSize: 20,
@@ -71,13 +84,14 @@ describe('Libro Diario', () => {
     });
     const detail = vi
       .spyOn(accountingApi, 'fetchJournalEntryById')
-      .mockImplementation(async (id) => (id === 'je-2' ? manual : sale));
+      .mockImplementation(async (id) => (id === 'je-2' ? manual() : sale()));
     const annul = vi
       .spyOn(accountingApi, 'annulJournalEntry')
       .mockResolvedValue(entry({ id: 'je-3', sourceType: 'REVERSAL', reversalOfId: 'je-2' }));
     renderPage([SYSTEM_PERMISSIONS.ACCOUNTING_READ, SYSTEM_PERMISSIONS.ACCOUNTING_MANAGE]);
 
-    const [saleDetail, manualDetail] = await screen.findAllByRole('button', { name: 'Detalle' });
+    const table = await loadedTable('Nota manual');
+    const [saleDetail, manualDetail] = table.getAllByRole('button', { name: 'Detalle' });
     fireEvent.click(saleDetail);
     let dialog = await screen.findByRole('dialog');
     await within(dialog).findByText('Venta mostrador comprobante FAC-000007');
@@ -103,15 +117,16 @@ describe('Libro Diario', () => {
 
   it('sin permiso contable de gestión la nota manual no se puede anular', async () => {
     vi.spyOn(accountingApi, 'fetchJournalEntries').mockResolvedValue({
-      items: [manual],
+      items: [manual()],
       total: 1,
       page: 1,
       pageSize: 20,
       totalPages: 1,
     });
-    vi.spyOn(accountingApi, 'fetchJournalEntryById').mockResolvedValue(manual);
+    vi.spyOn(accountingApi, 'fetchJournalEntryById').mockResolvedValue(manual());
     renderPage([SYSTEM_PERMISSIONS.ACCOUNTING_READ]);
-    fireEvent.click(await screen.findByRole('button', { name: 'Detalle' }));
+    const table = await loadedTable('Nota manual');
+    fireEvent.click(table.getByRole('button', { name: 'Detalle' }));
     const dialog = await screen.findByRole('dialog');
     await within(dialog).findByText('Nota manual');
     expect(within(dialog).queryByRole('button', { name: 'Anular' })).toBeNull();
@@ -130,7 +145,8 @@ describe('Libro Diario', () => {
       totalPages: 1,
     });
     renderPage([SYSTEM_PERMISSIONS.ACCOUNTING_READ]);
-    const link = await screen.findByRole('link', { name: 'FAC-000007' });
+    const table = await loadedTable('FAC-000007');
+    const link = table.getByRole('link', { name: 'FAC-000007' });
     expect(link).toHaveAttribute('href', '/sales?buscar=FAC-000007');
     expect(screen.queryByText(withDoc.sourceId)).toBeNull();
     expect(screen.getAllByText('02/11/2026')).toHaveLength(2);

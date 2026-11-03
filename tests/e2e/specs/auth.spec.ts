@@ -32,11 +32,16 @@ test.describe('Sesión', () => {
     await page.getByRole('button', { name: 'Ingresar' }).click();
     await expect(page).not.toHaveURL(/\/login$/);
     await page.goto('/products');
-    await page.waitForLoadState('networkidle');
+    // Se espera a que la SPA haya cargado la sesión y pintado la pantalla, no a un "networkidle":
+    // bajo carga la red puede quedar quieta antes de /auth/me y las cookies se borrarían antes
+    // de que la app tuviera sesión (iría al login sin pasar por la navegación que se prueba)
+    await expect(page.getByRole('heading', { name: 'Catálogo de Productos' })).toBeVisible();
+    const newSale = page.getByRole('button', { name: /Nueva Venta/ });
+    await expect(newSale).toBeVisible();
 
     await context.clearCookies();
     // Navegación dentro de la SPA: la sesión en caché sigue "viva" hasta que el API responde 401
-    await page.getByRole('button', { name: /Nueva Venta/ }).click();
+    await newSale.click();
     await expect(page).toHaveURL(/\/login$/);
     await expect(page.getByRole('button', { name: 'Ingresar' })).toBeVisible();
   });
