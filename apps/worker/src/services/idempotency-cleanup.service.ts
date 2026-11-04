@@ -1,9 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { prisma, PrismaClient } from '@farmacia/database';
 
 @Injectable()
 export class IdempotencyCleanupService {
-  constructor(private readonly db: PrismaClient = prisma) {}
+  constructor(@Optional() private readonly db: PrismaClient = prisma) {}
 
   async deleteExpired(now = new Date()): Promise<number> {
     let total = 0;
