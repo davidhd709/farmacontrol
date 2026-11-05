@@ -27,7 +27,11 @@ import {
 } from '../utils/session-cookie.util';
 import { SessionAuthGuard, AuthenticatedUserContext } from '../guards/session-auth.guard';
 import { CurrentUser } from '../decorators/current-user.decorator';
+import { AllowPendingPasswordChange } from '../decorators/allow-pending-password-change.decorator';
 import { InvalidCredentialsException } from '../../domain/exceptions/identity.exceptions';
+import { UserManagementService } from '../../application/services/user-management.service';
+import { RequestShapeValidationPipe } from '../../../../common/pagination/request-shape.pipe';
+import type { ChangeOwnPasswordDto, PasswordActionResponseDto } from '@farmacia/contracts';
 
 import { Optional } from '@nestjs/common';
 import { AuditService } from '../../../audit/application/services/audit.service';
@@ -38,6 +42,7 @@ import { RateLimiterService } from '../../../../common/services/rate-limiter.ser
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
+    private readonly userManagementService: UserManagementService,
     @Optional() private readonly auditService?: AuditService,
     @Optional() private readonly sessionService?: SessionService,
     @Optional() private readonly rateLimiterService?: RateLimiterService,
@@ -124,6 +129,7 @@ export class AuthController {
           isActive: user.isActive,
           roles,
           permissions,
+          mustChangePassword: user.mustChangePassword,
         },
         message: 'Inicio de sesión exitoso.',
       };
@@ -232,6 +238,7 @@ export class AuthController {
    */
   @Get('me')
   @UseGuards(SessionAuthGuard)
+  @AllowPendingPasswordChange()
   public getMe(@CurrentUser() user: AuthenticatedUserContext): CurrentUserResponseDto {
     return {
       user: {
@@ -240,7 +247,28 @@ export class AuthController {
         isActive: true,
         roles: user.roles,
         permissions: user.permissions,
+        mustChangePassword: user.mustChangePassword,
       },
     };
+  }
+
+  /** Cambia la contraseña propia y cierra todas las sesiones del usuario. */
+  @Post('change-password')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(SessionAuthGuard)
+  @AllowPendingPasswordChange()
+  public async changePassword(
+    @CurrentUser() user: AuthenticatedUserContext,
+    @Body(new RequestShapeValidationPipe({ currentPassword: 'text', newPassword: 'text' }))
+    dto: ChangeOwnPasswordDto,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<PasswordActionResponseDto> {
+    await this.userManagementService.changeOwnPassword(
+      user.id,
+      dto.currentPassword,
+      dto.newPassword,
+    );
+    res.clearCookie(SESSION_COOKIE_NAME, getClearSessionCookieOptions());
+    return { message: 'Contraseña actualizada. Inicie sesión de nuevo.' };
   }
 }

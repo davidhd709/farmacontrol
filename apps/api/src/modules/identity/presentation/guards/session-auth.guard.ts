@@ -1,11 +1,16 @@
 import {
   CanActivate,
   ExecutionContext,
+  ForbiddenException,
   Inject,
   Injectable,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
+import { PASSWORD_CHANGE_REQUIRED_CODE } from '@farmacia/contracts';
+import { ALLOW_PENDING_PASSWORD_CHANGE_KEY } from '../decorators/allow-pending-password-change.decorator';
 import { SessionService } from '../../application/services/session.service';
 import {
   USER_REPOSITORY_PORT,
@@ -23,6 +28,7 @@ export interface AuthenticatedUserContext {
   sessionId: string;
   roles: string[];
   permissions: string[];
+  mustChangePassword: boolean;
 }
 
 declare global {
@@ -44,6 +50,8 @@ declare global {
  * 4. Obtener roles activos y permisos consolidados mediante RbacRepositoryPort.
  * 5. Adjuntar un contexto autenticado seguro y estrictamente tipado a request.user.
  * 6. Rechazar peticiones inválidas con HTTP 401 Unauthorized.
+ * 7. Si la contraseña fue asignada por un administrador, permitir solo las rutas marcadas
+ *    con @AllowPendingPasswordChange (HTTP 403 con código PASSWORD_CHANGE_REQUIRED).
  */
 @Injectable()
 export class SessionAuthGuard implements CanActivate {
@@ -52,7 +60,8 @@ export class SessionAuthGuard implements CanActivate {
     @Inject(USER_REPOSITORY_PORT)
     private readonly userRepository: UserRepositoryPort,
     @Inject(RBAC_REPOSITORY_PORT)
-    private readonly rbacRepository: RbacRepositoryPort
+    private readonly rbacRepository: RbacRepositoryPort,
+    @Optional() private readonly reflector: Reflector = new Reflector()
   ) {}
 
   public async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -82,7 +91,22 @@ export class SessionAuthGuard implements CanActivate {
       sessionId: session.id!,
       roles: rbacContext.roles,
       permissions: rbacContext.permissions,
+      mustChangePassword: user.mustChangePassword,
     };
+
+    if (user.mustChangePassword) {
+      const allowed = this.reflector.getAllAndOverride<boolean>(
+        ALLOW_PENDING_PASSWORD_CHANGE_KEY,
+        [context.getHandler(), context.getClass()]
+      );
+      if (!allowed) {
+        throw new ForbiddenException({
+          message: 'Debe cambiar la contraseña temporal antes de continuar.',
+          error: 'Forbidden',
+          details: { code: PASSWORD_CHANGE_REQUIRED_CODE },
+        });
+      }
+    }
 
     return true;
   }

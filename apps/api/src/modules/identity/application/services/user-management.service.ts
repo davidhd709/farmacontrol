@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { prisma } from '@farmacia/database';
 import type {
@@ -37,6 +38,7 @@ export class UserManagementService {
       username: u.username,
       isActive: u.isActive,
       createdAt: u.createdAt.toISOString(),
+      mustChangePassword: u.mustChangePassword,
       roles: u.userRoles.map((ur) => ur.role.name),
     }));
   }
@@ -92,6 +94,7 @@ export class UserManagementService {
         username: normalizedUsername,
         passwordHash,
         isActive: dto.isActive ?? true,
+        mustChangePassword: true,
         userRoles: {
           create: roleRecords.map((r) => ({
             roleId: r.id,
@@ -112,6 +115,7 @@ export class UserManagementService {
       username: created.username,
       isActive: created.isActive,
       createdAt: created.createdAt.toISOString(),
+      mustChangePassword: created.mustChangePassword,
       roles: created.userRoles.map((ur) => ur.role.name),
     };
   }
@@ -119,10 +123,7 @@ export class UserManagementService {
   /**
    * Cambia el estado de activación de un usuario.
    */
-  public async updateUserStatus(
-    id: string,
-    isActive: boolean
-  ): Promise<SystemUserListItemDto> {
+  public async updateUserStatus(id: string, isActive: boolean): Promise<SystemUserListItemDto> {
     const user = await prisma.user.findUnique({ where: { id } });
     if (!user) {
       throw new NotFoundException(`Usuario con ID ${id} no encontrado.`);
@@ -145,6 +146,7 @@ export class UserManagementService {
       username: updated.username,
       isActive: updated.isActive,
       createdAt: updated.createdAt.toISOString(),
+      mustChangePassword: updated.mustChangePassword,
       roles: updated.userRoles.map((ur) => ur.role.name),
     };
   }
@@ -152,10 +154,7 @@ export class UserManagementService {
   /**
    * Actualiza los roles asignados a un usuario.
    */
-  public async updateUserRoles(
-    id: string,
-    roles: string[]
-  ): Promise<SystemUserListItemDto> {
+  public async updateUserRoles(id: string, roles: string[]): Promise<SystemUserListItemDto> {
     const user = await prisma.user.findUnique({ where: { id } });
     if (!user) {
       throw new NotFoundException(`Usuario con ID ${id} no encontrado.`);
@@ -196,7 +195,92 @@ export class UserManagementService {
       username: refreshed.username,
       isActive: refreshed.isActive,
       createdAt: refreshed.createdAt.toISOString(),
+      mustChangePassword: refreshed.mustChangePassword,
       roles: refreshed.userRoles.map((ur) => ur.role.name),
     };
+  }
+
+  /** Restablece una clave desde el gestor y cierra todas las sesiones del destinatario. */
+  public async resetPassword(
+    targetId: string,
+    newPassword: string,
+    actorId: string,
+  ): Promise<void> {
+    const passwordHash = await this.passwordService.hashPassword(newPassword);
+    await prisma.$transaction(async (tx) => {
+      const users = await tx.$queryRaw<Array<{ id: string; username: string }>>`
+        SELECT id, username FROM users WHERE id = ${targetId}::uuid FOR UPDATE
+      `;
+      const target = users[0];
+      if (!target) throw new NotFoundException('Usuario no encontrado.');
+
+      await tx.user.update({
+        where: { id: targetId },
+        data: { passwordHash, mustChangePassword: true },
+      });
+      await tx.session.updateMany({
+        where: { userId: targetId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      await tx.auditEvent.create({
+        data: {
+          userId: actorId,
+          action: 'auth:password_reset_by_manager',
+          entity: 'User',
+          entityId: targetId,
+          details: { targetUsername: target.username },
+        },
+      });
+    });
+  }
+
+  /** Cambia la clave propia tras comprobar la actual y revoca todas las sesiones. */
+  public async changeOwnPassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<void> {
+    if (
+      typeof currentPassword !== 'string' ||
+      currentPassword.length > PasswordService.MAX_PASSWORD_LENGTH
+    ) {
+      throw new BadRequestException('La contraseña actual tiene un formato inválido.');
+    }
+    const passwordHash = await this.passwordService.hashPassword(newPassword);
+    await prisma.$transaction(async (tx) => {
+      const users = await tx.$queryRaw<
+        Array<{ id: string; password_hash: string; is_active: boolean }>
+      >`
+        SELECT id, password_hash, is_active FROM users WHERE id = ${userId}::uuid FOR UPDATE
+      `;
+      const user = users[0];
+      if (
+        !user?.is_active ||
+        !(await this.passwordService.verifyPassword(currentPassword, user.password_hash))
+      ) {
+        throw new UnauthorizedException('La contraseña actual es incorrecta.');
+      }
+      if (await this.passwordService.verifyPassword(newPassword, user.password_hash)) {
+        throw new BadRequestException('La nueva contraseña debe ser diferente de la actual.');
+      }
+
+      await tx.user.update({
+        where: { id: userId },
+        data: { passwordHash, mustChangePassword: false },
+      });
+      await tx.session.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      await tx.auditEvent.create({
+        data: {
+          userId,
+          action: 'auth:password_changed_by_user',
+          entity: 'User',
+          entityId: userId,
+          details: { method: 'self_service' },
+        },
+      });
+    });
   }
 }

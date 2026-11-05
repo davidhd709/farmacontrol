@@ -36,7 +36,12 @@ const PUBLIC_ROUTES = new Set([
 ]);
 
 /** Rutas con sesión pero sin permiso específico (cualquier usuario autenticado). */
-const SESSION_ONLY_ROUTES = new Set(['GET /api/v1/auth/me', 'GET /api/v1/alerts/summary']);
+const SESSION_ONLY_ROUTES = new Set([
+  'GET /api/v1/auth/me',
+  'GET /api/v1/alerts/summary',
+  // Cada usuario cambia su propia contraseña: basta con la sesión
+  'POST /api/v1/auth/change-password',
+]);
 
 interface RouteInfo {
   method: string;

@@ -12,6 +12,7 @@ export interface ReconstituteUserProps {
   username: string;
   passwordHash: string;
   isActive: boolean;
+  mustChangePassword?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -25,6 +26,7 @@ export class User {
   private readonly _username: Username;
   private _passwordHash: string;
   private _isActive: boolean;
+  private _mustChangePassword = false;
   private readonly _createdAt?: Date;
   private _updatedAt?: Date;
 
@@ -70,7 +72,7 @@ export class User {
    */
   public static reconstitute(props: ReconstituteUserProps): User {
     const usernameVo = Username.create(props.username);
-    return new User(
+    const user = new User(
       props.id,
       usernameVo,
       props.passwordHash,
@@ -78,6 +80,8 @@ export class User {
       props.createdAt,
       props.updatedAt
     );
+    user._mustChangePassword = props.mustChangePassword ?? false;
+    return user;
   }
 
   public get id(): string | undefined {
@@ -94,6 +98,10 @@ export class User {
 
   public get isActive(): boolean {
     return this._isActive;
+  }
+
+  public get mustChangePassword(): boolean {
+    return this._mustChangePassword;
   }
 
   public get createdAt(): Date | undefined {

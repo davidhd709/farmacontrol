@@ -1,5 +1,7 @@
 import type {
   CreateSystemUserDto,
+  PasswordActionResponseDto,
+  ResetSystemUserPasswordDto,
   SystemRoleItemDto,
   SystemUserListItemDto,
   UpdateSystemUserRolesDto,
@@ -24,7 +26,7 @@ export async function createSystemUser(dto: CreateSystemUserDto): Promise<System
 
 export async function updateSystemUserStatus(
   id: string,
-  isActive: boolean
+  isActive: boolean,
 ): Promise<SystemUserListItemDto> {
   const payload: UpdateSystemUserStatusDto = { isActive };
   return apiRequest<SystemUserListItemDto>(`users/${id}/status`, {
@@ -35,11 +37,22 @@ export async function updateSystemUserStatus(
 
 export async function updateSystemUserRoles(
   id: string,
-  roles: string[]
+  roles: string[],
 ): Promise<SystemUserListItemDto> {
   const payload: UpdateSystemUserRolesDto = { roles };
   return apiRequest<SystemUserListItemDto>(`users/${id}/roles`, {
     method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function resetSystemUserPassword(
+  id: string,
+  newPassword: string,
+): Promise<PasswordActionResponseDto> {
+  const payload: ResetSystemUserPasswordDto = { newPassword };
+  return apiRequest<PasswordActionResponseDto>(`users/${id}/reset-password`, {
+    method: 'POST',
     body: JSON.stringify(payload),
   });
 }

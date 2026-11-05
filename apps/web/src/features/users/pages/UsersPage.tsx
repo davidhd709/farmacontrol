@@ -30,22 +30,33 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import type { SystemUserListItemDto } from '@farmacia/contracts';
+import { SYSTEM_PERMISSIONS, type SystemUserListItemDto } from '@farmacia/contracts';
 import {
   createSystemUser,
   fetchRoles,
   fetchUsers,
+  resetSystemUserPassword,
   updateSystemUserRoles,
   updateSystemUserStatus,
 } from '../api/users.api';
 import { formatDate } from '../../../utils/date-format';
+import { useAuth } from '../../auth/hooks/useAuth';
+import { usePermissions } from '../../auth/hooks/usePermissions';
+import { validateNewPassword } from '../../auth/password-policy';
 
 export function UsersPage() {
   const queryClient = useQueryClient();
+  const { user: currentUser } = useAuth();
+  const { hasPermission } = usePermissions();
+  const canResetPassword = hasPermission(SYSTEM_PERMISSIONS.USERS_UPDATE);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<SystemUserListItemDto | null>(null);
+  const [resetTarget, setResetTarget] = useState<SystemUserListItemDto | null>(null);
+  const [resetPassword, setResetPassword] = useState('');
+  const [resetConfirmation, setResetConfirmation] = useState('');
+  const [resetError, setResetError] = useState<string | null>(null);
 
   // Confirmaciones modales
   const [userToToggleStatus, setUserToToggleStatus] = useState<SystemUserListItemDto | null>(null);
@@ -75,7 +86,7 @@ export function UsersPage() {
 
   const notify = (
     message: string,
-    severity: 'success' | 'error' | 'info' | 'warning' = 'success'
+    severity: 'success' | 'error' | 'info' | 'warning' = 'success',
   ) => {
     setSnackbar({ open: true, message, severity });
   };
@@ -120,7 +131,7 @@ export function UsersPage() {
       queryClient.invalidateQueries({ queryKey: ['users'] });
       setUserToToggleStatus(null);
       notify(
-        `Usuario "${updated.username}" ${updated.isActive ? 'activado' : 'desactivado'} con éxito.`
+        `Usuario "${updated.username}" ${updated.isActive ? 'activado' : 'desactivado'} con éxito.`,
       );
     },
     onError: (err: any) => {
@@ -148,6 +159,53 @@ export function UsersPage() {
     },
   });
 
+  const resetPasswordMutation = useMutation({
+    mutationFn: ({ id, password }: { id: string; password: string }) =>
+      resetSystemUserPassword(id, password),
+    onSuccess: (_response, variables) => {
+      const username = resetTarget?.username ?? 'el usuario';
+      clearResetPassword();
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      if (variables.id === currentUser?.id) {
+        window.location.replace('/login');
+        return;
+      }
+      notify(
+        `Contraseña temporal asignada a "${username}". Deberá cambiarla al iniciar sesión.`,
+      );
+    },
+    onError: (cause: Error) => {
+      setResetError(cause.message || 'No fue posible restablecer la contraseña.');
+    },
+  });
+
+  const clearResetPassword = () => {
+    setResetTarget(null);
+    setResetPassword('');
+    setResetConfirmation('');
+    setResetError(null);
+  };
+
+  const closeResetPassword = () => {
+    if (!resetPasswordMutation.isPending) clearResetPassword();
+  };
+
+  const submitResetPassword = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!resetTarget) return;
+    const validationError = validateNewPassword(resetPassword);
+    if (validationError) {
+      setResetError(validationError);
+      return;
+    }
+    if (resetPassword !== resetConfirmation) {
+      setResetError('La confirmación no coincide con la nueva contraseña.');
+      return;
+    }
+    setResetError(null);
+    resetPasswordMutation.mutate({ id: resetTarget.id, password: resetPassword });
+  };
+
   const handleOpenEditRoles = (user: SystemUserListItemDto) => {
     setEditingUser(user);
     setEditRoles([...user.roles]);
@@ -156,13 +214,13 @@ export function UsersPage() {
 
   const handleToggleRoleForCreate = (roleName: string) => {
     setSelectedRoles((prev) =>
-      prev.includes(roleName) ? prev.filter((r) => r !== roleName) : [...prev, roleName]
+      prev.includes(roleName) ? prev.filter((r) => r !== roleName) : [...prev, roleName],
     );
   };
 
   const handleToggleRoleForEdit = (roleName: string) => {
     setEditRoles((prev) =>
-      prev.includes(roleName) ? prev.filter((r) => r !== roleName) : [...prev, roleName]
+      prev.includes(roleName) ? prev.filter((r) => r !== roleName) : [...prev, roleName],
     );
   };
 
@@ -172,8 +230,9 @@ export function UsersPage() {
       setCreateError('Ingresa un nombre de usuario.');
       return;
     }
-    if (!newPassword || newPassword.length < 8) {
-      setCreateError('La contraseña debe contener al menos 8 caracteres.');
+    const passwordError = validateNewPassword(newPassword);
+    if (passwordError) {
+      setCreateError(passwordError);
       return;
     }
     setCreateError(null);
@@ -204,10 +263,7 @@ export function UsersPage() {
 
   const filteredUsers = (usersQuery.data ?? []).filter((u) => {
     const q = searchTerm.toLowerCase();
-    return (
-      u.username.toLowerCase().includes(q) ||
-      u.roles.some((r) => r.toLowerCase().includes(q))
-    );
+    return u.username.toLowerCase().includes(q) || u.roles.some((r) => r.toLowerCase().includes(q));
   });
 
   return (
@@ -228,10 +284,18 @@ export function UsersPage() {
               Gestión de Usuarios y Roles
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-              Administración de cuentas de acceso, asignación de perfiles y permisos operativos del sistema.
+              Administración de cuentas de acceso, asignación de perfiles y permisos operativos del
+              sistema.
             </Typography>
           </Box>
-          <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', width: { xs: '100%', sm: 'auto' } }}>
+          <Box
+            sx={{
+              display: 'flex',
+              gap: 1.5,
+              alignItems: 'center',
+              width: { xs: '100%', sm: 'auto' },
+            }}
+          >
             <HomeBackButton />
             <Button
               variant="contained"
@@ -255,7 +319,11 @@ export function UsersPage() {
             bgcolor: 'background.paper',
           }}
         >
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={2}
+            sx={{ alignItems: 'center', justifyContent: 'space-between' }}
+          >
             <TextField
               size="small"
               placeholder="Buscar por usuario o rol…"
@@ -299,7 +367,9 @@ export function UsersPage() {
                 No se encontraron usuarios
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                {searchTerm ? 'Intenta con otro término de búsqueda.' : 'Crea el primer usuario con el botón superior.'}
+                {searchTerm
+                  ? 'Intenta con otro término de búsqueda.'
+                  : 'Crea el primer usuario con el botón superior.'}
               </Typography>
             </Box>
           ) : (
@@ -310,7 +380,9 @@ export function UsersPage() {
                   <TableCell sx={{ fontWeight: 700 }}>Roles Asignados</TableCell>
                   <TableCell sx={{ fontWeight: 700 }}>Estado</TableCell>
                   <TableCell sx={{ fontWeight: 700 }}>Fecha de Registro</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700 }}>Acciones</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700 }}>
+                    Acciones
+                  </TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -362,12 +434,22 @@ export function UsersPage() {
                     </TableCell>
 
                     <TableCell>
-                      <Chip
-                        label={u.isActive ? 'Activo' : 'Inactivo'}
-                        color={u.isActive ? 'success' : 'default'}
-                        size="small"
-                        sx={{ fontWeight: 700 }}
-                      />
+                      <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
+                        <Chip
+                          label={u.isActive ? 'Activo' : 'Inactivo'}
+                          color={u.isActive ? 'success' : 'default'}
+                          size="small"
+                          sx={{ fontWeight: 700 }}
+                        />
+                        {u.mustChangePassword && (
+                          <Chip
+                            label="Contraseña temporal"
+                            color="warning"
+                            variant="outlined"
+                            size="small"
+                          />
+                        )}
+                      </Stack>
                     </TableCell>
 
                     <TableCell>
@@ -386,6 +468,17 @@ export function UsersPage() {
                         >
                           Editar Roles
                         </Button>
+
+                        {canResetPassword && (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={() => setResetTarget(u)}
+                            sx={{ textTransform: 'none', fontWeight: 600 }}
+                          >
+                            Restablecer contraseña
+                          </Button>
+                        )}
 
                         <Button
                           size="small"
@@ -408,12 +501,7 @@ export function UsersPage() {
       </Stack>
 
       {/* MODAL CREAR USUARIO */}
-      <Dialog
-        open={isCreateOpen}
-        onClose={() => setIsCreateOpen(false)}
-        maxWidth="sm"
-        fullWidth
-      >
+      <Dialog open={isCreateOpen} onClose={() => setIsCreateOpen(false)} maxWidth="sm" fullWidth>
         <form onSubmit={handlePreSubmitCreate}>
           <DialogTitle sx={{ fontWeight: 800 }}>Nuevo Usuario del Sistema</DialogTitle>
           <DialogContent dividers>
@@ -457,7 +545,10 @@ export function UsersPage() {
                         }
                         label={
                           <Box>
-                            <Typography variant="body2" sx={{ fontWeight: 700, textTransform: 'capitalize' }}>
+                            <Typography
+                              variant="body2"
+                              sx={{ fontWeight: 700, textTransform: 'capitalize' }}
+                            >
                               {r.name}
                             </Typography>
                             {r.description && (
@@ -484,6 +575,64 @@ export function UsersPage() {
               disabled={createMutation.isPending}
             >
               Continuar
+            </Button>
+          </DialogActions>
+        </form>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(resetTarget)}
+        onClose={closeResetPassword}
+        maxWidth="xs"
+        fullWidth
+        aria-labelledby="reset-password-title"
+      >
+        <form onSubmit={submitResetPassword}>
+          <DialogTitle id="reset-password-title">Restablecer contraseña</DialogTitle>
+          <DialogContent dividers>
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <Typography variant="body2">
+                Cuenta: <strong>{resetTarget?.username}</strong>
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Asigna una contraseña temporal. Al guardar se cerrarán todas las sesiones de esta
+                cuenta y, en su próximo inicio de sesión, el usuario deberá cambiarla por una propia.
+                Comunícasela por un medio seguro.
+              </Typography>
+              {resetError && (
+                <Alert severity="error" role="alert">
+                  {resetError}
+                </Alert>
+              )}
+              <TextField
+                label="Contraseña temporal"
+                type="password"
+                autoComplete="new-password"
+                required
+                fullWidth
+                value={resetPassword}
+                onChange={(event) => setResetPassword(event.target.value)}
+                helperText="Entre 10 y 128 caracteres; mayúscula, minúscula, número y carácter especial."
+                disabled={resetPasswordMutation.isPending}
+              />
+              <TextField
+                label="Confirmar nueva contraseña"
+                type="password"
+                autoComplete="new-password"
+                required
+                fullWidth
+                value={resetConfirmation}
+                onChange={(event) => setResetConfirmation(event.target.value)}
+                disabled={resetPasswordMutation.isPending}
+              />
+            </Stack>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={closeResetPassword} disabled={resetPasswordMutation.isPending}>
+              Cancelar
+            </Button>
+            <Button type="submit" variant="contained" disabled={resetPasswordMutation.isPending}>
+              Restablecer contraseña
             </Button>
           </DialogActions>
         </form>
@@ -521,7 +670,10 @@ export function UsersPage() {
                       }
                       label={
                         <Box>
-                          <Typography variant="body2" sx={{ fontWeight: 700, textTransform: 'capitalize' }}>
+                          <Typography
+                            variant="body2"
+                            sx={{ fontWeight: 700, textTransform: 'capitalize' }}
+                          >
                             {r.name}
                           </Typography>
                           {r.description && (
@@ -602,7 +754,13 @@ export function UsersPage() {
       {/* NOTIFICACIONES MODALES SWEETALERT */}
       <SweetModal
         open={snackbar.open}
-        type={snackbar.severity === 'error' ? 'error' : snackbar.severity === 'warning' ? 'warning' : 'success'}
+        type={
+          snackbar.severity === 'error'
+            ? 'error'
+            : snackbar.severity === 'warning'
+              ? 'warning'
+              : 'success'
+        }
         title={snackbar.severity === 'error' ? 'Error' : '¡Buen trabajo!'}
         description={snackbar.message}
         confirmText="OK"

@@ -4,6 +4,8 @@ export interface AuthUser {
   isActive: boolean;
   roles?: string[];
   permissions?: string[];
+  /** Contraseña temporal asignada por un administrador: hay que cambiarla antes de operar. */
+  mustChangePassword?: boolean;
 }
 
 export interface LoginCredentials {

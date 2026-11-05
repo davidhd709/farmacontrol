@@ -88,6 +88,7 @@ export class PrismaUserRepository implements UserRepositoryPort {
     username: string;
     passwordHash: string;
     isActive: boolean;
+    mustChangePassword: boolean;
     createdAt: Date;
     updatedAt: Date;
   }): User {
@@ -96,6 +97,7 @@ export class PrismaUserRepository implements UserRepositoryPort {
       username: record.username,
       passwordHash: record.passwordHash,
       isActive: record.isActive,
+      mustChangePassword: record.mustChangePassword,
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
     });
