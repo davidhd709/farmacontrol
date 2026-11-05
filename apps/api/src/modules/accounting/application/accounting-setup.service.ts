@@ -7,6 +7,8 @@ import type {
   ApplyPucTemplateResultDto,
   CreateOpeningBalancePayload,
   OpeningBalanceDto,
+  CashOpeningDto,
+  IncorporateOpeningCashPayload,
 } from '@farmacia/contracts';
 import { businessToday } from '../../../common/utils/business-date';
 import { accountingPolicyAt } from '../../company/application/accounting-policy.reader';
@@ -20,6 +22,8 @@ import {
 } from '../domain/accounting-rules';
 import { pucParentCode, requiredPurposes } from '../domain/accounting-setup-rules';
 import { PUC_TEMPLATES, type PucTemplate } from '../domain/puc-templates/pharmacy';
+import { IdempotencyService } from '../../../common/idempotency/idempotency.service';
+import { CashOpeningService } from '../../cash/application/cash-opening.service';
 
 const OPENING_SOURCE = 'OPENING_BALANCE';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -38,6 +42,8 @@ export class AccountingSetupService {
   constructor(
     private readonly repository: AccountingRepository,
     private readonly journal: JournalService,
+    private readonly cashOpening: CashOpeningService,
+    private readonly idempotency: IdempotencyService,
   ) {}
 
   private template(): PucTemplate {
@@ -270,6 +276,7 @@ export class AccountingSetupService {
   async createOpeningBalance(
     payload: CreateOpeningBalancePayload,
     userId: string,
+    idempotencyKey?: string,
   ): Promise<OpeningBalanceDto> {
     const entryDate = String(payload?.entryDate ?? '');
     if (!/^\d{4}-\d{2}-\d{2}$/.test(entryDate)) {
@@ -301,33 +308,123 @@ export class AccountingSetupService {
           typeof line.description === 'string' ? line.description.trim().slice(0, 200) : undefined,
       };
     });
-    if (await this.activeOpeningEntry()) {
-      throw new AccountingConflictError(
-        'Ya hay saldos de apertura vigentes. Para registrar otros, reverse primero el asiento de apertura.',
+    return this.openingTransaction(
+      '/api/v1/accounting/opening-balances',
+      userId,
+      idempotencyKey,
+      { entryDate, reason, lines },
+      async (tx) => {
+        await this.cashOpening.assertDedicatedCompany(tx);
+        if (await this.activeOpeningEntry(tx)) {
+          throw new AccountingConflictError(
+            'Ya hay saldos de apertura vigentes. No se crea otro asiento ni se repara Caja implícitamente.',
+          );
+        }
+        const previous = await tx.journalEntry.count({ where: { sourceType: OPENING_SOURCE } });
+        const posted = await this.journal.post(
+          {
+            entryDate,
+            description: `Saldos de apertura: ${reason}`,
+            sourceType: OPENING_SOURCE,
+            sourceId: `OPENING-${previous + 1}`,
+            createdById: userId,
+            lines,
+          },
+          tx,
+        );
+        await this.cashOpening.incorporate(tx, posted.id, userId);
+        return this.toOpeningDto(posted.id, tx);
+      },
+    );
+  }
+
+  /** Reparación opt-in: el asiento original permanece intacto. Nunca se ejecuta al iniciar. */
+  async incorporateExistingCash(
+    journalEntryId: string,
+    payload: IncorporateOpeningCashPayload,
+    userId: string,
+    idempotencyKey?: string,
+  ): Promise<CashOpeningDto> {
+    if (
+      !UUID_RE.test(journalEntryId) ||
+      typeof payload?.companyId !== 'string' ||
+      !UUID_RE.test(payload.companyId) ||
+      typeof payload?.accountId !== 'string' ||
+      !UUID_RE.test(payload.accountId) ||
+      typeof payload?.expectedAmount !== 'string' ||
+      !MONEY_RE.test(payload.expectedAmount) ||
+      typeof payload?.reason !== 'string' ||
+      !payload.reason.trim() ||
+      payload.reason.trim().length > 300
+    ) {
+      throw new AccountingValidationError(
+        'Indique asiento, empresa y cuenta válidos, importe esperado y motivo (máximo 300 caracteres).',
       );
     }
-    const previous = await prisma.journalEntry.count({ where: { sourceType: OPENING_SOURCE } });
-    const posted = await this.journal.post({
-      entryDate,
-      description: `Saldos de apertura: ${reason}`,
-      sourceType: OPENING_SOURCE,
-      sourceId: `OPENING-${previous + 1}`,
-      createdById: userId,
-      lines,
-    });
-    return this.toOpeningDto(posted.id);
+    const input = {
+      companyId: payload.companyId,
+      accountId: payload.accountId,
+      expectedAmount: payload.expectedAmount,
+      reason: payload.reason.trim(),
+    };
+    return this.openingTransaction(
+      `/api/v1/accounting/opening-balances/${journalEntryId}/cash`,
+      userId,
+      idempotencyKey,
+      input,
+      async (tx) => {
+        const result = await this.cashOpening.incorporate(tx, journalEntryId, userId, input);
+        return result!;
+      },
+    );
+  }
+
+  private async openingTransaction<T>(
+    endpoint: string,
+    userId: string,
+    idempotencyKey: string | undefined,
+    payload: unknown,
+    execute: (tx: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
+    const key = idempotencyKey?.trim();
+    if (!key || key.length > 100) {
+      throw new AccountingValidationError(
+        'Idempotency-Key es obligatorio (máximo 100 caracteres).',
+      );
+    }
+    const requestHash = this.idempotency.computeHash(endpoint, userId, payload);
+    return this.idempotency.retryOnSerialization(() =>
+      prisma.$transaction(
+        async (tx) => {
+          const cached = await this.idempotency.getRecord(key, requestHash, tx, 'http');
+          if (cached) return cached.responseBody as T;
+          // Serializa creación, reparación y la comprobación de una única apertura vigente.
+          await tx.$queryRaw`SELECT pg_advisory_xact_lock(742189322)::text AS locked`;
+          const result = await execute(tx);
+          await this.idempotency.saveRecord(
+            { key, userId, endpoint, requestHash, responseStatus: 201, responseBody: result },
+            tx,
+          );
+          return result;
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      ),
+    );
   }
 
   /** Asiento de apertura publicado y no reversado; hay uno solo vigente. */
-  private async activeOpeningEntry() {
-    return prisma.journalEntry.findFirst({
+  private async activeOpeningEntry(client: Prisma.TransactionClient | typeof prisma = prisma) {
+    return client.journalEntry.findFirst({
       where: { sourceType: OPENING_SOURCE, status: 'POSTED', reversal: { is: null } },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  private async toOpeningDto(id: string): Promise<OpeningBalanceDto> {
-    const entry = await prisma.journalEntry.findUnique({
+  private async toOpeningDto(
+    id: string,
+    client: Prisma.TransactionClient | typeof prisma = prisma,
+  ): Promise<OpeningBalanceDto> {
+    const entry = await client.journalEntry.findUnique({
       where: { id },
       include: { lines: { include: { account: true } } },
     });

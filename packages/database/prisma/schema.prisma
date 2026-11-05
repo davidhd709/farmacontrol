@@ -26,6 +26,7 @@ model User {
   companyTaxProfiles    CompanyTaxProfile[]
   purchasesReceived     Purchase[]
   cashMovements         CashMovement[]
+  cashOpenings          CashOpening[]
   salesCreated          Sale[]              @relation("SalesCreated")
   idempotencyKeys       IdempotencyKey[]    @relation("UserIdempotencyKeys")
   receivablePayments    ReceivablePayment[]
@@ -515,6 +516,7 @@ model CashMovement {
   createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz
   createdByUserId       String   @map("created_by_user_id") @db.Uuid
   treasuryDocument      TreasuryDocument?
+  cashOpening           CashOpening?
 
   createdByUser         User     @relation(fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
@@ -523,6 +525,31 @@ model CashMovement {
   @@index([createdAt])
   @@index([createdByUserId])
   @@map("cash_movements")
+}
+
+/// Incorporación única del efectivo de una apertura contable al auxiliar de caja.
+/// No representa un recibo ni genera otro asiento. Es inmutable (FARM-TEST-001).
+model CashOpening {
+  id             String   @id @default(uuid()) @db.Uuid
+  companyId      String   @map("company_id") @db.Uuid
+  journalEntryId String   @unique @map("journal_entry_id") @db.Uuid
+  cashMovementId String   @unique @map("cash_movement_id") @db.Uuid
+  accountId      String   @map("account_id") @db.Uuid
+  amount         Decimal  @db.Decimal(12, 2)
+  effectiveDate  DateTime @map("effective_date") @db.Date
+  createdById    String   @map("created_by_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  company      Company      @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  journalEntry JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  cashMovement CashMovement @relation(fields: [cashMovementId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  account      Account      @relation(fields: [accountId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy    User         @relation(fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([companyId])
+  @@index([accountId])
+  @@index([createdById])
+  @@map("cash_openings")
 }
 
 model Customer {
@@ -892,6 +919,7 @@ model Account {
   expenseCategories ExpenseCategory[]
   bankAccounts   BankAccount[] @relation("BankAccountLedger")
   treasuryDocuments TreasuryDocument[] @relation("TreasuryDocumentCounterpart")
+  cashOpenings    CashOpening[]
 
   @@index([parentId])
   @@index([name])
@@ -941,6 +969,7 @@ model Company {
   branches           Branch[]
   accountingPolicies CompanyAccountingPolicy[]
   taxProfiles        CompanyTaxProfile[]
+  cashOpenings       CashOpening[]
 
   @@map("companies")
 }
@@ -1012,6 +1041,7 @@ model JournalEntry {
   reversal       JournalEntry?      @relation("JournalEntryReversal")
   lines          JournalEntryLine[]
   fiscalPeriodClosing FiscalPeriod[] @relation("FiscalPeriodClosingEntry")
+  cashOpening    CashOpening?
 
   @@unique([sourceType, sourceId])
   @@index([entryDate, id])

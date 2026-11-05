@@ -515,7 +515,8 @@ export class ReportsService {
   // ==========================================================================
 
   async getCashSummaryReport(filter: ReportDateFilter = {}): Promise<CashSummaryReportDto> {
-    const where: any = {};
+    // La base inicial se consulta en Caja; no es un flujo operativo del período.
+    const where: any = { movementType: { not: 'SALDO_APERTURA' } };
 
     if (filter.fromDate || filter.toDate) {
       where.createdAt = {};

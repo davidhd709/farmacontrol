@@ -53,6 +53,7 @@ export function validateCashMovementType(type: unknown): CashMovementType {
     'INGRESO_MANUAL',
     'EGRESO_MANUAL',
     'EGRESO_PAGO_PROVEEDOR',
+    'SALDO_APERTURA',
   ];
   if (typeof type !== 'string' || !validTypes.includes(type as CashMovementType)) {
     throw new InvalidCashMovementTypeException();
@@ -69,7 +70,8 @@ export function calculateNewCashBalanceCents(
     throw new InvalidCashAmountException();
   }
 
-  const isIncome = isCashIncome(movementType);
+  // La apertura aumenta disponibilidad, pero no es ingreso operativo.
+  const isIncome = isCashIncome(movementType) || movementType === 'SALDO_APERTURA';
   const isExpense = isCashExpense(movementType);
 
   if (!isIncome && !isExpense) {

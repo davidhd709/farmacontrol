@@ -516,6 +516,26 @@ export interface OpeningBalanceDto {
   lines: Array<{ accountId: string; accountCode: string; accountName: string; debit: string; credit: string }>;
 }
 
+/** Incorporación explícita de efectivo ya contabilizado; no publica otro asiento. */
+export interface IncorporateOpeningCashPayload {
+  companyId: string;
+  accountId: string;
+  expectedAmount: string;
+  reason: string;
+}
+
+export interface CashOpeningDto {
+  id: string;
+  companyId: string;
+  journalEntryId: string;
+  cashMovementId: string;
+  accountId: string;
+  amount: string;
+  effectiveDate: string;
+  createdById: string;
+  createdAt: string;
+}
+
 /** Libros oficiales y conciliación (ADR-006, F8). Fechas YYYY-MM-DD; dinero como texto. */
 export interface JournalBookDto {
   from: string;

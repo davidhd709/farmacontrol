@@ -40,10 +40,10 @@ export class PrismaCashMovementRepository implements ICashMovementRepository {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(742189321)`;
 
       // 1. Obtener el último movimiento para conocer el saldo anterior
-      const lastRows = await tx.$queryRaw<Array<{ balance_after: Prisma.Decimal }>>`
-        SELECT balance_after
+      const lastRows = await tx.$queryRaw<Array<{ balance_after: Prisma.Decimal; created_at: Date }>>`
+        SELECT balance_after, created_at
         FROM cash_movements
-        ORDER BY created_at DESC
+        ORDER BY created_at DESC, id DESC
         LIMIT 1
       `;
 
@@ -61,6 +61,10 @@ export class PrismaCashMovementRepository implements ICashMovementRepository {
 
       const amountDecimal = new Prisma.Decimal(centsToMoneyString(amountCents));
       const balanceAfterDecimal = new Prisma.Decimal(centsToMoneyString(balanceAfter));
+      // now() en PostgreSQL representa el inicio de la transacción, anterior a una posible
+      // espera del cerrojo. Asignar el orden de registro bajo el mismo cerrojo evita que
+      // un movimiento posterior quede antes de su saldo predecesor. No cambia históricos.
+      const createdAt = new Date(Math.max(Date.now(), (lastRows[0]?.created_at.getTime() ?? 0) + 1));
 
       // 2. Crear el movimiento inmutable
       const created = await tx.cashMovement.create({
@@ -73,6 +77,7 @@ export class PrismaCashMovementRepository implements ICashMovementRepository {
           referenceDocumentId: data.referenceDocumentId || null,
           balanceAfter: balanceAfterDecimal,
           createdByUserId: data.createdByUserId,
+          createdAt,
         },
         include: {
           createdByUser: true,
@@ -106,7 +111,7 @@ export class PrismaCashMovementRepository implements ICashMovementRepository {
   async getCurrentBalance(paymentMethod?: PaymentMethod): Promise<CashBalanceDto> {
     // 1. Último movimiento general para el saldo actual de caja
     const lastMovement = await this.client.cashMovement.findFirst({
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
 
     const currentBalanceCents = lastMovement
@@ -118,6 +123,7 @@ export class PrismaCashMovementRepository implements ICashMovementRepository {
 
     const todayWhere: Prisma.CashMovementWhereInput = {
       createdAt: { gte: startOfToday },
+      movementType: { not: 'SALDO_APERTURA' },
       ...(paymentMethod ? { paymentMethod } : {}),
     };
 
@@ -135,7 +141,7 @@ export class PrismaCashMovementRepository implements ICashMovementRepository {
         mov.movementType === 'INGRESO_MANUAL'
       ) {
         totalIncomeTodayCents += amountCents;
-      } else {
+      } else if (mov.movementType !== 'SALDO_APERTURA') {
         totalExpenseTodayCents += amountCents;
       }
     }

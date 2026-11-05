@@ -302,6 +302,11 @@ export class JournalService {
     });
     if (!original || original.status !== 'POSTED')
       throw new AccountingNotFoundError('Asiento publicado inexistente.');
+    if (await tx.cashOpening.findUnique({ where: { journalEntryId: original.id } })) {
+      throw new AccountingConflictError(
+        'La apertura ya inicializó Caja. Su corrección requiere un flujo conjunto contable y operativo; no puede anularse solo el asiento.',
+      );
+    }
     const existing = await tx.journalEntry.findUnique({
       where: { reversalOfId: original.id },
       include: journalInclude,

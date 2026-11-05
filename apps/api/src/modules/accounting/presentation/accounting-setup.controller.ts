@@ -5,6 +5,9 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Headers,
+  Param,
+  ParseUUIDPipe,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -15,6 +18,8 @@ import {
   type ApplyPucTemplateResultDto,
   type CreateOpeningBalancePayload,
   type OpeningBalanceDto,
+  type IncorporateOpeningCashPayload,
+  type CashOpeningDto,
 } from '@farmacia/contracts';
 import { AccountingSetupService } from '../application/accounting-setup.service';
 import { SessionAuthGuard } from '../../identity/presentation/guards/session-auth.guard';
@@ -69,15 +74,40 @@ export class AccountingSetupController {
   @Post('opening-balances')
   @HttpCode(HttpStatus.CREATED)
   @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_MANAGE)
-  @ApiOperation({ summary: 'Registra los saldos de apertura como un asiento cuadrado' })
+  @ApiOperation({
+    summary: 'Registra apertura e incorpora efectivo atómicamente; requiere Idempotency-Key',
+  })
   @ApiResponse({ status: 409, description: 'Ya hay saldos de apertura vigentes.' })
   createOpeningBalance(
     @Body() body: unknown,
     @CurrentUser() user: AuthenticatedUserContext,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
   ): Promise<OpeningBalanceDto> {
     return this.setup.createOpeningBalance(
       objectBody(body) as unknown as CreateOpeningBalancePayload,
       user.id,
+      idempotencyKey,
+    );
+  }
+
+  @Post('opening-balances/:id/cash')
+  @HttpCode(HttpStatus.CREATED)
+  @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_MANAGE, SYSTEM_PERMISSIONS.CASH_MOVEMENTS)
+  @ApiOperation({
+    summary:
+      'Incorpora explícitamente el efectivo de una apertura existente, sin nuevo asiento; requiere Idempotency-Key',
+  })
+  incorporateExistingCash(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: unknown,
+    @CurrentUser() user: AuthenticatedUserContext,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+  ): Promise<CashOpeningDto> {
+    return this.setup.incorporateExistingCash(
+      id,
+      objectBody(body) as unknown as IncorporateOpeningCashPayload,
+      user.id,
+      idempotencyKey,
     );
   }
 }

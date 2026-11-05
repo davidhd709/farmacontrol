@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -76,6 +76,7 @@ export function AccountingSetupPage() {
   const [reason, setReason] = useState('');
   const [lines, setLines] = useState<OpeningLine[]>([emptyLine(), emptyLine()]);
   const [saving, setSaving] = useState(false);
+  const openingRequest = useRef<{ fingerprint: string; key: string } | null>(null);
 
   const movementAccounts = (accounts.data ?? []).filter((a) => a.isActive && a.allowsMovement);
   const totals = useMemo(() => {
@@ -91,7 +92,10 @@ export function AccountingSetupPage() {
   }, [lines]);
 
   const refresh = async () => {
-    await queryClient.invalidateQueries({ queryKey: ['accounting'] });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['accounting'] }),
+      queryClient.invalidateQueries({ queryKey: ['cash'] }),
+    ]);
   };
 
   const apply = async () => {
@@ -111,13 +115,19 @@ export function AccountingSetupPage() {
     setError(null);
     setSaving(true);
     try {
-      await createOpeningBalance({
+      const payload = {
         entryDate,
         reason,
         lines: lines
           .filter((l) => l.accountId)
           .map((l) => ({ accountId: l.accountId, debit: l.debit || '0', credit: l.credit || '0' })),
-      });
+      };
+      const fingerprint = JSON.stringify(payload);
+      if (openingRequest.current?.fingerprint !== fingerprint) {
+        openingRequest.current = { fingerprint, key: crypto.randomUUID() };
+      }
+      await createOpeningBalance(payload, openingRequest.current.key);
+      openingRequest.current = null;
       setLines([emptyLine(), emptyLine()]);
       setReason('');
       await refresh();
@@ -277,8 +287,8 @@ export function AccountingSetupPage() {
             {openingData ? (
               <>
                 <Typography variant="body2" sx={{ mb: 1 }}>
-                  Registrados con fecha {formatDate(openingData.entryDate)}. Para cambiarlos, reverse el asiento
-                  de apertura en el libro diario y registre otros.
+                  Registrados con fecha {formatDate(openingData.entryDate)}. Si la apertura ya inicializó Caja,
+                  su corrección requiere revisar conjuntamente el asiento y el saldo operativo.
                 </Typography>
                 <TableContainer>
                   <Table size="small" aria-label="Saldos de apertura registrados">

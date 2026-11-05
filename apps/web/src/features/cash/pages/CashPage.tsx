@@ -95,6 +95,8 @@ export const CashPage: React.FC = () => {
 
   const getMovementTypeChip = (type: CashMovementType) => {
     switch (type) {
+      case 'SALDO_APERTURA':
+        return <Chip label="Saldo de apertura" color="info" size="small" variant="outlined" />;
       case 'INGRESO_VENTA':
         return <Chip label="Venta POS" color="success" size="small" variant="filled" />;
       case 'INGRESO_MANUAL':
@@ -109,7 +111,7 @@ export const CashPage: React.FC = () => {
   };
 
   const isIncome = (type: CashMovementType) => {
-    return type === 'INGRESO_VENTA' || type === 'INGRESO_MANUAL';
+    return type === 'INGRESO_VENTA' || type === 'INGRESO_MANUAL' || type === 'SALDO_APERTURA';
   };
 
   return (
@@ -302,6 +304,7 @@ export const CashPage: React.FC = () => {
             <MenuItem value="">Todos los tipos</MenuItem>
             <MenuItem value="INGRESO_VENTA">Venta POS (Ingreso)</MenuItem>
             <MenuItem value="INGRESO_MANUAL">Recibo de caja</MenuItem>
+            <MenuItem value="SALDO_APERTURA">Saldo de apertura</MenuItem>
             <MenuItem value="EGRESO_MANUAL">Egreso Manual</MenuItem>
             <MenuItem value="EGRESO_PAGO_PROVEEDOR">Pago a Proveedor (Egreso)</MenuItem>
           </Select>

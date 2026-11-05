@@ -55,6 +55,7 @@ export class CashMovement {
       'INGRESO_MANUAL',
       'EGRESO_MANUAL',
       'EGRESO_PAGO_PROVEEDOR',
+      'SALDO_APERTURA',
     ];
 
     if (!validTypes.includes(props.movementType)) {
