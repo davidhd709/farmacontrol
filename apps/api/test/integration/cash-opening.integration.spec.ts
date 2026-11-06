@@ -1,4 +1,9 @@
 import { randomUUID } from 'crypto';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { Client } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import { Test } from '@nestjs/testing';
@@ -777,6 +782,269 @@ describe('FARM-TEST-001 — apertura operativa de caja', () => {
     expect(await prisma.cashOpening.count()).toBe(0);
     expect(await prisma.treasuryDocument.count()).toBe(0);
   });
+
+  it('rechaza nulos en referencias de apertura y columnas obligatorias del vínculo', async () => {
+    const original = await legacyOpening();
+    const client = new Client({ connectionString: process.env.DATABASE_TEST_URL });
+    await client.connect();
+    try {
+      const mandatory = await client.query(`
+        SELECT column_name FROM information_schema.columns
+        WHERE table_name = 'cash_openings' AND is_nullable = 'YES'
+      `);
+      expect(mandatory.rows).toEqual([]);
+      const movementMandatory = await client.query(`
+        SELECT column_name FROM information_schema.columns
+        WHERE table_name = 'cash_movements' AND is_nullable = 'NO'
+      `);
+      expect(movementMandatory.rows.map((row) => row.column_name)).toEqual(
+        expect.arrayContaining([
+          'movement_type',
+          'amount',
+          'payment_method',
+          'balance_after',
+          'created_by_user_id',
+        ]),
+      );
+      for (const [referenceType, referenceId] of [
+        [null, original.id],
+        ['OPENING_BALANCE', null],
+        ['OPENING_BALANCE', '  '],
+      ]) {
+        await expect(
+          client.query(
+            `INSERT INTO cash_movements (id, movement_type, amount, payment_method, reason,
+             reference_document_type, reference_document_id, balance_after, created_by_user_id)
+           VALUES (gen_random_uuid(), 'SALDO_APERTURA', 2000000, 'EFECTIVO',
+             'Prueba de referencia nula', $1, $2, 2000000, $3)`,
+            [referenceType, referenceId, adminId],
+          ),
+        ).rejects.toMatchObject({ code: '23514' });
+      }
+      const required = [
+        'id',
+        'company_id',
+        'journal_entry_id',
+        'cash_movement_id',
+        'account_id',
+        'amount',
+        'effective_date',
+        'created_by_id',
+        'created_at',
+      ];
+      for (const column of required) {
+        const cols = required.map((name) => `"${name}"`).join(', ');
+        const vals = required
+          .map((name) =>
+            name === column
+              ? 'NULL'
+              : name === 'amount'
+                ? '2000000'
+                : name === 'effective_date'
+                  ? "DATE '2026-11-03'"
+                  : name === 'created_at'
+                    ? 'CURRENT_TIMESTAMP'
+                    : name === 'journal_entry_id'
+                      ? `'${original.id}'`
+                      : name === 'company_id'
+                        ? `'${companyId}'`
+                        : name === 'account_id'
+                          ? `'${cashId}'`
+                          : name === 'created_by_id'
+                            ? `'${adminId}'`
+                            : 'gen_random_uuid()',
+          )
+          .join(', ');
+        try {
+          await client.query(`INSERT INTO cash_openings (${cols}) VALUES (${vals})`);
+          throw new Error(`Se aceptó ${column} nulo`);
+        } catch (error) {
+          expect(['23502', '23514']).toContain((error as { code?: string }).code);
+        }
+      }
+      expect(await prisma.cashMovement.count()).toBe(0);
+      expect(await prisma.cashOpening.count()).toBe(0);
+    } finally {
+      await client.end();
+    }
+  });
+
+  it('aplica la migración en una copia desechable con un asiento histórico contabilizado', async () => {
+    const original = await legacyOpening(opening());
+    await post('treasury/bank-accounts', {
+      ledgerAccountId: bankId,
+      bankName: 'Banco histórico de pruebas',
+      accountType: 'AHORROS',
+      accountNumber: '9876543210',
+      name: 'Cuenta histórica',
+      initialBalance: '6000000.00',
+    }).expect(201);
+    const testUrl = new URL(process.env.DATABASE_TEST_URL ?? '');
+    expect(testUrl.hostname).toBe('127.0.0.1');
+    expect(testUrl.pathname).toBe('/farmacia_test');
+    expect(process.env.FARMACIA_TEST_RUN_ID).toBeTruthy();
+    const cloneName = `farm_cash_opening_copy_${randomUUID().replaceAll('-', '')}_test`;
+    const cloneUrl = new URL(testUrl);
+    cloneUrl.pathname = `/${cloneName}`;
+    const adminUrl = new URL(testUrl);
+    adminUrl.pathname = '/postgres';
+    const admin = new Client({ connectionString: adminUrl.toString() });
+    const scratch = mkdtempSync(join(tmpdir(), 'farm-cash-migration-'));
+    const dumpFile = join(scratch, 'previous-data.dump');
+    let clone: Client | undefined;
+    await admin.connect();
+    try {
+      execFileSync('pg_dump', ['-Fc', '-f', dumpFile], { stdio: 'pipe' });
+      await admin.query(`CREATE DATABASE "${cloneName}"`);
+      await admin.query(`COMMENT ON DATABASE "${cloneName}"
+        IS 'farmacontrol-test-run:${process.env.FARMACIA_TEST_RUN_ID}'`);
+      execFileSync('pg_restore', ['-d', cloneName, '--no-owner', dumpFile], { stdio: 'pipe' });
+      clone = new Client({ connectionString: cloneUrl.toString() });
+      await clone.connect();
+      const before = (
+        await clone.query(
+          `SELECT e.id, e.status, e.source_type,
+        (SELECT sum(l.debit - l.credit)::text FROM journal_entry_lines l
+         JOIN accounts a ON a.id = l.account_id
+         WHERE l.journal_entry_id = e.id AND a.code = '110505') AS cash_net
+        FROM journal_entries e WHERE e.id = $1`,
+          [original.id],
+        )
+      ).rows;
+      expect(before).toMatchObject([
+        {
+          id: original.id,
+          status: 'POSTED',
+          source_type: 'OPENING_BALANCE',
+          cash_net: '2000000.00',
+        },
+      ]);
+      const bankBefore = (await clone.query('SELECT current_balance::text FROM bank_accounts'))
+        .rows;
+      expect(bankBefore).toEqual([{ current_balance: '6000000.00' }]);
+
+      // La copia reproduce el esquema anterior y conserva los datos previamente cargados.
+      await clone.query(`DROP TABLE cash_openings CASCADE;
+        DROP INDEX cash_movements_opening_source_key;
+        ALTER TABLE cash_movements DROP CONSTRAINT cash_movements_opening_reference_check;
+        DROP FUNCTION validate_cash_opening();
+        DROP TRIGGER cash_opening_movement_at_commit_trg ON cash_movements;
+        DROP FUNCTION validate_cash_opening_movement_at_commit();
+        DROP TRIGGER journal_entries_cash_opening_reversal_trg ON journal_entries;
+        DROP FUNCTION guard_cash_opening_reversal();`);
+      const previousSql = readFileSync(
+        resolve(
+          __dirname,
+          '../../../../packages/database/prisma/migrations/20261102130000_document_annulments/migration.sql',
+        ),
+        'utf8',
+      );
+      const oldFunction = previousSql.match(
+        /CREATE OR REPLACE FUNCTION create_treasury_document_for_cash\(\)[\s\S]*?\$\$ LANGUAGE plpgsql;/,
+      )?.[0];
+      expect(oldFunction).toBeTruthy();
+      const currentSql = readFileSync(
+        resolve(
+          __dirname,
+          '../../../../packages/database/prisma/migrations/20261105100000_cash_opening/migration.sql',
+        ),
+        'utf8',
+      );
+      const newFunction = currentSql.match(
+        /CREATE OR REPLACE FUNCTION create_treasury_document_for_cash\(\)[\s\S]*?\$\$ LANGUAGE plpgsql;/,
+      )?.[0];
+      expect(
+        newFunction?.replace(
+          `  -- La apertura es incorporación al auxiliar, no un recibo ni un egreso.\n  IF NEW."movement_type" = 'SALDO_APERTURA' THEN\n    RETURN NEW;\n  END IF;\n`,
+          '',
+        ),
+      ).toBe(oldFunction);
+      await clone.query(oldFunction!);
+
+      const cases = [
+        ['INGRESO_VENTA', 'SALE', null],
+        ['EGRESO_MANUAL', 'SALE_CANCEL', null],
+        ['INGRESO_MANUAL', 'RECEIVABLE', 'RECIBO_CAJA'],
+        ['EGRESO_MANUAL', 'EXPENSE', 'COMPROBANTE_EGRESO'],
+        ['INGRESO_MANUAL', 'TREASURY_DOCUMENT', null],
+        ['EGRESO_MANUAL', 'TREASURY_DOCUMENT_CANCEL', null],
+        ['INGRESO_MANUAL', null, 'RECIBO_CAJA'],
+      ] as const;
+      const exercise = async (phase: string) => {
+        const observed = [];
+        for (const [movementType, referenceType] of cases) {
+          const movement = await clone!.query(
+            `INSERT INTO cash_movements
+            (id, movement_type, amount, payment_method, reason, reference_document_type,
+             reference_document_id, balance_after, created_by_user_id)
+            VALUES (gen_random_uuid(), $1, 100, 'EFECTIVO', $2, $3, $4, 100, $5)
+            RETURNING id`,
+            [
+              movementType,
+              `${phase}: ${movementType}`,
+              referenceType,
+              `${phase}-${observed.length}`,
+              adminId,
+            ],
+          );
+          const docs = await clone!.query(
+            `SELECT document_type, document_number
+            FROM treasury_documents WHERE cash_movement_id = $1`,
+            [movement.rows[0].id],
+          );
+          observed.push(docs.rows[0]?.document_type ?? null);
+        }
+        return observed;
+      };
+      const oldBehavior = await exercise('before');
+      expect(oldBehavior).toEqual(cases.map((entry) => entry[2]));
+      const historic = (await clone.query('SELECT count(*)::int AS n FROM cash_movements')).rows[0]
+        .n;
+      await clone.query(`DELETE FROM _prisma_migrations
+        WHERE migration_name = '20261105100000_cash_opening'`);
+      execFileSync('pnpm', ['--filter', '@farmacia/database', 'db:test:migrate'], {
+        cwd: resolve(__dirname, '../../../..'),
+        env: {
+          ...process.env,
+          DATABASE_URL: cloneUrl.toString(),
+          DATABASE_TEST_URL: cloneUrl.toString(),
+          PGDATABASE: cloneName,
+        },
+        stdio: 'pipe',
+      });
+      expect(
+        (
+          await clone.query(`SELECT finished_at IS NOT NULL AS applied
+        FROM _prisma_migrations WHERE migration_name = '20261105100000_cash_opening'`)
+        ).rows,
+      ).toEqual([{ applied: true }]);
+      expect(await exercise('after')).toEqual(oldBehavior);
+      expect((await clone.query('SELECT count(*)::int AS n FROM cash_movements')).rows[0].n).toBe(
+        historic + cases.length,
+      );
+      expect((await clone.query('SELECT count(*)::int AS n FROM cash_openings')).rows[0].n).toBe(0);
+      expect(
+        (
+          await clone.query(
+            `SELECT e.id, e.status, e.source_type,
+        (SELECT sum(l.debit - l.credit)::text FROM journal_entry_lines l
+         JOIN accounts a ON a.id = l.account_id
+         WHERE l.journal_entry_id = e.id AND a.code = '110505') AS cash_net
+        FROM journal_entries e WHERE e.id = $1`,
+            [original.id],
+          )
+        ).rows,
+      ).toEqual(before);
+      expect((await clone.query('SELECT current_balance::text FROM bank_accounts')).rows).toEqual(
+        bankBefore,
+      );
+    } finally {
+      await clone?.end();
+      await admin.query(`DROP DATABASE IF EXISTS "${cloneName}" WITH (FORCE)`);
+      await admin.end();
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  }, 90000);
 
   it('la base de datos impide modificar o borrar la trazabilidad de una apertura', async () => {
     const created = await createOpening();
