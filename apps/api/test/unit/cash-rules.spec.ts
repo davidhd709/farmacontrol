@@ -61,6 +61,19 @@ describe('Cash Rules & Cents Precision (Domain Unit Tests)', () => {
   });
 
   describe('calculateNewCashBalanceCents', () => {
+    it('incorpora la base inicial sin clasificarla como ingreso ni egreso operativo', () => {
+      expect(validateCashMovementType('SALDO_APERTURA')).toBe('SALDO_APERTURA');
+      expect(isCashIncome('SALDO_APERTURA')).toBe(false);
+      expect(isCashExpense('SALDO_APERTURA')).toBe(false);
+      expect(calculateNewCashBalanceCents(0n, 'SALDO_APERTURA', 200000000n)).toEqual({
+        balanceBefore: 0n,
+        balanceAfter: 200000000n,
+      });
+      expect(calculateNewCashBalanceCents(200000000n, 'INGRESO_VENTA', 1n).balanceAfter)
+        .toBe(200000001n);
+      expect(calculateNewCashBalanceCents(200000001n, 'EGRESO_MANUAL', 1n).balanceAfter)
+        .toBe(200000000n);
+    });
     it('suma correctamente en ingresos de caja', () => {
       const res = calculateNewCashBalanceCents(5000000n, 'INGRESO_VENTA', 2500000n);
       expect(res.balanceBefore).toBe(5000000n);

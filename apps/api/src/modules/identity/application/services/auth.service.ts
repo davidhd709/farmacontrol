@@ -84,6 +84,16 @@ export class AuthService {
     }
 
     const persist = async (tx?: Prisma.TransactionClient): Promise<LoginResult> => {
+      if (tx) {
+        // Serializa la emisión de sesiones con los cambios de contraseña. Si la clave
+        // cambió mientras Argon2 verificaba el hash anterior, no crea una sesión nueva.
+        const current = await tx.$queryRaw<Array<{ password_hash: string; is_active: boolean }>>`
+          SELECT password_hash, is_active FROM users WHERE id = ${user.id!}::uuid FOR SHARE
+        `;
+        if (!current[0]?.is_active || current[0].password_hash !== user.passwordHash) {
+          throw new InvalidCredentialsException();
+        }
+      }
       // Crear la sesión opaca asociada al usuario (genera 256 bits CSPRNG y persiste hash)
       const { rawToken } = tx
         ? await this.sessionService.createSession(user.id!, undefined, tx)

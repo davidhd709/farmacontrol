@@ -1,6 +1,6 @@
 import { ThemeProvider } from '@mui/material';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -118,6 +118,50 @@ describe('Operación de Caja — Pantalla CashPage (UX-25)', () => {
       'href',
       '/treasury/disbursements',
     );
+  });
+
+  it('muestra el saldo de apertura como entrada sin atribuirlo a ingresos o egresos del día', async () => {
+    vi.mocked(cashApi.fetchCashBalance).mockResolvedValue({
+      currentBalance: 2000000,
+      totalIncomeToday: 0,
+      totalExpenseToday: 0,
+      movementsCountToday: 0,
+      lastMovementAt: '2026-11-03T15:00:00.000Z',
+    });
+    vi.mocked(cashApi.fetchCashMovements).mockResolvedValue({
+      items: [
+        {
+          id: 'opening-movement',
+          movementType: 'SALDO_APERTURA',
+          amount: 2000000,
+          paymentMethod: 'EFECTIVO',
+          reason: 'Efectivo inicial respaldado por asiento de apertura',
+          referenceDocumentType: 'OPENING_BALANCE',
+          referenceDocumentId: 'opening-entry',
+          balanceAfter: 2000000,
+          createdAt: '2026-11-03T15:00:00.000Z',
+          createdByUserId: 'admin',
+          createdByUsername: 'administrador',
+        },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 15,
+      totalPages: 1,
+    });
+
+    renderWithProviders(<CashPage />);
+
+    const label = await screen.findByText('Saldo de apertura');
+    const cells = within(label.closest('tr')!).getAllByRole('cell');
+    expect(cells[5]).toHaveTextContent(/\$2[.,]000[.,]000/);
+    expect(cells[6]).toBeEmptyDOMElement();
+    expect(cells[7]).toHaveTextContent(/\$2[.,]000[.,]000/);
+    expect(screen.getByText('Ref: OPENING_BALANCE #opening-entry')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /\$2[.,]000[.,]000/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '+$0' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '-$0' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '0' })).toBeInTheDocument();
   });
 
   it('ordena los movimientos por fecha: más nuevo primero y, al alternar, más viejo primero', async () => {

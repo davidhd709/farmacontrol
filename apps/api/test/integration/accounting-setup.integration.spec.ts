@@ -277,12 +277,14 @@ describe('Asistente de configuración contable', () => {
     ];
     const unbalanced = await api()
       .post('/api/v1/accounting/opening-balances')
+      .set('Idempotency-Key', randomUUID())
       .set('Cookie', cookie)
       .send({ entryDate: businessToday(), reason: 'Inventario físico', lines: lines.slice(0, 2) });
     expect(unbalanced.status).toBe(400);
 
     const created = await api()
       .post('/api/v1/accounting/opening-balances')
+      .set('Idempotency-Key', randomUUID())
       .set('Cookie', cookie)
       .send({ entryDate: businessToday(), reason: 'Inventario físico y caja al corte', lines });
     expect(created.status, JSON.stringify(created.body)).toBe(201);
@@ -290,6 +292,7 @@ describe('Asistente de configuración contable', () => {
 
     const second = await api()
       .post('/api/v1/accounting/opening-balances')
+      .set('Idempotency-Key', randomUUID())
       .set('Cookie', cookie)
       .send({ entryDate: businessToday(), reason: 'Otra vez', lines });
     expect(second.status).toBe(409);
@@ -308,16 +311,47 @@ describe('Asistente de configuración contable', () => {
     });
     expect(status.body.status).toBe('READY');
 
-    // Reversado el asiento, se pueden registrar otros saldos
+    // La apertura ya respalda caja operativa: no se puede anular solo el mayor.
     const reversed = await api()
       .post(`/api/v1/journal-entries/${created.body.journalEntryId}/annul`)
       .set('Cookie', cookie)
       .send({ reason: 'Corrección de saldos de apertura', entryDate: businessToday() });
+    expect(reversed.status).toBe(409);
+    const cash = await api().get('/api/v1/cash-movements/balance').set('Cookie', cookie);
+    expect(cash.body.currentBalance).toBe(500000);
+    expect(await prisma.journalEntry.count({ where: { sourceType: 'REVERSAL' } })).toBe(0);
+  });
+
+  it('conserva la anulación y nueva apertura cuando no se incorporó efectivo', async () => {
+    await setupCompany();
+    await apply();
+    const bank = await prisma.account.findUniqueOrThrow({ where: { code: '111005' } });
+    const capital = await prisma.account.findUniqueOrThrow({ where: { code: '310505' } });
+    const body = {
+      entryDate: businessToday(),
+      reason: 'Apertura exclusivamente bancaria',
+      lines: [
+        { accountId: bank.id, debit: '1000000.00', credit: '0' },
+        { accountId: capital.id, debit: '0', credit: '1000000.00' },
+      ],
+    };
+    const created = await api()
+      .post('/api/v1/accounting/opening-balances')
+      .set('Idempotency-Key', randomUUID())
+      .set('Cookie', cookie)
+      .send(body);
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    const reversed = await api()
+      .post(`/api/v1/journal-entries/${created.body.journalEntryId}/annul`)
+      .set('Cookie', cookie)
+      .send({ reason: 'Corrección de apertura bancaria', entryDate: businessToday() });
     expect([200, 201]).toContain(reversed.status);
     const again = await api()
       .post('/api/v1/accounting/opening-balances')
+      .set('Idempotency-Key', randomUUID())
       .set('Cookie', cookie)
-      .send({ entryDate: businessToday(), reason: 'Saldos corregidos', lines });
+      .send({ ...body, reason: 'Apertura bancaria corregida' });
     expect(again.status, JSON.stringify(again.body)).toBe(201);
+    expect(await prisma.cashMovement.count()).toBe(0);
   });
 });

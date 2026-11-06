@@ -2,6 +2,7 @@ import { Alert, Box, Button, CircularProgress, Stack, Typography } from '@mui/ma
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { loginDestination, type LoginLocationState } from './login-destination';
 import { useAuth } from '../hooks/useAuth';
+import { ChangePasswordDialog } from '../components/ChangePasswordDialog';
 
 function SessionLoading() {
   return (
@@ -49,8 +50,26 @@ function SessionError() {
   );
 }
 
+/** Bloquea la aplicación hasta que el usuario reemplace la contraseña asignada por un administrador. */
+function RequiredPasswordChange() {
+  const { user, logout, isLoggingOut } = useAuth();
+
+  return (
+    <Box component="main" sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
+      <ChangePasswordDialog
+        open
+        required
+        username={user?.username}
+        onLogout={() => void logout()}
+        isLoggingOut={isLoggingOut}
+        onClose={() => undefined}
+      />
+    </Box>
+  );
+}
+
 function AuthStateBoundary({ requireAuthentication }: { requireAuthentication: boolean }) {
-  const { status } = useAuth();
+  const { status, user } = useAuth();
   const location = useLocation();
 
   if (status === 'loading') {
@@ -63,6 +82,10 @@ function AuthStateBoundary({ requireAuthentication }: { requireAuthentication: b
 
   if (requireAuthentication && status === 'unauthenticated') {
     return <Navigate to="/login" replace state={{ from: location }} />;
+  }
+
+  if (requireAuthentication && status === 'authenticated' && user?.mustChangePassword) {
+    return <RequiredPasswordChange />;
   }
 
   if (!requireAuthentication && status === 'authenticated') {

@@ -21,8 +21,22 @@ export default async function globalSetup() {
 
   const admin = await apiAs(adminUsername, adminPassword);
 
-  const cashier = { username: 'e2e_cajero', password: `Cajero-${uniqueCode('PW')}` };
-  await call(admin, 'post', 'users', { ...cashier, roles: ['cajero'] });
+  const temporary = `Cajero-${uniqueCode('PW')}`;
+  await call(admin, 'post', 'users', {
+    username: 'e2e_cajero',
+    password: temporary,
+    roles: ['cajero'],
+  });
+
+  // Una cuenta creada desde el gestor nace con contraseña temporal: el cajero debe
+  // reemplazarla antes de poder usar el POS (la API responde 403 hasta entonces).
+  const cashier = { username: 'e2e_cajero', password: `${temporary}-Propia9!` };
+  const firstLogin = await apiAs(cashier.username, temporary);
+  await call(firstLogin, 'post', 'auth/change-password', {
+    currentPassword: temporary,
+    newPassword: cashier.password,
+  });
+  await firstLogin.dispose();
 
   const category = await call<{ id: string }>(admin, 'post', 'categories', {
     name: `Categoría ${uniqueCode('E2E')}`,

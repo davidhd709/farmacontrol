@@ -180,7 +180,12 @@ export interface AuthUserDto {
   isActive: boolean;
   roles: string[];
   permissions: string[];
+  /** La contraseña actual fue asignada por un administrador y debe cambiarse antes de operar. */
+  mustChangePassword: boolean;
 }
+
+/** Código de error cuando una sesión con contraseña temporal intenta usar otra ruta. */
+export const PASSWORD_CHANGE_REQUIRED_CODE = 'PASSWORD_CHANGE_REQUIRED';
 
 export interface SystemUserListItemDto {
   id: string;
@@ -188,6 +193,7 @@ export interface SystemUserListItemDto {
   isActive: boolean;
   createdAt: string;
   roles: string[];
+  mustChangePassword: boolean;
 }
 
 export interface SystemRoleItemDto {
@@ -210,6 +216,19 @@ export interface UpdateSystemUserStatusDto {
 
 export interface UpdateSystemUserRolesDto {
   roles: string[];
+}
+
+export interface ResetSystemUserPasswordDto {
+  newPassword: string;
+}
+
+export interface ChangeOwnPasswordDto {
+  currentPassword: string;
+  newPassword: string;
+}
+
+export interface PasswordActionResponseDto {
+  message: string;
 }
 
 export interface AuditEventDto {

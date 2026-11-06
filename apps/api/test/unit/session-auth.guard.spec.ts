@@ -167,6 +167,7 @@ describe('SessionAuthGuard (Unit)', () => {
       sessionId: sampleSessionId,
       roles: ['farmaceutico'],
       permissions: ['inventory:read'],
+      mustChangePassword: false,
     });
     expect(request.user.passwordHash).toBeUndefined();
     expect(request.user.tokenHash).toBeUndefined();

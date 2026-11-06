@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   AppBar,
   Avatar,
@@ -14,6 +14,7 @@ import {
 import MenuIcon from '@mui/icons-material/Menu';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import LogoutIcon from '@mui/icons-material/Logout';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import AddShoppingCartIcon from '@mui/icons-material/AddShoppingCart';
 import LocalPharmacyIcon from '@mui/icons-material/LocalPharmacy';
 import { useNavigate } from 'react-router-dom';
@@ -22,6 +23,7 @@ import { useAuth } from '../../features/auth/hooks/useAuth';
 import { usePermissions } from '../../features/auth/hooks/usePermissions';
 import { fetchAlertsSummary } from '../../features/alerts/api/alerts.api';
 import { SYSTEM_PERMISSIONS } from '@farmacia/contracts';
+import { ChangePasswordDialog } from '../../features/auth/components/ChangePasswordDialog';
 
 interface AppNavbarProps {
   onToggleSidebar: () => void;
@@ -29,6 +31,7 @@ interface AppNavbarProps {
 }
 
 export const AppNavbar: React.FC<AppNavbarProps> = ({ onToggleSidebar }) => {
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { roles, hasPermission } = usePermissions();
@@ -102,7 +105,10 @@ export const AppNavbar: React.FC<AppNavbarProps> = ({ onToggleSidebar }) => {
               <LocalPharmacyIcon sx={{ fontSize: '1.35rem' }} />
             </Box>
             <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 800, lineHeight: 1.1, color: 'text.primary' }}>
+              <Typography
+                variant="subtitle1"
+                sx={{ fontWeight: 800, lineHeight: 1.1, color: 'text.primary' }}
+              >
                 FarmaControl
               </Typography>
               <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
@@ -191,6 +197,21 @@ export const AppNavbar: React.FC<AppNavbarProps> = ({ onToggleSidebar }) => {
             </Box>
           </Box>
 
+          <Tooltip title="Cambiar mi contraseña">
+            <Button
+              variant="outlined"
+              color="inherit"
+              size="small"
+              onClick={() => setPasswordDialogOpen(true)}
+              startIcon={<LockOutlinedIcon fontSize="small" />}
+              sx={{ textTransform: 'none', fontWeight: 600, borderColor: 'divider' }}
+            >
+              <Box component="span" sx={{ display: { xs: 'none', lg: 'inline' } }}>
+                Cambiar contraseña
+              </Box>
+            </Button>
+          </Tooltip>
+
           {/* Botón Cerrar Sesión */}
           <Tooltip title="Cerrar Sesión">
             <Button
@@ -212,6 +233,10 @@ export const AppNavbar: React.FC<AppNavbarProps> = ({ onToggleSidebar }) => {
           </Tooltip>
         </Box>
       </Toolbar>
+      <ChangePasswordDialog
+        open={passwordDialogOpen}
+        onClose={() => setPasswordDialogOpen(false)}
+      />
     </AppBar>
   );
 };

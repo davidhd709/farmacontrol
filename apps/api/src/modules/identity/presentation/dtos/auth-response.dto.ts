@@ -8,6 +8,8 @@ export interface AuthUserResponseDto {
   isActive: boolean;
   roles: string[];
   permissions: string[];
+  /** Contraseña asignada por un administrador: el cliente debe pedir el cambio. */
+  mustChangePassword: boolean;
 }
 
 export interface LoginResponseDto {
