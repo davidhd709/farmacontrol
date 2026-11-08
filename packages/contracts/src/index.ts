@@ -1358,6 +1358,7 @@ export interface VerifyBackupResultDto {
 }
 
 export * from './third-parties.dto';
+export * from './divipola';
 
 // ===== DEVOLUCIONES A PROVEEDOR POR VENCIMIENTO =====
 

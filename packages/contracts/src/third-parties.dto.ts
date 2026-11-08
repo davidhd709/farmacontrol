@@ -21,6 +21,10 @@ export interface ThirdPartyDto {
   address?: string | null;
   city?: string | null;
   department?: string | null;
+  /** Código DIVIPOLA del departamento (2 dígitos con cero inicial, ej. '05', '23', '70') */
+  departmentCode?: string | null;
+  /** Código DIVIPOLA del municipio (5 dígitos con cero inicial, ej. '05001', '23001', '70001') */
+  municipalityCode?: string | null;
   taxRegime?: ThirdPartyTaxRegime | string | null;
   isCustomer: boolean;
   isSupplier: boolean;
@@ -47,6 +51,10 @@ export interface CreateThirdPartyPayload {
   address?: string | null;
   city?: string | null;
   department?: string | null;
+  /** Código DIVIPOLA del departamento (2 dígitos con cero inicial, ej. '05', '23', '70') */
+  departmentCode?: string | null;
+  /** Código DIVIPOLA del municipio (5 dígitos con cero inicial, ej. '05001', '23001', '70001') */
+  municipalityCode?: string | null;
   taxRegime?: ThirdPartyTaxRegime | string | null;
   isCustomer?: boolean;
   isSupplier?: boolean;
@@ -68,6 +76,10 @@ export interface UpdateThirdPartyPayload {
   address?: string | null;
   city?: string | null;
   department?: string | null;
+  /** Código DIVIPOLA del departamento (2 dígitos con cero inicial, ej. '05', '23', '70') */
+  departmentCode?: string | null;
+  /** Código DIVIPOLA del municipio (5 dígitos con cero inicial, ej. '05001', '23001', '70001') */
+  municipalityCode?: string | null;
   taxRegime?: ThirdPartyTaxRegime | string | null;
   isCustomer?: boolean;
   isSupplier?: boolean;

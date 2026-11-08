@@ -19,6 +19,8 @@ export class CreateThirdPartyDto implements CreateThirdPartyPayload {
   address?: string | null;
   city?: string | null;
   department?: string | null;
+  departmentCode?: string | null;
+  municipalityCode?: string | null;
   taxRegime?: ThirdPartyTaxRegime | string | null;
   isCustomer?: boolean;
   isSupplier?: boolean;
@@ -84,6 +86,12 @@ export class CreateThirdPartyValidationPipe implements PipeTransform {
       address: typeof record.address === 'string' ? record.address.trim() || null : null,
       city: typeof record.city === 'string' ? record.city.trim() || null : null,
       department: typeof record.department === 'string' ? record.department.trim() || null : null,
+      departmentCode:
+        typeof record.departmentCode === 'string' ? record.departmentCode.trim() || null : null,
+      municipalityCode:
+        typeof record.municipalityCode === 'string'
+          ? record.municipalityCode.trim() || null
+          : null,
       taxRegime: typeof record.taxRegime === 'string' ? record.taxRegime.trim().toUpperCase() : 'NO_RESPONSABLE_IVA',
       isCustomer: Boolean(record.isCustomer),
       isSupplier: Boolean(record.isSupplier),
