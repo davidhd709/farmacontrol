@@ -19,6 +19,8 @@ export class UpdateThirdPartyDto implements UpdateThirdPartyPayload {
   address?: string | null;
   city?: string | null;
   department?: string | null;
+  departmentCode?: string | null;
+  municipalityCode?: string | null;
   taxRegime?: ThirdPartyTaxRegime | string | null;
   isCustomer?: boolean;
   isSupplier?: boolean;
@@ -100,6 +102,18 @@ export class UpdateThirdPartyValidationPipe implements PipeTransform {
 
     if (record.department !== undefined) {
       result.department = typeof record.department === 'string' ? record.department.trim() || null : null;
+    }
+
+    if (record.departmentCode !== undefined) {
+      result.departmentCode =
+        typeof record.departmentCode === 'string' ? record.departmentCode.trim() || null : null;
+    }
+
+    if (record.municipalityCode !== undefined) {
+      result.municipalityCode =
+        typeof record.municipalityCode === 'string'
+          ? record.municipalityCode.trim() || null
+          : null;
     }
 
     if (record.taxRegime !== undefined) {

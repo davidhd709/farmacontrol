@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
+  Autocomplete,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -16,13 +17,20 @@ import {
   Typography,
   Divider,
 } from '@mui/material';
-import type {
-  ThirdPartyDto,
-  ThirdPartyDocumentType,
-  ThirdPartyPersonType,
-  ThirdPartyTaxRegime,
-  CreateThirdPartyPayload,
-  UpdateThirdPartyPayload,
+import {
+  DIVIPOLA_DEPARTMENTS,
+  getMunicipalitiesByDepartment,
+  filterDivipolaDepartments,
+  filterDivipolaMunicipalities,
+  resolveThirdPartyDivipolaLocation,
+  type DivipolaDepartment,
+  type DivipolaMunicipality,
+  type ThirdPartyDto,
+  type ThirdPartyDocumentType,
+  type ThirdPartyPersonType,
+  type ThirdPartyTaxRegime,
+  type CreateThirdPartyPayload,
+  type UpdateThirdPartyPayload,
 } from '@farmacia/contracts';
 import { createThirdParty, updateThirdParty } from '../api/third-parties.api';
 
@@ -93,9 +101,22 @@ export const ThirdPartyFormDialog: React.FC<ThirdPartyFormDialogProps> = ({
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [address, setAddress] = useState('');
-  const [city, setCity] = useState('');
-  const [department, setDepartment] = useState('');
+  const [selectedDepartment, setSelectedDepartment] = useState<DivipolaDepartment | null>(null);
+  const [selectedMunicipality, setSelectedMunicipality] = useState<DivipolaMunicipality | null>(
+    null,
+  );
+  const [locationTouched, setLocationTouched] = useState(false);
+  const [preservedLegacyLocation, setPreservedLegacyLocation] = useState<{
+    department: string | null;
+    city: string | null;
+  } | null>(null);
+  const [locationError, setLocationError] = useState<string | null>(null);
   const [taxRegime, setTaxRegime] = useState<ThirdPartyTaxRegime>('NO_RESPONSABLE_IVA');
+
+  const availableMunicipalities = useMemo(
+    () => (selectedDepartment ? getMunicipalitiesByDepartment(selectedDepartment.code) : []),
+    [selectedDepartment],
+  );
 
   // Roles
   const [isCustomer, setIsCustomer] = useState(false);
@@ -119,8 +140,45 @@ export const ThirdPartyFormDialog: React.FC<ThirdPartyFormDialogProps> = ({
       setPhone(thirdPartyToEdit.phone || '');
       setEmail(thirdPartyToEdit.email || '');
       setAddress(thirdPartyToEdit.address || '');
-      setCity(thirdPartyToEdit.city || '');
-      setDepartment(thirdPartyToEdit.department || '');
+
+      const locResolution = resolveThirdPartyDivipolaLocation({
+        department: thirdPartyToEdit.department,
+        city: thirdPartyToEdit.city,
+        departmentCode: thirdPartyToEdit.departmentCode,
+        municipalityCode: thirdPartyToEdit.municipalityCode,
+      });
+
+      if (locResolution.status === 'EMPTY') {
+        setSelectedDepartment(null);
+        setSelectedMunicipality(null);
+        setPreservedLegacyLocation(null);
+      } else if (
+        locResolution.status === 'RESOLVED' ||
+        locResolution.status === 'RESOLVED_UNIQUE_CITY'
+      ) {
+        setSelectedDepartment(locResolution.department);
+        setSelectedMunicipality(locResolution.municipality);
+        setPreservedLegacyLocation(null);
+      } else if (locResolution.status === 'DEPARTMENT_ONLY') {
+        setSelectedDepartment(locResolution.department);
+        setSelectedMunicipality(null);
+        setPreservedLegacyLocation({
+          department: thirdPartyToEdit.department || null,
+          city: thirdPartyToEdit.city || null,
+        });
+      } else {
+        // Nombres antiguos, errores de escritura o municipio ambiguo sin departamento:
+        // no asignar municipio automáticamente cuando haya dudas y conservar el original.
+        setSelectedDepartment(locResolution.department);
+        setSelectedMunicipality(null);
+        setPreservedLegacyLocation({
+          department: thirdPartyToEdit.department || null,
+          city: thirdPartyToEdit.city || null,
+        });
+      }
+      setLocationTouched(false);
+      setLocationError(null);
+
       setTaxRegime((thirdPartyToEdit.taxRegime as ThirdPartyTaxRegime) || 'NO_RESPONSABLE_IVA');
       setIsCustomer(thirdPartyToEdit.isCustomer);
       setIsSupplier(thirdPartyToEdit.isSupplier);
@@ -138,8 +196,11 @@ export const ThirdPartyFormDialog: React.FC<ThirdPartyFormDialogProps> = ({
       setPhone('');
       setEmail('');
       setAddress('');
-      setCity('');
-      setDepartment('');
+      setSelectedDepartment(null);
+      setSelectedMunicipality(null);
+      setPreservedLegacyLocation(null);
+      setLocationTouched(false);
+      setLocationError(null);
       setTaxRegime('NO_RESPONSABLE_IVA');
       setIsCustomer(!scoped || allowedRoles.includes('CUSTOMER'));
       setIsSupplier(scoped && !allowedRoles.includes('CUSTOMER'));
@@ -149,6 +210,27 @@ export const ThirdPartyFormDialog: React.FC<ThirdPartyFormDialogProps> = ({
     }
     setErrorMsg(null);
   }, [thirdPartyToEdit, open]);
+
+  const handleDepartmentChange = (
+    _: React.SyntheticEvent,
+    newDepartment: DivipolaDepartment | null,
+  ) => {
+    setSelectedDepartment(newDepartment);
+    setSelectedMunicipality(null);
+    setLocationTouched(true);
+    setPreservedLegacyLocation(null);
+    setLocationError(null);
+  };
+
+  const handleMunicipalityChange = (
+    _: React.SyntheticEvent,
+    newMunicipality: DivipolaMunicipality | null,
+  ) => {
+    setSelectedMunicipality(newMunicipality);
+    setLocationTouched(true);
+    setPreservedLegacyLocation(null);
+    setLocationError(null);
+  };
 
   // Recalcular DV automáticamente cuando cambia NIT
   const handleDocumentNumberChange = (val: string) => {
@@ -190,6 +272,38 @@ export const ThirdPartyFormDialog: React.FC<ThirdPartyFormDialogProps> = ({
       return;
     }
 
+    const usingLegacyUntouched = Boolean(!locationTouched && preservedLegacyLocation);
+    if (!usingLegacyUntouched) {
+      if (selectedDepartment && !selectedMunicipality) {
+        const msg = 'Seleccione la ciudad o municipio correspondiente al departamento elegido.';
+        setLocationError(msg);
+        setErrorMsg(msg);
+        return;
+      }
+      if (
+        selectedMunicipality &&
+        (!selectedDepartment || selectedMunicipality.departmentCode !== selectedDepartment.code)
+      ) {
+        const msg = 'El municipio seleccionado no pertenece al departamento elegido.';
+        setLocationError(msg);
+        setErrorMsg(msg);
+        return;
+      }
+    }
+
+    const finalDepartment = usingLegacyUntouched
+      ? preservedLegacyLocation!.department
+      : (selectedDepartment?.name ?? null);
+    const finalCity = usingLegacyUntouched
+      ? preservedLegacyLocation!.city
+      : (selectedMunicipality?.name ?? null);
+    const finalDepartmentCode = usingLegacyUntouched
+      ? undefined
+      : (selectedDepartment?.code ?? null);
+    const finalMunicipalityCode = usingLegacyUntouched
+      ? undefined
+      : (selectedMunicipality?.code ?? null);
+
     setLoading(true);
 
     try {
@@ -204,8 +318,12 @@ export const ThirdPartyFormDialog: React.FC<ThirdPartyFormDialogProps> = ({
           phone: phone.trim() || null,
           email: email.trim() || null,
           address: address.trim() || null,
-          city: city.trim() || null,
-          department: department.trim() || null,
+          city: finalCity,
+          department: finalDepartment,
+          ...(finalDepartmentCode !== undefined ? { departmentCode: finalDepartmentCode } : {}),
+          ...(finalMunicipalityCode !== undefined
+            ? { municipalityCode: finalMunicipalityCode }
+            : {}),
           taxRegime,
           isCustomer,
           isSupplier,
@@ -226,8 +344,10 @@ export const ThirdPartyFormDialog: React.FC<ThirdPartyFormDialogProps> = ({
           phone: phone.trim() || null,
           email: email.trim() || null,
           address: address.trim() || null,
-          city: city.trim() || null,
-          department: department.trim() || null,
+          city: finalCity,
+          department: finalDepartment,
+          departmentCode: finalDepartmentCode ?? null,
+          municipalityCode: finalMunicipalityCode ?? null,
           taxRegime,
           isCustomer,
           isSupplier,
@@ -403,6 +523,22 @@ export const ThirdPartyFormDialog: React.FC<ThirdPartyFormDialogProps> = ({
             3. Datos de Contacto y Ubicación
           </Typography>
 
+          {preservedLegacyLocation &&
+            !locationTouched &&
+            (preservedLegacyLocation.city || preservedLegacyLocation.department) && (
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                Ubicación registrada actualmente:{' '}
+                <strong>
+                  {[preservedLegacyLocation.city, preservedLegacyLocation.department]
+                    .filter(Boolean)
+                    .join(', ')}
+                </strong>
+                . No coincide de forma unívoca con el catálogo oficial DIVIPOLA; se conservará el
+                dato original a menos que seleccione un Departamento y Ciudad / Municipio para
+                corregirla.
+              </Alert>
+            )}
+
           <Grid container spacing={2}>
             <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
@@ -436,22 +572,65 @@ export const ThirdPartyFormDialog: React.FC<ThirdPartyFormDialogProps> = ({
             </Grid>
 
             <Grid size={{ xs: 12, sm: 3 }}>
-              <TextField
+              <Autocomplete<DivipolaDepartment, false, false, false>
+                options={DIVIPOLA_DEPARTMENTS}
+                value={selectedDepartment}
+                onChange={handleDepartmentChange}
+                getOptionLabel={(option) => option.name}
+                isOptionEqualToValue={(option, val) => option.code === val.code}
+                filterOptions={(options, state) =>
+                  filterDivipolaDepartments(options, state.inputValue)
+                }
+                autoHighlight
+                clearOnBlur
                 fullWidth
                 size="small"
-                label="Ciudad / Municipio"
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
+                noOptionsText="No se encontraron departamentos"
+                openText="Abrir lista de departamentos"
+                closeText="Cerrar lista de departamentos"
+                clearText="Limpiar departamento"
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Departamento"
+                    placeholder="Buscar departamento..."
+                    size="small"
+                  />
+                )}
               />
             </Grid>
 
             <Grid size={{ xs: 12, sm: 3 }}>
-              <TextField
+              <Autocomplete<DivipolaMunicipality, false, false, false>
+                options={availableMunicipalities}
+                value={selectedMunicipality}
+                onChange={handleMunicipalityChange}
+                disabled={!selectedDepartment}
+                getOptionLabel={(option) => option.name}
+                isOptionEqualToValue={(option, val) => option.code === val.code}
+                filterOptions={(options, state) =>
+                  filterDivipolaMunicipalities(options, state.inputValue)
+                }
+                autoHighlight
+                clearOnBlur
                 fullWidth
                 size="small"
-                label="Departamento"
-                value={department}
-                onChange={(e) => setDepartment(e.target.value)}
+                noOptionsText="No se encontraron municipios en este departamento"
+                openText="Abrir lista de municipios"
+                closeText="Cerrar lista de municipios"
+                clearText="Limpiar municipio"
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Ciudad / Municipio"
+                    placeholder={
+                      selectedDepartment ? 'Buscar municipio...' : 'Seleccione departamento'
+                    }
+                    size="small"
+                    error={Boolean(locationError)}
+                    helperText={locationError ?? undefined}
+                  />
+                )}
               />
             </Grid>
 

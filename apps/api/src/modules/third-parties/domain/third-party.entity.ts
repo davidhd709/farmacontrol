@@ -4,6 +4,7 @@ import {
   ThirdPartyPersonType,
   ThirdPartyDocumentType,
   ThirdPartyTaxRegime,
+  resolveThirdPartyDivipolaLocation,
 } from '@farmacia/contracts';
 
 export interface ThirdPartyProperties {
@@ -20,6 +21,8 @@ export interface ThirdPartyProperties {
   address?: string | null;
   city?: string | null;
   department?: string | null;
+  departmentCode?: string | null;
+  municipalityCode?: string | null;
   taxRegime?: ThirdPartyTaxRegime | string | null;
   isCustomer: boolean;
   isSupplier: boolean;
@@ -31,6 +34,117 @@ export interface ThirdPartyProperties {
   supplierId?: string | null;
   createdAt: Date;
   updatedAt: Date;
+}
+
+function validateAndNormalizeLocation(
+  input: {
+    department?: string | null;
+    city?: string | null;
+    departmentCode?: string | null;
+    municipalityCode?: string | null;
+  },
+  existingLegacy?: { department?: string | null; city?: string | null },
+): {
+  department: string | null;
+  city: string | null;
+  departmentCode: string | null;
+  municipalityCode: string | null;
+} {
+  const resolution = resolveThirdPartyDivipolaLocation(input);
+
+  const isUnchangedLegacy = Boolean(
+    existingLegacy &&
+      (input.department?.trim() || null) === (existingLegacy.department?.trim() || null) &&
+      (input.city?.trim() || null) === (existingLegacy.city?.trim() || null) &&
+      !input.departmentCode &&
+      !input.municipalityCode,
+  );
+
+  switch (resolution.status) {
+    case 'EMPTY':
+      return {
+        department: null,
+        city: null,
+        departmentCode: null,
+        municipalityCode: null,
+      };
+    case 'RESOLVED':
+    case 'RESOLVED_UNIQUE_CITY':
+      return {
+        department: resolution.department!.name,
+        city: resolution.municipality!.name,
+        departmentCode: resolution.department!.code,
+        municipalityCode: resolution.municipality!.code,
+      };
+    case 'DEPARTMENT_ONLY':
+      return {
+        department: resolution.department!.name,
+        city: null,
+        departmentCode: resolution.department!.code,
+        municipalityCode: null,
+      };
+    case 'MISMATCHED_MUNICIPALITY': {
+      if (isUnchangedLegacy) {
+        return {
+          department: existingLegacy?.department?.trim() || null,
+          city: existingLegacy?.city?.trim() || null,
+          departmentCode: resolution.department?.code ?? null,
+          municipalityCode: null,
+        };
+      }
+      const mpioLabel = input.city?.trim() || input.municipalityCode?.trim() || '';
+      const deptLabel = resolution.department?.name || input.department?.trim() || '';
+      throw new DomainError(
+        `El municipio "${mpioLabel}" no pertenece al departamento "${deptLabel}" según el catálogo DIVIPOLA.`,
+        'validation',
+      );
+    }
+    case 'AMBIGUOUS_CITY': {
+      if (isUnchangedLegacy) {
+        return {
+          department: existingLegacy?.department?.trim() || null,
+          city: existingLegacy?.city?.trim() || null,
+          departmentCode: null,
+          municipalityCode: null,
+        };
+      }
+      const mpioLabel = input.city?.trim() || '';
+      throw new DomainError(
+        `El municipio "${mpioLabel}" existe en varios departamentos; debe seleccionar el departamento correspondiente.`,
+        'validation',
+      );
+    }
+    case 'UNRECOGNIZED_DEPARTMENT': {
+      if (isUnchangedLegacy) {
+        return {
+          department: existingLegacy?.department?.trim() || null,
+          city: existingLegacy?.city?.trim() || null,
+          departmentCode: null,
+          municipalityCode: null,
+        };
+      }
+      const deptLabel = input.department?.trim() || input.departmentCode?.trim() || '';
+      throw new DomainError(
+        `El departamento "${deptLabel}" no existe en el catálogo oficial DIVIPOLA.`,
+        'validation',
+      );
+    }
+    case 'UNRECOGNIZED_CITY': {
+      if (isUnchangedLegacy) {
+        return {
+          department: existingLegacy?.department?.trim() || null,
+          city: existingLegacy?.city?.trim() || null,
+          departmentCode: resolution.department?.code ?? null,
+          municipalityCode: null,
+        };
+      }
+      const mpioLabel = input.city?.trim() || input.municipalityCode?.trim() || '';
+      throw new DomainError(
+        `El municipio "${mpioLabel}" no existe en el catálogo oficial DIVIPOLA.`,
+        'validation',
+      );
+    }
+  }
 }
 
 export class ThirdParty {
@@ -50,6 +164,8 @@ export class ThirdParty {
     address?: string | null;
     city?: string | null;
     department?: string | null;
+    departmentCode?: string | null;
+    municipalityCode?: string | null;
     taxRegime?: ThirdPartyTaxRegime | string | null;
     isCustomer?: boolean;
     isSupplier?: boolean;
@@ -69,6 +185,13 @@ export class ThirdParty {
       throw new DomainError('El nombre o razón social del tercero es obligatorio', 'validation');
     }
 
+    const location = validateAndNormalizeLocation({
+      department: payload.department,
+      city: payload.city,
+      departmentCode: payload.departmentCode,
+      municipalityCode: payload.municipalityCode,
+    });
+
     const now = new Date();
     return new ThirdParty({
       id: payload.id ?? crypto.randomUUID(),
@@ -82,8 +205,10 @@ export class ThirdParty {
       phone: payload.phone?.trim() || null,
       email: payload.email?.trim() || null,
       address: payload.address?.trim() || null,
-      city: payload.city?.trim() || null,
-      department: payload.department?.trim() || null,
+      city: location.city,
+      department: location.department,
+      departmentCode: location.departmentCode,
+      municipalityCode: location.municipalityCode,
       taxRegime: payload.taxRegime?.trim().toUpperCase() || 'NO_RESPONSABLE_IVA',
       isCustomer: Boolean(payload.isCustomer),
       isSupplier: Boolean(payload.isSupplier),
@@ -99,7 +224,30 @@ export class ThirdParty {
   }
 
   public static reconstitute(props: ThirdPartyProperties): ThirdParty {
-    return new ThirdParty(props);
+    const resolution = resolveThirdPartyDivipolaLocation({
+      department: props.department,
+      city: props.city,
+      departmentCode: props.departmentCode,
+      municipalityCode: props.municipalityCode,
+    });
+    const derivedDeptCode =
+      props.departmentCode ??
+      (resolution.status === 'RESOLVED' ||
+      resolution.status === 'RESOLVED_UNIQUE_CITY' ||
+      resolution.status === 'DEPARTMENT_ONLY'
+        ? (resolution.department?.code ?? null)
+        : null);
+    const derivedMpioCode =
+      props.municipalityCode ??
+      (resolution.status === 'RESOLVED' || resolution.status === 'RESOLVED_UNIQUE_CITY'
+        ? (resolution.municipality?.code ?? null)
+        : null);
+
+    return new ThirdParty({
+      ...props,
+      departmentCode: derivedDeptCode,
+      municipalityCode: derivedMpioCode,
+    });
   }
 
   public get id(): string {
@@ -152,6 +300,14 @@ export class ThirdParty {
 
   public get department(): string | null | undefined {
     return this.props.department;
+  }
+
+  public get departmentCode(): string | null | undefined {
+    return this.props.departmentCode;
+  }
+
+  public get municipalityCode(): string | null | undefined {
+    return this.props.municipalityCode;
   }
 
   public get taxRegime(): ThirdPartyTaxRegime | string | null | undefined {
@@ -211,6 +367,8 @@ export class ThirdParty {
     address?: string | null;
     city?: string | null;
     department?: string | null;
+    departmentCode?: string | null;
+    municipalityCode?: string | null;
     taxRegime?: ThirdPartyTaxRegime | string | null;
     isCustomer?: boolean;
     isSupplier?: boolean;
@@ -255,11 +413,41 @@ export class ThirdParty {
     if (payload.address !== undefined) {
       this.props.address = payload.address?.trim() || null;
     }
-    if (payload.city !== undefined) {
-      this.props.city = payload.city?.trim() || null;
-    }
-    if (payload.department !== undefined) {
-      this.props.department = payload.department?.trim() || null;
+    if (
+      payload.city !== undefined ||
+      payload.department !== undefined ||
+      payload.departmentCode !== undefined ||
+      payload.municipalityCode !== undefined
+    ) {
+      const nextDept =
+        payload.department !== undefined
+          ? payload.department
+          : payload.departmentCode !== undefined
+            ? null
+            : this.props.department;
+      const nextCity =
+        payload.city !== undefined
+          ? payload.city
+          : payload.municipalityCode !== undefined
+            ? null
+            : this.props.city;
+
+      const location = validateAndNormalizeLocation(
+        {
+          department: nextDept,
+          city: nextCity,
+          departmentCode: payload.departmentCode,
+          municipalityCode: payload.municipalityCode,
+        },
+        {
+          department: this.props.department,
+          city: this.props.city,
+        },
+      );
+      this.props.department = location.department;
+      this.props.city = location.city;
+      this.props.departmentCode = location.departmentCode;
+      this.props.municipalityCode = location.municipalityCode;
     }
     if (payload.taxRegime !== undefined) {
       this.props.taxRegime = payload.taxRegime?.trim().toUpperCase() || 'NO_RESPONSABLE_IVA';
@@ -320,6 +508,8 @@ export class ThirdParty {
       address: this.props.address,
       city: this.props.city,
       department: this.props.department,
+      departmentCode: this.props.departmentCode ?? null,
+      municipalityCode: this.props.municipalityCode ?? null,
       taxRegime: this.props.taxRegime,
       isCustomer: this.props.isCustomer,
       isSupplier: this.props.isSupplier,

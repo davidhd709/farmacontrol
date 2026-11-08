@@ -112,6 +112,8 @@ export class ThirdPartyService {
       address: input.address,
       city: input.city,
       department: input.department,
+      departmentCode: input.departmentCode,
+      municipalityCode: input.municipalityCode,
       taxRegime: input.taxRegime,
       isCustomer: input.isCustomer,
       isSupplier: input.isSupplier,

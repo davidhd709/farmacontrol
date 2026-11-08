@@ -50,6 +50,7 @@ import {
   ThirdPartyAlreadyExistsException,
   ThirdPartyDocumentChangeForbiddenException,
 } from '../../domain/third-party.exceptions';
+import { DomainError } from '../../../../common/domain-error';
 
 /** Lectura y escritura con todo tipo de tercero, o limitadas a clientes o a proveedores. */
 const READ_ANY = [
@@ -98,6 +99,9 @@ export class ThirdPartyController {
     } catch (error) {
       if (error instanceof ThirdPartyAlreadyExistsException) {
         throw new ConflictException(error.message);
+      }
+      if (error instanceof DomainError && error.kind === 'validation') {
+        throw new BadRequestException(error.message);
       }
       throw error;
     }
@@ -161,6 +165,9 @@ export class ThirdPartyController {
         throw new NotFoundException(error.message);
       }
       if (error instanceof ThirdPartyDocumentChangeForbiddenException) {
+        throw new BadRequestException(error.message);
+      }
+      if (error instanceof DomainError && error.kind === 'validation') {
         throw new BadRequestException(error.message);
       }
       throw error;
