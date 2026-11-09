@@ -284,3 +284,89 @@ describe('Formulario nota crédito', () => {
     },
   );
 });
+
+describe('Historial de Acciones por Factura (REQ-006)', () => {
+  it('muestra el botón Historial de Acciones y abre el diálogo con la trazabilidad cronológica', async () => {
+    vi.spyOn(salesApi, 'fetchSales').mockResolvedValue({
+      items: mockSalesList,
+      total: mockSalesList.length,
+      page: 1,
+      limit: 100,
+      totalPages: 1,
+    });
+
+    const mockHistory = {
+      saleId: 'sale-001',
+      invoiceNumber: 'VEN-20260926-0001',
+      status: 'COMPLETED' as const,
+      customerName: 'Consumidor Final',
+      total: 5000,
+      events: [
+        {
+          id: 'ev-1',
+          type: 'VENTA_CREADA' as const,
+          title: 'Venta creada',
+          description: 'Factura VEN-20260926-0001 registrada por valor de $5.000,00.',
+          timestamp: '2026-09-26T14:30:00.000Z',
+          userName: 'cajero_1',
+          documentNumber: 'VEN-20260926-0001',
+          amount: 5000,
+        },
+        {
+          id: 'ev-2',
+          type: 'NOTA_CREDITO_CREADA' as const,
+          title: 'Nota crédito aplicada',
+          description: 'Nota crédito NC-000001 por devolución.',
+          timestamp: '2026-09-26T16:00:00.000Z',
+          userName: 'admin_1',
+          documentNumber: 'NC-000001',
+          amount: 2000,
+          reason: 'Cambio de producto',
+        },
+      ],
+    };
+
+    const historySpy = vi.spyOn(salesApi, 'fetchSaleActionHistory').mockResolvedValue(mockHistory);
+
+    render(
+      <ThemeProvider theme={appTheme}>
+        <AuthContext.Provider value={mockAuthContext}>
+          <MemoryRouter>
+            <SalesHistoryPage />
+          </MemoryRouter>
+        </AuthContext.Provider>
+      </ThemeProvider>,
+    );
+
+    // Esperar a que cargue la lista
+    expect(await screen.findByText('VEN-20260926-0001')).toBeInTheDocument();
+
+    // Comprobar que existe el botón Historial de Acciones
+    const historyBtn = screen.getByTestId('action-history-btn-sale-001');
+    expect(historyBtn).toBeInTheDocument();
+    expect(historyBtn).toHaveTextContent('Historial de Acciones');
+
+    // Clic en el botón
+    fireEvent.click(historyBtn);
+
+    // Debe abrir el diálogo
+    expect(await screen.findByTestId('sale-action-history-dialog')).toBeInTheDocument();
+    expect(screen.getByText(/Historial de Acciones — Factura VEN-20260926-0001/)).toBeInTheDocument();
+
+    // Debe mostrar los eventos
+    await waitFor(() => {
+      expect(screen.getByText('Venta creada')).toBeInTheDocument();
+      expect(screen.getByText('Nota crédito aplicada')).toBeInTheDocument();
+      expect(screen.getByText('NC-000001')).toBeInTheDocument();
+      expect(screen.getByText(/Cambio de producto/)).toBeInTheDocument();
+    });
+
+    expect(historySpy).toHaveBeenCalledWith('sale-001');
+
+    // Cerrar el diálogo
+    fireEvent.click(screen.getByRole('button', { name: 'Cerrar' }));
+    await waitFor(() => {
+      expect(screen.queryByTestId('sale-action-history-dialog')).not.toBeInTheDocument();
+    });
+  });
+});

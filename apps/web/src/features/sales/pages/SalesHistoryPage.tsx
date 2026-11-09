@@ -32,6 +32,7 @@ import { PermissionGate } from '../../auth/components/PermissionGate';
 import { SweetModal } from '../../../components/SweetModal';
 import { CreditNoteDialog } from '../components/CreditNoteDialog';
 import { SaleCreditNotesDialog } from '../components/SaleCreditNotesDialog';
+import { SaleActionHistoryDialog } from '../components/SaleActionHistoryDialog';
 import { businessDayEnd, businessDayStart } from '../../../utils/business-date';
 import { formatDateTime } from '../../../utils/date-format';
 import { FilterBar } from '../../../components/layout/FilterBar';
@@ -66,6 +67,10 @@ export const SalesHistoryPage: React.FC = () => {
   const [saleForCreditNote, setSaleForCreditNote] = useState<SaleDto | null>(null);
   const [saleForNotes, setSaleForNotes] = useState<SaleDto | null>(null);
 
+  // Historial de Acciones (REQ-006)
+  const [saleForHistory, setSaleForHistory] = useState<SaleDto | null>(null);
+  const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+
   const loadSales = useCallback(async () => {
     setLoading(true);
     setErrorMsg(null);
@@ -92,6 +97,11 @@ export const SalesHistoryPage: React.FC = () => {
   const handleOpenReceipt = (sale: SaleDto) => {
     setSelectedSaleForReceipt(sale);
     setReceiptDialogOpen(true);
+  };
+
+  const handleOpenHistory = (sale: SaleDto) => {
+    setSaleForHistory(sale);
+    setHistoryDialogOpen(true);
   };
 
   const handleOpenCancel = (sale: SaleDto) => {
@@ -341,6 +351,17 @@ export const SalesHistoryPage: React.FC = () => {
                         </Button>
                       </Tooltip>
 
+                      <Tooltip title="Consultar historial cronológico de acciones de la factura">
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          onClick={() => handleOpenHistory(sale)}
+                          data-testid={`action-history-btn-${sale.id}`}
+                        >
+                          Historial de Acciones
+                        </Button>
+                      </Tooltip>
+
                       {sale.status === 'COMPLETED' && (
                         <PermissionGate permission={SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE}>
                           <Tooltip title="Devolución parcial con nota crédito">
@@ -490,6 +511,17 @@ export const SalesHistoryPage: React.FC = () => {
           }}
         />
       )}
+
+      {/* Historial de Acciones de la factura (REQ-006) */}
+      <SaleActionHistoryDialog
+        open={historyDialogOpen}
+        saleId={saleForHistory?.id || null}
+        invoiceNumber={saleForHistory?.invoiceNumber || null}
+        onClose={() => {
+          setHistoryDialogOpen(false);
+          setSaleForHistory(null);
+        }}
+      />
 
       {/* Notificación modal estilo SweetAlert2 */}
       <SweetModal

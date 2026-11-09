@@ -26,7 +26,11 @@ import {
   Typography,
 } from '@mui/material';
 import { useMutation } from '@tanstack/react-query';
-import { SYSTEM_PERMISSIONS } from '@farmacia/contracts';
+import {
+  SYSTEM_PERMISSIONS,
+  getAccountingPurposeDescription,
+  getAccountingPurposeLabel,
+} from '@farmacia/contracts';
 import { usePermissions } from '../../auth/hooks/usePermissions';
 import {
   confirmAccountImport,
@@ -102,7 +106,7 @@ function ConfigurationBanner() {
       Configuración contable: {data.configured} de {data.total} propósitos configurados.{' '}
       {data.status === 'READY'
         ? 'Lista.'
-        : `Pendientes: ${data.missing.join(', ') || 'sin detalle'}.`}
+        : `Pendientes: ${data.missing.map((p) => getAccountingPurposeLabel(p)).join(', ') || 'sin detalle'}.`}
     </Alert>
   );
 }
@@ -421,7 +425,7 @@ export function PurposesPage() {
     setError(null);
     try {
       await mutation.mutateAsync({ purpose, accountId: accountId || null });
-      setNotice(`${purpose} actualizado.`);
+      setNotice(`Propósito «${getAccountingPurposeLabel(purpose)}» actualizado.`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'No se pudo actualizar el propósito.');
     }
@@ -482,10 +486,19 @@ export function PurposesPage() {
                     {(query.data ?? []).map((mapping) => {
                       const selected = draft[mapping.purpose] ?? mapping.accountId ?? '';
                       const unchanged = selected === (mapping.accountId ?? '');
+                      const purposeLabel = getAccountingPurposeLabel(mapping.purpose);
+                      const purposeDescription = getAccountingPurposeDescription(mapping.purpose);
                       return (
                         <TableRow key={mapping.purpose}>
-                          <TableCell>
-                            <strong>{mapping.purpose}</strong>
+                          <TableCell sx={{ maxWidth: 420 }}>
+                            <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                              {purposeLabel}
+                            </Typography>
+                            {purposeDescription && (
+                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                                {purposeDescription}
+                              </Typography>
+                            )}
                           </TableCell>
                           <TableCell sx={{ minWidth: 280 }}>
                             {canManage ? (
@@ -493,7 +506,7 @@ export function PurposesPage() {
                                 select
                                 size="small"
                                 fullWidth
-                                label={`Cuenta para ${mapping.purpose}`}
+                                label={`Cuenta para ${purposeLabel}`}
                                 value={selected}
                                 disabled={mutation.isPending}
                                 onChange={(event) =>
@@ -721,7 +734,9 @@ export function ImportAccountsPage() {
                                 ? 'Activa'
                                 : 'Inactiva'}
                           </TableCell>
-                          <TableCell>{row.purpose || '—'}</TableCell>
+                          <TableCell>
+                            {row.purpose ? getAccountingPurposeLabel(row.purpose) : '—'}
+                          </TableCell>
                           <TableCell>
                             {row.errors.length ? (
                               <Typography color="error">{row.errors.join(' · ')}</Typography>

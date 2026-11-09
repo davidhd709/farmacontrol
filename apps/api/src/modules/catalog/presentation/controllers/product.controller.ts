@@ -1,4 +1,4 @@
-import { QueryFieldValidationPipe } from '../../../../common/pagination/request-shape.pipe';
+import { QueryFieldValidationPipe, RequestFieldValidationPipe } from '../../../../common/pagination/request-shape.pipe';
 import { parsePaginationValue } from '../../../../common/pagination/pagination';
 import {
   BadRequestException,
@@ -15,16 +15,21 @@ import {
   Put,
   Query,
   Req,
+  Res,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
   ParseUUIDPipe,
 } from '@nestjs/common';
-import type { Request } from 'express';
+import { FileInterceptor } from '@nestjs/platform-express';
+import type { Request, Response } from 'express';
 import {
   INVENTORY_CONTROL_MODES,
   type InventoryControlMode,
   type PaginatedResponse,
   type ProductBarcodeLookupDto,
   type ProductDto,
+  type ProductImportPreviewDto,
   type ProductSettingsDto,
   SYSTEM_PERMISSIONS,
 } from '@farmacia/contracts';
@@ -135,6 +140,107 @@ export class ProductController {
   @ApiOkResponse({ description: 'Perfil sectorial y modos de control permitidos.' })
   public async getSettings(): Promise<ProductSettingsDto> {
     return this.productService.getProductSettings();
+  }
+
+  /**
+   * GET /api/v1/products/import/template
+   * Descarga la plantilla estructurada de importación (.xlsx) con instrucciones y catálogos.
+   */
+  @Get('import/template')
+  @RequirePermissions(SYSTEM_PERMISSIONS.PRODUCTS_READ)
+  @ApiOperation({ summary: 'Descarga la plantilla Excel para importar productos' })
+  public async downloadTemplate(@Res() response: Response): Promise<void> {
+    const buffer = await this.productService.downloadImportTemplate();
+    response.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    response.setHeader('Content-Disposition', 'attachment; filename="plantilla_productos.xlsx"');
+    response.send(buffer);
+  }
+
+  /**
+   * GET /api/v1/products/export
+   * Exporta el catálogo actual o filtrado a formato Excel (.xlsx).
+   */
+  @Get('export')
+  @RequirePermissions(SYSTEM_PERMISSIONS.PRODUCTS_READ)
+  @ApiOperation({ summary: 'Exporta productos a formato Excel (.xlsx)' })
+  public async exportProducts(
+    @Res() response: Response,
+    @Query('search', new QueryFieldValidationPipe('search', 'text?')) search?: string,
+    @Query('categoryId', new QueryFieldValidationPipe('categoryId', 'uuid?')) categoryId?: string,
+    @Query('inventoryControlMode', new QueryFieldValidationPipe('inventoryControlMode', 'text?'))
+    inventoryControlMode?: string,
+    @Query('isActive', new QueryFieldValidationPipe('isActive', 'booleanString?'))
+    isActive?: string,
+  ): Promise<void> {
+    let parsedIsActive: boolean | undefined;
+    if (isActive === 'true') parsedIsActive = true;
+    if (isActive === 'false') parsedIsActive = false;
+
+    const buffer = await this.productService.exportProducts({
+      search,
+      categoryId,
+      inventoryControlMode: inventoryControlMode as InventoryControlMode | undefined,
+      isActive: parsedIsActive,
+    });
+    response.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    response.setHeader('Content-Disposition', 'attachment; filename="catalogo_productos.xlsx"');
+    response.send(buffer);
+  }
+
+  /**
+   * POST /api/v1/products/import/preview
+   * Valida el archivo .xlsx y retorna vista previa de filas válidas, errores y duplicados.
+   */
+  @Post('import/preview')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 } }))
+  @RequirePermissions(SYSTEM_PERMISSIONS.PRODUCTS_MANAGE)
+  @ApiOperation({ summary: 'Valida un archivo Excel y genera vista previa para importación' })
+  public async previewImport(
+    @UploadedFile() file?: { buffer: Buffer; originalname: string; size: number },
+  ): Promise<ProductImportPreviewDto> {
+    const buffer = this.validateUploadedFile(file);
+    return this.productService.previewProductImport(buffer);
+  }
+
+  /**
+   * POST /api/v1/products/import/confirm
+   * Confirma la importación e inserta los productos en la base de datos sin generar movimientos.
+   */
+  @Post('import/confirm')
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 } }))
+  @RequirePermissions(SYSTEM_PERMISSIONS.PRODUCTS_MANAGE)
+  @ApiOperation({ summary: 'Confirma la importación de productos desde Excel' })
+  public async confirmImport(
+    @UploadedFile() file: { buffer: Buffer; originalname: string; size: number } | undefined,
+    @Body('previewHash', new RequestFieldValidationPipe('previewHash', 'text')) previewHash: string,
+    @CurrentUser() user: AuthenticatedUserContext,
+    @Req() req: Request,
+  ): Promise<{ importedCount: number }> {
+    const buffer = this.validateUploadedFile(file);
+    return this.productService.confirmProductImport(buffer, previewHash, {
+      id: user.id,
+      ipAddress: req.ip || null,
+      correlationId: req.correlationId || null,
+    });
+  }
+
+  private validateUploadedFile(file?: { buffer: Buffer; originalname: string; size: number }): Buffer {
+    if (
+      !file ||
+      !file.originalname.toLowerCase().endsWith('.xlsx') ||
+      file.size > 5 * 1024 * 1024 ||
+      !file.buffer
+    ) {
+      throw new BadRequestException('Adjunte un archivo .xlsx válido de máximo 5 MB.');
+    }
+    return file.buffer;
   }
 
   /**

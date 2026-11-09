@@ -196,3 +196,36 @@ export interface CreditNoteDto {
   createdAt: string;
   lines: CreditNoteLineDto[];
 }
+
+// ===== HISTORIAL DE ACCIONES POR FACTURA (REQ-006) =====
+
+export type SaleActionType =
+  | 'VENTA_CREADA'
+  | 'CARTERA_REGISTRADA'
+  | 'ABONO_REGISTRADO'
+  | 'ABONO_REVERTIDO'
+  | 'NOTA_CREDITO_CREADA'
+  | 'NOTA_CREDITO_ANULADA'
+  | 'VENTA_ANULADA';
+
+export interface SaleActionEventDto {
+  id: string;
+  type: SaleActionType;
+  title: string;
+  description: string;
+  timestamp: string;
+  userName?: string | null;
+  documentNumber?: string | null;
+  amount?: number | null;
+  reason?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface SaleActionHistoryDto {
+  saleId: string;
+  invoiceNumber: string;
+  status: SaleStatus;
+  customerName?: string | null;
+  total: number;
+  events: SaleActionEventDto[];
+}

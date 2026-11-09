@@ -30,7 +30,11 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutlineOutlined';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import DeleteIcon from '@mui/icons-material/Delete';
-import { SYSTEM_PERMISSIONS, type ApplyPucTemplateResultDto } from '@farmacia/contracts';
+import {
+  SYSTEM_PERMISSIONS,
+  getAccountingPurposeLabel,
+  type ApplyPucTemplateResultDto,
+} from '@farmacia/contracts';
 import { HomeBackButton } from '../../../components/HomeBackButton';
 import { usePermissions } from '../../auth/hooks/usePermissions';
 import { fetchAccounts } from '../api/accounting.api';
@@ -218,7 +222,7 @@ export function AccountingSetupPage() {
                       <>
                         {c.detail}
                         {c.missingPurposes && c.missingPurposes.length > 0
-                          ? ` Pendientes: ${c.missingPurposes.join(', ')}.`
+                          ? ` Pendientes: ${c.missingPurposes.map((p) => getAccountingPurposeLabel(p)).join(', ')}.`
                           : ''}
                       </>
                     }

@@ -81,7 +81,11 @@ describe('Configuración contable', () => {
     expect(screen.getByText('Disponible')).toBeInTheDocument();
   });
 
-  it('permite mapear un propósito pendiente a una cuenta imputable', async () => {
+  it('permite mapear un propósito pendiente a una cuenta imputable mostrando nombres y descripciones en español', async () => {
+    vi.spyOn(api, 'fetchPurposes').mockResolvedValue([
+      { purpose: 'CASH', status: 'PENDING_MAPPING', accountId: null, account: null },
+      { purpose: 'CURRENT_YEAR_RESULT', status: 'PENDING_MAPPING', accountId: null, account: null },
+    ]);
     const save = vi.spyOn(api, 'updatePurpose').mockResolvedValue({
       purpose: 'CASH',
       status: 'ACTIVE',
@@ -89,10 +93,16 @@ describe('Configuración contable', () => {
       account: childAccount,
     });
     renderPage(<PurposesPage />);
-    const select = await screen.findByRole('combobox', { name: 'Cuenta para CASH' });
+    expect(await screen.findByText('Resultado del ejercicio actual')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Utilidad o pérdida neta determinada al cierre de cada período contable.',
+      ),
+    ).toBeInTheDocument();
+    const select = await screen.findByRole('combobox', { name: 'Cuenta para Caja general' });
     fireEvent.mouseDown(select);
     fireEvent.click(await screen.findByRole('option', { name: '11 — Disponible' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Guardar' })[0]);
     await waitFor(() => expect(save).toHaveBeenCalledWith('CASH', 'child'));
   });
 

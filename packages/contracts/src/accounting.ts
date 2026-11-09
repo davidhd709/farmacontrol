@@ -48,6 +48,84 @@ export const ACCOUNTING_PURPOSES = [
 ] as const;
 export type AccountingPurpose = (typeof ACCOUNTING_PURPOSES)[number];
 
+/**
+ * Catálogo centralizado de nombres en español contable colombiano para cada propósito
+ * del motor de contabilización (REQ-007). Los códigos internos (`AccountingPurpose`)
+ * se conservan intactos en la base de datos y contratos del API.
+ */
+export const ACCOUNTING_PURPOSE_LABELS: Record<AccountingPurpose, string> = {
+  CASH: 'Caja general',
+  BANK: 'Bancos',
+  CUSTOMERS: 'Clientes (Cuentas por cobrar)',
+  SUPPLIERS: 'Proveedores (Cuentas por pagar)',
+  INVENTORY: 'Inventarios de mercancías',
+  SALES_TAXED: 'Ingresos por ventas gravadas',
+  SALES_EXCLUDED: 'Ingresos por ventas excluidas o sin IVA',
+  SALES_EXEMPT: 'Ingresos por ventas exentas',
+  COST_OF_SALES: 'Costo de mercancías vendidas',
+  VAT_OUTPUT: 'IVA generado en ventas',
+  VAT_INPUT: 'IVA descontable en compras',
+  VAT_INPUT_COMMON: 'IVA descontable proporcional (uso común)',
+  VAT_NON_DEDUCTIBLE: 'IVA no descontable (gasto)',
+  SIMPLE_TAX_ADVANCE: 'Anticipo de impuestos / Régimen Simple',
+  SALES_RETURNS: 'Devoluciones en ventas',
+  SALES_DISCOUNTS: 'Descuentos comerciales en ventas',
+  CAPITAL: 'Capital social',
+  CURRENT_YEAR_RESULT: 'Resultado del ejercicio actual',
+  RETAINED_EARNINGS: 'Utilidades acumuladas',
+  ACCUMULATED_LOSSES: 'Pérdidas acumuladas',
+  INVENTORY_COST_VARIANCE: 'Diferencias en costo de inventario',
+  INC_PAYABLE: 'Impuesto nacional al consumo por pagar',
+  WITHHOLDING_INCOME_PAYABLE: 'Retención en la fuente por pagar',
+  WITHHOLDING_VAT_PAYABLE: 'Retención de IVA (ReteIVA) por pagar',
+  WITHHOLDING_ICA_PAYABLE: 'Retención de ICA (ReteICA) por pagar',
+  INVENTORY_SHRINKAGE: 'Faltantes y bajas de inventario',
+  INVENTORY_SURPLUS: 'Sobrantes de inventario',
+};
+
+/**
+ * Descripción funcional en español de cada propósito contable para orientar la asignación de cuentas PUC.
+ */
+export const ACCOUNTING_PURPOSE_DESCRIPTIONS: Record<AccountingPurpose, string> = {
+  CASH: 'Efectivo en caja para ventas de contado, recibos de caja y egresos en efectivo.',
+  BANK: 'Cuentas bancarias predeterminadas para recaudos y pagos por transferencia.',
+  CUSTOMERS: 'Cartera de clientes por ventas a crédito y aplicación de recibos de caja.',
+  SUPPLIERS: 'Obligaciones con proveedores por compras a crédito y comprobantes de egreso.',
+  INVENTORY: 'Existencias valorizadas de productos para la venta.',
+  SALES_TAXED: 'Ingresos operacionales por venta de mercancías gravadas con IVA o INC.',
+  SALES_EXCLUDED: 'Ingresos operacionales por venta de mercancías excluidas o no gravadas.',
+  SALES_EXEMPT: 'Ingresos operacionales por venta de mercancías exentas de IVA (tarifa 0%).',
+  COST_OF_SALES: 'Costo de ventas descargado del inventario al confirmar facturas.',
+  VAT_OUTPUT: 'Impuesto sobre las ventas (IVA) recaudado en facturas de venta.',
+  VAT_INPUT: 'IVA pagado en compras de mercancías descontable en la declaración.',
+  VAT_INPUT_COMMON: 'IVA descontable sujeto a prorrateo entre operaciones gravadas, exentas y excluidas.',
+  VAT_NON_DEDUCTIBLE: 'Impuesto sobre las ventas asumido como mayor valor del gasto o costo no descontable.',
+  SIMPLE_TAX_ADVANCE: 'Anticipos de impuestos, retenciones a favor o anticipos del Régimen Simple (RST).',
+  SALES_RETURNS: 'Disminución de ingresos por notas crédito y devoluciones de clientes.',
+  SALES_DISCOUNTS: 'Descuentos otorgados en facturas de venta.',
+  CAPITAL: 'Aportes sociales y contrapartida patrimonial en saldos iniciales de apertura.',
+  CURRENT_YEAR_RESULT: 'Utilidad o pérdida neta determinada al cierre de cada período contable.',
+  RETAINED_EARNINGS: 'Utilidades de ejercicios anteriores trasladadas en el cierre anual.',
+  ACCUMULATED_LOSSES: 'Pérdidas de ejercicios anteriores trasladadas en el cierre anual.',
+  INVENTORY_COST_VARIANCE: 'Ajuste por diferencia entre el costo de compra devuelto a proveedor y el costo promedio.',
+  INC_PAYABLE: 'Impuesto Nacional al Consumo (INC) causado en ventas.',
+  WITHHOLDING_INCOME_PAYABLE: 'Retención en la fuente a título de renta practicada en compras y gastos.',
+  WITHHOLDING_VAT_PAYABLE: 'Retención de impuesto sobre las ventas practicada a proveedores.',
+  WITHHOLDING_ICA_PAYABLE: 'Retención de industria y comercio practicada en compras y servicios.',
+  INVENTORY_SHRINKAGE: 'Gasto no operacional por mermas, vencimientos, bajas o ajustes negativos de stock.',
+  INVENTORY_SURPLUS: 'Ingreso o recuperación por ajustes positivos de stock y sobrantes físicos.',
+};
+
+export function getAccountingPurposeLabel(purpose: string | null | undefined): string {
+  if (!purpose) return '';
+  return (ACCOUNTING_PURPOSE_LABELS as Record<string, string>)[purpose] ?? purpose;
+}
+
+export function getAccountingPurposeDescription(purpose: string | null | undefined): string {
+  if (!purpose) return '';
+  return (ACCOUNTING_PURPOSE_DESCRIPTIONS as Record<string, string>)[purpose] ?? '';
+}
+
 export interface AccountDto {
   id: string;
   code: string;

@@ -29,7 +29,11 @@ import {
 } from '@mui/material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link as RouterLink } from 'react-router-dom';
-import { SYSTEM_PERMISSIONS, type JournalEntryDto } from '@farmacia/contracts';
+import {
+  SYSTEM_PERMISSIONS,
+  getAccountingPurposeLabel,
+  type JournalEntryDto,
+} from '@farmacia/contracts';
 import { usePermissions } from '../../auth/hooks/usePermissions';
 import {
   fetchJournalEntries,
@@ -505,7 +509,11 @@ export const JournalEntriesPage = () => {
                         <TableCell>{l.accountName || '-'}</TableCell>
                         <TableCell>
                           {l.purpose ? (
-                            <Chip size="small" variant="outlined" label={l.purpose} />
+                            <Chip
+                              size="small"
+                              variant="outlined"
+                              label={getAccountingPurposeLabel(l.purpose)}
+                            />
                           ) : (
                             '-'
                           )}

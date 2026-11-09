@@ -266,7 +266,7 @@ describe('Recibos de caja y comprobantes de egreso', () => {
   describe('permisos por documento', () => {
     const empty = { items: [], total: 0, page: 1, pageSize: 25, totalPages: 1 };
 
-    it('cartera registra el recibo desde cuentas por cobrar, solo como abono a cartera', async () => {
+    it('cuentas por cobrar es de solo consulta y no muestra el botón de nuevo recibo incluso con permisos de recaudo', async () => {
       vi.spyOn(receivablesApi, 'fetchReceivables').mockResolvedValue(empty);
       vi.spyOn(receivablesApi, 'fetchReceivablesAgingSummary').mockResolvedValue({
         current: { amount: '0.00', count: 0 },
@@ -276,14 +276,25 @@ describe('Recibos de caja y comprobantes de egreso', () => {
         totalPending: '0.00',
         totalCount: 0,
       });
-      vi.spyOn(customersApi, 'fetchCustomers').mockResolvedValue({ ...empty, items: [marta] });
-      const thirdParties = vi.spyOn(thirdPartiesApi, 'fetchThirdParties');
       renderPage(<ReceivablesPage />, [
         SYSTEM_PERMISSIONS.RECEIVABLES_READ,
         SYSTEM_PERMISSIONS.RECEIVABLES_MANAGE,
         SYSTEM_PERMISSIONS.CUSTOMERS_READ,
         SYSTEM_PERMISSIONS.CASH_RECEIPTS_COLLECT,
         SYSTEM_PERMISSIONS.TREASURY_ACCOUNTS_SELECT,
+      ]);
+      expect(await screen.findByRole('heading', { name: 'Cuentas por Cobrar' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Nuevo recibo de caja' })).toBeNull();
+    });
+
+    it('en recibos de caja con permiso de recaudo se registra el recibo como abono a cartera', async () => {
+      vi.spyOn(treasuryApi, 'getTreasuryDocuments').mockResolvedValue(empty);
+      vi.spyOn(customersApi, 'fetchCustomers').mockResolvedValue({ ...empty, items: [marta] });
+      const thirdParties = vi.spyOn(thirdPartiesApi, 'fetchThirdParties');
+      renderPage(<CashReceiptsPage />, [
+        SYSTEM_PERMISSIONS.RECEIVABLES_READ,
+        SYSTEM_PERMISSIONS.CASH_RECEIPTS_COLLECT,
+        SYSTEM_PERMISSIONS.CUSTOMERS_READ,
       ]);
       fireEvent.click(await screen.findByRole('button', { name: 'Nuevo recibo de caja' }));
       const dialog = await screen.findByRole('dialog', { name: 'Nuevo recibo de caja' });

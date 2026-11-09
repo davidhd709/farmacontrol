@@ -162,7 +162,7 @@ describe('Asistente de configuración contable (F7)', () => {
     expect(await screen.findByText('Configuración incompleta')).toBeInTheDocument();
     expect(screen.getByText('Obligatorio pendiente')).toBeInTheDocument();
     expect(screen.getByText('Recomendado')).toBeInTheDocument();
-    expect(screen.getByText(/Pendientes: CASH, BANK/)).toBeInTheDocument();
+    expect(screen.getByText(/Pendientes: Caja general, Bancos/)).toBeInTheDocument();
   });
 
   it('aplica la plantilla PUC e informa el resultado', async () => {
