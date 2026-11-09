@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -56,8 +56,15 @@ export const SelectSaleForCreditNoteDialog: React.FC<Props> = ({
   const [pageSize, setPageSize] = useState(20);
   const [totalItems, setTotalItems] = useState(0);
 
+  // Control de concurrencia y ciclo de vida de apertura del diálogo
+  const requestIdRef = useRef(0);
+  const prevOpenRef = useRef(false);
+  const pageSizeRef = useRef(pageSize);
+  pageSizeRef.current = pageSize;
+
   const loadSales = useCallback(
     async (queryText: string, pageNumber: number, limitNumber: number) => {
+      const currentRequestId = ++requestIdRef.current;
       setLoading(true);
       setErrorMessage(null);
       try {
@@ -66,36 +73,54 @@ export const SelectSaleForCreditNoteDialog: React.FC<Props> = ({
           page: pageNumber,
           limit: limitNumber,
         });
+        // Si otra petición se emitió después, descartar esta respuesta obsoleta (evita sobrescrituras)
+        if (currentRequestId !== requestIdRef.current) {
+          return;
+        }
         setSales(res.items || []);
         setTotalItems(res.total || 0);
         setPage(res.page || 1);
         setActiveSearch(queryText.trim());
       } catch (err: unknown) {
+        if (currentRequestId !== requestIdRef.current) {
+          return;
+        }
         setErrorMessage(err instanceof Error ? err.message : 'Error al buscar facturas');
       } finally {
-        setLoading(false);
+        if (currentRequestId === requestIdRef.current) {
+          setLoading(false);
+        }
       }
     },
     [],
   );
 
   useEffect(() => {
-    if (open) {
+    // Se ejecuta únicamente cuando el diálogo se abre (transición de false a true o montaje inicial abierto)
+    if (open && !prevOpenRef.current) {
       setSearchQuery('');
       setActiveSearch('');
       setErrorMessage(null);
       setPage(1);
-      void loadSales('', 1, pageSize);
+      void loadSales('', 1, pageSizeRef.current);
+    } else if (!open && prevOpenRef.current) {
+      // Al cerrar el diálogo, invalidar peticiones en curso y limpiar errores
+      requestIdRef.current++;
+      setLoading(false);
+      setErrorMessage(null);
     }
-  }, [open, loadSales, pageSize]);
+    prevOpenRef.current = open;
+  }, [open, loadSales]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setPage(1);
     void loadSales(searchQuery, 1, pageSize);
   };
 
   const handleClearSearch = () => {
     setSearchQuery('');
+    setPage(1);
     void loadSales('', 1, pageSize);
   };
 
@@ -106,6 +131,7 @@ export const SelectSaleForCreditNoteDialog: React.FC<Props> = ({
   const handleRowsPerPageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newLimit = parseInt(e.target.value, 10);
     setPageSize(newLimit);
+    setPage(1);
     void loadSales(activeSearch, 1, newLimit);
   };
 
@@ -170,7 +196,6 @@ export const SelectSaleForCreditNoteDialog: React.FC<Props> = ({
             <Button
               variant="contained"
               type="submit"
-              disabled={loading}
               data-testid="search-sale-submit-btn"
             >
               Buscar
@@ -179,7 +204,6 @@ export const SelectSaleForCreditNoteDialog: React.FC<Props> = ({
               <Button
                 variant="outlined"
                 onClick={handleClearSearch}
-                disabled={loading}
                 data-testid="clear-sale-search-btn"
               >
                 Limpiar

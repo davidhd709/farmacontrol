@@ -593,5 +593,235 @@ describe('CreditNotesPage (REQ-005)', () => {
       });
       expect(screen.queryByTestId('clear-sale-search-btn')).not.toBeInTheDocument();
     });
+
+    it('al cambiar la cantidad de filas conserva la búsqueda activa, vuelve a la página 1 y ejecuta una sola consulta', async () => {
+      const fetchSalesSpy = vi.spyOn(salesApi, 'fetchSales').mockResolvedValue({
+        items: [mockCompletedSale],
+        total: 60,
+        page: 1,
+        pageSize: 20,
+        totalPages: 3,
+      });
+
+      renderCreditNotesPage([
+        SYSTEM_PERMISSIONS.SALES_READ,
+        SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE,
+      ]);
+
+      fireEvent.click(await screen.findByTestId('new-credit-note-btn'));
+      expect(await screen.findByTestId('select-sale-for-credit-note-dialog')).toBeInTheDocument();
+
+      // 1. Realizar una búsqueda activa por cliente
+      const searchInput = screen.getByTestId('sale-search-input');
+      fireEvent.change(searchInput, { target: { value: 'María Rodríguez' } });
+      fireEvent.click(screen.getByTestId('search-sale-submit-btn'));
+
+      await waitFor(() => {
+        expect(fetchSalesSpy).toHaveBeenCalledWith({
+          search: 'María Rodríguez',
+          page: 1,
+          limit: 20,
+        });
+      });
+
+      fetchSalesSpy.mockClear();
+
+      // 2. Cambiar la cantidad de filas por página a 50
+      const combobox = screen.getByRole('combobox', { name: /Filas por página:/i });
+      fireEvent.mouseDown(combobox);
+      const option50 = await screen.findByRole('option', { name: '50' });
+      fireEvent.click(option50);
+
+      // 3. Debe ejecutarse exactamente UNA consulta con la búsqueda activa y limit 50, en página 1
+      await waitFor(() => {
+        expect(fetchSalesSpy).toHaveBeenCalledTimes(1);
+        expect(fetchSalesSpy).toHaveBeenCalledWith({
+          search: 'María Rodríguez',
+          page: 1,
+          limit: 50,
+        });
+      });
+
+      // 4. El input y la búsqueda activa deben conservarse
+      expect(screen.getByTestId('sale-search-input')).toHaveValue('María Rodríguez');
+      expect(screen.getByTestId('clear-sale-search-btn')).toBeInTheDocument();
+    });
+
+    it('vuelve a la página 1 al cambiar el tamaño de página estando en una página posterior', async () => {
+      const fetchSalesSpy = vi.spyOn(salesApi, 'fetchSales').mockImplementation(async (params) => {
+        return {
+          items: [mockCompletedSale],
+          total: 80,
+          page: params?.page ?? 1,
+          pageSize: params?.limit ?? 20,
+          totalPages: 4,
+        };
+      });
+
+      renderCreditNotesPage([
+        SYSTEM_PERMISSIONS.SALES_READ,
+        SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE,
+      ]);
+
+      fireEvent.click(await screen.findByTestId('new-credit-note-btn'));
+      expect(await screen.findByTestId('select-sale-for-credit-note-dialog')).toBeInTheDocument();
+
+      // Ir a página 2
+      const nextPageBtn = screen.getByRole('button', { name: /página siguiente/i });
+      fireEvent.click(nextPageBtn);
+
+      await waitFor(() => {
+        expect(fetchSalesSpy).toHaveBeenCalledWith(expect.objectContaining({ page: 2, limit: 20 }));
+      });
+
+      fetchSalesSpy.mockClear();
+
+      // Cambiar filas a 10
+      const combobox = screen.getByRole('combobox', { name: /Filas por página:/i });
+      fireEvent.mouseDown(combobox);
+      const option10 = await screen.findByRole('option', { name: '10' });
+      fireEvent.click(option10);
+
+      // Debe solicitar página 1 con limit 10
+      await waitFor(() => {
+        expect(fetchSalesSpy).toHaveBeenCalledTimes(1);
+        expect(fetchSalesSpy).toHaveBeenCalledWith(expect.objectContaining({ page: 1, limit: 10 }));
+      });
+    });
+
+    it('las respuestas lentas antiguas no sobrescriben los resultados de una búsqueda posterior más rápida', async () => {
+      let resolveSlowRequest!: (value: any) => void;
+      const slowPromise = new Promise((resolve) => {
+        resolveSlowRequest = resolve;
+      });
+
+      const fastSale: SaleDto = {
+        ...mockCompletedSale,
+        id: 'sale-fast',
+        invoiceNumber: 'FAC-RAPIDA-999',
+        customerName: 'Cliente Rápido',
+      };
+
+      const slowSale: SaleDto = {
+        ...mockCompletedSale,
+        id: 'sale-slow',
+        invoiceNumber: 'FAC-LENTA-000',
+        customerName: 'Cliente Lento',
+      };
+
+      vi.spyOn(salesApi, 'fetchSales').mockImplementation(async (params) => {
+        if (params?.search === 'LENTA') {
+          return slowPromise as any;
+        }
+        if (params?.search === 'RAPIDA') {
+          return {
+            items: [fastSale],
+            total: 1,
+            page: 1,
+            pageSize: 20,
+            totalPages: 1,
+          };
+        }
+        return {
+          items: [mockCompletedSale],
+          total: 1,
+          page: 1,
+          pageSize: 20,
+          totalPages: 1,
+        };
+      });
+
+      renderCreditNotesPage([
+        SYSTEM_PERMISSIONS.SALES_READ,
+        SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE,
+      ]);
+
+      fireEvent.click(await screen.findByTestId('new-credit-note-btn'));
+      expect(await screen.findByTestId('select-sale-for-credit-note-dialog')).toBeInTheDocument();
+
+      const searchInput = screen.getByTestId('sale-search-input');
+
+      // 1. Iniciar búsqueda lenta "LENTA"
+      fireEvent.change(searchInput, { target: { value: 'LENTA' } });
+      fireEvent.click(screen.getByTestId('search-sale-submit-btn'));
+
+      // 2. Inmediatamente iniciar búsqueda rápida "RAPIDA"
+      fireEvent.change(searchInput, { target: { value: 'RAPIDA' } });
+      fireEvent.click(screen.getByTestId('search-sale-submit-btn'));
+
+      // 3. La búsqueda rápida responde primero y se muestra en pantalla
+      expect(await screen.findByText('FAC-RAPIDA-999')).toBeInTheDocument();
+      expect(screen.getByText('Cliente Rápido')).toBeInTheDocument();
+
+      // 4. Ahora resuelve la respuesta lenta anterior
+      resolveSlowRequest({
+        items: [slowSale],
+        total: 1,
+        page: 1,
+        pageSize: 20,
+        totalPages: 1,
+      });
+
+      // Esperar un ciclo y verificar que la respuesta lenta NO sobrescribe el estado
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(screen.getByText('FAC-RAPIDA-999')).toBeInTheDocument();
+      expect(screen.queryByText('FAC-LENTA-000')).toBeNull();
+    });
+
+    it('al cerrar y volver a abrir el diálogo, se restablecen correctamente los filtros', async () => {
+      const fetchSalesSpy = vi.spyOn(salesApi, 'fetchSales').mockResolvedValue({
+        items: [mockCompletedSale],
+        total: 1,
+        page: 1,
+        pageSize: 20,
+        totalPages: 1,
+      });
+
+      renderCreditNotesPage([
+        SYSTEM_PERMISSIONS.SALES_READ,
+        SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE,
+      ]);
+
+      // Abrir diálogo
+      fireEvent.click(await screen.findByTestId('new-credit-note-btn'));
+      expect(await screen.findByTestId('select-sale-for-credit-note-dialog')).toBeInTheDocument();
+
+      // Escribir y buscar
+      const searchInput = screen.getByTestId('sale-search-input');
+      fireEvent.change(searchInput, { target: { value: 'María Rodríguez' } });
+      fireEvent.click(screen.getByTestId('search-sale-submit-btn'));
+
+      await waitFor(() => {
+        expect(fetchSalesSpy).toHaveBeenCalledWith(expect.objectContaining({ search: 'María Rodríguez' }));
+      });
+      expect(screen.getByTestId('clear-sale-search-btn')).toBeInTheDocument();
+
+      fetchSalesSpy.mockClear();
+
+      // Cerrar diálogo haciendo clic en Cancelar
+      fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('select-sale-for-credit-note-dialog')).not.toBeInTheDocument();
+      });
+
+      // Volver a abrir el diálogo
+      fireEvent.click(screen.getByTestId('new-credit-note-btn'));
+      expect(await screen.findByTestId('select-sale-for-credit-note-dialog')).toBeInTheDocument();
+
+      // El campo de búsqueda debe estar vacío y sin botón limpiar
+      expect(screen.getByTestId('sale-search-input')).toHaveValue('');
+      expect(screen.queryByTestId('clear-sale-search-btn')).not.toBeInTheDocument();
+
+      // Se debe haber consultado sin filtro de búsqueda
+      await waitFor(() => {
+        expect(fetchSalesSpy).toHaveBeenCalledWith({
+          search: undefined,
+          page: 1,
+          limit: 20,
+        });
+      });
+    });
   });
 });
