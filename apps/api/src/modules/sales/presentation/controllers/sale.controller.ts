@@ -30,6 +30,7 @@ import {
   FefoPreviewDto,
   SaleQueryFilters,
   PaginatedResponse,
+  SaleActionHistoryDto,
 } from '@farmacia/contracts';
 import { SaleService } from '../../application/sale.service';
 import { ConfirmSaleDto, ConfirmSaleValidationPipe } from '../dtos/confirm-sale.dto';
@@ -204,6 +205,7 @@ export class SaleController {
     @Query(
       new QueryShapeValidationPipe({
         invoiceNumber: 'text?',
+        search: 'text?',
         customerId: 'uuid?',
         fromDate: 'date?',
         toDate: 'date?',
@@ -214,6 +216,21 @@ export class SaleController {
     query: SaleQueryFilters,
   ): Promise<PaginatedResponse<SaleDto>> {
     return this.saleService.getSales(query);
+  }
+
+  @Get(':id/history')
+  @RequirePermissions(SYSTEM_PERMISSIONS.SALES_READ)
+  public async getHistory(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<SaleActionHistoryDto> {
+    try {
+      return await this.saleService.getSaleActionHistory(id);
+    } catch (error) {
+      if (error instanceof SaleNotFoundException) {
+        throw new NotFoundException(error.message);
+      }
+      throw error;
+    }
   }
 
   @Get(':id')

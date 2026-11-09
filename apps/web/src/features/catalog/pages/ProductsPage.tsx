@@ -38,6 +38,11 @@ import { ProductPresentationsDialog } from '../components/ProductPresentationsDi
 import { ProductTaxClassificationDialog } from '../../taxes/components/ProductTaxClassificationDialog';
 import { SweetModal } from '../../../components/SweetModal';
 import { inventoryControlModeLabel } from '../utils/inventory-control';
+import { ProductImportDialog } from '../components/ProductImportDialog';
+import { downloadProductTemplate, exportProductsToExcel } from '../api/products.api';
+import DownloadIcon from '@mui/icons-material/Download';
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
 
 type StatusFilterOption = 'active' | 'inactive' | 'all';
 type LotFilterOption = 'all' | InventoryControlMode;
@@ -52,6 +57,9 @@ export function ProductsPage() {
 
   // Dialogs
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isDownloadingTemplate, setIsDownloadingTemplate] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<ProductDto | null>(null);
   const [productToDeactivate, setProductToDeactivate] = useState<ProductDto | null>(null);
   const [productForPresentations, setProductForPresentations] = useState<ProductDto | null>(null);
@@ -80,11 +88,55 @@ export function ProductsPage() {
     pageSize,
   };
 
-  const { data, isLoading, isError, error } = useProducts(queryFilters);
+  const { data, isLoading, isError, error, refetch } = useProducts(queryFilters);
 
   const handleOpenCreate = () => {
     setSelectedProduct(null);
     setIsFormOpen(true);
+  };
+
+  const handleDownloadTemplate = async () => {
+    setIsDownloadingTemplate(true);
+    try {
+      await downloadProductTemplate();
+    } catch (err) {
+      setSnackbar({
+        open: true,
+        message: err instanceof Error ? err.message : 'Error al descargar la plantilla.',
+        severity: 'error',
+      });
+    } finally {
+      setIsDownloadingTemplate(false);
+    }
+  };
+
+  const handleExportProducts = async () => {
+    setIsExporting(true);
+    try {
+      await exportProductsToExcel({
+        search: queryFilters.search,
+        categoryId: queryFilters.categoryId,
+        inventoryControlMode: queryFilters.inventoryControlMode,
+        isActive: queryFilters.isActive,
+      });
+    } catch (err) {
+      setSnackbar({
+        open: true,
+        message: err instanceof Error ? err.message : 'Error al exportar los productos.',
+        severity: 'error',
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleImportSuccess = (importedCount: number) => {
+    void refetch();
+    setSnackbar({
+      open: true,
+      message: `Se importaron ${importedCount} producto(s) exitosamente al catálogo.`,
+      severity: 'success',
+    });
   };
 
   const handleOpenEdit = (product: ProductDto) => {
@@ -143,22 +195,58 @@ export function ProductsPage() {
             </Box>
           </Box>
 
-          <PermissionGate permission={SYSTEM_PERMISSIONS.PRODUCTS_MANAGE}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: 'center' }}>
             <Button
-              variant="contained"
-              color="primary"
-              onClick={handleOpenCreate}
-              data-testid="create-product-btn"
-              sx={{
-                textTransform: 'none',
-                fontWeight: 700,
-                transition: 'transform 0.1s ease, background-color 0.15s ease',
-                '&:active': { transform: 'scale(0.98)' },
-              }}
+              variant="outlined"
+              size="small"
+              startIcon={<DownloadIcon />}
+              onClick={handleDownloadTemplate}
+              disabled={isDownloadingTemplate}
+              sx={{ textTransform: 'none', fontWeight: 600 }}
             >
-              Nuevo Producto
+              {isDownloadingTemplate ? 'Descargando…' : 'Descargar Plantilla'}
             </Button>
-          </PermissionGate>
+
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<FileDownloadIcon />}
+              onClick={handleExportProducts}
+              disabled={isExporting}
+              sx={{ textTransform: 'none', fontWeight: 600 }}
+            >
+              {isExporting ? 'Exportando…' : 'Exportar (.xlsx)'}
+            </Button>
+
+            <PermissionGate permission={SYSTEM_PERMISSIONS.PRODUCTS_MANAGE}>
+              <Button
+                variant="outlined"
+                color="primary"
+                size="small"
+                startIcon={<UploadFileIcon />}
+                onClick={() => setIsImportOpen(true)}
+                sx={{ textTransform: 'none', fontWeight: 600 }}
+              >
+                Importar (.xlsx)
+              </Button>
+
+              <Button
+                variant="contained"
+                color="primary"
+                size="small"
+                onClick={handleOpenCreate}
+                data-testid="create-product-btn"
+                sx={{
+                  textTransform: 'none',
+                  fontWeight: 700,
+                  transition: 'transform 0.1s ease, background-color 0.15s ease',
+                  '&:active': { transform: 'scale(0.98)' },
+                }}
+              >
+                Nuevo Producto
+              </Button>
+            </PermissionGate>
+          </Stack>
         </Box>
 
         {isError ? (
@@ -480,6 +568,12 @@ export function ProductsPage() {
             severity: 'success',
           });
         }}
+      />
+
+      <ProductImportDialog
+        open={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
+        onSuccess={handleImportSuccess}
       />
 
       <ProductTaxClassificationDialog

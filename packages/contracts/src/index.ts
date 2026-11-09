@@ -417,6 +417,41 @@ export interface ProductQueryFilters {
   pageSize?: number;
 }
 
+export interface ProductImportRowDto {
+  row: number;
+  code: string;
+  barcode: string | null;
+  name: string;
+  categoryName: string;
+  genericName: string | null;
+  concentration: string | null;
+  sanitaryRegistry: string | null;
+  manufacturer: string | null;
+  description: string | null;
+  baseUnit: string;
+  basePrice: number;
+  baseCost: number;
+  inventoryControlMode: InventoryControlMode;
+  prescriptionRequired: boolean;
+  isActive: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
+export interface ProductImportPreviewDto {
+  previewHash: string;
+  totalRows: number;
+  validCount: number;
+  errorCount: number;
+  warningCount: number;
+  duplicateCount: number;
+  rows: ProductImportRowDto[];
+}
+
+export interface ProductImportResultDto {
+  importedCount: number;
+}
+
 export interface ProductPresentationDto {
   id: string;
   productId: string;

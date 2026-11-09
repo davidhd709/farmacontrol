@@ -22,15 +22,12 @@ import {
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 
-import { SYSTEM_PERMISSIONS, type ReceivableStatus } from '@farmacia/contracts';
+import { type ReceivableStatus } from '@farmacia/contracts';
 import { fetchReceivables, fetchReceivablesAgingSummary } from '../api/receivables.api';
 import { PageHeader } from '../../../components/layout/PageHeader';
 import { AgingSummaryCards } from '../../../components/AgingSummaryCards';
 
 import { ReceivableMovementsDialog } from '../components/ReceivableMovementsDialog';
-import { VoucherFormDialog } from '../../treasury/components/VoucherFormDialog';
-import { PermissionGate } from '../../auth/components/PermissionGate';
-import { formatMoney, toCents } from '../../../utils/money';
 import { isOverdue, getStatusDisplay } from '../utils/status';
 import { formatDate } from '../../../utils/date-format';
 import { FilterBar } from '../../../components/layout/FilterBar';
@@ -45,8 +42,6 @@ export function ReceivablesPage() {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [movementsReceivableId, setMovementsReceivableId] = useState<string | null>(null);
-  const [receiptOpen, setReceiptOpen] = useState(false);
-  const [receiptNotice, setReceiptNotice] = useState<string | null>(null);
 
   const { data: agingData } = useQuery({
     queryKey: ['receivables-aging'],
@@ -83,21 +78,8 @@ export function ReceivablesPage() {
       {/* Header */}
       <PageHeader
         title="Cuentas por Cobrar"
-        description="Gestión y seguimiento de cartera, abonos y créditos comerciales de clientes."
-        actions={
-          // El abono se registra con un recibo de caja (recibo_caja.crear_abono)
-          <PermissionGate permission={SYSTEM_PERMISSIONS.CASH_RECEIPTS_COLLECT}>
-            <Button variant="contained" onClick={() => setReceiptOpen(true)}>
-              Nuevo recibo de caja
-            </Button>
-          </PermissionGate>
-        }
+        description="Consulta y seguimiento de facturas a crédito, abonos realizados y saldos pendientes de clientes."
       />
-      {receiptNotice && (
-        <Alert severity="success" onClose={() => setReceiptNotice(null)} sx={{ mb: 2 }}>
-          {receiptNotice}
-        </Alert>
-      )}
 
       {/* Cartera por edades: los mismos rangos que cuentas por pagar */}
       {agingData && (
@@ -279,7 +261,12 @@ export function ReceivablesPage() {
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      <Chip size="small" label={cfg.label} color={cfg.color} />
+                      <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                        <Chip size="small" label={cfg.label} color={cfg.color} />
+                        {overdue && (
+                          <Chip size="small" label="Vencida" color="error" variant="outlined" />
+                        )}
+                      </Stack>
                     </TableCell>
                     <TableCell align="center" onClick={(e) => e.stopPropagation()}>
                       <Stack direction="row" spacing={1} sx={{ justifyContent: 'center' }}>
@@ -312,25 +299,13 @@ export function ReceivablesPage() {
         />
       </Paper>
 
-      {/* Modal de abono */}
+      {/* Modal de consulta de abonos */}
       {movementsReceivableId && (
         <ReceivableMovementsDialog
           receivableId={movementsReceivableId}
           onClose={() => setMovementsReceivableId(null)}
         />
       )}
-
-      <VoucherFormDialog
-        type="RECIBO_CAJA"
-        open={receiptOpen}
-        onClose={() => setReceiptOpen(false)}
-        onCreated={(document) => {
-          setReceiptOpen(false);
-          setReceiptNotice(
-            `Recibo de caja ${document.documentNumber} registrado por ${formatMoney(toCents(document.amount))}.`,
-          );
-        }}
-      />
     </Box>
   );
 }

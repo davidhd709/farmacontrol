@@ -149,26 +149,42 @@ export class PrismaSaleRepository implements ISaleRepository {
     const limit = Math.min(100, Math.max(1, filters.limit ?? 20));
     const skip = (page - 1) * limit;
 
-    const where: Prisma.SaleWhereInput = {};
+    const conditions: Prisma.SaleWhereInput[] = [];
+
+    if (filters.search && filters.search.trim()) {
+      const term = filters.search.trim();
+      conditions.push({
+        OR: [
+          { invoiceNumber: { contains: term, mode: 'insensitive' } },
+          { customer: { name: { contains: term, mode: 'insensitive' } } },
+          { customer: { documentNumber: { contains: term, mode: 'insensitive' } } },
+        ],
+      });
+    }
 
     if (filters.invoiceNumber && filters.invoiceNumber.trim()) {
-      where.invoiceNumber = { contains: filters.invoiceNumber.trim(), mode: 'insensitive' };
+      conditions.push({
+        invoiceNumber: { contains: filters.invoiceNumber.trim(), mode: 'insensitive' },
+      });
     }
     if (filters.customerId) {
-      where.customerId = filters.customerId;
+      conditions.push({ customerId: filters.customerId });
     }
     if (filters.status) {
-      where.status = filters.status;
+      conditions.push({ status: filters.status });
     }
     if (filters.fromDate || filters.toDate) {
-      where.createdAt = {};
+      const dateFilter: Prisma.DateTimeFilter = {};
       if (filters.fromDate) {
-        where.createdAt.gte = businessDayStart(filters.fromDate);
+        dateFilter.gte = businessDayStart(filters.fromDate);
       }
       if (filters.toDate) {
-        where.createdAt.lte = businessDayEnd(filters.toDate);
+        dateFilter.lte = businessDayEnd(filters.toDate);
       }
+      conditions.push({ createdAt: dateFilter });
     }
+
+    const where: Prisma.SaleWhereInput = conditions.length > 0 ? { AND: conditions } : {};
 
     const [rawItems, total] = await Promise.all([
       this.client.sale.findMany({

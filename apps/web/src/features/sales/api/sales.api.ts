@@ -6,6 +6,7 @@ import type {
   SaleQueryFilters,
   PaginatedResponse,
   CreditNoteDto,
+  SaleActionHistoryDto,
 } from '@farmacia/contracts';
 import { apiRequest } from '../../../api/http-client';
 
@@ -30,6 +31,7 @@ export async function fetchSales(
 ): Promise<PaginatedResponse<SaleDto>> {
   const query = new URLSearchParams();
 
+  if (filters.search?.trim()) query.set('search', filters.search.trim());
   if (filters.invoiceNumber?.trim()) query.set('invoiceNumber', filters.invoiceNumber.trim());
   if (filters.customerId) query.set('customerId', filters.customerId);
   if (filters.status) query.set('status', filters.status);
@@ -70,10 +72,23 @@ export async function fetchSaleCreditNotes(saleId: string): Promise<CreditNoteDt
   return apiRequest<CreditNoteDto[]>(`sales/${encodeURIComponent(saleId)}/credit-notes`);
 }
 
+/** Lista todas las notas crédito registradas en el sistema (REQ-005). */
+export async function fetchCreditNotes(saleId?: string): Promise<CreditNoteDto[]> {
+  const qs = saleId ? `?saleId=${encodeURIComponent(saleId)}` : '';
+  return apiRequest<CreditNoteDto[]>(`credit-notes${qs}`, { method: 'GET' });
+}
+
 /** Anula la devolución: la mercancía vuelve a salir, el reembolso se deshace y se reversa el asiento. */
 export async function cancelCreditNote(id: string, reason: string): Promise<CreditNoteDto> {
   return apiRequest<CreditNoteDto>(`credit-notes/${encodeURIComponent(id)}/cancel`, {
     method: 'POST',
     body: JSON.stringify({ reason }),
+  });
+}
+
+/** Consulta la trazabilidad cronológica completa de eventos de una factura (REQ-006). */
+export async function fetchSaleActionHistory(saleId: string): Promise<SaleActionHistoryDto> {
+  return apiRequest<SaleActionHistoryDto>(`sales/${encodeURIComponent(saleId)}/history`, {
+    method: 'GET',
   });
 }

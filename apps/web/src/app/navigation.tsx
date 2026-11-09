@@ -28,6 +28,7 @@ import DateRangeIcon from '@mui/icons-material/DateRange';
 import HistoryIcon from '@mui/icons-material/History';
 import GavelIcon from '@mui/icons-material/Gavel';
 import ChecklistIcon from '@mui/icons-material/Checklist';
+import AssignmentReturnIcon from '@mui/icons-material/AssignmentReturn';
 interface MenuItemConfig {
   title: string;
   path: string;
@@ -69,13 +70,19 @@ export const menuGroups: MenuGroupConfig[] = [
         icon: <ReceiptLongIcon fontSize="small" />,
         permission: SYSTEM_PERMISSIONS.SALES_READ,
       },
+      {
+        title: 'Notas Crédito',
+        path: '/credit-notes',
+        icon: <AssignmentReturnIcon fontSize="small" />,
+        permission: SYSTEM_PERMISSIONS.SALES_READ,
+      },
     ],
   },
   {
     category: 'INVENTARIO',
     items: [
       {
-        title: 'Lotes y Stock',
+        title: 'Stock',
         path: '/inventory/lots',
         icon: <Inventory2Icon fontSize="small" />,
         permission: SYSTEM_PERMISSIONS.INVENTORY_READ,
@@ -185,12 +192,6 @@ export const menuGroups: MenuGroupConfig[] = [
         title: 'Libro Diario',
         path: '/accounting/journal',
         icon: <MenuBookIcon fontSize="small" />,
-        permission: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
-      },
-      {
-        title: 'Cuentas y Terceros',
-        path: '/accounting/lookup',
-        icon: <PeopleAltIcon fontSize="small" />,
         permission: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
       },
       {
@@ -331,6 +332,11 @@ export const routeNavigation = [
     title: 'Proveedores',
     path: '/suppliers',
     permission: [SYSTEM_PERMISSIONS.THIRD_PARTIES_READ, SYSTEM_PERMISSIONS.SUPPLIERS_MANAGE],
+  },
+  {
+    title: 'Cuentas y Terceros',
+    path: '/accounting/lookup',
+    permission: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
   },
 ];
 

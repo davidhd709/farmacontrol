@@ -140,7 +140,7 @@ export const InventoryMovementsPage = () => {
               '&:active': { transform: 'scale(0.98)' },
             }}
           >
-            ← Volver a Lotes
+            ← Volver a Stock
           </Button>
           <Button
             variant="outlined"

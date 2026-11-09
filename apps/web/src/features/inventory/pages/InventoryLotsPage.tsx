@@ -169,10 +169,10 @@ export const InventoryLotsPage = () => {
           <HomeBackButton />
           <Box>
             <Typography variant="h5" component="h1" sx={{ fontWeight: 800, color: 'text.primary' }}>
-              Gestión de Lotes y Vencimientos
+              Stock
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Monitoreo de existencias, almacén y fechas de vencimiento farmacéuticas con prioridad
+              Monitoreo de existencias, lotes, almacén y fechas de vencimiento farmacéuticas con prioridad
               FEFO.
             </Typography>
           </Box>

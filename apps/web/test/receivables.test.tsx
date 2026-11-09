@@ -105,30 +105,33 @@ describe('ReceivablesPage (Frontend Cuentas por Cobrar — UX-21)', () => {
       ],
     });
 
-  it('no registra abonos en cartera: "Ver abonos" muestra los movimientos con su recibo de caja y saldo', async () => {
-    movementsWithPayment();
-    renderPage();
-    await waitFor(() => expect(screen.getByText('Carlos Gómez')).toBeInTheDocument());
-    expect(screen.queryByRole('button', { name: /^Abonar$/i })).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getAllByRole('button', { name: /Ver Abonos/i })[0]);
-    expect(await screen.findByText('RC-000007')).toBeInTheDocument();
-    expect(screen.getByText(/registra un recibo de caja/)).toBeInTheDocument();
-    expect(screen.queryByLabelText(/Monto del abono/i)).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Revertir' }));
-    expect(await screen.findByText('Revertir Abono de Cliente')).toBeInTheDocument();
-  });
-
-  it('cartera (sin recibo_caja.anular) ve los abonos pero no puede revertirlos', async () => {
+  it('es un módulo exclusivamente de consulta: no muestra botones para crear recibos ni revertir abonos (REQ-001)', async () => {
     movementsWithPayment();
     renderPage([
       SYSTEM_PERMISSIONS.RECEIVABLES_READ,
       SYSTEM_PERMISSIONS.RECEIVABLES_MANAGE,
       SYSTEM_PERMISSIONS.CASH_RECEIPTS_COLLECT,
+      SYSTEM_PERMISSIONS.CASH_RECEIPTS_ANNUL,
     ]);
     await waitFor(() => expect(screen.getByText('Carlos Gómez')).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /^Abonar$/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /Nuevo recibo de caja/i }),
+    ).not.toBeInTheDocument();
+
     fireEvent.click(screen.getAllByRole('button', { name: /Ver Abonos/i })[0]);
     expect(await screen.findByText('RC-000007')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Revertir' })).not.toBeInTheDocument();
+    expect(screen.getByText(/Valor original/i)).toBeInTheDocument();
+    expect(screen.getByText(/Tesorería → Recibos de Caja/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Monto del abono/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Revertir/i })).not.toBeInTheDocument();
+  });
+
+  it('identifica facturas pendientes, pagadas y vencidas en el listado de consulta', async () => {
+    renderPage([SYSTEM_PERMISSIONS.RECEIVABLES_READ]);
+    await waitFor(() => expect(screen.getByText('Carlos Gómez')).toBeInTheDocument());
+    expect(screen.getByText('Pendiente')).toBeInTheDocument();
+    expect(screen.getByText('Vencida')).toBeInTheDocument();
+    expect(screen.getByText('Pagada')).toBeInTheDocument();
   });
 });

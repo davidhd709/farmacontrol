@@ -29,6 +29,13 @@ import { AuditService } from '../../../audit/application/services/audit.service'
 import type { AuditContext } from './category.service';
 import { sectorProfileRules } from '../../../company/application/sector-profile.reader';
 import { saleTaxRatesAt } from '../../../taxes/application/tax-context.reader';
+import {
+  buildProductImportTemplate,
+  confirmProductImport,
+  exportProductsWorkbook,
+  parseAndValidateProductWorkbook,
+} from '../../infrastructure/excel-product-import';
+import type { ProductImportPreviewDto } from '@farmacia/contracts';
 
 /**
  * El lector de código de barras no distingue tablas: un código no puede estar a la vez en un
@@ -338,6 +345,39 @@ export class ProductService {
       allowedControlModes: [...rules.allowedControlModes],
       prescriptionRequiredControlMode: rules.prescriptionRequiredControlMode,
     };
+  }
+
+  public async downloadImportTemplate(): Promise<Buffer> {
+    const { rules } = await sectorProfileRules();
+    const categories = await prisma.category.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    });
+    const units = await prisma.unitOfMeasure.findMany({
+      where: { isActive: true },
+      select: { code: true, name: true },
+      orderBy: { name: 'asc' },
+    });
+    return buildProductImportTemplate(categories, units, rules.defaultControlMode);
+  }
+
+  public async previewProductImport(buffer: Buffer): Promise<ProductImportPreviewDto> {
+    return parseAndValidateProductWorkbook(buffer, prisma);
+  }
+
+  public async confirmProductImport(
+    buffer: Buffer,
+    previewHash: string,
+    user: { id: string; ipAddress?: string | null; correlationId?: string | null },
+  ): Promise<{ importedCount: number }> {
+    return confirmProductImport(buffer, previewHash, user, prisma, this.auditService);
+  }
+
+  public async exportProducts(filters: ProductQueryFilters = {}): Promise<Buffer> {
+    // Para exportación completa o filtrada, consultamos todos los que cumplan sin límite de paginación
+    const { items } = await this.listProducts({ ...filters, page: 1, pageSize: 10000 });
+    return exportProductsWorkbook(items);
   }
 }
 

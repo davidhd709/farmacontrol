@@ -16,6 +16,10 @@ export class SaleQueryValidationPipe implements PipeTransform {
       filters.invoiceNumber = record.invoiceNumber.trim();
     }
 
+    if (typeof record.search === 'string' && record.search.trim()) {
+      filters.search = record.search.trim();
+    }
+
     if (typeof record.customerId === 'string' && record.customerId.trim()) {
       filters.customerId = record.customerId.trim();
     }

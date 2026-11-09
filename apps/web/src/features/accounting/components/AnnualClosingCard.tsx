@@ -15,6 +15,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { getAccountingPurposeLabel } from '@farmacia/contracts';
 import { closeYear, fetchAnnualClosingPreview } from '../api/accounting.api';
 import { businessYear } from '../../../utils/business-date';
 import { formatDate } from '../../../utils/date-format';
@@ -116,7 +117,7 @@ export function AnnualClosingCard({ canManage }: { canManage: boolean }) {
                 <strong>{money(String(Math.abs(net)))}</strong>, a{' '}
                 {data.destinationAccount
                   ? `${data.destinationAccount.code} ${data.destinationAccount.name}`
-                  : `la cuenta del propósito ${data.destinationPurpose} (sin configurar)`}
+                  : `la cuenta del propósito «${getAccountingPurposeLabel(data.destinationPurpose)}» (sin configurar)`}
                 . Fecha del asiento: {formatDate(data.entryDate)}.
               </Alert>
             )}
@@ -149,7 +150,7 @@ export function AnnualClosingCard({ canManage }: { canManage: boolean }) {
                         <TableCell sx={{ fontWeight: 700 }}>
                           {data.destinationAccount
                             ? `${data.destinationAccount.code} ${data.destinationAccount.name}`
-                            : data.destinationPurpose}
+                            : getAccountingPurposeLabel(data.destinationPurpose)}
                         </TableCell>
                         <TableCell align="right" sx={{ fontWeight: 700 }}>
                           {net < 0 ? money(String(-net)) : ''}

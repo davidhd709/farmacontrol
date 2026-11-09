@@ -18,6 +18,9 @@ import {
   SaleQueryFilters,
   PaginatedResponse,
   SYSTEM_PERMISSIONS,
+  SaleActionHistoryDto,
+  SaleActionEventDto,
+  SaleStatus,
 } from '@farmacia/contracts';
 import { ISaleRepository, SALE_REPOSITORY } from '../domain/sale.repository';
 import { Sale, SaleLine, SaleLotAllocation } from '../domain/sale.entity';
@@ -978,5 +981,214 @@ export class SaleService {
     });
 
     return cancelledDto;
+  }
+
+  async getSaleActionHistory(saleId: string): Promise<SaleActionHistoryDto> {
+    const sale = await this.client.sale.findUnique({
+      where: { id: saleId },
+      include: {
+        customer: true,
+        createdByUser: true,
+        receivable: {
+          include: {
+            payments: {
+              include: {
+                createdByUser: true,
+                treasuryDocument: true,
+              },
+              orderBy: { createdAt: 'asc' },
+            },
+          },
+        },
+        creditNotes: {
+          include: {
+            createdByUser: true,
+            cancelledBy: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+
+    if (!sale) {
+      throw new SaleNotFoundException(saleId);
+    }
+
+    const auditEvents = await this.client.auditEvent.findMany({
+      where: {
+        entity: 'Sale',
+        entityId: sale.id,
+      },
+      include: {
+        user: true,
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const reversedUserIds =
+      sale.receivable?.payments
+        .map((p) => p.reversedByUserId)
+        .filter((id): id is string => Boolean(id)) || [];
+
+    const reversedUsersMap = new Map<string, string>();
+    if (reversedUserIds.length > 0) {
+      const users = await this.client.user.findMany({
+        where: { id: { in: reversedUserIds } },
+        select: { id: true, username: true },
+      });
+      for (const u of users) {
+        reversedUsersMap.set(u.id, u.username);
+      }
+    }
+
+    const events: SaleActionEventDto[] = [];
+
+    // 1. Venta creada
+    events.push({
+      id: `sale-created-${sale.id}`,
+      type: 'VENTA_CREADA',
+      title: 'Venta creada',
+      description: `Factura ${sale.invoiceNumber} registrada por valor de $${Number(sale.total).toLocaleString('es-CO', { minimumFractionDigits: 2 })} (Método: ${sale.paymentMethod}).`,
+      timestamp: sale.createdAt.toISOString(),
+      userName: sale.createdByUser ? sale.createdByUser.username : 'Sistema',
+      documentNumber: sale.invoiceNumber,
+      amount: Number(sale.total),
+      reason: sale.notes || null,
+      metadata: {
+        paymentMethod: sale.paymentMethod,
+        subtotal: Number(sale.subtotal),
+        taxTotal: Number(sale.taxTotal),
+      },
+    });
+
+    // 2. Registro en cartera (si fue a crédito)
+    if (sale.receivable) {
+      events.push({
+        id: `receivable-created-${sale.receivable.id}`,
+        type: 'CARTERA_REGISTRADA',
+        title: 'Registro en cartera',
+        description: `Registrada en Cuentas por Cobrar. Total: $${Number(sale.receivable.totalAmount).toLocaleString('es-CO', { minimumFractionDigits: 2 })} con fecha de vencimiento ${sale.receivable.dueDate.toISOString().split('T')[0]}.`,
+        timestamp: sale.receivable.createdAt.toISOString(),
+        userName: sale.createdByUser ? sale.createdByUser.username : 'Sistema',
+        documentNumber: sale.invoiceNumber,
+        amount: Number(sale.receivable.totalAmount),
+        metadata: {
+          dueDate: sale.receivable.dueDate.toISOString().split('T')[0],
+          balance: Number(sale.receivable.balance),
+        },
+      });
+
+      // 3. Abonos y reversiones de abonos
+      for (const payment of sale.receivable.payments) {
+        const receiptNumber = payment.treasuryDocument?.documentNumber || null;
+        const paymentUser = payment.createdByUser ? payment.createdByUser.username : 'Usuario';
+        events.push({
+          id: `payment-${payment.id}`,
+          type: 'ABONO_REGISTRADO',
+          title: 'Abono recibido',
+          description: receiptNumber
+            ? `Abono de $${Number(payment.amount).toLocaleString('es-CO', { minimumFractionDigits: 2 })} con Recibo de Caja ${receiptNumber} (${payment.paymentMethod}).`
+            : `Abono de $${Number(payment.amount).toLocaleString('es-CO', { minimumFractionDigits: 2 })} (${payment.paymentMethod}).`,
+          timestamp: payment.createdAt.toISOString(),
+          userName: paymentUser,
+          documentNumber: receiptNumber,
+          amount: Number(payment.amount),
+          reason: payment.notes || null,
+          metadata: {
+            isReversed: payment.isReversed,
+            paymentMethod: payment.paymentMethod,
+          },
+        });
+
+        // 4. Si el abono fue anulado / revertido
+        if (payment.isReversed) {
+          const revUser = payment.reversedByUserId
+            ? reversedUsersMap.get(payment.reversedByUserId) || 'Usuario'
+            : 'Usuario';
+          events.push({
+            id: `payment-reversed-${payment.id}`,
+            type: 'ABONO_REVERTIDO',
+            title: 'Abono revertido',
+            description: receiptNumber
+              ? `Reversión del abono correspondiente al Recibo de Caja ${receiptNumber} por $${Number(payment.amount).toLocaleString('es-CO', { minimumFractionDigits: 2 })}.`
+              : `Reversión del abono por $${Number(payment.amount).toLocaleString('es-CO', { minimumFractionDigits: 2 })}.`,
+            timestamp: (payment.reversedAt || payment.createdAt).toISOString(),
+            userName: revUser,
+            documentNumber: receiptNumber,
+            amount: Number(payment.amount),
+            reason: payment.reversalReason || 'Abono anulado',
+          });
+        }
+      }
+    }
+
+    // 5. Notas crédito aplicadas y anuladas
+    for (const note of sale.creditNotes) {
+      const noteUser = note.createdByUser ? note.createdByUser.username : 'Usuario';
+      events.push({
+        id: `credit-note-${note.id}`,
+        type: 'NOTA_CREDITO_CREADA',
+        title: 'Nota crédito aplicada',
+        description: `Nota crédito ${note.creditNoteNumber} por devolución de productos por valor de $${Number(note.total).toLocaleString('es-CO', { minimumFractionDigits: 2 })} (${note.refundMethod}).`,
+        timestamp: note.createdAt.toISOString(),
+        userName: noteUser,
+        documentNumber: note.creditNoteNumber,
+        amount: Number(note.total),
+        reason: note.reason,
+        metadata: {
+          refundMethod: note.refundMethod,
+          restock: note.restock,
+          status: note.status,
+        },
+      });
+
+      // 6. Anulación de nota crédito
+      if (note.status === 'ANULADA') {
+        const cancelUser = note.cancelledBy ? note.cancelledBy.username : 'Usuario';
+        events.push({
+          id: `credit-note-cancelled-${note.id}`,
+          type: 'NOTA_CREDITO_ANULADA',
+          title: 'Nota crédito anulada',
+          description: `Anulación de la nota crédito ${note.creditNoteNumber}. Se restituyeron las condiciones previas.`,
+          timestamp: (note.cancelledAt || note.updatedAt).toISOString(),
+          userName: cancelUser,
+          documentNumber: note.creditNoteNumber,
+          amount: Number(note.total),
+          reason: note.cancellationReason || 'Nota crédito anulada',
+        });
+      }
+    }
+
+    // 7. Anulación de la factura (si aplica)
+    if (sale.status === 'CANCELLED') {
+      const cancelAudit = auditEvents.find((e) => e.action === 'sales:sale_cancelled');
+      const cancelUser = cancelAudit?.user ? cancelAudit.user.username : 'Usuario';
+      const cancelReason = (cancelAudit?.details as any)?.reason || 'Venta anulada';
+      const cancelTime = cancelAudit?.createdAt || sale.updatedAt;
+
+      events.push({
+        id: `sale-cancelled-${sale.id}`,
+        type: 'VENTA_ANULADA',
+        title: 'Factura anulada',
+        description: `Anulación total de la factura ${sale.invoiceNumber}. Reversión de inventario y saldos.`,
+        timestamp: cancelTime.toISOString(),
+        userName: cancelUser,
+        documentNumber: sale.invoiceNumber,
+        amount: Number(sale.total),
+        reason: cancelReason,
+      });
+    }
+
+    // Ordenar cronológicamente ascendente (antiguo -> reciente)
+    events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+    return {
+      saleId: sale.id,
+      invoiceNumber: sale.invoiceNumber,
+      status: sale.status as SaleStatus,
+      customerName: sale.customer ? sale.customer.name : null,
+      total: Number(sale.total),
+      events,
+    };
   }
 }
