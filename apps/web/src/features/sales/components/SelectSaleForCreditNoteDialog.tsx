@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -12,6 +12,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TablePagination,
   Paper,
   Chip,
   CircularProgress,
@@ -47,47 +48,66 @@ export const SelectSaleForCreditNoteDialog: React.FC<Props> = ({
   const [sales, setSales] = useState<SaleDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeSearch, setActiveSearch] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const loadSales = useCallback(async (query: string) => {
-    setLoading(true);
-    setErrorMessage(null);
-    try {
-      const res = await fetchSales({
-        invoiceNumber: query.trim() || undefined,
-        limit: 50,
-      });
-      setSales(res.items || []);
-    } catch (err: unknown) {
-      setErrorMessage(err instanceof Error ? err.message : 'Error al buscar facturas');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // Paginación desde backend
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [totalItems, setTotalItems] = useState(0);
+
+  const loadSales = useCallback(
+    async (queryText: string, pageNumber: number, limitNumber: number) => {
+      setLoading(true);
+      setErrorMessage(null);
+      try {
+        const res = await fetchSales({
+          search: queryText.trim() || undefined,
+          page: pageNumber,
+          limit: limitNumber,
+        });
+        setSales(res.items || []);
+        setTotalItems(res.total || 0);
+        setPage(res.page || 1);
+        setActiveSearch(queryText.trim());
+      } catch (err: unknown) {
+        setErrorMessage(err instanceof Error ? err.message : 'Error al buscar facturas');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     if (open) {
       setSearchQuery('');
+      setActiveSearch('');
       setErrorMessage(null);
-      void loadSales('');
+      setPage(1);
+      void loadSales('', 1, pageSize);
     }
-  }, [open, loadSales]);
+  }, [open, loadSales, pageSize]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    void loadSales(searchQuery);
+    void loadSales(searchQuery, 1, pageSize);
   };
 
-  const filteredSales = useMemo(() => {
-    if (!searchQuery.trim()) return sales;
-    const q = searchQuery.toLowerCase().trim();
-    return sales.filter(
-      (s) =>
-        s.invoiceNumber.toLowerCase().includes(q) ||
-        (s.customerName && s.customerName.toLowerCase().includes(q)) ||
-        (s.customerDocument && s.customerDocument.includes(q)),
-    );
-  }, [sales, searchQuery]);
+  const handleClearSearch = () => {
+    setSearchQuery('');
+    void loadSales('', 1, pageSize);
+  };
+
+  const handlePageChange = (_: unknown, newPage0: number) => {
+    void loadSales(activeSearch, newPage0 + 1, pageSize);
+  };
+
+  const handleRowsPerPageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newLimit = parseInt(e.target.value, 10);
+    setPageSize(newLimit);
+    void loadSales(activeSearch, 1, newLimit);
+  };
 
   const handleSelect = (sale: SaleDto) => {
     if (sale.status === 'CANCELLED') {
@@ -120,6 +140,7 @@ export const SelectSaleForCreditNoteDialog: React.FC<Props> = ({
         <Box sx={{ mb: 2 }}>
           <Alert severity="info" sx={{ mb: 2 }}>
             Seleccione una factura completada para registrar la devolución y emitir la nota crédito.
+            Puede buscar por número de factura, nombre del cliente o documento de identidad.
           </Alert>
 
           {errorMessage && (
@@ -136,18 +157,34 @@ export const SelectSaleForCreditNoteDialog: React.FC<Props> = ({
             <TextField
               size="small"
               fullWidth
-              placeholder="Buscar por número de factura (ej. FAC-000001), cliente o documento…"
+              placeholder="Buscar por número de factura (ej. FAC-000001), nombre o documento del cliente…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               slotProps={{
                 htmlInput: {
                   'aria-label': 'Buscar factura',
+                  'data-testid': 'sale-search-input',
                 },
               }}
             />
-            <Button variant="outlined" type="submit" disabled={loading}>
+            <Button
+              variant="contained"
+              type="submit"
+              disabled={loading}
+              data-testid="search-sale-submit-btn"
+            >
               Buscar
             </Button>
+            {activeSearch && (
+              <Button
+                variant="outlined"
+                onClick={handleClearSearch}
+                disabled={loading}
+                data-testid="clear-sale-search-btn"
+              >
+                Limpiar
+              </Button>
+            )}
           </Box>
         </Box>
 
@@ -180,7 +217,7 @@ export const SelectSaleForCreditNoteDialog: React.FC<Props> = ({
                     </Typography>
                   </TableCell>
                 </TableRow>
-              ) : filteredSales.length === 0 ? (
+              ) : sales.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
                     <Typography variant="body2" color="text.secondary">
@@ -189,7 +226,7 @@ export const SelectSaleForCreditNoteDialog: React.FC<Props> = ({
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredSales.map((sale) => {
+                sales.map((sale) => {
                   const isEligible = sale.status === 'COMPLETED';
 
                   return (
@@ -254,6 +291,20 @@ export const SelectSaleForCreditNoteDialog: React.FC<Props> = ({
             </TableBody>
           </Table>
         </TableContainer>
+
+        <TablePagination
+          component="div"
+          count={totalItems}
+          page={Math.max(0, page - 1)}
+          onPageChange={handlePageChange}
+          rowsPerPage={pageSize}
+          onRowsPerPageChange={handleRowsPerPageChange}
+          rowsPerPageOptions={[10, 20, 50]}
+          labelRowsPerPage="Filas por página:"
+          labelDisplayedRows={({ from, to, count }) =>
+            `${from}–${to} de ${count !== -1 ? count : `más de ${to}`}`
+          }
+        />
       </DialogContent>
       <DialogActions sx={{ px: 3, py: 1.5 }}>
         <Button onClick={onClose} variant="outlined">
@@ -263,4 +314,3 @@ export const SelectSaleForCreditNoteDialog: React.FC<Props> = ({
     </Dialog>
   );
 };
-

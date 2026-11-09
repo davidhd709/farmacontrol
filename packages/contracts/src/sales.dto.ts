@@ -120,6 +120,7 @@ export interface FefoPreviewDto {
 
 export interface SaleQueryFilters {
   invoiceNumber?: string;
+  search?: string;
   customerId?: string;
   fromDate?: string;
   toDate?: string;

@@ -31,6 +31,7 @@ export async function fetchSales(
 ): Promise<PaginatedResponse<SaleDto>> {
   const query = new URLSearchParams();
 
+  if (filters.search?.trim()) query.set('search', filters.search.trim());
   if (filters.invoiceNumber?.trim()) query.set('invoiceNumber', filters.invoiceNumber.trim());
   if (filters.customerId) query.set('customerId', filters.customerId);
   if (filters.status) query.set('status', filters.status);

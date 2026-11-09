@@ -205,6 +205,7 @@ export class SaleController {
     @Query(
       new QueryShapeValidationPipe({
         invoiceNumber: 'text?',
+        search: 'text?',
         customerId: 'uuid?',
         fromDate: 'date?',
         toDate: 'date?',

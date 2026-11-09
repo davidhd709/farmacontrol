@@ -404,4 +404,194 @@ describe('CreditNotesPage (REQ-005)', () => {
     expect(await screen.findByText('Ingresa una cantidad entre 0 y lo vendido.')).toBeInTheDocument();
     expect(createSpy).not.toHaveBeenCalled();
   });
+
+  describe('Búsqueda multicriterio y paginación en selección de facturas (REQ-005)', () => {
+    it('criterio 1: busca facturas por número de factura (invoiceNumber)', async () => {
+      const fetchSalesSpy = vi.spyOn(salesApi, 'fetchSales').mockResolvedValue({
+        items: [mockCompletedSale],
+        total: 1,
+        page: 1,
+        pageSize: 20,
+        totalPages: 1,
+      });
+
+      renderCreditNotesPage([
+        SYSTEM_PERMISSIONS.SALES_READ,
+        SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE,
+      ]);
+
+      fireEvent.click(await screen.findByTestId('new-credit-note-btn'));
+      expect(await screen.findByTestId('select-sale-for-credit-note-dialog')).toBeInTheDocument();
+
+      const searchInput = screen.getByTestId('sale-search-input');
+      fireEvent.change(searchInput, { target: { value: 'FAC-000100' } });
+      fireEvent.click(screen.getByTestId('search-sale-submit-btn'));
+
+      await waitFor(() => {
+        expect(fetchSalesSpy).toHaveBeenCalledWith({
+          search: 'FAC-000100',
+          page: 1,
+          limit: 20,
+        });
+      });
+    });
+
+    it('criterio 2: busca facturas por nombre del cliente (customerName)', async () => {
+      const fetchSalesSpy = vi.spyOn(salesApi, 'fetchSales').mockResolvedValue({
+        items: [mockCompletedSale],
+        total: 1,
+        page: 1,
+        pageSize: 20,
+        totalPages: 1,
+      });
+
+      renderCreditNotesPage([
+        SYSTEM_PERMISSIONS.SALES_READ,
+        SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE,
+      ]);
+
+      fireEvent.click(await screen.findByTestId('new-credit-note-btn'));
+      expect(await screen.findByTestId('select-sale-for-credit-note-dialog')).toBeInTheDocument();
+
+      const searchInput = screen.getByTestId('sale-search-input');
+      fireEvent.change(searchInput, { target: { value: 'María Rodríguez' } });
+      fireEvent.click(screen.getByTestId('search-sale-submit-btn'));
+
+      await waitFor(() => {
+        expect(fetchSalesSpy).toHaveBeenCalledWith({
+          search: 'María Rodríguez',
+          page: 1,
+          limit: 20,
+        });
+      });
+    });
+
+    it('criterio 3: busca facturas por documento de identidad del cliente (customerDocument)', async () => {
+      const fetchSalesSpy = vi.spyOn(salesApi, 'fetchSales').mockResolvedValue({
+        items: [mockCompletedSale],
+        total: 1,
+        page: 1,
+        pageSize: 20,
+        totalPages: 1,
+      });
+
+      renderCreditNotesPage([
+        SYSTEM_PERMISSIONS.SALES_READ,
+        SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE,
+      ]);
+
+      fireEvent.click(await screen.findByTestId('new-credit-note-btn'));
+      expect(await screen.findByTestId('select-sale-for-credit-note-dialog')).toBeInTheDocument();
+
+      const searchInput = screen.getByTestId('sale-search-input');
+      fireEvent.change(searchInput, { target: { value: '1017001002' } });
+      fireEvent.click(screen.getByTestId('search-sale-submit-btn'));
+
+      await waitFor(() => {
+        expect(fetchSalesSpy).toHaveBeenCalledWith({
+          search: '1017001002',
+          page: 1,
+          limit: 20,
+        });
+      });
+    });
+
+    it('soporta paginación con más de 50 facturas y navega entre páginas', async () => {
+      const page1Items = Array.from({ length: 20 }, (_, i) => ({
+        ...mockCompletedSale,
+        id: `sale-p1-${i + 1}`,
+        invoiceNumber: `FAC-0000${String(i + 1).padStart(2, '0')}`,
+      }));
+
+      const page2Items = Array.from({ length: 20 }, (_, i) => ({
+        ...mockCompletedSale,
+        id: `sale-p2-${i + 21}`,
+        invoiceNumber: `FAC-0000${String(i + 21).padStart(2, '0')}`,
+      }));
+
+      const fetchSalesSpy = vi.spyOn(salesApi, 'fetchSales').mockImplementation(async (params) => {
+        if (params?.page === 2) {
+          return {
+            items: page2Items,
+            total: 75,
+            page: 2,
+            pageSize: 20,
+            totalPages: 4,
+          };
+        }
+        return {
+          items: page1Items,
+          total: 75,
+          page: 1,
+          pageSize: 20,
+          totalPages: 4,
+        };
+      });
+
+      renderCreditNotesPage([
+        SYSTEM_PERMISSIONS.SALES_READ,
+        SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE,
+      ]);
+
+      fireEvent.click(await screen.findByTestId('new-credit-note-btn'));
+      expect(await screen.findByTestId('select-sale-for-credit-note-dialog')).toBeInTheDocument();
+
+      // Debe mostrar el conteo de 75 facturas totales
+      expect(screen.getByText('1–20 de 75')).toBeInTheDocument();
+      expect(screen.getByText('FAC-000001')).toBeInTheDocument();
+
+      // Avanzar a la página 2
+      const nextPageBtn = screen.getByRole('button', { name: /página siguiente/i });
+      fireEvent.click(nextPageBtn);
+
+      await waitFor(() => {
+        expect(fetchSalesSpy).toHaveBeenCalledWith({
+          search: undefined,
+          page: 2,
+          limit: 20,
+        });
+      });
+
+      // En la página 2 se muestran los documentos correspondientes
+      expect(await screen.findByText('FAC-000021')).toBeInTheDocument();
+      expect(screen.getByText('21–40 de 75')).toBeInTheDocument();
+    });
+
+    it('permite limpiar la búsqueda activa y recargar la primera página', async () => {
+      const fetchSalesSpy = vi.spyOn(salesApi, 'fetchSales').mockResolvedValue({
+        items: [mockCompletedSale],
+        total: 1,
+        page: 1,
+        pageSize: 20,
+        totalPages: 1,
+      });
+
+      renderCreditNotesPage([
+        SYSTEM_PERMISSIONS.SALES_READ,
+        SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE,
+      ]);
+
+      fireEvent.click(await screen.findByTestId('new-credit-note-btn'));
+      expect(await screen.findByTestId('select-sale-for-credit-note-dialog')).toBeInTheDocument();
+
+      const searchInput = screen.getByTestId('sale-search-input');
+      fireEvent.change(searchInput, { target: { value: 'FAC-000100' } });
+      fireEvent.click(screen.getByTestId('search-sale-submit-btn'));
+
+      // Botón limpiar aparece al estar activa la búsqueda
+      const clearBtn = await screen.findByTestId('clear-sale-search-btn');
+      expect(clearBtn).toBeInTheDocument();
+
+      fireEvent.click(clearBtn);
+
+      await waitFor(() => {
+        expect(fetchSalesSpy).toHaveBeenLastCalledWith({
+          search: undefined,
+          page: 1,
+          limit: 20,
+        });
+      });
+      expect(screen.queryByTestId('clear-sale-search-btn')).not.toBeInTheDocument();
+    });
+  });
 });
