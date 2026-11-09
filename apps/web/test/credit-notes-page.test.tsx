@@ -3,9 +3,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { SYSTEM_PERMISSIONS, SYSTEM_ROLES, type CreditNoteDto } from '@farmacia/contracts';
+import { SYSTEM_PERMISSIONS, SYSTEM_ROLES, type CreditNoteDto, type SaleDto } from '@farmacia/contracts';
 import { AuthContext, type AuthContextValue } from '../src/features/auth/context/auth-context';
 import * as salesApi from '../src/features/sales/api/sales.api';
+import * as accountingApi from '../src/features/accounting/api/accounting.api';
 import { CreditNotesPage } from '../src/features/sales/pages/CreditNotesPage';
 import { appTheme } from '../src/theme/app-theme';
 
@@ -70,6 +71,79 @@ const mockCreditNotes: CreditNoteDto[] = [
   },
 ];
 
+const mockCompletedSale: SaleDto = {
+  id: 'sale-100',
+  invoiceNumber: 'FAC-000100',
+  customerId: 'cust-1',
+  customerName: 'María Rodríguez',
+  customerDocument: '1017001002',
+  status: 'COMPLETED',
+  paymentMethod: 'EFECTIVO',
+  subtotal: 20000,
+  taxTotal: 3800,
+  discountTotal: 0,
+  total: 23800,
+  amountPaid: 23800,
+  changeGiven: 0,
+  createdById: 'usr-1',
+  createdAt: '2026-10-10T10:00:00.000Z',
+  updatedAt: '2026-10-10T10:00:00.000Z',
+  lines: [
+    {
+      id: 'sline-100',
+      saleId: 'sale-100',
+      productId: 'prod-1',
+      productName: 'Ibuprofeno 800mg',
+      quantityCommercial: 4,
+      quantityBaseUnits: 4,
+      unitPrice: 5000,
+      discount: 0,
+      subtotal: 20000,
+      taxRate: 19,
+      taxAmount: 3800,
+      total: 23800,
+      createdAt: '2026-10-10T10:00:00.000Z',
+      lotAllocations: [],
+    },
+  ],
+};
+
+const mockCancelledSale: SaleDto = {
+  id: 'sale-200',
+  invoiceNumber: 'FAC-000200',
+  customerId: 'cust-2',
+  customerName: 'Carlos Gómez',
+  status: 'CANCELLED',
+  paymentMethod: 'EFECTIVO',
+  subtotal: 10000,
+  taxTotal: 1900,
+  discountTotal: 0,
+  total: 11900,
+  amountPaid: 11900,
+  changeGiven: 0,
+  createdById: 'usr-1',
+  createdAt: '2026-10-11T10:00:00.000Z',
+  updatedAt: '2026-10-11T10:00:00.000Z',
+  lines: [
+    {
+      id: 'sline-200',
+      saleId: 'sale-200',
+      productId: 'prod-2',
+      productName: 'Acetaminofén 500mg',
+      quantityCommercial: 2,
+      quantityBaseUnits: 2,
+      unitPrice: 5000,
+      discount: 0,
+      subtotal: 10000,
+      taxRate: 19,
+      taxAmount: 1900,
+      total: 11900,
+      createdAt: '2026-10-11T10:00:00.000Z',
+      lotAllocations: [],
+    },
+  ],
+};
+
 const renderCreditNotesPage = (permissions: string[] = [SYSTEM_PERMISSIONS.SALES_READ]) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
@@ -110,6 +184,13 @@ describe('CreditNotesPage (REQ-005)', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.spyOn(salesApi, 'fetchCreditNotes').mockResolvedValue(mockCreditNotes);
+    vi.spyOn(salesApi, 'fetchSales').mockResolvedValue({
+      items: [mockCompletedSale, mockCancelledSale],
+      total: 2,
+      page: 1,
+      pageSize: 50,
+      totalPages: 1,
+    });
   });
 
   it('lista las notas crédito con su número, factura, cliente, total y estado', async () => {
@@ -185,5 +266,142 @@ describe('CreditNotesPage (REQ-005)', () => {
       expect(cancelSpy).toHaveBeenCalledWith('cn-1', 'Error en digitación de unidades devueltas');
     });
   });
-});
 
+  it('controla la visualización del botón "Nueva Nota Crédito" según los permisos del usuario', async () => {
+    // Sin permiso SALES_CREDIT_NOTE
+    const { unmount } = renderCreditNotesPage([SYSTEM_PERMISSIONS.SALES_READ]);
+    expect(await screen.findByRole('heading', { name: 'Notas Crédito' })).toBeInTheDocument();
+    expect(screen.queryByTestId('new-credit-note-btn')).not.toBeInTheDocument();
+    unmount();
+
+    // Con permiso SALES_CREDIT_NOTE
+    renderCreditNotesPage([
+      SYSTEM_PERMISSIONS.SALES_READ,
+      SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE,
+    ]);
+    expect(await screen.findByTestId('new-credit-note-btn')).toBeInTheDocument();
+  });
+
+  it('permite abrir el diálogo de búsqueda, seleccionar una factura elegible y rechazar facturas no elegibles', async () => {
+    renderCreditNotesPage([
+      SYSTEM_PERMISSIONS.SALES_READ,
+      SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE,
+    ]);
+
+    const newBtn = await screen.findByTestId('new-credit-note-btn');
+    fireEvent.click(newBtn);
+
+    // Diálogo de selección se abre
+    expect(await screen.findByTestId('select-sale-for-credit-note-dialog')).toBeInTheDocument();
+    expect(screen.getByText('FAC-000100')).toBeInTheDocument();
+    expect(screen.getByText('FAC-000200')).toBeInTheDocument();
+
+    // Factura CANCELLED (FAC-000200) tiene botón deshabilitado
+    const ineligibleBtn = screen.getByTestId('select-sale-btn-sale-200');
+    expect(ineligibleBtn).toBeDisabled();
+
+    // Factura COMPLETED (FAC-000100) permite seleccionar
+    const eligibleBtn = screen.getByTestId('select-sale-btn-sale-100');
+    expect(eligibleBtn).not.toBeDisabled();
+
+    fireEvent.click(eligibleBtn);
+
+    // Se cierra el selector y se abre el diálogo de elaboración de nota crédito
+    await waitFor(() => {
+      expect(screen.queryByTestId('select-sale-for-credit-note-dialog')).not.toBeInTheDocument();
+    });
+    expect(screen.getByText('Devolución / Nota Crédito — Factura FAC-000100')).toBeInTheDocument();
+    expect(screen.getByText('Ibuprofeno 800mg')).toBeInTheDocument();
+  });
+
+  it('elabora una nota crédito válida, calcula el resumen y actualiza el listado al confirmar', async () => {
+    const createSpy = vi.spyOn(accountingApi, 'createSaleCreditNote').mockResolvedValue({
+      id: 'cn-3',
+      creditNoteNumber: 'NC-000003',
+      saleId: 'sale-100',
+      saleInvoiceNumber: 'FAC-000100',
+      customerId: 'cust-1',
+      customerName: 'María Rodríguez',
+      reason: 'Producto devuelto por defectos de empaque',
+      subtotal: 5000,
+      taxTotal: 950,
+      total: 5950,
+      refundMethod: 'EFECTIVO',
+      restock: true,
+      status: 'CONFIRMADA',
+      createdById: 'usr-1',
+      createdAt: '2026-10-12T10:00:00.000Z',
+      lines: [],
+    });
+
+    renderCreditNotesPage([
+      SYSTEM_PERMISSIONS.SALES_READ,
+      SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE,
+    ]);
+
+    fireEvent.click(await screen.findByTestId('new-credit-note-btn'));
+    fireEvent.click(await screen.findByTestId('select-sale-btn-sale-100'));
+
+    // Diálogo de nota crédito abierto
+    expect(await screen.findByText('Devolución / Nota Crédito — Factura FAC-000100')).toBeInTheDocument();
+
+    // Ingresar cantidad a devolver
+    const qtyInput = screen.getByLabelText(/Cantidad a devolver de Ibuprofeno 800mg/);
+    fireEvent.change(qtyInput, { target: { value: '1' } });
+
+    // Ingresar motivo de devolución
+    const reasonInput = screen.getByLabelText(/Motivo de la devolución/);
+    fireEvent.change(reasonInput, { target: { value: 'Producto devuelto por defectos de empaque' } });
+
+    // Confirmar
+    const submitBtn = screen.getByRole('button', { name: 'Confirmar nota crédito' });
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(createSpy).toHaveBeenCalledWith(
+        'sale-100',
+        expect.objectContaining({
+          saleId: 'sale-100',
+          reason: 'Producto devuelto por defectos de empaque',
+          restock: true,
+          refundMethod: 'EFECTIVO',
+          items: [{ saleLineId: 'sline-100', quantityCommercial: 1 }],
+        }),
+        expect.any(String),
+      );
+    });
+
+    // Se actualiza el listado automáticamente
+    await waitFor(() => {
+      expect(salesApi.fetchCreditNotes).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it('rechaza cantidades inválidas superiores a lo vendido', async () => {
+    const createSpy = vi.spyOn(accountingApi, 'createSaleCreditNote');
+
+    renderCreditNotesPage([
+      SYSTEM_PERMISSIONS.SALES_READ,
+      SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE,
+    ]);
+
+    fireEvent.click(await screen.findByTestId('new-credit-note-btn'));
+    fireEvent.click(await screen.findByTestId('select-sale-btn-sale-100'));
+
+    expect(await screen.findByText('Devolución / Nota Crédito — Factura FAC-000100')).toBeInTheDocument();
+
+    // Cantidad vendida es 4: intentamos ingresar 10
+    const qtyInput = screen.getByLabelText(/Cantidad a devolver de Ibuprofeno 800mg/);
+    fireEvent.change(qtyInput, { target: { value: '10' } });
+
+    const reasonInput = screen.getByLabelText(/Motivo de la devolución/);
+    fireEvent.change(reasonInput, { target: { value: 'Motivo válido de prueba' } });
+
+    const submitBtn = screen.getByRole('button', { name: 'Confirmar nota crédito' });
+    fireEvent.click(submitBtn);
+
+    // Debe mostrar error de validación y NO enviar la petición
+    expect(await screen.findByText('Ingresa una cantidad entre 0 y lo vendido.')).toBeInTheDocument();
+    expect(createSpy).not.toHaveBeenCalled();
+  });
+});

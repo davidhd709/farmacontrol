@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -23,7 +24,7 @@ import {
   Stack,
   Divider,
 } from '@mui/material';
-import type { CreditNoteDto, CreditNoteStatus } from '@farmacia/contracts';
+import type { CreditNoteDto, CreditNoteStatus, SaleDto } from '@farmacia/contracts';
 import { SYSTEM_PERMISSIONS } from '@farmacia/contracts';
 import { fetchCreditNotes, cancelCreditNote } from '../api/sales.api';
 import { HomeBackButton } from '../../../components/HomeBackButton';
@@ -32,6 +33,8 @@ import { SweetModal } from '../../../components/SweetModal';
 import { formatDateTime } from '../../../utils/date-format';
 import { FilterBar } from '../../../components/layout/FilterBar';
 import { DateField } from '../../../components/DateField';
+import { CreditNoteDialog } from '../components/CreditNoteDialog';
+import { SelectSaleForCreditNoteDialog } from '../components/SelectSaleForCreditNoteDialog';
 
 const REFUND_LABELS: Record<string, string> = {
   EFECTIVO: 'Efectivo',
@@ -49,6 +52,7 @@ function formatCurrency(amount: number): string {
 }
 
 export const CreditNotesPage: React.FC = () => {
+  const navigate = useNavigate();
   const [creditNotes, setCreditNotes] = useState<CreditNoteDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -68,6 +72,10 @@ export const CreditNotesPage: React.FC = () => {
   const [noteToCancel, setNoteToCancel] = useState<CreditNoteDto | null>(null);
   const [cancelReason, setCancelReason] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+
+  // Diálogo Nueva Nota Crédito
+  const [selectSaleOpen, setSelectSaleOpen] = useState(false);
+  const [saleForCreditNote, setSaleForCreditNote] = useState<SaleDto | null>(null);
 
   // Notificación Toast
   const [toastMsg, setToastMsg] = useState<string | null>(null);
@@ -151,6 +159,19 @@ export const CreditNotesPage: React.FC = () => {
     }
   };
 
+  const handleSelectSale = (sale: SaleDto) => {
+    if (sale.status === 'CANCELLED') {
+      setErrorMsg(`La factura ${sale.invoiceNumber} está anulada y no es elegible.`);
+      return;
+    }
+    if (sale.status !== 'COMPLETED') {
+      setErrorMsg(`La factura ${sale.invoiceNumber} debe estar completada para emitir notas crédito.`);
+      return;
+    }
+    setSelectSaleOpen(false);
+    setSaleForCreditNote(sale);
+  };
+
   // Métricas rápidas
   const totalAmount = useMemo(() => {
     return filteredNotes
@@ -168,6 +189,17 @@ export const CreditNotesPage: React.FC = () => {
             Notas Crédito
           </Typography>
         </Box>
+
+        <PermissionGate permission={SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE}>
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={() => setSelectSaleOpen(true)}
+            data-testid="new-credit-note-btn"
+          >
+            Nueva Nota Crédito
+          </Button>
+        </PermissionGate>
       </Box>
 
       {/* Banner Informativo */}
@@ -607,6 +639,29 @@ export const CreditNotesPage: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Diálogo de selección de factura para nueva nota crédito */}
+      <SelectSaleForCreditNoteDialog
+        open={selectSaleOpen}
+        onClose={() => setSelectSaleOpen(false)}
+        onSelectSale={handleSelectSale}
+      />
+
+      {/* Diálogo de elaboración de Nota Crédito */}
+      <CreditNoteDialog
+        open={Boolean(saleForCreditNote)}
+        sale={saleForCreditNote}
+        onClose={() => setSaleForCreditNote(null)}
+        onCreated={(number, exchangeCreditNoteId) => {
+          setSaleForCreditNote(null);
+          if (exchangeCreditNoteId) {
+            navigate(`/pos?cambio=${encodeURIComponent(exchangeCreditNoteId)}`);
+            return;
+          }
+          setToastMsg(`Nota crédito ${number} registrada correctamente.`);
+          void loadCreditNotes();
+        }}
+      />
 
       {/* Toast Modal */}
       <SweetModal
