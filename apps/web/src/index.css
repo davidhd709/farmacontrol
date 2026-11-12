@@ -30,27 +30,32 @@ body {
 }
 
 /*
- * Impresión de un documento abierto en un diálogo (comprobante de venta, recibo de caja,
- * comprobante de egreso). La pantalla de fondo se retira del flujo en lugar de ocultarse: con
- * visibility y position: fixed el navegador repetía el documento en cada página que ocupaba
- * el fondo y el cliente veía dos comprobantes por venta.
+ * Impresión de documentos en FarmaControl:
+ * 1. Comprobantes de venta en formato tirilla térmica POS (80mm).
+ * 2. Documentos contables y de tesorería en formato carta corporativo oficial.
  */
 @media print {
+  /* Ocultar la aplicación de fondo y el backdrop del modal */
   body:has(.print-document) > #root,
   .MuiDialog-root:has(.print-document) .MuiBackdrop-root {
     display: none !important;
   }
 
-  @page {
-    margin: 12mm 15mm 12mm 15mm;
-    size: auto;
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
+  /* Diálogo como contenedor estático plano en papel */
   .MuiDialog-root:has(.print-document),
   .MuiDialog-root:has(.print-document) .MuiDialog-container {
     position: static !important;
     display: block !important;
     height: auto !important;
+    padding: 0 !important;
+    margin: 0 !important;
   }
 
   .print-document {
@@ -59,13 +64,18 @@ body {
     max-width: none !important;
     max-height: none !important;
     margin: 0 !important;
+    padding: 0 !important;
     box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
     overflow: visible !important;
+    background: #ffffff !important;
   }
 
   .print-document .MuiDialogContent-root {
     overflow: visible !important;
     padding: 0 !important;
+    border: none !important;
   }
 
   .print-document table {
@@ -87,5 +97,40 @@ body {
 
   .no-print {
     display: none !important;
+  }
+
+  /* -------------------------------------------------------------------------
+   * A. FORMATO TIRILLA POS TÉRMICA (Comprobante de Venta 80mm)
+   * ------------------------------------------------------------------------- */
+  @page {
+    margin: 3mm 2mm;
+    size: auto;
+  }
+
+  .sale-receipt-print {
+    width: 76mm !important;
+    max-width: 76mm !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    font-family: 'Courier New', Courier, monospace !important;
+    color: #000000 !important;
+    background: #ffffff !important;
+  }
+
+  .sale-receipt-print * {
+    font-family: 'Courier New', Courier, monospace !important;
+  }
+
+  /* -------------------------------------------------------------------------
+   * B. FORMATO CONTABLE CORPORATIVO (Recibos, Egresos, Notas, Compras, Diario)
+   * ------------------------------------------------------------------------- */
+  .corporate-doc-print {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+    color: #0f172a !important;
+    background: #ffffff !important;
   }
 }

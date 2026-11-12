@@ -7,7 +7,6 @@ import {
   Button,
   Typography,
   Box,
-  Divider,
   Table,
   TableContainer,
   TableHead,
@@ -39,12 +38,12 @@ export const SaleReceiptDialog: React.FC<SaleReceiptDialogProps> = ({
 }) => {
   const handlePrint = () => {
     if (!sale) return;
-    printDocument(`${sale.invoiceNumber}_Comprobante_Venta`);
+    printDocument(`${sale.invoiceNumber}_Tirilla_Venta`);
   };
 
   const handleDownloadPdf = () => {
     if (!sale) return;
-    downloadDocumentPdf(`${sale.invoiceNumber}_Comprobante_Venta`);
+    downloadDocumentPdf(`${sale.invoiceNumber}_Tirilla_Venta`);
   };
 
   React.useEffect(() => {
@@ -69,20 +68,32 @@ export const SaleReceiptDialog: React.FC<SaleReceiptDialogProps> = ({
     <Dialog
       open={open}
       onClose={onClose}
-      maxWidth="sm"
+      maxWidth="xs"
       fullWidth
       slotProps={{
         paper: {
           className: 'sale-receipt-print print-document',
           sx: {
-            borderRadius: 2.5,
-            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.04)',
+            borderRadius: 2,
+            boxShadow: '0 10px 25px rgba(0, 0, 0, 0.15)',
+            bgcolor: '#ffffff',
+            maxWidth: '420px',
+            overflow: 'visible',
           },
         },
       }}
     >
       <DialogTitle
-        sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 1 }}
+        className="no-print"
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          py: 1.5,
+          px: 2,
+          bgcolor: 'action.hover',
+          borderBottom: '1px solid #e2e8f0',
+        }}
       >
         <Typography component="span" variant="h6" sx={{ fontWeight: 700 }}>
           Comprobante de Venta
@@ -91,171 +102,275 @@ export const SaleReceiptDialog: React.FC<SaleReceiptDialogProps> = ({
           label={sale.status === 'COMPLETED' ? 'Venta Confirmada' : 'Venta Anulada'}
           color={sale.status === 'COMPLETED' ? 'success' : 'error'}
           size="small"
+          sx={{ fontWeight: 700, fontSize: '0.75rem' }}
         />
       </DialogTitle>
 
-      <DialogContent dividers sx={{ '@media print': { p: 0 } }}>
-        <Box sx={{ textAlign: 'center', mb: 2 }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-            Comprobante N°: {sale.invoiceNumber}
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            Fecha: {formatDateTime(sale.createdAt)}
-          </Typography>
-        </Box>
-
-        <Divider sx={{ my: 1.5 }} />
-
-        <Box sx={{ mb: 2, fontSize: '0.875rem' }}>
-          <Typography variant="body2">
-            <strong>Cliente:</strong> {sale.customerName} ({sale.customerDocument})
-          </Typography>
-          <Typography variant="body2">
-            <strong>Atendido por:</strong> {sale.createdByUsername || 'Cajero POS'}
-          </Typography>
-          <Typography variant="body2">
-            <strong>Condición:</strong>{' '}
-            {sale.paymentMethod === 'CREDITO'
-              ? 'Crédito'
-              : `Contado (${sale.paymentMethod === 'TRANSFERENCIA' ? 'transferencia' : 'efectivo'})`}
-          </Typography>
-        </Box>
-
-        {/* Detalle de Artículos y Lotes FEFO */}
-        <TableContainer>
-          <Table size="small" aria-label="detalle comprobante">
-            <TableHead sx={{ bgcolor: 'action.hover' }}>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 600 }}>Descripción / Lotes FEFO</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 600 }}>
-                  Cant.
-                </TableCell>
-                <TableCell align="right" sx={{ fontWeight: 600 }}>
-                  V. Unit
-                </TableCell>
-                <TableCell align="right" sx={{ fontWeight: 600 }}>
-                  Descuento
-                </TableCell>
-                <TableCell align="right" sx={{ fontWeight: 600 }}>
-                  Total línea
-                </TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {sale.lines.map((line) => (
-                <TableRow key={line.id} sx={{ verticalAlign: 'top' }}>
-                  <TableCell>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      {line.productName}
-                    </Typography>
-                    {line.presentationName && (
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                        Pres: {line.presentationName} (Factor: {line.presentationFactorHistorical})
-                      </Typography>
-                    )}
-                    {/* Desglose de Lotes Asignados */}
-                    {line.lotAllocations && line.lotAllocations.length > 0 && (
-                      <Box sx={{ mt: 0.5 }}>
-                        {line.lotAllocations.map((alloc) => (
-                          <Typography
-                            key={alloc.id}
-                            variant="caption"
-                            sx={{ display: 'block', color: 'text.secondary', fontSize: '0.75rem' }}
-                          >
-                            • Lote: <strong>{lotNumberLabel(alloc.lotNumber)}</strong> (Vence:{' '}
-                            {expirationDateLabel(alloc.expirationDate)}) → {alloc.quantityBaseUnits}{' '}
-                            un. base
-                          </Typography>
-                        ))}
-                      </Box>
-                    )}
-                  </TableCell>
-                  <TableCell align="right">{line.quantityCommercial}</TableCell>
-                  <TableCell align="right">${line.unitPrice.toLocaleString('es-CO')}</TableCell>
-                  <TableCell align="right">${line.discount.toLocaleString('es-CO')}</TableCell>
-                  <TableCell align="right">${line.total.toLocaleString('es-CO')}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-
-        <Divider sx={{ my: 2 }} />
-
-        {/* Liquidación Monetaria */}
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, alignItems: 'flex-end' }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '220px' }}>
-            <Typography variant="body2">Subtotal:</Typography>
-            <Typography variant="body2">${sale.subtotal.toLocaleString('es-CO')}</Typography>
-          </Box>
-          {sale.discountTotal > 0 && (
-            <Box
+      <DialogContent sx={{ p: { xs: 1.5, sm: 2 }, '@media print': { p: 0 } }}>
+        {/* LIENZO DE LA TIRILLA TÉRMICA POS */}
+        <Box
+          sx={{
+            width: '100%',
+            maxWidth: '380px',
+            mx: 'auto',
+            p: { xs: 1.5, sm: 2 },
+            bgcolor: '#ffffff',
+            color: '#000000',
+            fontFamily: "'Courier New', Courier, monospace",
+            border: '1px dashed #cbd5e1',
+            borderRadius: 1,
+            boxShadow: { xs: 'none', sm: '0 2px 8px rgba(0,0,0,0.06)' },
+            '@media print': {
+              maxWidth: '100%',
+              p: 0,
+              border: 'none',
+              boxShadow: 'none',
+            },
+          }}
+        >
+          {/* ENCABEZADO DEL ESTABLECIMIENTO */}
+          <Box sx={{ textAlign: 'center', mb: 1.5 }}>
+            <Typography
               sx={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                width: '220px',
-                color: 'error.main',
+                fontFamily: 'inherit',
+                fontWeight: 900,
+                fontSize: '1.2rem',
+                letterSpacing: 1.5,
+                lineHeight: 1.2,
               }}
             >
-              <Typography variant="body2">Descuento:</Typography>
-              <Typography variant="body2">
-                -${sale.discountTotal.toLocaleString('es-CO')}
+              FARMACONTROL
+            </Typography>
+            <Typography sx={{ fontFamily: 'inherit', fontSize: '0.8rem', fontWeight: 700, letterSpacing: 0.5 }}>
+              DROGUERÍA Y FARMACIA
+            </Typography>
+            <Typography sx={{ fontFamily: 'inherit', fontSize: '0.75rem', color: '#475569' }}>
+              Calle Principal # 12-34 • Tel: (605) 300-1234
+            </Typography>
+            <Typography sx={{ fontFamily: 'inherit', fontSize: '0.75rem', color: '#475569' }}>
+              Barranquilla, Colombia
+            </Typography>
+          </Box>
+
+          {/* DATOS DE LA VENTA / TICKET */}
+          <Box
+            sx={{
+              borderTop: '1px dashed #000000',
+              borderBottom: '1px dashed #000000',
+              py: 1,
+              my: 1.5,
+              fontSize: '0.8rem',
+            }}
+          >
+            <Box sx={{ textAlign: 'center', my: 0.5 }}>
+              <Typography sx={{ fontFamily: 'inherit', fontSize: '0.85rem', fontWeight: 700 }}>
+                Comprobante N°: {sale.invoiceNumber}
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5 }}>
+              <Typography sx={{ fontFamily: 'inherit', fontSize: '0.75rem' }}>Fecha:</Typography>
+              <Typography sx={{ fontFamily: 'inherit', fontSize: '0.75rem' }}>
+                {formatDateTime(sale.createdAt)}
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5 }}>
+              <Typography sx={{ fontFamily: 'inherit', fontSize: '0.75rem' }}>Cliente:</Typography>
+              <Typography sx={{ fontFamily: 'inherit', fontSize: '0.75rem', fontWeight: 600 }}>
+                {sale.customerName} ({sale.customerDocument})
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5 }}>
+              <Typography sx={{ fontFamily: 'inherit', fontSize: '0.75rem' }}>Atendido por:</Typography>
+              <Typography sx={{ fontFamily: 'inherit', fontSize: '0.75rem' }}>
+                {sale.createdByUsername || 'Cajero POS'}
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5 }}>
+              <Typography sx={{ fontFamily: 'inherit', fontSize: '0.75rem' }}>Condición:</Typography>
+              <Typography sx={{ fontFamily: 'inherit', fontSize: '0.75rem' }}>
+                {sale.paymentMethod === 'CREDITO'
+                  ? 'Crédito'
+                  : `Contado (${sale.paymentMethod === 'TRANSFERENCIA' ? 'transferencia' : 'efectivo'})`}
+              </Typography>
+            </Box>
+          </Box>
+
+          {/* MARCA VISIBLE SI LA VENTA FUE ANULADA */}
+          {sale.status !== 'COMPLETED' && (
+            <Box
+              sx={{
+                border: '2px solid #E05656',
+                p: 0.5,
+                my: 1,
+                textAlign: 'center',
+                bgcolor: 'rgba(224, 86, 86, 0.08)',
+              }}
+            >
+              <Typography sx={{ fontFamily: 'inherit', fontWeight: 900, color: 'error.main', fontSize: '0.9rem' }}>
+                *** VENTA ANULADA ***
               </Typography>
             </Box>
           )}
-          {sale.taxTotal > 0 && (
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '220px' }}>
-              <Typography variant="body2">Impuestos:</Typography>
-              <Typography variant="body2">${sale.taxTotal.toLocaleString('es-CO')}</Typography>
+
+          {/* TABLA DE PRODUCTOS EN FORMATO TIRILLA */}
+          <TableContainer sx={{ overflowX: 'auto' }}>
+            <Table size="small" aria-label="detalle comprobante" sx={{ '& td, & th': { py: 0.5, px: 0.5, border: 'none' } }}>
+              <TableHead sx={{ borderBottom: '1px dashed #000000' }}>
+                <TableRow>
+                  <TableCell sx={{ fontFamily: 'inherit', fontWeight: 700, fontSize: '0.75rem' }}>
+                    Descripción / Lotes FEFO
+                  </TableCell>
+                  <TableCell align="right" sx={{ fontFamily: 'inherit', fontWeight: 700, fontSize: '0.75rem' }}>
+                    Cant.
+                  </TableCell>
+                  <TableCell align="right" sx={{ fontFamily: 'inherit', fontWeight: 700, fontSize: '0.75rem' }}>
+                    V. Unit
+                  </TableCell>
+                  <TableCell align="right" sx={{ fontFamily: 'inherit', fontWeight: 700, fontSize: '0.75rem' }}>
+                    Descuento
+                  </TableCell>
+                  <TableCell align="right" sx={{ fontFamily: 'inherit', fontWeight: 700, fontSize: '0.75rem' }}>
+                    Total línea
+                  </TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {sale.lines.map((line) => (
+                  <TableRow key={line.id} sx={{ verticalAlign: 'top', borderBottom: '1px dotted #e2e8f0' }}>
+                    <TableCell sx={{ fontFamily: 'inherit', fontSize: '0.75rem' }}>
+                      <Typography sx={{ fontFamily: 'inherit', fontWeight: 700, fontSize: '0.75rem' }}>
+                        {line.productName}
+                      </Typography>
+                      {line.presentationName && (
+                        <Typography sx={{ fontFamily: 'inherit', fontSize: '0.68rem', color: '#64748b', display: 'block' }}>
+                          Pres: {line.presentationName} (Factor: {line.presentationFactorHistorical})
+                        </Typography>
+                      )}
+                      {line.lotAllocations && line.lotAllocations.length > 0 && (
+                        <Box sx={{ mt: 0.25 }}>
+                          {line.lotAllocations.map((alloc) => (
+                            <Typography
+                              key={alloc.id}
+                              sx={{ fontFamily: 'inherit', display: 'block', color: '#64748b', fontSize: '0.68rem' }}
+                            >
+                              • Lote: {lotNumberLabel(alloc.lotNumber)} (Vence: {expirationDateLabel(alloc.expirationDate)}) → {alloc.quantityBaseUnits} un.
+                            </Typography>
+                          ))}
+                        </Box>
+                      )}
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontFamily: 'inherit', fontSize: '0.75rem' }}>
+                      {line.quantityCommercial}
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontFamily: 'inherit', fontSize: '0.75rem' }}>
+                      ${line.unitPrice.toLocaleString('es-CO')}
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontFamily: 'inherit', fontSize: '0.75rem' }}>
+                      ${line.discount.toLocaleString('es-CO')}
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontFamily: 'inherit', fontWeight: 700, fontSize: '0.75rem' }}>
+                      ${line.total.toLocaleString('es-CO')}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+
+          {/* LIQUIDACIÓN DE TOTALES */}
+          <Box sx={{ borderTop: '1px dashed #000000', pt: 1, mt: 1.5, fontSize: '0.8rem' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.25 }}>
+              <Typography sx={{ fontFamily: 'inherit', fontSize: 'inherit' }}>Subtotal:</Typography>
+              <Typography sx={{ fontFamily: 'inherit', fontSize: 'inherit' }}>
+                ${sale.subtotal.toLocaleString('es-CO')}
+              </Typography>
             </Box>
-          )}
-          <Box
-            sx={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              width: '220px',
-              mt: 0.5,
-              pt: 0.5,
-              borderTop: 1,
-              borderColor: 'divider',
-            }}
-          >
-            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-              Total:
-            </Typography>
-            <Typography variant="subtitle1" sx={{ fontWeight: 800, color: 'primary.main' }}>
-              ${sale.total.toLocaleString('es-CO')}
-            </Typography>
+            {sale.discountTotal > 0 && (
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.25, color: 'error.main' }}>
+                <Typography sx={{ fontFamily: 'inherit', fontSize: 'inherit' }}>Descuento:</Typography>
+                <Typography sx={{ fontFamily: 'inherit', fontSize: 'inherit' }}>
+                  -${sale.discountTotal.toLocaleString('es-CO')}
+                </Typography>
+              </Box>
+            )}
+            {sale.taxTotal > 0 && (
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.25 }}>
+                <Typography sx={{ fontFamily: 'inherit', fontSize: 'inherit' }}>Impuestos:</Typography>
+                <Typography sx={{ fontFamily: 'inherit', fontSize: 'inherit' }}>
+                  ${sale.taxTotal.toLocaleString('es-CO')}
+                </Typography>
+              </Box>
+            )}
+
+            {/* TOTAL DESTACADO */}
+            <Box
+              sx={{
+                borderTop: '1px solid #000000',
+                borderBottom: '1px solid #000000',
+                py: 0.5,
+                my: 0.75,
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <Typography sx={{ fontFamily: 'inherit', fontWeight: 900, fontSize: '1rem' }}>
+                TOTAL:
+              </Typography>
+              <Typography sx={{ fontFamily: 'inherit', fontWeight: 900, fontSize: '1.1rem' }}>
+                ${sale.total.toLocaleString('es-CO')}
+              </Typography>
+            </Box>
+
+            {/* PAGO EN EFECTIVO Y CAMBIO */}
+            {sale.paymentMethod === 'EFECTIVO' && (
+              <>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', mb: 0.25 }}>
+                  <Typography sx={{ fontFamily: 'inherit', fontSize: 'inherit', color: '#475569' }}>
+                    Recibido:
+                  </Typography>
+                  <Typography sx={{ fontFamily: 'inherit', fontSize: 'inherit' }}>
+                    ${sale.amountPaid.toLocaleString('es-CO')}
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', fontWeight: 700 }}>
+                  <Typography sx={{ fontFamily: 'inherit', fontSize: 'inherit' }}>
+                    Cambio:
+                  </Typography>
+                  <Typography sx={{ fontFamily: 'inherit', fontSize: 'inherit', fontWeight: 700 }}>
+                    ${sale.changeGiven.toLocaleString('es-CO')}
+                  </Typography>
+                </Box>
+              </>
+            )}
           </Box>
 
-          {sale.paymentMethod === 'EFECTIVO' && (
-            <>
-              <Box
-                sx={{ display: 'flex', justifyContent: 'space-between', width: '220px', mt: 0.5 }}
-              >
-                <Typography variant="caption" color="text.secondary">
-                  Recibido:
-                </Typography>
-                <Typography variant="caption">
-                  ${sale.amountPaid.toLocaleString('es-CO')}
-                </Typography>
-              </Box>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '220px' }}>
-                <Typography variant="caption" color="text.secondary">
-                  Cambio:
-                </Typography>
-                <Typography variant="caption" sx={{ fontWeight: 600 }}>
-                  ${sale.changeGiven.toLocaleString('es-CO')}
-                </Typography>
-              </Box>
-            </>
-          )}
+          {/* PIE DE PÁGINA TIRILLA */}
+          <Box sx={{ textAlign: 'center', mt: 2, pt: 1, borderTop: '1px dashed #000000', fontSize: '0.7rem' }}>
+            <Typography sx={{ fontFamily: 'inherit', fontWeight: 700, fontSize: '0.75rem' }}>
+              ¡GRACIAS POR SU COMPRA!
+            </Typography>
+            <Typography sx={{ fontFamily: 'inherit', fontSize: '0.7rem', color: '#475569', mt: 0.5 }}>
+              Conserve este comprobante para cualquier cambio o reclamo.
+            </Typography>
+            <Typography sx={{ fontFamily: 'inherit', fontSize: '0.65rem', color: '#94a3b8', mt: 0.5 }}>
+              Software FarmaControl • {sale.lines.length} ítem(s) vendidos
+            </Typography>
+          </Box>
         </Box>
       </DialogContent>
 
       <DialogActions
         className="no-print"
-        sx={{ p: 2, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}
+        sx={{
+          p: 2,
+          display: 'flex',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 1,
+          bgcolor: 'action.hover',
+          borderTop: '1px solid #e2e8f0',
+        }}
       >
         <Stack direction="row" spacing={1}>
           <Button
