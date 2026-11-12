@@ -6,10 +6,6 @@ import {
   Chip,
   CircularProgress,
   Container,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   Link,
   Paper,
   Stack,
@@ -38,6 +34,8 @@ import { VoucherFormDialog } from '../components/VoucherFormDialog';
 import { usePermissions } from '../../auth/hooks/usePermissions';
 import { formatDate } from '../../../utils/date-format';
 import { DateField } from '../../../components/DateField';
+import { TreasuryDocumentPrintDialog } from '../../../components/documents/TreasuryDocumentPrintDialog';
+import { TreasuryDocumentCorrectionDialog } from '../components/TreasuryDocumentCorrectionDialog';
 
 const LABELS: Record<
   TreasuryDocumentType,
@@ -115,6 +113,7 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(25);
   const [selected, setSelected] = useState<TreasuryDocumentDto | null>(null);
+  const [correctionDoc, setCorrectionDoc] = useState<TreasuryDocumentDto | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [annulReason, setAnnulReason] = useState('');
@@ -342,139 +341,102 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
         </TableContainer>
       </Stack>
 
-      <Dialog
+      {/* Modal Imprimible de Recibos y Comprobantes (REQ-010) */}
+      <TreasuryDocumentPrintDialog
         open={!!selected}
-        onClose={() => setSelected(null)}
-        maxWidth="sm"
-        fullWidth
-        slotProps={{ paper: { className: 'print-document' } }}
-      >
-        {selected && (
-          <>
-            <DialogTitle sx={{ fontWeight: 700 }}>
-              {labels.singular} {selected.documentNumber}
-            </DialogTitle>
-            <DialogContent dividers>
-              <Stack spacing={1}>
-                <Typography>
-                  <strong>Fecha:</strong> {formatDate(selected.documentDate)}
-                </Typography>
-                <Typography>
-                  <strong>{type === 'RECIBO_CAJA' ? 'Recibido de' : 'Pagado a'}:</strong>{' '}
-                  {selected.thirdPartyName ?? '—'}
-                </Typography>
-                <Typography>
-                  <strong>Concepto:</strong> {selected.concept}
-                </Typography>
-                <Typography>
-                  <strong>Valor:</strong> {money(selected.amount)}
-                </Typography>
-                <Typography>
-                  <strong>Medio:</strong>{' '}
-                  {selected.source === 'CAJA'
-                    ? `Caja (${selected.paymentMethod})`
-                    : selected.bankAccountName}
-                </Typography>
-                <Typography>
-                  <strong>Origen:</strong> {ORIGIN_LABELS[selected.origin]}
-                </Typography>
-                {selected.counterpartAccount && (
-                  <Typography>
-                    <strong>Contrapartida:</strong> {selected.counterpartAccount}
-                  </Typography>
-                )}
-                {selected.applications.length > 0 ? (
-                  <TableContainer>
-                    <Table size="small" aria-label="Facturas aplicadas">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Documento</TableCell>
-                          <TableCell align="right">Valor</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {selected.applications.map((a) => (
-                          <TableRow key={`${a.documentType}-${a.documentId}`}>
-                            <TableCell>
-                              {APPLICATION_LABELS[a.documentType]} {a.documentNumber ?? ''}
-                              {a.isReversed ? ' (revertido)' : ''}
-                            </TableCell>
-                            <TableCell align="right">{money(a.amount)}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                ) : (
-                  <Typography>
-                    <strong>Documento origen:</strong> {originOf(selected)}
-                  </Typography>
-                )}
-                <Typography>
-                  <strong>Elaborado por:</strong> {selected.createdByName ?? '—'}
-                </Typography>
-                {selected.status === 'ANULADO' && (
-                  <Alert severity="warning">
-                    Anulado {selected.cancelledByName ? `por ${selected.cancelledByName}` : ''}
-                    {selected.cancellationReason ? `. Motivo: ${selected.cancellationReason}` : ''}
+        document={selected}
+        onClose={() => {
+          setSelected(null);
+          setAnnulOpen(false);
+          setAnnulError(null);
+          setAnnulReason('');
+        }}
+        actions={
+          selected && canAnnul(selected) ? (
+            annulOpen ? (
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                {annulError && (
+                  <Alert severity="error" sx={{ py: 0, px: 1 }}>
+                    {annulError}
                   </Alert>
                 )}
-                {annulOpen && (
-                  <Stack spacing={1.5} className="no-print">
-                    <Alert severity="warning">
-                      {selected.origin === 'MANUAL'
-                        ? 'Se reversa el asiento contra la contrapartida y '
-                        : 'Se reversan los abonos o pagos que sigan vigentes y '}
-                      {selected.documentType === 'RECIBO_CAJA'
-                        ? 'el dinero recibido sale de '
-                        : 'el dinero pagado vuelve a '}
-                      {selected.source === 'CAJA' ? 'caja' : 'la cuenta bancaria'}. El documento
-                      queda anulado y no se borra.
-                    </Alert>
-                    {annulError && <Alert severity="error">{annulError}</Alert>}
-                    <TextField
-                      label="Motivo de la anulación"
-                      value={annulReason}
-                      onChange={(e) => setAnnulReason(e.target.value)}
-                      required
-                      multiline
-                      minRows={2}
-                    />
-                  </Stack>
-                )}
+                <TextField
+                  size="small"
+                  label="Motivo de la anulación *"
+                  value={annulReason}
+                  onChange={(e) => setAnnulReason(e.target.value)}
+                  placeholder="Mínimo 3 caracteres…"
+                  disabled={annulling}
+                  sx={{ width: 220 }}
+                />
+                <Button
+                  color="error"
+                  variant="contained"
+                  disabled={annulling || annulReason.trim().length < 3}
+                  onClick={() => void annul()}
+                  sx={{ textTransform: 'none', fontWeight: 600 }}
+                >
+                  {annulling ? 'Anulando…' : 'Confirmar anulación'}
+                </Button>
+                <Button
+                  variant="outlined"
+                  color="inherit"
+                  onClick={() => setAnnulOpen(false)}
+                  disabled={annulling}
+                  sx={{ textTransform: 'none' }}
+                >
+                  Cancelar
+                </Button>
               </Stack>
-            </DialogContent>
-            <DialogActions className="no-print">
-              {canAnnul(selected) &&
-                (annulOpen ? (
-                  <Button
-                    color="error"
-                    variant="contained"
-                    disabled={annulling || annulReason.trim().length < 3}
-                    onClick={() => void annul()}
-                  >
-                    {annulling ? 'Anulando…' : 'Confirmar anulación'}
-                  </Button>
-                ) : (
-                  <Button color="error" variant="outlined" onClick={() => setAnnulOpen(true)}>
-                    Anular
-                  </Button>
-                ))}
-              <Button onClick={() => window.print()}>Imprimir</Button>
-              <Button
-                variant="contained"
-                onClick={() => {
-                  setSelected(null);
-                  setAnnulOpen(false);
-                  setAnnulError(null);
-                }}
-              >
-                Cerrar
-              </Button>
-            </DialogActions>
-          </>
-        )}
-      </Dialog>
+            ) : (
+              <Stack direction="row" spacing={1}>
+                <Button
+                  color="warning"
+                  variant="outlined"
+                  onClick={() => {
+                    const toCorrect = selected;
+                    setSelected(null);
+                    setCorrectionDoc(toCorrect);
+                  }}
+                  sx={{ textTransform: 'none', fontWeight: 600 }}
+                >
+                  Corregir Documento
+                </Button>
+                <Button
+                  color="error"
+                  variant="outlined"
+                  onClick={() => setAnnulOpen(true)}
+                  sx={{ textTransform: 'none', fontWeight: 600 }}
+                >
+                  Anular Documento
+                </Button>
+              </Stack>
+            )
+          ) : undefined
+        }
+      />
+
+      <TreasuryDocumentCorrectionDialog
+        open={!!correctionDoc}
+        document={correctionDoc}
+        onClose={() => setCorrectionDoc(null)}
+        onSuccess={(newDocument) => {
+          setCorrectionDoc(null);
+          setToast(
+            `${labels.singular} corregido exitosamente. Se emitió el reemplazo ${newDocument.documentNumber}.`,
+          );
+          for (const key of [
+            'treasury-documents',
+            'receivables',
+            'payables-statement',
+            'expenses',
+            'cash',
+          ]) {
+            void queryClient.invalidateQueries({ queryKey: [key] });
+          }
+          setSelected(newDocument);
+        }}
+      />
 
       <VoucherFormDialog
         type={type}

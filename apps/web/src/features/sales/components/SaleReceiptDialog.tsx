@@ -15,10 +15,14 @@ import {
   TableCell,
   TableBody,
   Chip,
+  Stack,
 } from '@mui/material';
+import PrintIcon from '@mui/icons-material/Print';
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import type { SaleDto } from '@farmacia/contracts';
 import { expirationDateLabel, lotNumberLabel } from '../../catalog/utils/inventory-control';
 import { formatDateTime } from '../../../utils/date-format';
+import { printDocument, downloadDocumentPdf } from '../../../utils/print-document';
 
 interface SaleReceiptDialogProps {
   open: boolean;
@@ -34,7 +38,13 @@ export const SaleReceiptDialog: React.FC<SaleReceiptDialogProps> = ({
   onNewSale,
 }) => {
   const handlePrint = () => {
-    window.print();
+    if (!sale) return;
+    printDocument(`${sale.invoiceNumber}_Comprobante_Venta`);
+  };
+
+  const handleDownloadPdf = () => {
+    if (!sale) return;
+    downloadDocumentPdf(`${sale.invoiceNumber}_Comprobante_Venta`);
   };
 
   React.useEffect(() => {
@@ -245,21 +255,38 @@ export const SaleReceiptDialog: React.FC<SaleReceiptDialogProps> = ({
 
       <DialogActions
         className="no-print"
-        sx={{ p: 2, display: 'flex', justifyContent: 'space-between' }}
+        sx={{ p: 2, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}
       >
-        <Button
-          variant="outlined"
-          color="primary"
-          onClick={handlePrint}
-          sx={{
-            textTransform: 'none',
-            fontWeight: 600,
-            transition: 'transform 0.1s ease',
-            '&:active': { transform: 'scale(0.98)' },
-          }}
-        >
-          Imprimir Comprobante
-        </Button>
+        <Stack direction="row" spacing={1}>
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<PrintIcon />}
+            onClick={handlePrint}
+            sx={{
+              textTransform: 'none',
+              fontWeight: 600,
+              transition: 'transform 0.1s ease',
+              '&:active': { transform: 'scale(0.98)' },
+            }}
+          >
+            Imprimir Comprobante
+          </Button>
+          <Button
+            variant="outlined"
+            color="primary"
+            startIcon={<PictureAsPdfIcon />}
+            onClick={handleDownloadPdf}
+            sx={{
+              textTransform: 'none',
+              fontWeight: 600,
+              transition: 'transform 0.1s ease',
+              '&:active': { transform: 'scale(0.98)' },
+            }}
+          >
+            Descargar PDF
+          </Button>
+        </Stack>
         <Box sx={{ display: 'flex', gap: 1 }}>
           <Button onClick={onClose} color="inherit" sx={{ textTransform: 'none', fontWeight: 600 }}>
             Cerrar

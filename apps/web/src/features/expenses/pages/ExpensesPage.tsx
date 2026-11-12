@@ -43,6 +43,8 @@ import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
+import PrintIcon from '@mui/icons-material/Print';
+import { ExpensePrintDialog } from '../../../components/documents/ExpensePrintDialog';
 import { ExpenseDto, ExpenseCategoryDto, ExpensesSummaryDto } from '@farmacia/contracts';
 
 import {
@@ -99,6 +101,7 @@ export const ExpensesPage: React.FC = () => {
   // Registro activo para modales
   const [selectedExpense, setSelectedExpense] = useState<ExpenseDto | null>(null);
   const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(null);
+  const [printExpense, setPrintExpense] = useState<ExpenseDto | null>(null);
 
   // Carga de categorías y bancos auxiliares
   const loadAuxData = useCallback(async () => {
@@ -496,6 +499,16 @@ export const ExpensesPage: React.FC = () => {
                             <VisibilityIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
+                        <Tooltip title="Imprimir / Descargar PDF">
+                          <IconButton
+                            aria-label="Imprimir gasto"
+                            size="small"
+                            color="info"
+                            onClick={() => setPrintExpense(e)}
+                          >
+                            <PrintIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
                         {!isCancelled && (
                           <Tooltip title="Anular Gasto">
                             <IconButton
@@ -725,11 +738,24 @@ export const ExpensesPage: React.FC = () => {
           )}
         </DialogContent>
         <DialogActions>
+          <Button
+            variant="outlined"
+            startIcon={<PrintIcon />}
+            onClick={() => setPrintExpense(selectedExpense)}
+          >
+            Imprimir
+          </Button>
           <Button onClick={() => setDetailModalOpen(false)} variant="outlined">
             Cerrar
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ExpensePrintDialog
+        open={Boolean(printExpense)}
+        expense={printExpense}
+        onClose={() => setPrintExpense(null)}
+      />
 
       {cancelModalOpen && (
         <ExpenseReasonDialog

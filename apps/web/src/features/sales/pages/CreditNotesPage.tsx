@@ -22,7 +22,6 @@ import {
   DialogActions,
   Tooltip,
   Stack,
-  Divider,
 } from '@mui/material';
 import type { CreditNoteDto, CreditNoteStatus, SaleDto } from '@farmacia/contracts';
 import { SYSTEM_PERMISSIONS } from '@farmacia/contracts';
@@ -35,6 +34,8 @@ import { FilterBar } from '../../../components/layout/FilterBar';
 import { DateField } from '../../../components/DateField';
 import { CreditNoteDialog } from '../components/CreditNoteDialog';
 import { SelectSaleForCreditNoteDialog } from '../components/SelectSaleForCreditNoteDialog';
+import { CreditNotePrintDialog } from '../../../components/documents/CreditNotePrintDialog';
+import PrintIcon from '@mui/icons-material/Print';
 
 const REFUND_LABELS: Record<string, string> = {
   EFECTIVO: 'Efectivo',
@@ -401,6 +402,15 @@ export const CreditNotesPage: React.FC = () => {
                       >
                         Ver Detalle
                       </Button>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<PrintIcon />}
+                        onClick={() => setSelectedNote(note)}
+                        title="Imprimir o Descargar PDF"
+                      >
+                        Imprimir
+                      </Button>
 
                       {note.status === 'CONFIRMADA' && (
                         <PermissionGate permission={SYSTEM_PERMISSIONS.SALES_CANCEL}>
@@ -411,7 +421,7 @@ export const CreditNotesPage: React.FC = () => {
                             onClick={() => handleOpenCancel(note)}
                             data-testid={`cancel-note-btn-${note.id}`}
                           >
-                            Anular
+                            Anular Documento
                           </Button>
                         </PermissionGate>
                       )}
@@ -424,169 +434,29 @@ export const CreditNotesPage: React.FC = () => {
         </Table>
       </TableContainer>
 
-      {/* Modal Detalle de la Nota Crédito */}
-      <Dialog
+      {/* Modal Imprimible de Nota Crédito (REQ-010) */}
+      <CreditNotePrintDialog
         open={Boolean(selectedNote)}
+        creditNote={selectedNote}
         onClose={() => setSelectedNote(null)}
-        maxWidth="md"
-        fullWidth
-        data-testid="credit-note-detail-dialog"
-      >
-        <DialogTitle sx={{ fontWeight: 'bold' }}>
-          Detalle de Nota Crédito {selectedNote?.creditNoteNumber}
-        </DialogTitle>
-        <DialogContent dividers>
-          {selectedNote && (
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <Paper variant="outlined" sx={{ p: 2, bgcolor: 'background.default' }}>
-                <Stack
-                  direction={{ xs: 'column', sm: 'row' }}
-                  spacing={2}
-                  sx={{ justifyContent: 'space-between' }}
-                >
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
-                      Factura Afectada
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-                      {selectedNote.saleInvoiceNumber || '—'}
-                    </Typography>
-                  </Box>
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
-                      Cliente
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
-                      {selectedNote.customerName || 'Consumidor Final'}
-                    </Typography>
-                  </Box>
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
-                      Método de Reembolso
-                    </Typography>
-                    <Typography variant="body2">
-                      {REFUND_LABELS[selectedNote.refundMethod] ?? selectedNote.refundMethod}
-                    </Typography>
-                  </Box>
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
-                      Reintegro de Inventario
-                    </Typography>
-                    <Typography variant="body2">
-                      {selectedNote.restock ? 'Sí (Afecta Stock)' : 'No'}
-                    </Typography>
-                  </Box>
-                </Stack>
-              </Paper>
-
-              <Box>
-                <Typography variant="caption" color="text.secondary">
-                  Motivo de la Devolución:
-                </Typography>
-                <Typography variant="body2" sx={{ fontStyle: 'italic', mt: 0.5 }}>
-                  "{selectedNote.reason}"
-                </Typography>
-              </Box>
-
-              {selectedNote.status === 'ANULADA' && (
-                <Alert severity="error">
-                  Esta nota fue anulada el {formatDateTime(selectedNote.cancelledAt || '')}. Motivo:{' '}
-                  <strong>{selectedNote.cancellationReason}</strong>
-                </Alert>
-              )}
-
-              <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mt: 1 }}>
-                Productos Devueltos
-              </Typography>
-
-              <TableContainer component={Paper} variant="outlined">
-                <Table size="small">
-                  <TableHead sx={{ bgcolor: 'grey.50' }}>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Producto</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }}>Lote</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }} align="right">
-                        Cant.
-                      </TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }} align="right">
-                        Precio Unit.
-                      </TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }} align="right">
-                        Subtotal
-                      </TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }} align="right">
-                        IVA
-                      </TableCell>
-                      <TableCell sx={{ fontWeight: 'bold' }} align="right">
-                        Total
-                      </TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {(selectedNote.lines || []).map((line) => (
-                      <TableRow key={line.id}>
-                        <TableCell>
-                          <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
-                            {line.productName || line.productId}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>{line.lotNumber || '—'}</TableCell>
-                        <TableCell align="right">{line.quantityCommercial}</TableCell>
-                        <TableCell align="right">{formatCurrency(line.unitPrice)}</TableCell>
-                        <TableCell align="right">{formatCurrency(line.subtotal)}</TableCell>
-                        <TableCell align="right">{formatCurrency(line.taxAmount)}</TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                          {formatCurrency(line.total)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-
-              <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
-                <Paper variant="outlined" sx={{ p: 2, minWidth: 240 }}>
-                  <Stack spacing={1}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <Typography variant="body2" color="text.secondary">
-                        Subtotal:
-                      </Typography>
-                      <Typography variant="body2">
-                        {formatCurrency(selectedNote.subtotal)}
-                      </Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <Typography variant="body2" color="text.secondary">
-                        IVA:
-                      </Typography>
-                      <Typography variant="body2">
-                        {formatCurrency(selectedNote.taxTotal)}
-                      </Typography>
-                    </Box>
-                    <Divider />
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
-                        Total Devuelto:
-                      </Typography>
-                      <Typography
-                        variant="body1"
-                        sx={{ fontWeight: 'bold', color: 'primary.main' }}
-                      >
-                        {formatCurrency(selectedNote.total)}
-                      </Typography>
-                    </Box>
-                  </Stack>
-                </Paper>
-              </Box>
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions sx={{ px: 3, py: 1.5 }}>
-          <Button onClick={() => setSelectedNote(null)} variant="outlined">
-            Cerrar
-          </Button>
-        </DialogActions>
-      </Dialog>
+        actions={
+          selectedNote?.status === 'CONFIRMADA' ? (
+            <PermissionGate permission={SYSTEM_PERMISSIONS.SALES_CANCEL}>
+              <Button
+                variant="outlined"
+                color="error"
+                onClick={() => {
+                  const note = selectedNote;
+                  setSelectedNote(null);
+                  handleOpenCancel(note);
+                }}
+              >
+                Anular Documento
+              </Button>
+            </PermissionGate>
+          ) : undefined
+        }
+      />
 
       {/* Diálogo de Anulación de Nota Crédito */}
       <Dialog
@@ -647,10 +517,11 @@ export const CreditNotesPage: React.FC = () => {
         onSelectSale={handleSelectSale}
       />
 
-      {/* Diálogo de elaboración de Nota Crédito */}
+      {/* Diálogo de elaboración de Nota Crédito (REQ-009) */}
       <CreditNoteDialog
         open={Boolean(saleForCreditNote)}
         sale={saleForCreditNote}
+        creditNotes={creditNotes}
         onClose={() => setSaleForCreditNote(null)}
         onCreated={(number, exchangeCreditNoteId) => {
           setSaleForCreditNote(null);

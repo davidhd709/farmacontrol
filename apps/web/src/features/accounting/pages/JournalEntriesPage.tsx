@@ -45,6 +45,8 @@ import { QuickDateRange, localIsoDate } from '../../../components/QuickDateRange
 import { formatDate } from '../../../utils/date-format';
 import { FilterBar } from '../../../components/layout/FilterBar';
 import { DateField } from '../../../components/DateField';
+import PrintIcon from '@mui/icons-material/Print';
+import { JournalEntryPrintDialog } from '../../../components/documents/JournalEntryPrintDialog';
 
 const sourceTypeLabels: Record<
   string,
@@ -123,6 +125,7 @@ export const JournalEntriesPage = () => {
 
   // Modales
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
+  const [printEntryId, setPrintEntryId] = useState<string | null>(null);
   const [annullingEntry, setAnnullingEntry] = useState<JournalEntryDto | null>(null);
   const [annulReason, setAnnulReason] = useState('');
   const [noteOpen, setNoteOpen] = useState(false);
@@ -147,6 +150,12 @@ export const JournalEntriesPage = () => {
     queryKey: ['journal-entry-detail', selectedEntryId],
     queryFn: () => (selectedEntryId ? fetchJournalEntryById(selectedEntryId) : null),
     enabled: Boolean(selectedEntryId),
+  });
+
+  const { data: printEntryDetail } = useQuery({
+    queryKey: ['journal-entry-print-detail', printEntryId],
+    queryFn: () => (printEntryId ? fetchJournalEntryById(printEntryId) : null),
+    enabled: Boolean(printEntryId),
   });
 
   const annulMutation = useMutation({
@@ -397,13 +406,22 @@ export const JournalEntriesPage = () => {
                             <TableCell align="center">
                               <Chip size="small" label={status.label} color={status.color} />
                             </TableCell>
-                            <TableCell align="center">
+                            <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>
                               <Button
                                 size="small"
                                 variant="outlined"
                                 onClick={() => setSelectedEntryId(entry.id)}
                               >
                                 Detalle
+                              </Button>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                startIcon={<PrintIcon />}
+                                onClick={() => setPrintEntryId(entry.id)}
+                                sx={{ ml: 1 }}
+                              >
+                                Imprimir
                               </Button>
                             </TableCell>
                           </TableRow>
@@ -559,6 +577,15 @@ export const JournalEntriesPage = () => {
           )}
         </DialogContent>
         <DialogActions>
+          {entryDetail && (
+            <Button
+              variant="outlined"
+              startIcon={<PrintIcon />}
+              onClick={() => setPrintEntryId(entryDetail.id)}
+            >
+              Imprimir
+            </Button>
+          )}
           {entryDetail && canAnnul(entryDetail) && (
             <Button color="warning" variant="outlined" onClick={() => handleOpenAnnul(entryDetail)}>
               Anular
@@ -567,6 +594,13 @@ export const JournalEntriesPage = () => {
           <Button onClick={() => setSelectedEntryId(null)}>Cerrar</Button>
         </DialogActions>
       </Dialog>
+
+      {/* Modal Imprimible de Comprobante Contable / Libro Diario (REQ-010) */}
+      <JournalEntryPrintDialog
+        open={Boolean(printEntryId && printEntryDetail)}
+        entry={printEntryDetail || null}
+        onClose={() => setPrintEntryId(null)}
+      />
 
       {/* Anulación de una nota contable, un saldo inicial o un cierre anual */}
       <Dialog

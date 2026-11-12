@@ -1,5 +1,5 @@
 import { ThemeProvider } from '@mui/material';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, waitForElementToBeRemoved, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -339,6 +339,345 @@ describe('Recibos de caja y comprobantes de egreso', () => {
       const dialog = await screen.findByRole('dialog', { name: 'Nuevo recibo de caja' });
       expect(within(dialog).queryByRole('button', { name: 'Abono a cartera' })).toBeNull();
       expect(within(dialog).getByRole('combobox', { name: /Tercero/ })).toBeInTheDocument();
+    });
+  });
+
+  describe('REQ-008: Corrección y edición de documentos de tesorería', () => {
+    it('corrige un recibo asociado a una factura (permite modificar concepto, valor aplicado, muestra diff, exige motivo y realiza reemplazo transaccional)', async () => {
+      const rcCartera: TreasuryDocumentDto = {
+        id: 'rc-101',
+        documentType: 'RECIBO_CAJA',
+        documentNumber: 'RC-000101',
+        documentDate: '2026-10-10',
+        amount: '50000.00',
+        paymentMethod: 'EFECTIVO',
+        source: 'CAJA',
+        bankAccountName: null,
+        concept: 'Abono factura FAC-001',
+        referenceDocumentType: null,
+        referenceDocumentId: null,
+        thirdPartyName: 'Marta Crédito',
+        customerId: 'cust-1',
+        origin: 'CARTERA',
+        counterpartAccount: null,
+        applications: [
+          {
+            documentType: 'FACTURA_VENTA',
+            documentId: 'rec-1',
+            documentNumber: 'FAC-001',
+            amount: '50000.00',
+            isReversed: false,
+          },
+        ],
+        status: 'VIGENTE',
+        cancelledAt: null,
+        cancelledByName: null,
+        cancellationReason: null,
+        createdByName: 'cajero',
+        createdAt: '2026-10-10T10:00:00.000Z',
+      };
+
+      vi.spyOn(treasuryApi, 'getTreasuryDocuments').mockResolvedValue({
+        items: [rcCartera],
+        total: 1,
+        page: 1,
+        pageSize: 25,
+        totalPages: 1,
+      });
+      const cancelSpy = vi.spyOn(treasuryApi, 'cancelTreasuryDocument').mockResolvedValue({
+        ...rcCartera,
+        status: 'ANULADO',
+        cancellationReason: 'Corregido por reemplazo: Ajuste en valores aplicados',
+      });
+      const createSpy = vi.spyOn(treasuryApi, 'createCashReceipt').mockResolvedValue({
+        ...rcCartera,
+        id: 'rc-102',
+        documentNumber: 'RC-000102',
+        amount: '40000.00',
+      });
+
+      renderPage(<CashReceiptsPage />);
+      expect(await screen.findByRole('button', { name: 'RC-000101' })).toBeInTheDocument();
+
+      // Abrir detalle imprimible
+      fireEvent.click(screen.getByRole('button', { name: 'RC-000101' }));
+      expect(await screen.findByText('Recibo de caja RC-000101')).toBeInTheDocument();
+
+      // Abrir diálogo de corrección
+      fireEvent.click(screen.getByRole('button', { name: 'Corregir Documento' }));
+      expect(await screen.findByText(/Corregir Recibo de Caja RC-000101/)).toBeInTheDocument();
+
+      // Verificar que muestra la información original y el diff view
+      expect(screen.getByText('1. Información del Documento Original a Corregir')).toBeInTheDocument();
+      expect(screen.getByText('3. Comparación de Diferencias (Diff View)')).toBeInTheDocument();
+
+      // Modificar concepto y valor aplicado
+      fireEvent.change(screen.getByLabelText('Concepto Corregido *'), {
+        target: { value: 'Abono corregido FAC-001' },
+      });
+      fireEvent.change(screen.getByDisplayValue('50000.00'), {
+        target: { value: '40000' },
+      });
+
+      // Seleccionar motivo obligatorio
+      fireEvent.click(screen.getByRole('button', { name: 'Ajuste en valores aplicados' }));
+
+      // Enviar corrección
+      const corregirBtns = screen.getAllByRole('button', { name: 'Corregir Documento' });
+      fireEvent.click(corregirBtns[corregirBtns.length - 1]);
+
+      // Confirmar en SweetModal
+      expect(await screen.findByText('¿Confirmar Corrección del Documento?')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Confirmar y Reemplazar' }));
+
+      await waitFor(() => {
+        expect(cancelSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ id: 'rc-101', documentType: 'RECIBO_CAJA' }),
+          expect.stringContaining('Ajuste en valores aplicados'),
+        );
+        expect(createSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            kind: 'CARTERA',
+            customerId: 'cust-1',
+            applications: [{ receivableId: 'rec-1', amount: '40000.00' }],
+          }),
+          expect.any(String),
+        );
+      });
+    });
+
+    it('corrige un comprobante de pago a proveedor (modificando facturas y concepto)', async () => {
+      const ceProveedor: TreasuryDocumentDto = {
+        id: 'ce-201',
+        documentType: 'COMPROBANTE_EGRESO',
+        documentNumber: 'CE-000201',
+        documentDate: '2026-10-15',
+        amount: '80000.00',
+        paymentMethod: 'EFECTIVO',
+        source: 'CAJA',
+        bankAccountName: null,
+        concept: 'Pago factura proveedor FV-88',
+        referenceDocumentType: null,
+        referenceDocumentId: null,
+        thirdPartyName: 'Droguería Mayorista',
+        supplierId: 'sup-1',
+        origin: 'PROVEEDOR',
+        counterpartAccount: null,
+        applications: [
+          {
+            documentType: 'FACTURA_COMPRA',
+            documentId: 'pay-1',
+            documentNumber: 'FV-88',
+            amount: '80000.00',
+            isReversed: false,
+          },
+        ],
+        status: 'VIGENTE',
+        cancelledAt: null,
+        cancelledByName: null,
+        cancellationReason: null,
+        createdByName: 'tesorero',
+        createdAt: '2026-10-15T11:00:00.000Z',
+      };
+
+      vi.spyOn(treasuryApi, 'getTreasuryDocuments').mockResolvedValue({
+        items: [ceProveedor],
+        total: 1,
+        page: 1,
+        pageSize: 25,
+        totalPages: 1,
+      });
+      const cancelSpy = vi.spyOn(treasuryApi, 'cancelTreasuryDocument').mockResolvedValue({
+        ...ceProveedor,
+        status: 'ANULADO',
+      });
+      const createSpy = vi.spyOn(treasuryApi, 'createDisbursement').mockResolvedValue({
+        ...ceProveedor,
+        id: 'ce-202',
+        documentNumber: 'CE-000202',
+        amount: '70000.00',
+      });
+
+      renderPage(<DisbursementVouchersPage />);
+      expect(await screen.findByRole('button', { name: 'CE-000201' })).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'CE-000201' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Corregir Documento' }));
+      expect(await screen.findByText(/Corregir Comprobante de Egreso CE-000201/)).toBeInTheDocument();
+
+      fireEvent.change(screen.getByLabelText('Concepto Corregido *'), {
+        target: { value: 'Pago corregido proveedor' },
+      });
+      fireEvent.change(screen.getByDisplayValue('80000.00'), {
+        target: { value: '70000' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Error en el concepto digitado' }));
+
+      const corregirBtns = screen.getAllByRole('button', { name: 'Corregir Documento' });
+      fireEvent.click(corregirBtns[corregirBtns.length - 1]);
+
+      expect(await screen.findByText('¿Confirmar Corrección del Documento?')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Confirmar y Reemplazar' }));
+
+      await waitFor(() => {
+        expect(cancelSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ id: 'ce-201', documentType: 'COMPROBANTE_EGRESO' }),
+          expect.stringContaining('Error en el concepto digitado'),
+        );
+        expect(createSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            kind: 'PROVEEDOR',
+            supplierId: 'sup-1',
+            applications: [
+              { documentType: 'FACTURA_COMPRA', documentId: 'pay-1', amount: '70000.00' },
+            ],
+          }),
+          expect.any(String),
+        );
+      });
+    });
+
+    it('corrige un documento cuyo medio de pago sea incorrecto (efectivo a transferencia con banco)', async () => {
+      const rcManual: TreasuryDocumentDto = {
+        id: 'rc-301',
+        documentType: 'RECIBO_CAJA',
+        documentNumber: 'RC-000301',
+        documentDate: '2026-10-18',
+        amount: '30000.00',
+        paymentMethod: 'EFECTIVO',
+        source: 'CAJA',
+        bankAccountName: null,
+        concept: 'Ingreso manual por servicios',
+        referenceDocumentType: null,
+        referenceDocumentId: null,
+        thirdPartyName: 'Cliente Varios',
+        origin: 'MANUAL',
+        counterpartAccount: '413501 - Comercio',
+        counterpartAccountId: 'acc-4135',
+        applications: [],
+        status: 'VIGENTE',
+        cancelledAt: null,
+        cancelledByName: null,
+        cancellationReason: null,
+        createdByName: 'contador',
+        createdAt: '2026-10-18T09:00:00.000Z',
+      };
+
+      vi.spyOn(treasuryApi, 'getTreasuryDocuments').mockResolvedValue({
+        items: [rcManual],
+        total: 1,
+        page: 1,
+        pageSize: 25,
+        totalPages: 1,
+      });
+      vi.spyOn(treasuryApi, 'getBankAccountOptions').mockResolvedValue([
+        {
+          id: 'bank-1',
+          name: 'Principal',
+          bankName: 'Bancolombia',
+          accountNumberLast4: '1234',
+          isActive: true,
+        },
+      ]);
+      const cancelSpy = vi.spyOn(treasuryApi, 'cancelTreasuryDocument').mockResolvedValue({
+        ...rcManual,
+        status: 'ANULADO',
+      });
+      const createSpy = vi.spyOn(treasuryApi, 'createCashReceipt').mockResolvedValue({
+        ...rcManual,
+        id: 'rc-302',
+        documentNumber: 'RC-000302',
+        paymentMethod: 'TRANSFERENCIA',
+        bankAccountId: 'bank-1',
+      });
+
+      renderPage(<CashReceiptsPage />);
+      expect(await screen.findByRole('button', { name: 'RC-000301' })).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'RC-000301' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Corregir Documento' }));
+      expect(await screen.findByText(/Corregir Recibo de Caja RC-000301/)).toBeInTheDocument();
+
+      // Cambiar medio de pago a Transferencia
+      fireEvent.mouseDown(screen.getByLabelText('Medio de Pago Corregido'));
+      fireEvent.click(await screen.findByRole('option', { name: 'Transferencia Bancaria' }));
+
+      // Seleccionar cuenta bancaria
+      fireEvent.mouseDown(await screen.findByLabelText(/Cuenta Bancaria de Destino/));
+      fireEvent.click(await screen.findByRole('option', { name: /Principal — Bancolombia/ }));
+
+      // Seleccionar motivo
+      fireEvent.click(screen.getByRole('button', { name: 'Corrección de medio de pago' }));
+
+      const corregirBtns = screen.getAllByRole('button', { name: 'Corregir Documento' });
+      fireEvent.click(corregirBtns[corregirBtns.length - 1]);
+
+      expect(await screen.findByText('¿Confirmar Corrección del Documento?')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Confirmar y Reemplazar' }));
+
+      await waitFor(() => {
+        expect(cancelSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ id: 'rc-301' }),
+          expect.stringContaining('Corrección de medio de pago'),
+        );
+        expect(createSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            kind: 'MANUAL',
+            paymentMethod: 'TRANSFERENCIA',
+            bankAccountId: 'bank-1',
+          }),
+          expect.any(String),
+        );
+      });
+    });
+
+    it('soporta guardar y recuperar borrador en el formulario sin generar movimientos contables', async () => {
+      vi.spyOn(treasuryApi, 'getTreasuryDocuments').mockResolvedValue({
+        items: [],
+        total: 0,
+        page: 1,
+        pageSize: 25,
+        totalPages: 1,
+      });
+      localStorage.clear();
+
+      renderPage(<CashReceiptsPage />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Nuevo recibo de caja' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Nuevo recibo de caja' });
+
+      // Ingresar concepto y observaciones de borrador
+      fireEvent.change(within(dialog).getByLabelText(/Concepto/), {
+        target: { value: 'Borrador de prueba de tesorería' },
+      });
+      fireEvent.change(within(dialog).getByLabelText(/Observaciones/), {
+        target: { value: 'Pendiente de verificar soporte físico' },
+      });
+
+      // Guardar borrador
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Guardar Borrador' }));
+      expect(
+        await within(dialog).findByText(/Borrador guardado correctamente/i),
+      ).toBeInTheDocument();
+
+      // Cerrar modal y esperar a que desaparezca
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
+      await waitForElementToBeRemoved(() => screen.queryByRole('dialog', { name: 'Nuevo recibo de caja' }));
+
+      // Volver a abrir: debe detectar el borrador pendiente
+      fireEvent.click(await screen.findByRole('button', { name: 'Nuevo recibo de caja' }));
+      const dialog2 = await screen.findByRole('dialog', { name: 'Nuevo recibo de caja' });
+      expect(
+        await within(dialog2).findByText(/Existe un borrador guardado sin contabilizar/i),
+      ).toBeInTheDocument();
+
+      // Cargar el borrador
+      fireEvent.click(within(dialog2).getByRole('button', { name: 'Cargar borrador' }));
+      expect(
+        await within(dialog2).findByDisplayValue('Borrador de prueba de tesorería'),
+      ).toBeInTheDocument();
+      expect(
+        within(dialog2).getByDisplayValue('Pendiente de verificar soporte físico'),
+      ).toBeInTheDocument();
     });
   });
 });

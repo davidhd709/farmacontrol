@@ -16,10 +16,15 @@ import {
   TableRow,
   Paper,
   Divider,
+  Stack,
 } from '@mui/material';
+import PrintIcon from '@mui/icons-material/Print';
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import type { PurchaseDto } from '@farmacia/contracts';
 import { expirationDateLabel, lotNumberLabel } from '../../catalog/utils/inventory-control';
 import { formatDate, formatDateTime } from '../../../utils/date-format';
+import { useCompanyInfo } from '../../company/hooks/useCompanyInfo';
+import { printDocument, downloadDocumentPdf } from '../../../utils/print-document';
 
 interface PurchaseDetailDialogProps {
   open: boolean;
@@ -32,7 +37,16 @@ export const PurchaseDetailDialog: React.FC<PurchaseDetailDialogProps> = ({
   onClose,
   purchase,
 }) => {
+  const company = useCompanyInfo();
   if (!purchase) return null;
+
+  const handlePrint = () => {
+    printDocument(`${purchase.invoiceNumber}_Compra`);
+  };
+
+  const handleDownloadPdf = () => {
+    downloadDocumentPdf(`${purchase.invoiceNumber}_Compra`);
+  };
 
   // Extraer metadatos de factura de compra si existen
   let dueDate = purchase.dueDate;
@@ -57,6 +71,7 @@ export const PurchaseDetailDialog: React.FC<PurchaseDetailDialogProps> = ({
       fullWidth
       slotProps={{
         paper: {
+          className: 'print-document',
           sx: {
             borderRadius: 2.5,
             boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
@@ -87,6 +102,15 @@ export const PurchaseDetailDialog: React.FC<PurchaseDetailDialogProps> = ({
       </DialogTitle>
 
       <DialogContent dividers>
+        {/* Encabezado Institucional de la Farmacia */}
+        <Box sx={{ pb: 2, mb: 2, borderBottom: '1px solid #E0E0E0' }}>
+          <Typography variant="h6" sx={{ fontWeight: 800, color: 'primary.main', lineHeight: 1.2 }}>
+            {company.legalName}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" component="div">
+            {company.taxIdFull} • {company.address} {company.phone ? `• Tel: ${company.phone}` : ''}
+          </Typography>
+        </Box>
         {/* Cabecera Informativa de Factura */}
         <Box
           sx={{
@@ -267,10 +291,32 @@ export const PurchaseDetailDialog: React.FC<PurchaseDetailDialogProps> = ({
         </Box>
       </DialogContent>
 
-      <DialogActions sx={{ p: 2 }}>
+      <DialogActions className="no-print" sx={{ p: 2, display: 'flex', justifyContent: 'space-between' }}>
+        <Stack direction="row" spacing={1}>
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<PrintIcon />}
+            onClick={handlePrint}
+            sx={{ textTransform: 'none', fontWeight: 600 }}
+          >
+            Imprimir
+          </Button>
+          <Button
+            variant="outlined"
+            color="primary"
+            startIcon={<PictureAsPdfIcon />}
+            onClick={handleDownloadPdf}
+            sx={{ textTransform: 'none', fontWeight: 600 }}
+          >
+            Descargar PDF
+          </Button>
+        </Stack>
+
         <Button
           onClick={onClose}
-          variant="contained"
+          variant="outlined"
+          color="inherit"
           sx={{
             textTransform: 'none',
             fontWeight: 700,

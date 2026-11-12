@@ -113,15 +113,20 @@ export class TreasuryDocumentsService {
       bankAccountName: record.bankAccount
         ? `${record.bankAccount.bankName} — ${record.bankAccount.name}`
         : null,
+      bankAccountId: record.bankAccountId ?? null,
       concept: record.concept,
       referenceDocumentType: record.referenceDocumentType,
       referenceDocumentId: record.referenceDocumentId,
       thirdPartyName:
         record.customer?.name ?? record.supplier?.name ?? record.thirdParty?.name ?? thirdPartyName,
+      thirdPartyId: record.thirdPartyId ?? null,
+      customerId: record.customerId ?? null,
+      supplierId: record.supplierId ?? null,
       origin: record.origin as TreasuryDocumentOrigin,
       counterpartAccount: record.counterpartAccount
         ? `${record.counterpartAccount.code} - ${record.counterpartAccount.name}`
         : null,
+      counterpartAccountId: record.counterpartAccountId ?? null,
       applications: this.applicationsOf(record),
       status: record.status as TreasuryDocumentStatus,
       cancelledAt: record.cancelledAt ? record.cancelledAt.toISOString() : null,

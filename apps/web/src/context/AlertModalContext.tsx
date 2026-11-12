@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
 import { SweetModal, SweetModalType } from '../components/SweetModal';
+import type { ConfirmOperationType } from '../components/ConfirmDialog';
 
 export interface AlertModalOptions {
   type?: SweetModalType;
@@ -9,8 +10,22 @@ export interface AlertModalOptions {
   cancelText?: string;
   showCancelButton?: boolean;
   confirmColor?: 'primary' | 'error' | 'warning' | 'info' | 'success' | string;
+  isLoading?: boolean;
   onConfirm?: () => void | Promise<void>;
   onCancel?: () => void;
+}
+
+export interface ConfirmActionOptions {
+  operationType?: ConfirmOperationType;
+  title?: string;
+  message: React.ReactNode;
+  confirmText?: string;
+  cancelText?: string;
+  isDanger?: boolean;
+  onConfirm: () => void | Promise<void>;
+  onCancel?: () => void;
+  successMessage?: React.ReactNode;
+  successTitle?: string;
 }
 
 export interface AlertModalContextValue {
@@ -27,6 +42,43 @@ export interface AlertModalContextValue {
     isDanger?: boolean;
     onConfirm: () => void | Promise<void>;
     onCancel?: () => void;
+  }) => void;
+  confirmAction: (options: ConfirmActionOptions) => void;
+  confirmCreate: (options: {
+    title?: string;
+    message: React.ReactNode;
+    confirmText?: string;
+    cancelText?: string;
+    onConfirm: () => void | Promise<void>;
+    onCancel?: () => void;
+    successMessage?: React.ReactNode;
+  }) => void;
+  confirmUpdate: (options: {
+    title?: string;
+    message: React.ReactNode;
+    confirmText?: string;
+    cancelText?: string;
+    onConfirm: () => void | Promise<void>;
+    onCancel?: () => void;
+    successMessage?: React.ReactNode;
+  }) => void;
+  confirmAnnul: (options: {
+    title?: string;
+    message: React.ReactNode;
+    confirmText?: string;
+    cancelText?: string;
+    onConfirm: () => void | Promise<void>;
+    onCancel?: () => void;
+    successMessage?: React.ReactNode;
+  }) => void;
+  confirmDelete: (options: {
+    title?: string;
+    message: React.ReactNode;
+    confirmText?: string;
+    cancelText?: string;
+    onConfirm: () => void | Promise<void>;
+    onCancel?: () => void;
+    successMessage?: React.ReactNode;
   }) => void;
   closeAlert: () => void;
 }
@@ -55,6 +107,26 @@ export const notifyEvent = {
   },
 };
 
+const DEFAULT_TITLES: Record<ConfirmOperationType, string> = {
+  create: '¿Confirmar registro?',
+  update: '¿Guardar cambios?',
+  delete: '¿Eliminar registro?',
+  annul: '¿Anular este documento?',
+  revert: '¿Revertir operación?',
+  confirm: '¿Confirmar operación?',
+  custom: '¿Está seguro de continuar?',
+};
+
+const DEFAULT_CONFIRM_TEXTS: Record<ConfirmOperationType, string> = {
+  create: 'Confirmar',
+  update: 'Guardar Cambios',
+  delete: 'Eliminar',
+  annul: 'Confirmar Anulación',
+  revert: 'Confirmar Reversión',
+  confirm: 'Confirmar',
+  custom: 'Confirmar',
+};
+
 export const AlertModalProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [modalState, setModalState] = useState<{
     open: boolean;
@@ -65,6 +137,7 @@ export const AlertModalProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     cancelText: string;
     showCancelButton: boolean;
     confirmColor?: 'primary' | 'error' | 'warning' | 'info' | 'success' | string;
+    isLoading?: boolean;
     onConfirmCallback?: () => void | Promise<void>;
     onCancelCallback?: () => void;
   }>({
@@ -75,10 +148,14 @@ export const AlertModalProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     confirmText: 'OK',
     cancelText: 'Cancelar',
     showCancelButton: false,
+    isLoading: false,
   });
 
+  const isExecutingRef = useRef(false);
+
   const closeAlert = useCallback(() => {
-    setModalState((prev) => ({ ...prev, open: false }));
+    setModalState((prev) => ({ ...prev, open: false, isLoading: false }));
+    isExecutingRef.current = false;
   }, []);
 
   const showAlert = useCallback((options: AlertModalOptions) => {
@@ -91,6 +168,7 @@ export const AlertModalProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       cancelText: options.cancelText || 'Cancelar',
       showCancelButton: options.showCancelButton || false,
       confirmColor: options.confirmColor,
+      isLoading: options.isLoading || false,
       onConfirmCallback: options.onConfirm,
       onCancelCallback: options.onCancel,
     });
@@ -183,14 +261,157 @@ export const AlertModalProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     [showAlert],
   );
 
+  const confirmAction = useCallback(
+    (options: ConfirmActionOptions) => {
+      const op = options.operationType || 'custom';
+      const resolvedTitle = options.title || DEFAULT_TITLES[op] || '¿Confirmar acción?';
+      const resolvedConfirmText =
+        options.confirmText || DEFAULT_CONFIRM_TEXTS[op] || 'Confirmar';
+
+      const isDanger =
+        options.isDanger || op === 'delete' || op === 'annul';
+      const isWarning = op === 'revert';
+
+      showAlert({
+        type: isDanger ? 'warning' : isWarning ? 'warning' : 'question',
+        title: resolvedTitle,
+        message: options.message,
+        confirmText: resolvedConfirmText,
+        cancelText: options.cancelText || 'Cancelar',
+        showCancelButton: true,
+        confirmColor: isDanger ? 'error' : isWarning ? 'warning' : 'primary',
+        onConfirm: async () => {
+          if (options.onConfirm) {
+            await options.onConfirm();
+          }
+          if (options.successMessage) {
+            alertSuccess(options.successMessage, options.successTitle || '¡Operación Exitosa!');
+          }
+        },
+        onCancel: options.onCancel,
+      });
+    },
+    [showAlert, alertSuccess],
+  );
+
+  const confirmCreate = useCallback(
+    (options: {
+      title?: string;
+      message: React.ReactNode;
+      confirmText?: string;
+      cancelText?: string;
+      onConfirm: () => void | Promise<void>;
+      onCancel?: () => void;
+      successMessage?: React.ReactNode;
+    }) => {
+      confirmAction({
+        operationType: 'create',
+        title: options.title,
+        message: options.message,
+        confirmText: options.confirmText,
+        cancelText: options.cancelText,
+        onConfirm: options.onConfirm,
+        onCancel: options.onCancel,
+        successMessage: options.successMessage || 'Registro creado correctamente.',
+      });
+    },
+    [confirmAction],
+  );
+
+  const confirmUpdate = useCallback(
+    (options: {
+      title?: string;
+      message: React.ReactNode;
+      confirmText?: string;
+      cancelText?: string;
+      onConfirm: () => void | Promise<void>;
+      onCancel?: () => void;
+      successMessage?: React.ReactNode;
+    }) => {
+      confirmAction({
+        operationType: 'update',
+        title: options.title,
+        message: options.message,
+        confirmText: options.confirmText,
+        cancelText: options.cancelText,
+        onConfirm: options.onConfirm,
+        onCancel: options.onCancel,
+        successMessage: options.successMessage || 'Cambios guardados.',
+      });
+    },
+    [confirmAction],
+  );
+
+  const confirmAnnul = useCallback(
+    (options: {
+      title?: string;
+      message: React.ReactNode;
+      confirmText?: string;
+      cancelText?: string;
+      onConfirm: () => void | Promise<void>;
+      onCancel?: () => void;
+      successMessage?: React.ReactNode;
+    }) => {
+      confirmAction({
+        operationType: 'annul',
+        title: options.title,
+        message: options.message,
+        confirmText: options.confirmText,
+        cancelText: options.cancelText,
+        isDanger: true,
+        onConfirm: options.onConfirm,
+        onCancel: options.onCancel,
+        successMessage: options.successMessage || 'Documento anulado.',
+      });
+    },
+    [confirmAction],
+  );
+
+  const confirmDelete = useCallback(
+    (options: {
+      title?: string;
+      message: React.ReactNode;
+      confirmText?: string;
+      cancelText?: string;
+      onConfirm: () => void | Promise<void>;
+      onCancel?: () => void;
+      successMessage?: React.ReactNode;
+    }) => {
+      confirmAction({
+        operationType: 'delete',
+        title: options.title,
+        message: options.message,
+        confirmText: options.confirmText,
+        cancelText: options.cancelText,
+        isDanger: true,
+        onConfirm: options.onConfirm,
+        onCancel: options.onCancel,
+        successMessage: options.successMessage || 'Registro eliminado correctamente.',
+      });
+    },
+    [confirmAction],
+  );
+
   const handleConfirm = async () => {
-    if (modalState.onConfirmCallback) {
-      await modalState.onConfirmCallback();
+    if (isExecutingRef.current) return;
+    isExecutingRef.current = true;
+    setModalState((prev) => ({ ...prev, isLoading: true }));
+
+    try {
+      if (modalState.onConfirmCallback) {
+        await modalState.onConfirmCallback();
+      }
+      closeAlert();
+    } catch (err: unknown) {
+      setModalState((prev) => ({ ...prev, isLoading: false }));
+      isExecutingRef.current = false;
+      const msg = err instanceof Error ? err.message : 'No fue posible realizar la operación.';
+      alertError(msg, 'No fue posible realizar la operación');
     }
-    closeAlert();
   };
 
   const handleCancel = () => {
+    if (modalState.isLoading) return;
     if (modalState.onCancelCallback) {
       modalState.onCancelCallback();
     }
@@ -206,6 +427,11 @@ export const AlertModalProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         alertWarning,
         alertInfo,
         alertConfirm,
+        confirmAction,
+        confirmCreate,
+        confirmUpdate,
+        confirmAnnul,
+        confirmDelete,
         closeAlert,
       }}
     >
@@ -220,6 +446,7 @@ export const AlertModalProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         cancelText={modalState.cancelText}
         showCancelButton={modalState.showCancelButton}
         confirmColor={modalState.confirmColor}
+        isLoading={modalState.isLoading}
         onConfirm={handleConfirm}
         onClose={handleCancel}
         onCancel={handleCancel}

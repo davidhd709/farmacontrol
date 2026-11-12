@@ -164,13 +164,18 @@ export interface TreasuryDocumentDto {
   /** Auxiliar al que pertenece: caja o la cuenta bancaria */
   source: 'CAJA' | 'BANCO';
   bankAccountName: string | null;
+  bankAccountId?: string | null;
   concept: string;
   referenceDocumentType: string | null;
   referenceDocumentId: string | null;
   /** Cliente, proveedor o beneficiario, cuando el origen lo identifica */
   thirdPartyName: string | null;
+  thirdPartyId?: string | null;
+  customerId?: string | null;
+  supplierId?: string | null;
   origin: TreasuryDocumentOrigin;
   counterpartAccount: string | null;
+  counterpartAccountId?: string | null;
   /** Facturas abonadas o pagadas por el documento */
   applications: TreasuryDocumentApplicationDto[];
   /** VIGENTE o ANULADO */

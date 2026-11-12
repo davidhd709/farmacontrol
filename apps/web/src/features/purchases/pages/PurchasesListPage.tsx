@@ -261,6 +261,20 @@ export const PurchasesListPage: React.FC = () => {
                     >
                       Ver Detalle
                     </Button>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => handleOpenDetail(purchase)}
+                      sx={{
+                        ml: 1,
+                        textTransform: 'none',
+                        fontWeight: 600,
+                        transition: 'transform 0.1s ease',
+                        '&:active': { transform: 'scale(0.98)' },
+                      }}
+                    >
+                      Imprimir
+                    </Button>
                     {purchase.status === 'RECEIVED' && (
                       <PermissionGate permission={SYSTEM_PERMISSIONS.PURCHASES_DEBIT_NOTE}>
                         <Button

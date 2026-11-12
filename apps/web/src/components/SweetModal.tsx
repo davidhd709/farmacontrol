@@ -178,16 +178,43 @@ export const SweetModal: React.FC<SweetModalProps> = ({
   const content = description ?? text ?? message;
 
   const handleCancel = () => {
+    if (isLoading) return;
     if (onCancel) onCancel();
     else if (onClose) onClose();
   };
+
+  const handleConfirm = () => {
+    if (isLoading) return;
+    void onConfirm();
+  };
+
+  // Accesibilidad por teclado: Enter confirma, Escape cancela (si no está cargando)
+  React.useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !isLoading) {
+        e.preventDefault();
+        handleCancel();
+      } else if (e.key === 'Enter' && !isLoading) {
+        // Si el foco no está en el botón de cancelar
+        const target = e.target as HTMLElement | null;
+        if (target && target.tagName === 'BUTTON' && target.getAttribute('data-action') === 'cancel') {
+          return;
+        }
+        e.preventDefault();
+        handleConfirm();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [open, isLoading]);
 
   const getButtonBgColor = () => {
     if (confirmColor === 'error') return '#E05656';
     if (confirmColor === 'warning') return '#E67E22';
     if (confirmColor === 'success') return '#2ECC71';
     if (typeof confirmColor === 'string' && confirmColor.startsWith('#')) return confirmColor;
-    return '#70B9EB'; // Celeste suave característico de SweetAlert en la imagen de referencia
+    return '#70B9EB'; // Celeste suave característico de SweetAlert
   };
 
   const getButtonHoverBgColor = () => {
@@ -215,6 +242,8 @@ export const SweetModal: React.FC<SweetModalProps> = ({
         },
       }}
       aria-labelledby="sweet-modal-title"
+      aria-modal="true"
+      role="alertdialog"
     >
       <DialogContent sx={{ p: 0 }}>
         {/* Icono animado centrado */}
@@ -264,7 +293,7 @@ export const SweetModal: React.FC<SweetModalProps> = ({
           sx={{
             justifyContent: 'center',
             alignItems: 'center',
-            mt: description ? 0 : 2,
+            mt: content ? 0 : 2,
           }}
         >
           {showCancelButton && (
@@ -272,6 +301,7 @@ export const SweetModal: React.FC<SweetModalProps> = ({
               onClick={handleCancel}
               disabled={isLoading}
               variant="contained"
+              data-action="cancel"
               sx={{
                 bgcolor: '#AAAAAA',
                 color: '#ffffff',
@@ -293,9 +323,10 @@ export const SweetModal: React.FC<SweetModalProps> = ({
           )}
 
           <Button
-            onClick={onConfirm}
+            onClick={handleConfirm}
             disabled={isLoading}
             variant="contained"
+            data-action="confirm"
             startIcon={isLoading ? <CircularProgress size={18} color="inherit" /> : null}
             sx={{
               bgcolor: getButtonBgColor(),

@@ -41,6 +41,11 @@ body {
     display: none !important;
   }
 
+  @page {
+    margin: 12mm 15mm 12mm 15mm;
+    size: auto;
+  }
+
   .MuiDialog-root:has(.print-document),
   .MuiDialog-root:has(.print-document) .MuiDialog-container {
     position: static !important;
@@ -60,6 +65,24 @@ body {
 
   .print-document .MuiDialogContent-root {
     overflow: visible !important;
+    padding: 0 !important;
+  }
+
+  .print-document table {
+    page-break-inside: auto;
+  }
+
+  .print-document tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+
+  .print-document thead {
+    display: table-header-group;
+  }
+
+  .print-document tfoot {
+    display: table-footer-group;
   }
 
   .no-print {

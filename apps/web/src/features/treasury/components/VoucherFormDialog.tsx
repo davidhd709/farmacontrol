@@ -108,6 +108,7 @@ export function VoucherFormDialog({
   const [paymentMethod, setPaymentMethod] = useState<TreasuryVoucherPaymentMethod>('EFECTIVO');
   const [bankAccountId, setBankAccountId] = useState('');
   const [concept, setConcept] = useState('');
+  const [notes, setNotes] = useState('');
   const [party, setParty] = useState<ThirdPartyDto | null>(null);
   const [customer, setCustomer] = useState<CustomerDto | null>(null);
   const [amount, setAmount] = useState('');
@@ -117,8 +118,13 @@ export function VoucherFormDialog({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [statementOpen, setStatementOpen] = useState(false);
+  const [savedDraft, setSavedDraft] = useState<any | null>(null);
+  const [draftBannerDismissed, setDraftBannerDismissed] = useState(false);
+  const [draftToast, setDraftToast] = useState<string | null>(null);
   const retry = useRef<{ fingerprint: string; key: string } | null>(null);
   const bankAccounts = useBankAccountOptions(open && paymentMethod === 'TRANSFERENCIA');
+
+  const draftStorageKey = `farmacontrol_draft_voucher_${type}`;
 
   useEffect(() => {
     if (!open) return;
@@ -126,14 +132,76 @@ export function VoucherFormDialog({
     setPaymentMethod('EFECTIVO');
     setBankAccountId('');
     setConcept('');
+    setNotes('');
     setParty(null);
     setCustomer(null);
     setAmount('');
     setCounterpartAccountId('');
     setSelected({});
     setError(null);
+    setDraftToast(null);
     retry.current = null;
-  }, [open, initialMode]);
+
+    try {
+      const raw = localStorage.getItem(draftStorageKey);
+      if (raw) {
+        setSavedDraft(JSON.parse(raw));
+      } else {
+        setSavedDraft(null);
+      }
+    } catch {
+      setSavedDraft(null);
+    }
+    setDraftBannerDismissed(false);
+  }, [open, initialMode, draftStorageKey]);
+
+  const loadDraft = () => {
+    if (!savedDraft) return;
+    if (savedDraft.mode) setMode(savedDraft.mode);
+    if (savedDraft.paymentMethod) setPaymentMethod(savedDraft.paymentMethod);
+    if (savedDraft.bankAccountId) setBankAccountId(savedDraft.bankAccountId);
+    if (savedDraft.concept) setConcept(savedDraft.concept);
+    if (savedDraft.notes) setNotes(savedDraft.notes);
+    if (savedDraft.party) setParty(savedDraft.party);
+    if (savedDraft.customer) setCustomer(savedDraft.customer);
+    if (savedDraft.amount) setAmount(savedDraft.amount);
+    if (savedDraft.counterpartAccountId) setCounterpartAccountId(savedDraft.counterpartAccountId);
+    if (savedDraft.selected) setSelected(savedDraft.selected);
+    setSavedDraft(null);
+    setDraftToast('Borrador cargado. Puedes modificar cualquier campo antes de contabilizar.');
+  };
+
+  const discardDraft = () => {
+    localStorage.removeItem(draftStorageKey);
+    setSavedDraft(null);
+  };
+
+  const saveDraft = () => {
+    if (concept.trim().length === 0 && !party && !customer && !amount) {
+      setError('Ingresa al menos el concepto o el tercero para guardar el borrador.');
+      return;
+    }
+    setError(null);
+    const draftData = {
+      mode,
+      paymentMethod,
+      bankAccountId,
+      concept,
+      notes,
+      party,
+      customer,
+      amount,
+      counterpartAccountId,
+      selected,
+      savedAt: new Date().toISOString(),
+    };
+    try {
+      localStorage.setItem(draftStorageKey, JSON.stringify(draftData));
+      setDraftToast('Borrador guardado correctamente. Los cambios no se han contabilizado aún.');
+    } catch {
+      setError('No se pudo guardar el borrador en el almacenamiento local.');
+    }
+  };
 
   // El abono a cartera elige el cliente en el maestro de clientes (lo puede consultar cartera)
   const customerId = customer?.id ?? null;
@@ -228,10 +296,13 @@ export function VoucherFormDialog({
   };
 
   const buildPayload = () => {
+    const conceptText = notes.trim()
+      ? `${concept.trim()} (Obs: ${notes.trim()})`
+      : concept.trim();
     const base = {
       paymentMethod,
       bankAccountId: paymentMethod === 'TRANSFERENCIA' ? bankAccountId : undefined,
-      concept: concept.trim(),
+      concept: conceptText,
     };
     if (mode === 'MANUAL') {
       return {
@@ -285,6 +356,12 @@ export function VoucherFormDialog({
             retry.current.key,
           );
       retry.current = null;
+      try {
+        localStorage.removeItem(draftStorageKey);
+        setSavedDraft(null);
+      } catch {
+        // Ignorar fallo de almacenamiento
+      }
       for (const key of [
         'treasury-documents',
         'receivables',
@@ -324,6 +401,30 @@ export function VoucherFormDialog({
       </DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2.5}>
+          {savedDraft && !draftBannerDismissed && (
+            <Alert
+              severity="info"
+              action={
+                <Stack direction="row" spacing={1}>
+                  <Button size="small" variant="contained" color="info" onClick={loadDraft}>
+                    Cargar borrador
+                  </Button>
+                  <Button size="small" color="inherit" onClick={discardDraft}>
+                    Descartar
+                  </Button>
+                </Stack>
+              }
+            >
+              Existe un borrador guardado sin contabilizar. Puedes cargarlo para continuar editándolo o descartarlo.
+            </Alert>
+          )}
+
+          {draftToast && (
+            <Alert severity="success" onClose={() => setDraftToast(null)}>
+              {draftToast}
+            </Alert>
+          )}
+
           {canInvoices && canManual && (
             <ToggleButtonGroup
               exclusive
@@ -544,6 +645,16 @@ export function VoucherFormDialog({
             }
           />
 
+          <TextField
+            label="Observaciones (opcional)"
+            size="small"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Anotaciones adicionales o detalles del documento…"
+            multiline
+            rows={2}
+          />
+
           <Alert severity="info" variant="outlined">
             <strong>Total: {formatMoney(Number.isFinite(totalCents) ? totalCents : 0)}</strong> — el
             dinero {labels.destination}
@@ -556,21 +667,33 @@ export function VoucherFormDialog({
           {error && <Alert severity="error">{error}</Alert>}
         </Stack>
       </DialogContent>
-      <DialogActions>
+      <DialogActions sx={{ justifyContent: 'space-between', px: 3, py: 2 }}>
         <Button onClick={onClose} disabled={submitting}>
           Cancelar
         </Button>
-        <Button
-          variant="contained"
-          disabled={submitting}
-          onClick={() => {
-            const problem = validate();
-            setError(problem);
-            if (!problem) setConfirmOpen(true);
-          }}
-        >
-          {submitting ? 'Registrando…' : 'Registrar'}
-        </Button>
+        <Stack direction="row" spacing={1}>
+          <Button
+            variant="outlined"
+            color="info"
+            disabled={submitting}
+            onClick={saveDraft}
+            sx={{ textTransform: 'none', fontWeight: 600 }}
+          >
+            Guardar Borrador
+          </Button>
+          <Button
+            variant="contained"
+            disabled={submitting}
+            onClick={() => {
+              const problem = validate();
+              setError(problem);
+              if (!problem) setConfirmOpen(true);
+            }}
+            sx={{ textTransform: 'none', fontWeight: 600 }}
+          >
+            {submitting ? 'Registrando…' : 'Registrar'}
+          </Button>
+        </Stack>
       </DialogActions>
 
       <ConfirmDialog
