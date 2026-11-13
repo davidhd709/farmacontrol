@@ -12,20 +12,19 @@ import {
   TableHead,
   TableRow,
   Paper,
-  Chip,
   CircularProgress,
   Alert,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogContentText,
-  DialogActions,
+  Link as MuiLink,
   Tooltip,
 } from '@mui/material';
-import { useNavigate } from 'react-router-dom';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import type { SaleDto, SaleStatus } from '@farmacia/contracts';
 import { SYSTEM_PERMISSIONS } from '@farmacia/contracts';
-import { fetchSales, cancelSale } from '../api/sales.api';
+import { fetchSales } from '../api/sales.api';
+import { CancelSaleDialog } from '../components/CancelSaleDialog';
+import { StatusChip } from '../../../components/StatusChip';
+import { formatCop } from '../../../utils/money';
+import { SALE_STATUS_LABELS, paymentMethodLabel } from '../sale-labels';
 import { SaleReceiptDialog } from '../components/SaleReceiptDialog';
 import { HomeBackButton } from '../../../components/HomeBackButton';
 import { PermissionGate } from '../../auth/components/PermissionGate';
@@ -54,11 +53,8 @@ export const SalesHistoryPage: React.FC = () => {
   const [selectedSaleForReceipt, setSelectedSaleForReceipt] = useState<SaleDto | null>(null);
   const [receiptDialogOpen, setReceiptDialogOpen] = useState(false);
 
-  // Diálogo Anular Venta
-  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  // Anulación de venta
   const [saleToCancel, setSaleToCancel] = useState<SaleDto | null>(null);
-  const [cancelReason, setCancelReason] = useState('');
-  const [actionLoading, setActionLoading] = useState(false);
 
   // Notificaciones Toast
   const [toastMsg, setToastMsg] = useState<string | null>(null);
@@ -106,30 +102,6 @@ export const SalesHistoryPage: React.FC = () => {
 
   const handleOpenCancel = (sale: SaleDto) => {
     setSaleToCancel(sale);
-    setCancelReason('');
-    setCancelDialogOpen(true);
-  };
-
-  const handleConfirmCancel = async () => {
-    if (!saleToCancel) return;
-    if (cancelReason.trim().length < 5) {
-      setErrorMsg('El motivo de anulación debe tener al menos 5 caracteres');
-      return;
-    }
-
-    setActionLoading(true);
-    try {
-      await cancelSale(saleToCancel.id, cancelReason.trim());
-      setToastMsg(`Venta ${saleToCancel.invoiceNumber} anulada correctamente.`);
-      setCancelDialogOpen(false);
-      setSaleToCancel(null);
-      setCancelReason('');
-      await loadSales();
-    } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Error al anular la venta');
-    } finally {
-      setActionLoading(false);
-    }
   };
 
   return (
@@ -252,7 +224,6 @@ export const SalesHistoryPage: React.FC = () => {
           onChange={(value) => setToDateFilter(value)}
           data-testid="filter-to-date"
         />
-
       </FilterBar>
 
       {/* Tabla de Ventas */}
@@ -299,10 +270,17 @@ export const SalesHistoryPage: React.FC = () => {
             ) : (
               sales.map((sale) => (
                 <TableRow key={sale.id} hover>
-                  <TableCell>
-                    {formatDateTime(sale.createdAt)}
+                  <TableCell>{formatDateTime(sale.createdAt)}</TableCell>
+                  <TableCell sx={{ fontWeight: 'bold' }}>
+                    <MuiLink
+                      component={RouterLink}
+                      to={`/sales/${sale.id}`}
+                      underline="hover"
+                      data-testid={`sale-detail-link-${sale.id}`}
+                    >
+                      {sale.invoiceNumber}
+                    </MuiLink>
                   </TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>{sale.invoiceNumber}</TableCell>
                   <TableCell>
                     <Typography variant="body2" sx={{ fontWeight: 500 }}>
                       {sale.customerName || 'Cliente General'}
@@ -313,26 +291,14 @@ export const SalesHistoryPage: React.FC = () => {
                       </Typography>
                     )}
                   </TableCell>
-                  <TableCell>
-                    <Chip
-                      label={sale.paymentMethod}
-                      size="small"
-                      variant="outlined"
-                      color="default"
-                    />
-                  </TableCell>
+                  <TableCell>{paymentMethodLabel(sale.paymentMethod)}</TableCell>
                   <TableCell align="right" sx={{ fontWeight: 'bold', fontSize: '1rem' }}>
-                    $
-                    {sale.total.toLocaleString('es-CO', {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
+                    {formatCop(sale.total)}
                   </TableCell>
                   <TableCell align="center">
-                    <Chip
-                      label={sale.status === 'COMPLETED' ? 'Completada' : 'Anulada'}
-                      size="small"
-                      color={sale.status === 'COMPLETED' ? 'success' : 'error'}
+                    <StatusChip
+                      label={SALE_STATUS_LABELS[sale.status].label}
+                      tone={SALE_STATUS_LABELS[sale.status].tone}
                     />
                   </TableCell>
                   <TableCell align="center">
@@ -423,66 +389,16 @@ export const SalesHistoryPage: React.FC = () => {
         }}
       />
 
-      {/* Modal Diálogo de Anulación de Venta (HU-019) */}
-      <Dialog
-        open={cancelDialogOpen}
-        onClose={() => !actionLoading && setCancelDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-        data-testid="cancel-sale-dialog"
-      >
-        <DialogTitle sx={{ fontWeight: 'bold', color: 'error.main' }}>
-          Anulación de Venta
-        </DialogTitle>
-        <DialogContent dividers>
-          <Alert severity="warning" sx={{ mb: 2 }}>
-            <strong>ADVERTENCIA:</strong> Esta acción restituirá el stock automáticamente a los
-            lotes originales y registrará el egreso correspondiente en la caja activa. Esta
-            operación es irreversible.
-          </Alert>
-
-          <DialogContentText sx={{ mb: 2 }}>
-            ¿Está seguro de que desea anular la venta con comprobante{' '}
-            <strong>{saleToCancel?.invoiceNumber}</strong> por un total de{' '}
-            <strong>
-              ${saleToCancel?.total.toLocaleString('es-CO', { minimumFractionDigits: 2 })}
-            </strong>
-            ?
-          </DialogContentText>
-
-          <TextField
-            label="Motivo de la anulación (Obligatorio)"
-            fullWidth
-            required
-            multiline
-            rows={3}
-            value={cancelReason}
-            onChange={(e) => setCancelReason(e.target.value)}
-            placeholder="Indique la justificación técnica o comercial (ej. Error en digitación de producto por el cliente)..."
-            helperText="Mínimo 5 caracteres para auditoría"
-            disabled={actionLoading}
-            data-testid="cancel-reason-input"
-          />
-        </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
-          <Button
-            onClick={() => setCancelDialogOpen(false)}
-            disabled={actionLoading}
-            color="inherit"
-          >
-            Cancelar
-          </Button>
-          <Button
-            onClick={handleConfirmCancel}
-            disabled={actionLoading || cancelReason.trim().length < 5}
-            color="error"
-            variant="contained"
-            data-testid="confirm-cancel-sale-btn"
-          >
-            {actionLoading ? <CircularProgress size={20} color="inherit" /> : 'Confirmar Anulación'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {/* Anulación de venta (HU-019) */}
+      <CancelSaleDialog
+        sale={saleToCancel}
+        onClose={() => setSaleToCancel(null)}
+        onCancelled={(cancelled) => {
+          setSaleToCancel(null);
+          setToastMsg(`Venta ${cancelled.invoiceNumber} anulada correctamente.`);
+          void loadSales();
+        }}
+      />
 
       {/* Nota Crédito / Devolución parcial (RF-033) */}
       <CreditNoteDialog

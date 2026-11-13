@@ -98,7 +98,7 @@ describe('flujo frontend de autenticación', () => {
         password: 'Password#2026!',
       });
     });
-    expect(await screen.findByRole('heading', { name: /¡Bienvenido/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Inicio', level: 1 })).toBeInTheDocument();
     expect(screen.getAllByText(/cajero/i)[0]).toBeInTheDocument();
   });
 
@@ -131,8 +131,10 @@ describe('flujo frontend de autenticación', () => {
     const tester = userEvent.setup();
     renderApplication('/');
 
-    expect(await screen.findByRole('heading', { name: /¡Bienvenido/i })).toBeInTheDocument();
-    await tester.click(screen.getByRole('button', { name: /Cerrar sesión/i }));
+    expect(await screen.findByRole('heading', { name: 'Inicio', level: 1 })).toBeInTheDocument();
+    // Cambio de contraseña y cierre de sesión viven en el menú del usuario
+    await tester.click(screen.getByRole('button', { name: /^Menú de / }));
+    await tester.click(await screen.findByRole('menuitem', { name: 'Cerrar sesión' }));
 
     await waitFor(() => expect(logoutSpy).toHaveBeenCalledOnce());
     expect(await screen.findByRole('heading', { name: 'Iniciar sesión' })).toBeInTheDocument();
@@ -171,7 +173,7 @@ it('401 en una consulta borra caché y sesión, redirige y login vuelve a la URL
     }),
   );
   const { queryClient } = renderApplication('/pos/scan?search=rx#list');
-  await screen.findByRole('button', { name: /Cerrar sesión/i }, { timeout: 10_000 });
+  await screen.findByRole('button', { name: /^Menú de / }, { timeout: 10_000 });
   queryClient.setQueryData(['private-data'], { customer: 'previous user' });
   let completeOldQuery!: (value: string) => void;
   let oldSignal: AbortSignal | undefined;
@@ -200,7 +202,9 @@ it('401 en una consulta borra caché y sesión, redirige y login vuelve a la URL
     queryClient
       .getQueryCache()
       .getAll()
-      .map((query) => query.queryKey),
+      .map((query) => query.queryKey)
+      // El ambiente del despliegue (GET /health) no es dato del usuario: lo consulta el login
+      .filter((key) => key[0] !== 'app-environment'),
   ).toEqual([authQueryKey]);
   const tester = userEvent.setup();
   await tester.type(screen.getByLabelText('Usuario'), 'cajero');

@@ -103,27 +103,24 @@ describe('Panel T-02', () => {
       P.REPORTS_READ,
       P.USERS_READ,
     ]);
-    const cash = screen.getByRole('region', { name: 'Efectivo en Caja' });
+    const cash = screen.getByRole('region', { name: 'Efectivo en caja' });
     const banks = screen.getByRole('region', { name: 'Bancos' });
-    expect(await within(cash).findByText(/100\.000,00/)).toBeInTheDocument();
-    expect(await within(banks).findByText(/50\.000,00/)).toBeInTheDocument();
+    expect(await within(cash).findByText(/100\.000/)).toBeInTheDocument();
+    expect(await within(banks).findByText(/50\.000/)).toBeInTheDocument();
     expect(within(cash).queryByText(/150\.000/)).not.toBeInTheDocument();
     expect(
-      await within(screen.getByRole('region', { name: 'Cartera de Clientes' })).findByText(
-        /250\.000,00/,
+      await within(screen.getByRole('region', { name: 'Cartera de clientes' })).findByText(
+        /250\.000/,
       ),
     ).toBeInTheDocument();
     expect(receivablesApi.fetchReceivables).not.toHaveBeenCalled();
     expect(screen.queryByText('Gestión de Usuarios')).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Arqueo y Movimientos' })).toHaveAttribute(
-      'href',
-      '/cash',
-    );
-    expect(screen.getByRole('link', { name: 'Ver cuentas bancarias' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Ver caja' })).toHaveAttribute('href', '/cash');
+    expect(screen.getByRole('link', { name: 'Ver bancos' })).toHaveAttribute(
       'href',
       '/treasury/bank-accounts',
     );
-    expect(screen.getByRole('link', { name: 'Ver Cuentas por Cobrar' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Ver cartera' })).toHaveAttribute(
       'href',
       '/receivables',
     );
@@ -133,9 +130,9 @@ describe('Panel T-02', () => {
     renderDashboard([P.SALES_READ, P.USERS_READ]);
     for (const label of [
       'Ventas de hoy',
-      'Efectivo en Caja',
+      'Efectivo en caja',
       'Bancos',
-      'Cartera de Clientes',
+      'Cartera de clientes',
       'Gestión de Usuarios',
     ])
       expect(screen.queryByText(label)).not.toBeInTheDocument();
@@ -152,14 +149,14 @@ describe('Panel T-02', () => {
   it('muestra No disponible al fallar caja, mantiene bancos y permite reintentar', async () => {
     vi.mocked(cashApi.fetchCashBalance).mockRejectedValueOnce(new Error('offline'));
     renderDashboard([P.CASH_READ, P.TREASURY_READ]);
-    const cash = screen.getByRole('region', { name: 'Efectivo en Caja' });
+    const cash = screen.getByRole('region', { name: 'Efectivo en caja' });
     expect(await within(cash).findByText('No disponible')).toBeInTheDocument();
     expect(within(cash).queryByText(/\$\s*0/)).not.toBeInTheDocument();
     expect(
-      await within(screen.getByRole('region', { name: 'Bancos' })).findByText(/50\.000,00/),
+      await within(screen.getByRole('region', { name: 'Bancos' })).findByText(/50\.000/),
     ).toBeInTheDocument();
-    fireEvent.click(within(cash).getByRole('button', { name: 'Reintentar Efectivo en Caja' }));
-    expect(await within(cash).findByText(/100\.000,00/)).toBeInTheDocument();
+    fireEvent.click(within(cash).getByRole('button', { name: 'Reintentar Efectivo en caja' }));
+    expect(await within(cash).findByText(/100\.000/)).toBeInTheDocument();
   });
 
   it('muestra ventas de hoy y enlaza al mismo período de Bogotá', async () => {
@@ -186,6 +183,44 @@ describe('Panel T-02', () => {
     renderDashboard([P.INVENTORY_READ, P.ALERTS_READ]);
     fireEvent.click(await screen.findByRole('link', { name: 'Críticos: 5' }));
     expect(screen.getByLabelText('Ubicación')).toHaveTextContent('/alerts?severity=CRITICO');
+  });
+
+  it('lista como pendientes los vencidos y críticos, con la acción que los resuelve', async () => {
+    renderDashboard([P.INVENTORY_READ, P.ALERTS_READ]);
+    const pending = await screen.findByRole('region', { name: 'Pendientes' });
+    expect(await within(pending).findByText(/1 lote vencido con existencias/)).toBeInTheDocument();
+    expect(within(pending).getByText(/5 lotes vencen en 30 días o menos/)).toBeInTheDocument();
+    expect(within(pending).getByRole('link', { name: 'Revisar vencidos' })).toHaveAttribute(
+      'href',
+      '/alerts?severity=VENCIDO',
+    );
+  });
+
+  it('sin pendientes lo dice, y el inicio no muestra conteo de permisos ni avisos técnicos', async () => {
+    vi.mocked(alertsApi.fetchAlertsSummary).mockResolvedValue({
+      totalActive: 0,
+      vencidos: 0,
+      criticos: 0,
+      alertas: 0,
+      proximos: 0,
+      lastEvaluatedAt: null,
+    });
+    renderDashboard([P.INVENTORY_READ, P.ALERTS_READ, P.RECEIVABLES_READ]);
+    expect(await screen.findByText('No hay pendientes que requieran acción.')).toBeInTheDocument();
+    expect(screen.queryByText(/permisos habilitados/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/FEFO/)).not.toBeInTheDocument();
+  });
+
+  it('accesos frecuentes según el perfil: el cajero ve Nueva venta, no Recibir compra', () => {
+    renderDashboard([P.SALES_CREATE, P.SALES_READ]);
+    const shortcuts = screen.getByRole('region', { name: 'Accesos frecuentes' });
+    expect(within(shortcuts).getByRole('link', { name: 'Nueva venta' })).toHaveAttribute(
+      'href',
+      '/pos',
+    );
+    expect(
+      within(shortcuts).queryByRole('link', { name: 'Recibir compra' }),
+    ).not.toBeInTheDocument();
   });
 
   it('el destino de ventas aplica el período recibido en la URL', async () => {

@@ -447,11 +447,11 @@ export const PosPage: React.FC = () => {
         }}
       >
         <Box>
-          <Typography variant="h5" component="h1" sx={{ fontWeight: 800, color: 'text.primary' }}>
-            Punto de Venta (POS)
+          <Typography variant="h4" component="h1">
+            Punto de venta
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Dispensación y facturación rápida con asignación automática FEFO.
+            Busque o escanee el producto · F2 cobra la venta
           </Typography>
         </Box>
 

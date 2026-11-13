@@ -1,94 +1,122 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Avatar,
+  Alert,
   Box,
   Button,
   Card,
   CardContent,
-  Chip,
-  Container,
-  Paper,
+  Link as MuiLink,
+  List,
+  ListItem,
+  Skeleton,
   Stack,
   Typography,
-  Skeleton,
 } from '@mui/material';
-import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
+import AddShoppingCartIcon from '@mui/icons-material/AddShoppingCart';
+import LocalShippingIcon from '@mui/icons-material/LocalShipping';
+import Inventory2Icon from '@mui/icons-material/Inventory2';
+import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { SYSTEM_PERMISSIONS } from '@farmacia/contracts';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../features/auth/hooks/useAuth';
 import { usePermissions } from '../features/auth/hooks/usePermissions';
-import { useQuery } from '@tanstack/react-query';
 import { fetchAlertsSummary } from '../features/alerts/api/alerts.api';
 import { fetchCashBalance } from '../features/cash/api/cash.api';
 import { fetchReceivablesAgingSummary } from '../features/receivables/api/receivables.api';
 import { getBankAccountSummary } from '../features/treasury/api/treasury.api';
 import { fetchSalesReport } from '../features/reports/api/reports.api';
 import { businessToday } from '../utils/business-date';
+import { formatCop } from '../utils/money';
+import { formatDate } from '../utils/date-format';
 
-const currency = (value: number | string) =>
-  new Intl.NumberFormat('es-CO', {
-    style: 'currency',
-    currency: 'COP',
-    minimumFractionDigits: 2,
-  }).format(typeof value === 'string' ? Number(value) : value);
+type QueryState = { isPending: boolean; isError: boolean; refetch: () => unknown };
 
-function MetricCard({
+/** Indicador compacto: nombre, valor, detalle y un enlace a la pantalla donde se actúa. */
+function Kpi({
   title,
-  period,
+  detail,
   query,
   children,
   to,
   action,
 }: {
   title: string;
-  period: string;
-  query: { isPending: boolean; isError: boolean; refetch: () => unknown };
+  detail: string;
+  query: QueryState;
   children: ReactNode;
   to: string;
   action: string;
 }) {
   return (
-    <Card variant="outlined" component="section" aria-label={title} sx={{ borderRadius: 3 }}>
-      <CardContent>
-        <Stack spacing={1.5}>
-          <Typography component="h2" variant="subtitle2">
-            {title}
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            {period}
-          </Typography>
+    <Card variant="outlined" component="section" aria-label={title}>
+      <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+        <Typography component="h2" variant="body2" color="text.secondary" sx={{ fontWeight: 700 }}>
+          {title}
+        </Typography>
+        <Box sx={{ minHeight: 44, display: 'flex', alignItems: 'center' }}>
           {query.isError ? (
-            <Stack spacing={1}>
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
               <Typography role="status">No disponible</Typography>
-              <Button
-                onClick={() => {
-                  query.refetch();
-                }}
-              >
+              <Button size="small" onClick={() => void query.refetch()}>
                 Reintentar {title}
               </Button>
             </Stack>
           ) : query.isPending ? (
-            <Skeleton aria-label={`Cargando ${title}`} height={40} />
+            <Skeleton aria-label={`Cargando ${title}`} width="70%" height={36} />
           ) : (
             children
           )}
-          <Button component={Link} to={to} variant="outlined">
-            {action}
-          </Button>
-        </Stack>
+        </Box>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+          {detail}
+        </Typography>
+        <MuiLink
+          component={Link}
+          to={to}
+          variant="body2"
+          underline="hover"
+          sx={{ display: 'inline-flex', alignItems: 'center', mt: 1, fontWeight: 700 }}
+        >
+          {action}
+          <ChevronRightIcon fontSize="small" aria-hidden />
+        </MuiLink>
       </CardContent>
     </Card>
   );
 }
 
+const kpiValueSx = {
+  fontSize: '1.5rem',
+  fontWeight: 800,
+  fontVariantNumeric: 'tabular-nums',
+} as const;
+
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+interface Pending {
+  key: string;
+  severity: 'error' | 'warning';
+  text: string;
+  to: string;
+  action: string;
+}
+
 export function AuthenticatedHomePage() {
   const { user } = useAuth();
-  const { roles, permissions, hasPermission } = usePermissions();
+  const { hasPermission } = usePermissions();
   const today = businessToday();
+
   const canReadAlerts =
     hasPermission(SYSTEM_PERMISSIONS.INVENTORY_READ) &&
     hasPermission(SYSTEM_PERMISSIONS.ALERTS_READ);
+  const canReadCash = hasPermission(SYSTEM_PERMISSIONS.CASH_READ);
+  const canReadBanks = hasPermission(SYSTEM_PERMISSIONS.TREASURY_READ);
+  const canReadReceivables = hasPermission(SYSTEM_PERMISSIONS.RECEIVABLES_READ);
+  const canReadSales = hasPermission(SYSTEM_PERMISSIONS.REPORTS_READ);
+
   const alertsQuery = useQuery({
     queryKey: ['dashboard', 'alerts-summary'],
     queryFn: fetchAlertsSummary,
@@ -98,262 +126,280 @@ export function AuthenticatedHomePage() {
   const cashQuery = useQuery({
     queryKey: ['dashboard', 'cash-balance'],
     queryFn: fetchCashBalance,
-    enabled: hasPermission(SYSTEM_PERMISSIONS.CASH_READ),
+    enabled: canReadCash,
     refetchInterval: 30000,
   });
   const banksQuery = useQuery({
     queryKey: ['dashboard', 'banks-summary'],
     queryFn: getBankAccountSummary,
-    enabled: hasPermission(SYSTEM_PERMISSIONS.TREASURY_READ),
+    enabled: canReadBanks,
     refetchInterval: 30000,
   });
   const receivablesQuery = useQuery({
     queryKey: ['dashboard', 'receivables-summary'],
     queryFn: fetchReceivablesAgingSummary,
-    enabled: hasPermission(SYSTEM_PERMISSIONS.RECEIVABLES_READ),
+    enabled: canReadReceivables,
     refetchInterval: 30000,
   });
   const salesQuery = useQuery({
     queryKey: ['dashboard', 'sales', today],
     queryFn: () => fetchSalesReport({ fromDate: today, toDate: today }),
-    enabled: hasPermission(SYSTEM_PERMISSIONS.REPORTS_READ),
+    enabled: canReadSales,
     refetchInterval: 30000,
   });
 
-  const todayFormatted = new Intl.DateTimeFormat('es-CO', {
-    timeZone: 'America/Bogota',
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  }).format(new Date());
+  const quickActions = [
+    {
+      to: '/pos',
+      label: 'Nueva venta',
+      icon: <AddShoppingCartIcon />,
+      allowed: hasPermission(SYSTEM_PERMISSIONS.SALES_CREATE),
+    },
+    {
+      to: '/purchases/receive',
+      label: 'Recibir compra',
+      icon: <LocalShippingIcon />,
+      allowed: hasPermission(SYSTEM_PERMISSIONS.PURCHASES_RECEIVE),
+    },
+    {
+      to: '/inventory/lots',
+      label: 'Stock y lotes',
+      icon: <Inventory2Icon />,
+      allowed: hasPermission(SYSTEM_PERMISSIONS.INVENTORY_READ),
+    },
+    {
+      to: '/cash',
+      label: 'Caja',
+      icon: <AccountBalanceWalletIcon />,
+      allowed: canReadCash,
+    },
+    {
+      to: '/sales',
+      label: 'Historial de ventas',
+      icon: <ReceiptLongIcon />,
+      allowed: hasPermission(SYSTEM_PERMISSIONS.SALES_READ),
+    },
+  ].filter((action) => action.allowed);
+
+  // Pendientes que llevan a una acción concreta; solo con datos ya cargados
+  const pending: Pending[] = [];
+  const alerts = alertsQuery.data;
+  if (alerts?.vencidos) {
+    pending.push({
+      key: 'vencidos',
+      severity: 'error',
+      text: `${plural(alerts.vencidos, 'lote vencido', 'lotes vencidos')} con existencias: retírelos de la venta.`,
+      to: '/alerts?severity=VENCIDO',
+      action: 'Revisar vencidos',
+    });
+  }
+  if (alerts?.criticos) {
+    pending.push({
+      key: 'criticos',
+      severity: 'warning',
+      text: `${plural(alerts.criticos, 'lote vence', 'lotes vencen')} en 30 días o menos.`,
+      to: '/alerts?severity=CRITICO',
+      action: 'Revisar críticos',
+    });
+  }
+  const aging = receivablesQuery.data;
+  const overdueCount = aging ? aging.days61To90.count + aging.daysOver90.count : 0;
+  if (overdueCount > 0) {
+    pending.push({
+      key: 'cartera',
+      severity: 'warning',
+      text: `${plural(overdueCount, 'cuenta por cobrar', 'cuentas por cobrar')} con más de 60 días.`,
+      to: '/receivables',
+      action: 'Ver cartera',
+    });
+  }
+  const pendingSources = [
+    canReadAlerts && alertsQuery,
+    canReadReceivables && receivablesQuery,
+  ].filter(Boolean) as QueryState[];
+  const pendingLoaded = pendingSources.length > 0 && pendingSources.every((q) => !q.isPending);
+
+  const hasKpis =
+    canReadSales || canReadCash || canReadAlerts || canReadBanks || canReadReceivables;
 
   return (
-    <Box sx={{ minHeight: '100%', py: { xs: 1, sm: 2 } }}>
-      <Container maxWidth="lg" disableGutters>
-        <Stack spacing={3}>
-          {/* Banner de Bienvenida y Estado del Operador (Boss Ultimate Style) */}
-          <Paper
-            elevation={0}
-            sx={{
-              p: { xs: 2.5, md: 3 },
-              borderRadius: 3,
-              border: 1,
-              borderColor: 'divider',
-              bgcolor: '#FFFFFF',
-              boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
-            }}
-          >
-            <Box
-              sx={{
-                display: 'flex',
-                flexDirection: { xs: 'column', sm: 'row' },
-                alignItems: { xs: 'flex-start', sm: 'center' },
-                justifyContent: 'space-between',
-                gap: 2,
-              }}
+    <Stack spacing={3} sx={{ maxWidth: 1200 }}>
+      <Box>
+        <Typography component="h1" variant="h4">
+          Inicio
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+          Hola, {user?.username} · Hoy {formatDate(today)}
+        </Typography>
+      </Box>
+
+      {quickActions.length > 0 && (
+        <Box
+          component="section"
+          aria-label="Accesos frecuentes"
+          sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}
+        >
+          {quickActions.map((action, index) => (
+            <Button
+              key={action.to}
+              component={Link}
+              to={action.to}
+              variant={index === 0 ? 'contained' : 'outlined'}
+              startIcon={action.icon}
             >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Avatar
-                  sx={{
-                    width: 54,
-                    height: 54,
-                    bgcolor: 'primary.main',
-                    fontWeight: 800,
-                    fontSize: '1.25rem',
-                    boxShadow: '0 2px 8px rgba(15, 118, 110, 0.25)',
-                  }}
-                >
-                  {user?.username?.substring(0, 2).toUpperCase() || 'U'}
-                </Avatar>
-                <Box>
-                  <Typography variant="h5" sx={{ fontWeight: 800, color: 'text.primary' }}>
-                    ¡Bienvenido, {user?.username}!
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.2 }}>
-                    Tu sesión está activa con {permissions.length} permisos habilitados en la
-                    plataforma.
-                  </Typography>
-                  <Typography
-                    variant="caption"
-                    sx={{ color: 'text.disabled', textTransform: 'capitalize' }}
-                  >
-                    📅 {todayFormatted}
-                  </Typography>
-                </Box>
+              {action.label}
+            </Button>
+          ))}
+        </Box>
+      )}
+
+      {hasKpis && (
+        <Box
+          sx={{
+            display: 'grid',
+            gap: 2,
+            gridTemplateColumns: {
+              xs: 'minmax(0, 1fr)',
+              sm: 'repeat(2, minmax(0, 1fr))',
+              lg: 'repeat(auto-fit, minmax(200px, 1fr))',
+            },
+          }}
+        >
+          {canReadSales && (
+            <Kpi
+              title="Ventas de hoy"
+              detail={`${formatDate(today)} · hora de Bogotá`}
+              query={salesQuery}
+              to={`/reports?tab=sales&fromDate=${today}&toDate=${today}`}
+              action="Ver ventas de hoy"
+            >
+              <Box>
+                <Typography sx={kpiValueSx}>
+                  {salesQuery.data && formatCop(salesQuery.data.totalAmount)}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {salesQuery.data && plural(salesQuery.data.totalSales, 'venta', 'ventas')}
+                </Typography>
               </Box>
-
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
-                <Typography
-                  variant="caption"
-                  sx={{ fontWeight: 700, color: 'text.secondary', mr: 0.5 }}
-                >
-                  ROLES:
-                </Typography>
-                {roles.length > 0 ? (
-                  roles.map((role) => (
-                    <Chip
-                      key={role}
-                      label={role}
-                      color={role === 'admin' ? 'primary' : 'default'}
-                      size="small"
-                      sx={{ fontWeight: 700, textTransform: 'capitalize', borderRadius: 1.5 }}
-                    />
-                  ))
-                ) : (
-                  <Chip label="Sin rol" size="small" variant="outlined" />
-                )}
-              </Box>
-            </Box>
-          </Paper>
-
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(4, minmax(0, 1fr))' },
-              gap: 2,
-            }}
-          >
-            {hasPermission(SYSTEM_PERMISSIONS.CASH_READ) && (
-              <MetricCard
-                title="Efectivo en Caja"
-                period="Saldo actual"
-                query={cashQuery}
-                to="/cash"
-                action="Arqueo y Movimientos"
-              >
-                <Typography variant="h5">
-                  {cashQuery.data && currency(cashQuery.data.currentBalance)}
-                </Typography>
-              </MetricCard>
-            )}
-            {hasPermission(SYSTEM_PERMISSIONS.TREASURY_READ) && (
-              <MetricCard
-                title="Bancos"
-                period="Saldo actual"
-                query={banksQuery}
-                to="/treasury/bank-accounts"
-                action="Ver cuentas bancarias"
-              >
-                <Typography variant="h5">
-                  {banksQuery.data && currency(banksQuery.data.totalBalance)}
-                </Typography>
-              </MetricCard>
-            )}
-            {hasPermission(SYSTEM_PERMISSIONS.RECEIVABLES_READ) && (
-              <MetricCard
-                title="Cartera de Clientes"
-                period="Saldo pendiente actual · todas las cuentas"
-                query={receivablesQuery}
-                to="/receivables"
-                action="Ver Cuentas por Cobrar"
-              >
-                <Typography variant="h5">
-                  {receivablesQuery.data && currency(receivablesQuery.data.totalPending)}
-                </Typography>
-              </MetricCard>
-            )}
-            {hasPermission(SYSTEM_PERMISSIONS.REPORTS_READ) && (
-              <MetricCard
-                title="Ventas de hoy"
-                period={`Hoy: ${today} · Bogotá`}
-                query={salesQuery}
-                to={`/reports?tab=sales&fromDate=${today}&toDate=${today}`}
-                action="Ver ventas de hoy"
-              >
-                <Box>
-                  <Typography variant="h5">
-                    {salesQuery.data && currency(salesQuery.data.totalAmount)}
-                  </Typography>
-                  <Typography>{salesQuery.data?.totalSales} ventas</Typography>
-                </Box>
-              </MetricCard>
-            )}
-            {canReadAlerts && (
-              <MetricCard
-                title="Alertas de vencimiento"
-                period="Lotes activos con stock · estado actual"
-                query={alertsQuery}
-                to="/alerts"
-                action="Revisar Alertas"
-              >
-                <Stack spacing={1}>
-                  {(
-                    [
-                      ['VENCIDO', 'Vencidos', alertsQuery.data?.vencidos],
-                      ['CRITICO', 'Críticos', alertsQuery.data?.criticos],
-                      ['ALERTA', 'En alerta', alertsQuery.data?.alertas],
-                      ['PROXIMO', 'Próximos', alertsQuery.data?.proximos],
-                    ] as const
-                  ).map(([severity, label, count]) => (
-                    <Button
-                      key={severity}
-                      component={Link}
-                      to={`/alerts?severity=${severity}`}
-                      sx={{ justifyContent: 'flex-start' }}
-                    >
-                      {label}: {count}
-                    </Button>
-                  ))}
-                </Stack>
-              </MetricCard>
-            )}
-          </Box>
-
-          {/* Panel de Resumen Rápido y Notificaciones de Seguridad */}
-          <Paper
-            variant="outlined"
-            sx={{
-              p: 3,
-              borderRadius: 3,
-              bgcolor: '#FFFFFF',
-            }}
-          >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-              <NotificationsActiveIcon color="primary" />
-              <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
-                Avisos Operativos y Reglas Críticas del Sistema
+            </Kpi>
+          )}
+          {canReadCash && (
+            <Kpi
+              title="Efectivo en caja"
+              detail="Saldo actual"
+              query={cashQuery}
+              to="/cash"
+              action="Ver caja"
+            >
+              <Typography sx={kpiValueSx}>
+                {cashQuery.data && formatCop(cashQuery.data.currentBalance)}
               </Typography>
-            </Box>
-            <Stack spacing={1.5}>
-              <Box
-                sx={{
-                  p: 2,
-                  borderRadius: 2,
-                  bgcolor: '#F8FAFC',
-                  border: 1,
-                  borderColor: 'divider',
-                }}
-              >
-                <Typography variant="body2" sx={{ fontWeight: 700, color: 'text.primary' }}>
-                  🎯 Motor de Dispensación FEFO Activo:
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                  Toda venta reserva automáticamente los lotes con fecha de vencimiento más próxima
-                  de forma inmutable, garantizando cero pérdidas de producto vencido.
-                </Typography>
-              </Box>
-              <Box
-                sx={{
-                  p: 2,
-                  borderRadius: 2,
-                  bgcolor: '#F8FAFC',
-                  border: 1,
-                  borderColor: 'divider',
-                }}
-              >
-                <Typography variant="body2" sx={{ fontWeight: 700, color: 'text.primary' }}>
-                  🛡️ Navegación Centralizada:
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                  Utiliza el menú lateral izquierdo para acceder rápidamente a Ventas, Inventario,
-                  Contabilidad, Reportes y Configuración de acuerdo a tus roles asignados.
-                </Typography>
-              </Box>
-            </Stack>
-          </Paper>
-        </Stack>
-      </Container>
-    </Box>
+            </Kpi>
+          )}
+          {canReadAlerts && (
+            <Kpi
+              title="Vencimientos"
+              detail="Lotes activos con existencias"
+              query={alertsQuery}
+              to="/alerts"
+              action="Ver vencimientos"
+            >
+              <Stack direction="row" spacing={2} useFlexGap sx={{ flexWrap: 'wrap' }}>
+                {(
+                  [
+                    ['VENCIDO', 'Vencidos', alertsQuery.data?.vencidos],
+                    ['CRITICO', 'Críticos', alertsQuery.data?.criticos],
+                    ['ALERTA', 'En alerta', alertsQuery.data?.alertas],
+                  ] as const
+                ).map(([severity, label, count]) => (
+                  <MuiLink
+                    key={severity}
+                    component={Link}
+                    to={`/alerts?severity=${severity}`}
+                    underline="hover"
+                    color={severity === 'VENCIDO' && count ? 'error' : 'inherit'}
+                    sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}
+                  >
+                    {label}: {count}
+                  </MuiLink>
+                ))}
+              </Stack>
+            </Kpi>
+          )}
+          {canReadBanks && (
+            <Kpi
+              title="Bancos"
+              detail={
+                banksQuery.data
+                  ? `${plural(banksQuery.data.activeAccountsCount, 'cuenta activa', 'cuentas activas')}`
+                  : 'Saldo actual'
+              }
+              query={banksQuery}
+              to="/treasury/bank-accounts"
+              action="Ver bancos"
+            >
+              <Typography sx={kpiValueSx}>
+                {banksQuery.data && formatCop(banksQuery.data.totalBalance)}
+              </Typography>
+            </Kpi>
+          )}
+          {canReadReceivables && (
+            <Kpi
+              title="Cartera de clientes"
+              detail={
+                receivablesQuery.data
+                  ? `Saldo pendiente · ${plural(receivablesQuery.data.totalCount, 'cuenta', 'cuentas')}`
+                  : 'Saldo pendiente'
+              }
+              query={receivablesQuery}
+              to="/receivables"
+              action="Ver cartera"
+            >
+              <Typography sx={kpiValueSx}>
+                {receivablesQuery.data && formatCop(receivablesQuery.data.totalPending)}
+              </Typography>
+            </Kpi>
+          )}
+        </Box>
+      )}
+
+      {pendingSources.length > 0 && (
+        <Box component="section" aria-labelledby="home-pending-title">
+          <Typography
+            id="home-pending-title"
+            component="h2"
+            variant="h6"
+            sx={{ fontWeight: 700, mb: 1 }}
+          >
+            Pendientes
+          </Typography>
+          {!pendingLoaded ? (
+            <Skeleton aria-label="Cargando pendientes" height={48} />
+          ) : pending.length === 0 ? (
+            <Typography variant="body2" color="text.secondary" role="status">
+              No hay pendientes que requieran acción.
+            </Typography>
+          ) : (
+            <List disablePadding sx={{ display: 'grid', gap: 1 }}>
+              {pending.map((item) => (
+                <ListItem key={item.key} disablePadding>
+                  <Alert
+                    severity={item.severity}
+                    sx={{ width: '100%' }}
+                    action={
+                      <Button component={Link} to={item.to} color="inherit" size="small">
+                        {item.action}
+                      </Button>
+                    }
+                  >
+                    {item.text}
+                  </Alert>
+                </ListItem>
+              ))}
+            </List>
+          )}
+        </Box>
+      )}
+    </Stack>
   );
 }

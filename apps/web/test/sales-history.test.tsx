@@ -176,7 +176,7 @@ describe('SalesHistoryPage (Frontend Historial y Anulación UX-04 / UX-05)', () 
     // Diálogo de confirmación con advertencia irreversible
     expect(await screen.findByTestId('cancel-sale-dialog')).toBeInTheDocument();
     expect(
-      screen.getByText(/Esta acción restituirá el stock automáticamente a los lotes originales/i),
+      screen.getByText(/Las unidades vuelven a sus lotes de origen/i),
     ).toBeInTheDocument();
 
     const confirmCancelBtn = screen.getByTestId('confirm-cancel-sale-btn');

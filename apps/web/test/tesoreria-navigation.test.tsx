@@ -27,12 +27,12 @@ describe('Navegación del rol tesorería (2026-11-03)', () => {
       </ThemeProvider>,
     );
     const expected = [
-      'Control de Caja',
-      'Tesorería y Bancos',
-      'Recibos de Caja',
-      'Comprobantes de Egreso',
-      'Cuentas por Cobrar',
-      'Cuentas por Pagar',
+      'Caja',
+      'Bancos',
+      'Recibos de caja',
+      'Comprobantes de egreso',
+      'Cuentas por cobrar',
+      'Cuentas por pagar',
     ];
     const visible = menuGroups
       .flatMap((group) => group.items)

@@ -8,9 +8,10 @@ test('el cajero no ve ni abre módulos sin permiso, y el API también lo rechaza
   page,
 }) => {
   await page.goto('/');
-  await expect(page.getByRole('button', { name: 'Punto de Venta (POS)' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Gestión de Usuarios' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Libro Diario' })).toHaveCount(0);
+  const menu = page.getByRole('navigation', { name: 'Menú principal' });
+  await expect(menu.getByRole('link', { name: 'Punto de venta' })).toBeVisible();
+  await expect(menu.getByRole('link', { name: 'Usuarios' })).toHaveCount(0);
+  await expect(menu.getByRole('link', { name: 'Libro diario' })).toHaveCount(0);
 
   for (const path of ['/users', '/accounting/journal', '/purchases/receive', '/backups']) {
     await page.goto(path);

@@ -161,6 +161,6 @@ describe('Directorio de terceros por rol (2026-11-03)', () => {
         <MemoryRouter>{withAuth(<AppSidebar open onClose={vi.fn()} />, permissions)}</MemoryRouter>
       </ThemeProvider>,
     );
-    expect(Boolean(screen.queryByText('Directorio de Terceros'))).toBe(visible);
+    expect(Boolean(screen.queryByText('Clientes, proveedores y otros'))).toBe(visible);
   });
 });

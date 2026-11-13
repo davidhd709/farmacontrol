@@ -1,35 +1,47 @@
 import type React from 'react';
 import { SYSTEM_PERMISSIONS } from '@farmacia/contracts';
+import StorefrontIcon from '@mui/icons-material/Storefront';
 import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
-import BusinessIcon from '@mui/icons-material/Business';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
-import PeopleAltIcon from '@mui/icons-material/PeopleAlt';
+import AssignmentReturnIcon from '@mui/icons-material/AssignmentReturn';
+import LocalShippingIcon from '@mui/icons-material/LocalShipping';
+import ShoppingBagIcon from '@mui/icons-material/ShoppingBag';
 import Inventory2Icon from '@mui/icons-material/Inventory2';
-import CompareArrowsIcon from '@mui/icons-material/CompareArrows';
+import SwapVertIcon from '@mui/icons-material/SwapVert';
+import EventBusyIcon from '@mui/icons-material/EventBusy';
 import MedicationIcon from '@mui/icons-material/Medication';
 import CategoryIcon from '@mui/icons-material/Category';
 import StraightenIcon from '@mui/icons-material/Straighten';
-import LocalShippingIcon from '@mui/icons-material/LocalShipping';
-import ShoppingBagIcon from '@mui/icons-material/ShoppingBag';
-import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import PeopleAltIcon from '@mui/icons-material/PeopleAlt';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
-import MonetizationOnIcon from '@mui/icons-material/MonetizationOn';
+import ReceiptIcon from '@mui/icons-material/Receipt';
 import PaymentsIcon from '@mui/icons-material/Payments';
+import MonetizationOnIcon from '@mui/icons-material/MonetizationOn';
+import RequestPageIcon from '@mui/icons-material/RequestPage';
+import RequestQuoteIcon from '@mui/icons-material/RequestQuote';
+import MenuBookIcon from '@mui/icons-material/MenuBook';
+import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
+import CompareArrowsIcon from '@mui/icons-material/CompareArrows';
+import RuleIcon from '@mui/icons-material/Rule';
+import BalanceIcon from '@mui/icons-material/Balance';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import SummarizeIcon from '@mui/icons-material/Summarize';
+import DateRangeIcon from '@mui/icons-material/DateRange';
+import CalculateIcon from '@mui/icons-material/Calculate';
 import AssessmentIcon from '@mui/icons-material/Assessment';
+import SettingsIcon from '@mui/icons-material/Settings';
+import BusinessIcon from '@mui/icons-material/Business';
 import ManageAccountsIcon from '@mui/icons-material/ManageAccounts';
 import CloudSyncIcon from '@mui/icons-material/CloudSync';
-import AccountTreeIcon from '@mui/icons-material/AccountTree';
-import RuleIcon from '@mui/icons-material/Rule';
-import UploadFileIcon from '@mui/icons-material/UploadFile';
-import MenuBookIcon from '@mui/icons-material/MenuBook';
-import BalanceIcon from '@mui/icons-material/Balance';
-import DateRangeIcon from '@mui/icons-material/DateRange';
 import HistoryIcon from '@mui/icons-material/History';
-import GavelIcon from '@mui/icons-material/Gavel';
 import ChecklistIcon from '@mui/icons-material/Checklist';
-import AssignmentReturnIcon from '@mui/icons-material/AssignmentReturn';
-interface MenuItemConfig {
+import GavelIcon from '@mui/icons-material/Gavel';
+import AccountTreeIcon from '@mui/icons-material/AccountTree';
+import TuneIcon from '@mui/icons-material/Tune';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
+
+export interface MenuItemConfig {
   title: string;
   path: string;
   icon: React.ReactNode;
@@ -49,29 +61,39 @@ const THIRD_PARTY_DIRECTORY = [
   SYSTEM_PERMISSIONS.SUPPLIERS_MANAGE,
 ];
 
-interface MenuGroupConfig {
+export interface MenuGroupConfig {
+  /** Identificador estable: guarda qué grupos dejó abiertos el usuario */
+  id: string;
   category: string;
+  icon: React.ReactNode;
   items: MenuItemConfig[];
 }
 
+/**
+ * Menú agrupado por tarea (rediseño 2026-11-12, fase 1). Cada entrada conserva la ruta y el
+ * permiso que ya tenía: el menú y la guarda de rutas (`RequirePermission`) leen esta misma
+ * tabla, y el API valida cada endpoint por su cuenta.
+ */
 export const menuGroups: MenuGroupConfig[] = [
   {
-    category: 'VENTAS',
+    id: 'ventas',
+    category: 'Ventas',
+    icon: <StorefrontIcon fontSize="small" />,
     items: [
       {
-        title: 'Punto de Venta (POS)',
+        title: 'Punto de venta',
         path: '/pos',
         icon: <PointOfSaleIcon fontSize="small" />,
         permission: SYSTEM_PERMISSIONS.SALES_CREATE,
       },
       {
-        title: 'Historial de Ventas',
+        title: 'Historial de ventas',
         path: '/sales',
         icon: <ReceiptLongIcon fontSize="small" />,
         permission: SYSTEM_PERMISSIONS.SALES_READ,
       },
       {
-        title: 'Notas Crédito',
+        title: 'Notas crédito',
         path: '/credit-notes',
         icon: <AssignmentReturnIcon fontSize="small" />,
         permission: SYSTEM_PERMISSIONS.SALES_READ,
@@ -79,22 +101,49 @@ export const menuGroups: MenuGroupConfig[] = [
     ],
   },
   {
-    category: 'INVENTARIO',
+    id: 'compras',
+    category: 'Compras',
+    icon: <LocalShippingIcon fontSize="small" />,
     items: [
       {
-        title: 'Stock',
+        title: 'Recepción de compras',
+        path: '/purchases/receive',
+        icon: <LocalShippingIcon fontSize="small" />,
+        permission: SYSTEM_PERMISSIONS.PURCHASES_RECEIVE,
+      },
+      {
+        title: 'Historial y devoluciones',
+        path: '/purchases',
+        icon: <ShoppingBagIcon fontSize="small" />,
+        permission: SYSTEM_PERMISSIONS.PURCHASES_READ,
+      },
+    ],
+  },
+  {
+    id: 'inventario',
+    category: 'Inventario',
+    icon: <Inventory2Icon fontSize="small" />,
+    items: [
+      {
+        title: 'Stock y lotes',
         path: '/inventory/lots',
         icon: <Inventory2Icon fontSize="small" />,
         permission: SYSTEM_PERMISSIONS.INVENTORY_READ,
       },
       {
-        title: 'Movimientos (Kardex)',
+        title: 'Kardex',
         path: '/inventory/movements',
-        icon: <CompareArrowsIcon fontSize="small" />,
+        icon: <SwapVertIcon fontSize="small" />,
         permission: SYSTEM_PERMISSIONS.INVENTORY_READ,
       },
       {
-        title: 'Catálogo de Productos',
+        title: 'Vencimientos',
+        path: '/alerts',
+        icon: <EventBusyIcon fontSize="small" />,
+        permission: SYSTEM_PERMISSIONS.INVENTORY_READ,
+      },
+      {
+        title: 'Productos',
         path: '/products',
         icon: <MedicationIcon fontSize="small" />,
         permission: SYSTEM_PERMISSIONS.PRODUCTS_READ,
@@ -106,36 +155,20 @@ export const menuGroups: MenuGroupConfig[] = [
         permission: SYSTEM_PERMISSIONS.CATEGORIES_READ,
       },
       {
-        title: 'Unidades de Medida',
+        title: 'Unidades de medida',
         path: '/units-of-measure',
         icon: <StraightenIcon fontSize="small" />,
         permission: SYSTEM_PERMISSIONS.CATEGORIES_READ,
       },
-      {
-        title: 'Recepción de Compras',
-        path: '/purchases/receive',
-        icon: <LocalShippingIcon fontSize="small" />,
-        permission: SYSTEM_PERMISSIONS.PURCHASES_RECEIVE,
-      },
-      {
-        title: 'Historial de Compras',
-        path: '/purchases',
-        icon: <ShoppingBagIcon fontSize="small" />,
-        permission: SYSTEM_PERMISSIONS.PURCHASES_READ,
-      },
-      {
-        title: 'Alertas de Vencimiento',
-        path: '/alerts',
-        icon: <WarningAmberIcon fontSize="small" />,
-        permission: SYSTEM_PERMISSIONS.INVENTORY_READ,
-      },
     ],
   },
   {
-    category: 'TERCEROS',
+    id: 'terceros',
+    category: 'Terceros',
+    icon: <PeopleAltIcon fontSize="small" />,
     items: [
       {
-        title: 'Directorio de Terceros',
+        title: 'Clientes, proveedores y otros',
         path: '/third-parties',
         icon: <PeopleAltIcon fontSize="small" />,
         permission: THIRD_PARTY_DIRECTORY,
@@ -143,94 +176,123 @@ export const menuGroups: MenuGroupConfig[] = [
     ],
   },
   {
-    category: 'CONTABILIDAD Y FINANZAS',
+    id: 'tesoreria',
+    category: 'Tesorería',
+    icon: <AccountBalanceWalletIcon fontSize="small" />,
     items: [
       {
-        title: 'Control de Caja',
+        title: 'Caja',
         path: '/cash',
         icon: <AccountBalanceWalletIcon fontSize="small" />,
         permission: SYSTEM_PERMISSIONS.CASH_READ,
       },
       {
-        title: 'Tesorería y Bancos',
+        title: 'Bancos',
         path: '/treasury/bank-accounts',
         icon: <AccountBalanceIcon fontSize="small" />,
         permission: SYSTEM_PERMISSIONS.TREASURY_READ,
       },
       {
-        title: 'Recibos de Caja',
+        title: 'Recibos de caja',
         path: '/treasury/receipts',
-        icon: <ReceiptLongIcon fontSize="small" />,
+        icon: <ReceiptIcon fontSize="small" />,
         // Tesorería los consulta y registra sin el permiso contable (2026-11-03)
         permission: [SYSTEM_PERMISSIONS.ACCOUNTING_READ, SYSTEM_PERMISSIONS.CASH_RECEIPTS_MANUAL],
       },
       {
-        title: 'Comprobantes de Egreso',
+        title: 'Comprobantes de egreso',
         path: '/treasury/disbursements',
         icon: <PaymentsIcon fontSize="small" />,
         permission: [SYSTEM_PERMISSIONS.ACCOUNTING_READ, SYSTEM_PERMISSIONS.DISBURSEMENTS_CREATE],
       },
       {
-        title: 'Cuentas por Cobrar',
+        title: 'Cuentas por cobrar',
         path: '/receivables',
         icon: <MonetizationOnIcon fontSize="small" />,
         permission: SYSTEM_PERMISSIONS.RECEIVABLES_READ,
       },
       {
-        title: 'Cuentas por Pagar',
+        title: 'Cuentas por pagar',
         path: '/payables',
-        icon: <PaymentsIcon fontSize="small" />,
+        icon: <RequestPageIcon fontSize="small" />,
         permission: SYSTEM_PERMISSIONS.PAYABLES_READ,
       },
+    ],
+  },
+  {
+    id: 'contabilidad',
+    category: 'Contabilidad',
+    icon: <MenuBookIcon fontSize="small" />,
+    items: [
       {
-        title: 'Causación de Gastos',
+        title: 'Gastos',
         path: '/expenses',
-        icon: <ReceiptLongIcon fontSize="small" />,
+        icon: <RequestQuoteIcon fontSize="small" />,
         permission: SYSTEM_PERMISSIONS.EXPENSES_READ,
       },
       {
-        title: 'Libro Diario',
+        title: 'Libro diario',
         path: '/accounting/journal',
         icon: <MenuBookIcon fontSize="small" />,
         permission: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
       },
       {
-        title: 'Auditoría Contable',
+        title: 'Libros oficiales',
+        path: '/accounting/books',
+        icon: <LibraryBooksIcon fontSize="small" />,
+        permission: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
+      },
+      {
+        title: 'Conciliación',
+        path: '/accounting/reconciliation',
+        icon: <CompareArrowsIcon fontSize="small" />,
+        permission: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
+      },
+      {
+        title: 'Auditoría contable',
         path: '/accounting/audit',
         icon: <RuleIcon fontSize="small" />,
         permission: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
       },
       {
-        title: 'Balance de Comprobación',
+        title: 'Balance de comprobación',
         path: '/accounting/trial-balance',
         icon: <BalanceIcon fontSize="small" />,
         permission: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
       },
       {
-        title: 'Estado de Resultados (PyG)',
+        title: 'Estado de resultados',
         path: '/accounting/income-statement',
-        icon: <AssessmentIcon fontSize="small" />,
+        icon: <TrendingUpIcon fontSize="small" />,
         permission: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
       },
       {
-        title: 'Balance General',
+        title: 'Balance general',
         path: '/accounting/balance-sheet',
-        icon: <AccountBalanceIcon fontSize="small" />,
+        icon: <SummarizeIcon fontSize="small" />,
         permission: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
       },
       {
-        title: 'Períodos y Cierre Fiscal',
+        title: 'Períodos y cierre',
         path: '/accounting/periods',
         icon: <DateRangeIcon fontSize="small" />,
+        permission: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
+      },
+      {
+        title: 'Borradores tributarios',
+        path: '/tax-reports',
+        icon: <CalculateIcon fontSize="small" />,
         permission: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
       },
     ],
   },
   {
-    category: 'REPORTES',
+    id: 'reportes',
+    category: 'Reportes',
+    icon: <AssessmentIcon fontSize="small" />,
     items: [
       {
-        title: 'Reportes y Exportación',
+        title: 'Reportes y exportación',
         path: '/reports',
         icon: <AssessmentIcon fontSize="small" />,
         permission: SYSTEM_PERMISSIONS.REPORTS_READ,
@@ -238,81 +300,60 @@ export const menuGroups: MenuGroupConfig[] = [
     ],
   },
   {
-    category: 'CONFIGURACIÓN',
+    id: 'configuracion',
+    category: 'Configuración',
+    icon: <SettingsIcon fontSize="small" />,
     items: [
       {
-        title: 'Gestión de Usuarios',
-        path: '/users',
-        icon: <ManageAccountsIcon fontSize="small" />,
-        permission: SYSTEM_PERMISSIONS.USERS_READ,
-      },
-      {
-        title: 'Copias de Seguridad',
-        path: '/backups',
-        icon: <CloudSyncIcon fontSize="small" />,
-        permission: SYSTEM_PERMISSIONS.BACKUPS_MANAGE,
-      },
-      {
-        title: 'Auditoría y Trazabilidad',
-        path: '/audit',
-        icon: <HistoryIcon fontSize="small" />,
-        permission: SYSTEM_PERMISSIONS.AUDIT_READ,
-      },
-    ],
-  },
-  {
-    category: 'CONFIGURACIÓN CONTABLE',
-    items: [
-      {
-        title: 'Empresa y Política Contable',
+        title: 'Empresa y políticas',
         path: '/company',
         icon: <BusinessIcon fontSize="small" />,
         permission: SYSTEM_PERMISSIONS.COMPANY_READ,
       },
       {
-        title: 'Catálogo Normativo Tributario',
-        path: '/tax-catalog',
-        icon: <GavelIcon fontSize="small" />,
-        permission: SYSTEM_PERMISSIONS.PRODUCTS_READ,
+        title: 'Usuarios',
+        path: '/users',
+        icon: <ManageAccountsIcon fontSize="small" />,
+        permission: SYSTEM_PERMISSIONS.USERS_READ,
       },
       {
-        title: 'Asistente de Configuración Contable',
+        title: 'Copias de seguridad',
+        path: '/backups',
+        icon: <CloudSyncIcon fontSize="small" />,
+        permission: SYSTEM_PERMISSIONS.BACKUPS_MANAGE,
+      },
+      {
+        title: 'Auditoría del sistema',
+        path: '/audit',
+        icon: <HistoryIcon fontSize="small" />,
+        permission: SYSTEM_PERMISSIONS.AUDIT_READ,
+      },
+      {
+        title: 'Asistente contable',
         path: '/accounting/setup',
         icon: <ChecklistIcon fontSize="small" />,
         permission: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
       },
       {
-        title: 'Libros Oficiales',
-        path: '/accounting/books',
-        icon: <MenuBookIcon fontSize="small" />,
-        permission: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
+        title: 'Catálogo tributario',
+        path: '/tax-catalog',
+        icon: <GavelIcon fontSize="small" />,
+        permission: SYSTEM_PERMISSIONS.PRODUCTS_READ,
       },
       {
-        title: 'Conciliación Contable',
-        path: '/accounting/reconciliation',
-        icon: <CompareArrowsIcon fontSize="small" />,
-        permission: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
-      },
-      {
-        title: 'Borradores Tributarios',
-        path: '/tax-reports',
-        icon: <ReceiptLongIcon fontSize="small" />,
-        permission: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
-      },
-      {
-        title: 'Plan de Cuentas',
+        title: 'Plan de cuentas',
         path: '/accounting/accounts',
         icon: <AccountTreeIcon fontSize="small" />,
         permission: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
       },
       {
-        title: 'Propósitos Contables',
+        title: 'Propósitos contables',
         path: '/accounting/purposes',
-        icon: <RuleIcon fontSize="small" />,
+        icon: <TuneIcon fontSize="small" />,
         permission: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
       },
       {
-        title: 'Importar Plan de Cuentas',
+        title: 'Importar plan de cuentas',
         path: '/accounting/import',
         icon: <UploadFileIcon fontSize="small" />,
         permission: SYSTEM_PERMISSIONS.ACCOUNTING_MANAGE,
@@ -340,8 +381,16 @@ export const routeNavigation = [
   },
 ];
 
+/** La entrada que protege una ruta: la de prefijo más largo (p. ej. /purchases/receive). */
 export function navigationForPath(pathname: string) {
   return routeNavigation
     .filter((item) => pathname === item.path || pathname.startsWith(`${item.path}/`))
     .sort((a, b) => b.path.length - a.path.length)[0];
+}
+
+/** Grupo del menú al que pertenece la ruta actual (el de la entrada que la protege). */
+export function menuGroupForPath(pathname: string): MenuGroupConfig | undefined {
+  const entry = navigationForPath(pathname);
+  if (!entry) return undefined;
+  return menuGroups.find((group) => group.items.some((item) => item.path === entry.path));
 }

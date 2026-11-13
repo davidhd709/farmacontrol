@@ -4,6 +4,7 @@ import {
   Alert,
   Box,
   Button,
+  Chip,
   CircularProgress,
   InputAdornment,
   Paper,
@@ -13,6 +14,8 @@ import {
 } from '@mui/material';
 import { Controller, useForm } from 'react-hook-form';
 import { useLocation, useNavigate } from 'react-router-dom';
+import LocalPharmacyIcon from '@mui/icons-material/LocalPharmacy';
+import { useAppEnvironment } from '../../../app/useAppEnvironment';
 import { loginDestination, type LoginLocationState } from '../routes/login-destination';
 import { ApiError } from '../../../api/http-client';
 import { useAuth } from '../hooks/useAuth';
@@ -41,6 +44,7 @@ function getLoginErrorMessage(error: unknown): string {
 export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const { login, isLoggingIn } = useAuth();
+  const { environment, label: environmentLabel } = useAppEnvironment();
   const navigate = useNavigate();
   const location = useLocation();
   const locationState = location.state as LoginLocationState | null;
@@ -89,44 +93,48 @@ export function LoginPage() {
         variant="outlined"
         sx={{
           width: '100%',
-          maxWidth: 440,
-          p: { xs: 3, sm: 4 },
+          maxWidth: 400,
+          p: { xs: 3, sm: 3.5 },
           borderColor: 'divider',
           boxShadow: '0 12px 32px rgba(23, 33, 31, 0.08)',
         }}
       >
-        <Stack spacing={3}>
-          <Stack spacing={1.5} sx={{ alignItems: 'center', textAlign: 'center' }}>
-            <Box
-              aria-hidden="true"
-              sx={{
-                width: 48,
-                height: 48,
-                display: 'grid',
-                placeItems: 'center',
-                borderRadius: 2,
-                bgcolor: 'primary.main',
-                color: 'primary.contrastText',
-                fontWeight: 800,
-                letterSpacing: '-0.04em',
-              }}
-            >
-              Rx
-            </Box>
-            <Box>
-              <Typography
-                component="p"
-                variant="overline"
-                color="primary.main"
-                sx={{ fontWeight: 800 }}
+        <Stack spacing={2.5}>
+          <Stack spacing={1.5}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
+              <Box
+                aria-hidden="true"
+                sx={{
+                  width: 36,
+                  height: 36,
+                  display: 'grid',
+                  placeItems: 'center',
+                  borderRadius: 2,
+                  bgcolor: 'primary.main',
+                  color: 'primary.contrastText',
+                }}
               >
+                <LocalPharmacyIcon sx={{ fontSize: '1.3rem' }} />
+              </Box>
+              <Typography component="p" variant="subtitle1" sx={{ fontWeight: 800 }}>
                 FarmaControl
               </Typography>
+              {environmentLabel && environment !== 'produccion' && (
+                <Chip
+                  label={environmentLabel}
+                  size="small"
+                  color="warning"
+                  variant="outlined"
+                  sx={{ fontWeight: 800 }}
+                />
+              )}
+            </Box>
+            <Box>
               <Typography id="login-title" component="h1" variant="h1">
                 Iniciar sesión
               </Typography>
-              <Typography color="text.secondary" sx={{ mt: 1 }}>
-                Ingresa tus credenciales para acceder a FarmaControl.
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                Use el usuario y la contraseña que le asignó el administrador.
               </Typography>
             </Box>
           </Stack>
@@ -181,6 +189,7 @@ export function LoginPage() {
                               aria-label={
                                 showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'
                               }
+                              aria-pressed={showPassword}
                               sx={{ minWidth: 'auto', minHeight: 36, px: 1 }}
                             >
                               {showPassword ? 'Ocultar' : 'Mostrar'}

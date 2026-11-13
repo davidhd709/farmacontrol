@@ -21,6 +21,20 @@ export const formatMoney = (cents: number): string =>
     maximumFractionDigits: 2,
   }).format(fromCents(cents));
 
+/**
+ * Importe COP que llega del API en unidades mayores (número o texto decimal, p. ej. 12500 o
+ * "12500.50"). Se pasa a centavos sin aritmética binaria y se muestra con el mismo formato que
+ * el resto de la aplicación. Un valor no numérico se muestra como "—".
+ */
+export function formatCop(value: number | string | null | undefined): string {
+  if (value === null || value === undefined || value === '') return '—';
+  try {
+    return formatMoney(toCents(typeof value === 'number' ? value.toFixed(2) : value));
+  } catch {
+    return '—';
+  }
+}
+
 export function lineAmounts(
   quantity: number,
   unitPriceCents: number,

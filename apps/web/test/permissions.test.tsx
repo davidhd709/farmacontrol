@@ -202,9 +202,10 @@ describe('RBAC Frontend — usePermissions y PermissionGate (Slice 003.3)', () =
 
       renderWithContext(<AuthenticatedHomePage />, authValue);
 
-      expect(screen.getByText(/Tu sesión está activa/i)).toBeInTheDocument();
+      // El rediseño retira el conteo de permisos; el saludo conserva el usuario
+      expect(screen.queryByText(/Tu sesión está activa/i)).not.toBeInTheDocument();
       expect(screen.getByText(/cajero_operativo/i)).toBeInTheDocument();
-      expect(screen.getByText('cajero')).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Nueva venta' })).toHaveAttribute('href', '/pos');
 
       // Módulo POS debe existir
       expect(screen.queryByText('Ventas de hoy')).not.toBeInTheDocument();

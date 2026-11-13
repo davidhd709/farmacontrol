@@ -14,6 +14,9 @@ const PosPage = lazy(() =>
 const SalesHistoryPage = lazy(() =>
   import('./features/sales/pages/SalesHistoryPage').then((m) => ({ default: m.SalesHistoryPage })),
 );
+const SaleDetailPage = lazy(() =>
+  import('./features/sales/pages/SaleDetailPage').then((m) => ({ default: m.SaleDetailPage })),
+);
 const CreditNotesPage = lazy(() =>
   import('./features/sales/pages/CreditNotesPage').then((m) => ({ default: m.CreditNotesPage })),
 );
@@ -196,6 +199,7 @@ export const App = () => {
               <Route path="/" element={<AuthenticatedHomePage />} />
               <Route path="/pos/*" element={<PosPage />} />
               <Route path="/sales" element={<SalesHistoryPage />} />
+              <Route path="/sales/:id" element={<SaleDetailPage />} />
               <Route path="/credit-notes" element={<CreditNotesPage />} />
               <Route path="/categories" element={<CategoriesPage />} />
               <Route path="/units-of-measure" element={<UnitsOfMeasurePage />} />

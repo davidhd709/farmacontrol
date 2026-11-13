@@ -36,7 +36,7 @@ test.describe('Sesión', () => {
     // bajo carga la red puede quedar quieta antes de /auth/me y las cookies se borrarían antes
     // de que la app tuviera sesión (iría al login sin pasar por la navegación que se prueba)
     await expect(page.getByRole('heading', { name: 'Catálogo de Productos' })).toBeVisible();
-    const newSale = page.getByRole('button', { name: /Nueva Venta/ });
+    const newSale = page.getByRole('link', { name: 'Nueva venta' });
     await expect(newSale).toBeVisible();
 
     await context.clearCookies();

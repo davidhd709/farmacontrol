@@ -98,9 +98,54 @@ export const appTheme = createTheme(
           root: { overflowX: 'auto', maxWidth: '100%' },
         },
       },
+      // Estilos comunes (rediseño 2026-11-12): encabezado de tabla sobrio y cifras con ancho
+      // fijo para que los importes alineados a la derecha se lean en columna
       MuiTableCell: {
         styleOverrides: {
-          head: { whiteSpace: 'nowrap', fontWeight: 700 },
+          root: { fontVariantNumeric: 'tabular-nums' },
+          head: {
+            whiteSpace: 'nowrap',
+            fontWeight: 700,
+            fontSize: '0.8rem',
+            color: '#52605D',
+            backgroundColor: '#F5F8F7',
+          },
+        },
+      },
+      MuiChip: {
+        styleOverrides: {
+          root: { fontWeight: 600 },
+        },
+      },
+      MuiDialogTitle: {
+        styleOverrides: {
+          root: { fontWeight: 700, fontSize: '1.15rem' },
+        },
+      },
+      MuiDialogActions: {
+        styleOverrides: {
+          root: { padding: '12px 24px 16px', gap: 8, flexWrap: 'wrap' },
+        },
+      },
+      MuiAlert: {
+        styleOverrides: {
+          root: { borderRadius: 8, alignItems: 'center' },
+        },
+      },
+      MuiCard: {
+        styleOverrides: {
+          root: { borderRadius: 12 },
+        },
+      },
+      // Foco visible en todo control: anillo del color de marca, también sobre fondos de color
+      MuiButtonBase: {
+        styleOverrides: {
+          root: {
+            '&.Mui-focusVisible': {
+              outline: '2px solid #0F766E',
+              outlineOffset: 2,
+            },
+          },
         },
       },
       // El layout ya da el margen lateral: los Container de cada página no lo duplican

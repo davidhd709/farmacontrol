@@ -3,9 +3,11 @@ import { Box, CircularProgress, useMediaQuery, useTheme } from '@mui/material';
 import { Outlet } from 'react-router-dom';
 import { AppNavbar } from './AppNavbar';
 import { AppSidebar, SIDEBAR_WIDTH } from './AppSidebar';
+import { useAppEnvironment } from '../../app/useAppEnvironment';
 
 export const AppLayout: React.FC = () => {
   const theme = useTheme();
+  const environment = useAppEnvironment();
   // Móvil y tablet: el menú empieza cerrado y se abre con el botón; escritorio: abierto
   const isMobile = useMediaQuery(theme.breakpoints.down('lg'), { noSsr: true });
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(!isMobile);
@@ -22,14 +24,25 @@ export const AppLayout: React.FC = () => {
   };
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', bgcolor: '#F8FAFC' }}>
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        minHeight: '100vh',
+        bgcolor: 'background.default',
+      }}
+    >
       {/* Barra de Navegación Superior Fija */}
-      <AppNavbar onToggleSidebar={handleToggleSidebar} isSidebarOpen={sidebarOpen} />
+      <AppNavbar
+        onToggleSidebar={handleToggleSidebar}
+        isSidebarOpen={sidebarOpen}
+        environment={environment}
+      />
 
       {/* Contenedor con Sidebar + Área de Contenido */}
       <Box sx={{ display: 'flex', flex: 1, position: 'relative' }}>
         {/* Menú Lateral Profesional */}
-        <AppSidebar open={sidebarOpen} onClose={handleCloseSidebar} />
+        <AppSidebar open={sidebarOpen} onClose={handleCloseSidebar} environment={environment} />
 
         {/* Contenido Principal con Ancho Adaptativo */}
         <Box
@@ -48,7 +61,14 @@ export const AppLayout: React.FC = () => {
         >
           <React.Suspense
             fallback={
-              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '40vh' }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  minHeight: '40vh',
+                }}
+              >
                 <CircularProgress size={32} />
               </Box>
             }
