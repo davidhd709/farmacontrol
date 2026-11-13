@@ -26,12 +26,19 @@ export interface PaginatedResponse<T> {
   totalPages: number;
 }
 
+/**
+ * Ambiente del despliegue, declarado por la variable APP_ENVIRONMENT del API. `null` cuando no
+ * está configurada: la interfaz no presume ningún ambiente (tampoco producción).
+ */
+export type AppEnvironment = 'produccion' | 'pruebas' | 'desarrollo';
+
 export interface HealthStatus {
   status: 'ok' | 'error';
   timestamp: string;
   uptime: number;
   service: string;
   database: 'up' | 'down';
+  environment: AppEnvironment | null;
 }
 
 export const SYSTEM_ROLES = {

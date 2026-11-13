@@ -1,8 +1,19 @@
 import { Injectable, Logger, OnApplicationShutdown, Optional } from '@nestjs/common';
 import { prisma, PrismaClient } from '@farmacia/database';
-import { HealthStatus } from '@farmacia/contracts';
+import { AppEnvironment, HealthStatus } from '@farmacia/contracts';
 
 const DATABASE_CHECK_TIMEOUT_MS = 2000;
+
+const APP_ENVIRONMENTS: readonly AppEnvironment[] = ['produccion', 'pruebas', 'desarrollo'];
+
+/**
+ * Ambiente declarado en APP_ENVIRONMENT. NODE_ENV no sirve: el despliegue de pruebas usa la
+ * misma configuración de producción. Un valor ausente o desconocido se informa como null.
+ */
+export function resolveAppEnvironment(raw: string | undefined): AppEnvironment | null {
+  const value = raw?.trim().toLowerCase();
+  return APP_ENVIRONMENTS.find((env) => env === value) ?? null;
+}
 
 @Injectable()
 export class AppService implements OnApplicationShutdown {
@@ -21,6 +32,7 @@ export class AppService implements OnApplicationShutdown {
       database,
       uptime: process.uptime(),
       timestamp: new Date().toISOString(),
+      environment: resolveAppEnvironment(process.env.APP_ENVIRONMENT),
     };
   }
 

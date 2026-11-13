@@ -13,7 +13,7 @@ alias fc='docker compose --env-file infra/compose/.env -f infra/compose/docker-c
 | Requisito | Dónde se resuelve |
 |---|---|
 | Servidor con Docker y Docker Compose, dominio o IP y puertos 80/443 | Infraestructura |
-| `infra/compose/.env` con `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `SESSION_SECRET` (32+ caracteres) y `DOMAIN` | Copiar de un ejemplo seguro; no se versiona |
+| `infra/compose/.env` con `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `SESSION_SECRET` (32+ caracteres), `DOMAIN` y `APP_ENVIRONMENT=pruebas` (la interfaz muestra «Pruebas») | Copiar de un ejemplo seguro; no se versiona |
 | `infra/compose/backup.env` (clave pública `age`, destino `rclone`) | [backup-restore.md](backup-restore.md), sección 3 |
 | Excel del PUC enviado por la contadora | Contadora |
 | Lista de usuarios de prueba por rol | Cliente |
