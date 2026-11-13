@@ -127,7 +127,7 @@ describe('Anulación de documentos en la web', () => {
     ]);
     fireEvent.click(await screen.findByRole('button', { name: 'RC-000001' }));
     const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).queryByRole('button', { name: 'Anular' })).toBeNull();
+    expect(within(dialog).queryByRole('button', { name: /^Anular/ })).toBeNull();
   });
 
   it('el recibo de abono se anula desde su detalle con el permiso de anulación', async () => {
@@ -151,7 +151,7 @@ describe('Anulación de documentos en la web', () => {
     ]);
     fireEvent.click(await screen.findByRole('button', { name: 'RC-000001' }));
     const dialog = await screen.findByRole('dialog');
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Anular' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: /^Anular/ }));
     fireEvent.change(within(dialog).getByLabelText(/Motivo de la anulación/), {
       target: { value: 'Cliente equivocado' },
     });
@@ -176,6 +176,6 @@ describe('Anulación de documentos en la web', () => {
     renderWith(<CashReceiptsPage />, Object.values(SYSTEM_PERMISSIONS));
     fireEvent.click(await screen.findByRole('button', { name: 'RC-000001' }));
     const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).queryByRole('button', { name: 'Anular' })).toBeNull();
+    expect(within(dialog).queryByRole('button', { name: /^Anular/ })).toBeNull();
   });
 });
