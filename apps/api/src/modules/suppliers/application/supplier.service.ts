@@ -141,6 +141,20 @@ export class SupplierService {
     supplier.update(input);
     const persist = async (tx?: Prisma.TransactionClient) => {
       await this.supplierRepository.save(supplier, tx);
+      // El tercero vinculado recibe los mismos datos, en la misma transacción
+      await this.thirdPartyService?.syncFromRole(
+        'supplier',
+        {
+          id: supplier.id,
+          documentNumber: supplier.taxId,
+          name: supplier.name,
+          contactName: supplier.contactName ?? null,
+          phone: supplier.phone ?? null,
+          email: supplier.email ?? null,
+          address: supplier.address ?? null,
+        },
+        tx,
+      );
 
       if (this.auditService) {
         await this.auditService.recordEvent(

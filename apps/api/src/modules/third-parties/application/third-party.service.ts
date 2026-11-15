@@ -14,6 +14,7 @@ import {
   ThirdPartyAlreadyExistsException,
   ThirdPartyDocumentChangeForbiddenException,
   ThirdPartyAccessDeniedException,
+  ThirdPartySharedDocumentChangeException,
 } from '../domain/third-party.exceptions';
 import {
   canReachThirdParty,
@@ -212,6 +213,84 @@ export class ThirdPartyService {
         supplierId: role === 'supplier' ? record.id : null,
       },
     });
+  }
+
+  /**
+   * Edición desde el módulo de clientes o de proveedores: copia al tercero vinculado los datos
+   * que ambos comparten, en la misma transacción. Si el tercero también tiene el otro rol, ese
+   * registro recibe los mismos datos para que los tres sigan iguales, como cuando se edita desde
+   * Terceros. El estado activo no se propaga: inactivar un cliente no inactiva al proveedor.
+   */
+  async syncFromRole(
+    role: 'customer' | 'supplier',
+    record: {
+      id: string;
+      documentType?: string | null;
+      documentNumber: string;
+      name: string;
+      contactName?: string | null;
+      phone: string | null;
+      email: string | null;
+      address: string | null;
+    },
+    tx?: Prisma.TransactionClient,
+  ): Promise<void> {
+    if (!tx) return this.db.$transaction((own) => this.syncFromRole(role, record, own));
+    const db = tx;
+    const linked = await db.thirdParty.findUnique({
+      where: role === 'customer' ? { customerId: record.id } : { supplierId: record.id },
+    });
+    if (!linked) return;
+    const documentNumber = record.documentNumber.trim();
+    const documentChanged = documentNumber !== linked.documentNumber;
+    const sharesOtherRole = role === 'customer' ? linked.isSupplier : linked.isCustomer;
+    if (documentChanged && sharesOtherRole) throw new ThirdPartySharedDocumentChangeException();
+    if (documentChanged) {
+      const taken = await db.thirdParty.findUnique({ where: { documentNumber } });
+      if (taken && taken.id !== linked.id)
+        throw new ThirdPartyAlreadyExistsException(documentNumber);
+    }
+    const contactName =
+      role === 'supplier' && record.contactName !== undefined
+        ? record.contactName
+        : linked.contactName;
+    await db.thirdParty.update({
+      where: { id: linked.id },
+      data: {
+        ...(documentChanged
+          ? {
+              documentNumber,
+              ...(record.documentType ? { documentType: record.documentType } : {}),
+            }
+          : {}),
+        name: record.name,
+        contactName,
+        phone: record.phone,
+        email: record.email,
+        address: record.address,
+      },
+    });
+    if (role === 'customer' && linked.isSupplier && linked.supplierId) {
+      const supplier = await tx.supplier.findUniqueOrThrow({ where: { id: linked.supplierId } });
+      await this.suppliersLedger.update(tx, linked.supplierId, {
+        name: record.name,
+        contactName: supplier.contactName,
+        phone: record.phone,
+        email: record.email,
+        address: record.address,
+        isActive: supplier.isActive,
+      });
+    }
+    if (role === 'supplier' && linked.isCustomer && linked.customerId) {
+      const customer = await tx.customer.findUniqueOrThrow({ where: { id: linked.customerId } });
+      await this.customersLedger.update(tx, linked.customerId, {
+        name: record.name,
+        phone: record.phone,
+        email: record.email,
+        address: record.address,
+        isActive: customer.isActive,
+      });
+    }
   }
 
   async updateThirdParty(

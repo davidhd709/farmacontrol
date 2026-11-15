@@ -132,6 +132,20 @@ export class CustomerService {
 
     const persist = async (tx?: Prisma.TransactionClient) => {
       await this.customerRepository.save(customer, tx);
+      // El tercero vinculado recibe los mismos datos, en la misma transacción
+      await this.thirdPartyService?.syncFromRole(
+        'customer',
+        {
+          id: customer.id,
+          documentType: customer.documentType,
+          documentNumber: customer.documentNumber,
+          name: customer.name,
+          phone: customer.phone ?? null,
+          email: customer.email ?? null,
+          address: customer.address ?? null,
+        },
+        tx,
+      );
 
       if (this.auditService) {
         await this.auditService.recordEvent(

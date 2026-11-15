@@ -34,3 +34,17 @@ export class ThirdPartyAccessDeniedException extends DomainError {
     this.name = 'ThirdPartyAccessDeniedException';
   }
 }
+
+/**
+ * El documento de un cliente o proveedor cambió, pero su tercero también tiene el otro rol:
+ * cambiarlo dejaría al otro registro con un documento distinto del tercero que comparten.
+ */
+export class ThirdPartySharedDocumentChangeException extends DomainError {
+  constructor() {
+    super(
+      'Este tercero es cliente y proveedor a la vez: su número de documento no puede cambiarse desde uno solo de sus roles.',
+      'conflict',
+    );
+    this.name = 'ThirdPartySharedDocumentChangeException';
+  }
+}
