@@ -21,6 +21,7 @@ import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import type { SaleDto } from '@farmacia/contracts';
 import { expirationDateLabel, lotNumberLabel } from '../../catalog/utils/inventory-control';
 import { formatDateTime } from '../../../utils/date-format';
+import { useCompanyLetterhead } from '../../company/hooks/useCompanyLetterhead';
 import { printDocument, downloadDocumentPdf } from '../../../utils/print-document';
 
 interface SaleReceiptDialogProps {
@@ -36,6 +37,11 @@ export const SaleReceiptDialog: React.FC<SaleReceiptDialogProps> = ({
   onClose,
   onNewSale,
 }) => {
+  const { company } = useCompanyLetterhead(open);
+  const companyName = company?.tradeName || company?.legalName || 'FarmaControl';
+  const companyContact = [company?.address, company?.phone ? `Tel: ${company.phone}` : null]
+    .filter(Boolean)
+    .join(' • ');
   const handlePrint = () => {
     if (!sale) return;
     printDocument(`${sale.invoiceNumber}_Tirilla_Venta`);
@@ -139,17 +145,27 @@ export const SaleReceiptDialog: React.FC<SaleReceiptDialogProps> = ({
                 lineHeight: 1.2,
               }}
             >
-              FARMACONTROL
+              {companyName.toUpperCase()}
             </Typography>
-            <Typography sx={{ fontFamily: 'inherit', fontSize: '0.8rem', fontWeight: 700, letterSpacing: 0.5 }}>
-              DROGUERÍA Y FARMACIA
-            </Typography>
-            <Typography sx={{ fontFamily: 'inherit', fontSize: '0.75rem', color: '#475569' }}>
-              Calle Principal # 12-34 • Tel: (605) 300-1234
-            </Typography>
-            <Typography sx={{ fontFamily: 'inherit', fontSize: '0.75rem', color: '#475569' }}>
-              Barranquilla, Colombia
-            </Typography>
+            {company && company.tradeName && company.tradeName !== company.legalName && (
+              <Typography sx={{ fontFamily: 'inherit', fontSize: '0.8rem', fontWeight: 700 }}>
+                {company.legalName}
+              </Typography>
+            )}
+            {company && (
+              <Typography
+                data-testid="receipt-tax-id"
+                sx={{ fontFamily: 'inherit', fontSize: '0.75rem', color: '#475569' }}
+              >
+                NIT {company.taxId}
+                {company.taxIdCheckDigit ? `-${company.taxIdCheckDigit}` : ''}
+              </Typography>
+            )}
+            {companyContact && (
+              <Typography sx={{ fontFamily: 'inherit', fontSize: '0.75rem', color: '#475569' }}>
+                {companyContact}
+              </Typography>
+            )}
           </Box>
 
           {/* DATOS DE LA VENTA / TICKET */}
@@ -180,13 +196,17 @@ export const SaleReceiptDialog: React.FC<SaleReceiptDialogProps> = ({
               </Typography>
             </Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5 }}>
-              <Typography sx={{ fontFamily: 'inherit', fontSize: '0.75rem' }}>Atendido por:</Typography>
+              <Typography sx={{ fontFamily: 'inherit', fontSize: '0.75rem' }}>
+                Atendido por:
+              </Typography>
               <Typography sx={{ fontFamily: 'inherit', fontSize: '0.75rem' }}>
                 {sale.createdByUsername || 'Cajero POS'}
               </Typography>
             </Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5 }}>
-              <Typography sx={{ fontFamily: 'inherit', fontSize: '0.75rem' }}>Condición:</Typography>
+              <Typography sx={{ fontFamily: 'inherit', fontSize: '0.75rem' }}>
+                Condición:
+              </Typography>
               <Typography sx={{ fontFamily: 'inherit', fontSize: '0.75rem' }}>
                 {sale.paymentMethod === 'CREDITO'
                   ? 'Crédito'
@@ -206,7 +226,14 @@ export const SaleReceiptDialog: React.FC<SaleReceiptDialogProps> = ({
                 bgcolor: 'rgba(224, 86, 86, 0.08)',
               }}
             >
-              <Typography sx={{ fontFamily: 'inherit', fontWeight: 900, color: 'error.main', fontSize: '0.9rem' }}>
+              <Typography
+                sx={{
+                  fontFamily: 'inherit',
+                  fontWeight: 900,
+                  color: 'error.main',
+                  fontSize: '0.9rem',
+                }}
+              >
                 *** VENTA ANULADA ***
               </Typography>
             </Box>
@@ -214,36 +241,65 @@ export const SaleReceiptDialog: React.FC<SaleReceiptDialogProps> = ({
 
           {/* TABLA DE PRODUCTOS EN FORMATO TIRILLA */}
           <TableContainer sx={{ overflowX: 'auto' }}>
-            <Table size="small" aria-label="detalle comprobante" sx={{ '& td, & th': { py: 0.5, px: 0.5, border: 'none' } }}>
+            <Table
+              size="small"
+              aria-label="detalle comprobante"
+              sx={{ '& td, & th': { py: 0.5, px: 0.5, border: 'none' } }}
+            >
               <TableHead sx={{ borderBottom: '1px dashed #000000' }}>
                 <TableRow>
                   <TableCell sx={{ fontFamily: 'inherit', fontWeight: 700, fontSize: '0.75rem' }}>
                     Descripción / Lotes FEFO
                   </TableCell>
-                  <TableCell align="right" sx={{ fontFamily: 'inherit', fontWeight: 700, fontSize: '0.75rem' }}>
+                  <TableCell
+                    align="right"
+                    sx={{ fontFamily: 'inherit', fontWeight: 700, fontSize: '0.75rem' }}
+                  >
                     Cant.
                   </TableCell>
-                  <TableCell align="right" sx={{ fontFamily: 'inherit', fontWeight: 700, fontSize: '0.75rem' }}>
+                  <TableCell
+                    align="right"
+                    sx={{ fontFamily: 'inherit', fontWeight: 700, fontSize: '0.75rem' }}
+                  >
                     V. Unit
                   </TableCell>
-                  <TableCell align="right" sx={{ fontFamily: 'inherit', fontWeight: 700, fontSize: '0.75rem' }}>
+                  <TableCell
+                    align="right"
+                    sx={{ fontFamily: 'inherit', fontWeight: 700, fontSize: '0.75rem' }}
+                  >
                     Descuento
                   </TableCell>
-                  <TableCell align="right" sx={{ fontFamily: 'inherit', fontWeight: 700, fontSize: '0.75rem' }}>
+                  <TableCell
+                    align="right"
+                    sx={{ fontFamily: 'inherit', fontWeight: 700, fontSize: '0.75rem' }}
+                  >
                     Total línea
                   </TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {sale.lines.map((line) => (
-                  <TableRow key={line.id} sx={{ verticalAlign: 'top', borderBottom: '1px dotted #e2e8f0' }}>
+                  <TableRow
+                    key={line.id}
+                    sx={{ verticalAlign: 'top', borderBottom: '1px dotted #e2e8f0' }}
+                  >
                     <TableCell sx={{ fontFamily: 'inherit', fontSize: '0.75rem' }}>
-                      <Typography sx={{ fontFamily: 'inherit', fontWeight: 700, fontSize: '0.75rem' }}>
+                      <Typography
+                        sx={{ fontFamily: 'inherit', fontWeight: 700, fontSize: '0.75rem' }}
+                      >
                         {line.productName}
                       </Typography>
                       {line.presentationName && (
-                        <Typography sx={{ fontFamily: 'inherit', fontSize: '0.68rem', color: '#64748b', display: 'block' }}>
-                          Pres: {line.presentationName} (Factor: {line.presentationFactorHistorical})
+                        <Typography
+                          sx={{
+                            fontFamily: 'inherit',
+                            fontSize: '0.68rem',
+                            color: '#64748b',
+                            display: 'block',
+                          }}
+                        >
+                          Pres: {line.presentationName} (Factor: {line.presentationFactorHistorical}
+                          )
                         </Typography>
                       )}
                       {line.lotAllocations && line.lotAllocations.length > 0 && (
@@ -251,9 +307,16 @@ export const SaleReceiptDialog: React.FC<SaleReceiptDialogProps> = ({
                           {line.lotAllocations.map((alloc) => (
                             <Typography
                               key={alloc.id}
-                              sx={{ fontFamily: 'inherit', display: 'block', color: '#64748b', fontSize: '0.68rem' }}
+                              sx={{
+                                fontFamily: 'inherit',
+                                display: 'block',
+                                color: '#64748b',
+                                fontSize: '0.68rem',
+                              }}
                             >
-                              • Lote: {lotNumberLabel(alloc.lotNumber)} (Vence: {expirationDateLabel(alloc.expirationDate)}) → {alloc.quantityBaseUnits} un.
+                              • Lote: {lotNumberLabel(alloc.lotNumber)} (Vence:{' '}
+                              {expirationDateLabel(alloc.expirationDate)}) →{' '}
+                              {alloc.quantityBaseUnits} un.
                             </Typography>
                           ))}
                         </Box>
@@ -268,7 +331,10 @@ export const SaleReceiptDialog: React.FC<SaleReceiptDialogProps> = ({
                     <TableCell align="right" sx={{ fontFamily: 'inherit', fontSize: '0.75rem' }}>
                       ${line.discount.toLocaleString('es-CO')}
                     </TableCell>
-                    <TableCell align="right" sx={{ fontFamily: 'inherit', fontWeight: 700, fontSize: '0.75rem' }}>
+                    <TableCell
+                      align="right"
+                      sx={{ fontFamily: 'inherit', fontWeight: 700, fontSize: '0.75rem' }}
+                    >
                       ${line.total.toLocaleString('es-CO')}
                     </TableCell>
                   </TableRow>
@@ -286,8 +352,17 @@ export const SaleReceiptDialog: React.FC<SaleReceiptDialogProps> = ({
               </Typography>
             </Box>
             {sale.discountTotal > 0 && (
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.25, color: 'error.main' }}>
-                <Typography sx={{ fontFamily: 'inherit', fontSize: 'inherit' }}>Descuento:</Typography>
+              <Box
+                sx={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  mb: 0.25,
+                  color: 'error.main',
+                }}
+              >
+                <Typography sx={{ fontFamily: 'inherit', fontSize: 'inherit' }}>
+                  Descuento:
+                </Typography>
                 <Typography sx={{ fontFamily: 'inherit', fontSize: 'inherit' }}>
                   -${sale.discountTotal.toLocaleString('es-CO')}
                 </Typography>
@@ -295,7 +370,9 @@ export const SaleReceiptDialog: React.FC<SaleReceiptDialogProps> = ({
             )}
             {sale.taxTotal > 0 && (
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.25 }}>
-                <Typography sx={{ fontFamily: 'inherit', fontSize: 'inherit' }}>Impuestos:</Typography>
+                <Typography sx={{ fontFamily: 'inherit', fontSize: 'inherit' }}>
+                  Impuestos:
+                </Typography>
                 <Typography sx={{ fontFamily: 'inherit', fontSize: 'inherit' }}>
                   ${sale.taxTotal.toLocaleString('es-CO')}
                 </Typography>
@@ -325,7 +402,14 @@ export const SaleReceiptDialog: React.FC<SaleReceiptDialogProps> = ({
             {/* PAGO EN EFECTIVO Y CAMBIO */}
             {sale.paymentMethod === 'EFECTIVO' && (
               <>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', mb: 0.25 }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    fontSize: '0.75rem',
+                    mb: 0.25,
+                  }}
+                >
                   <Typography sx={{ fontFamily: 'inherit', fontSize: 'inherit', color: '#475569' }}>
                     Recibido:
                   </Typography>
@@ -333,7 +417,14 @@ export const SaleReceiptDialog: React.FC<SaleReceiptDialogProps> = ({
                     ${sale.amountPaid.toLocaleString('es-CO')}
                   </Typography>
                 </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', fontWeight: 700 }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                  }}
+                >
                   <Typography sx={{ fontFamily: 'inherit', fontSize: 'inherit' }}>
                     Cambio:
                   </Typography>
@@ -346,14 +437,26 @@ export const SaleReceiptDialog: React.FC<SaleReceiptDialogProps> = ({
           </Box>
 
           {/* PIE DE PÁGINA TIRILLA */}
-          <Box sx={{ textAlign: 'center', mt: 2, pt: 1, borderTop: '1px dashed #000000', fontSize: '0.7rem' }}>
+          <Box
+            sx={{
+              textAlign: 'center',
+              mt: 2,
+              pt: 1,
+              borderTop: '1px dashed #000000',
+              fontSize: '0.7rem',
+            }}
+          >
             <Typography sx={{ fontFamily: 'inherit', fontWeight: 700, fontSize: '0.75rem' }}>
               ¡GRACIAS POR SU COMPRA!
             </Typography>
-            <Typography sx={{ fontFamily: 'inherit', fontSize: '0.7rem', color: '#475569', mt: 0.5 }}>
+            <Typography
+              sx={{ fontFamily: 'inherit', fontSize: '0.7rem', color: '#475569', mt: 0.5 }}
+            >
               Conserve este comprobante para cualquier cambio o reclamo.
             </Typography>
-            <Typography sx={{ fontFamily: 'inherit', fontSize: '0.65rem', color: '#94a3b8', mt: 0.5 }}>
+            <Typography
+              sx={{ fontFamily: 'inherit', fontSize: '0.65rem', color: '#94a3b8', mt: 0.5 }}
+            >
               Software FarmaControl • {sale.lines.length} ítem(s) vendidos
             </Typography>
           </Box>

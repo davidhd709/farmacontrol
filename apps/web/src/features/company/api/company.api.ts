@@ -2,6 +2,7 @@ import type {
   AccountingPolicyDto,
   BranchDto,
   CompanyDto,
+  CompanyLetterheadResponse,
   CompanySettingsDto,
   CreateAccountingPolicyPayload,
   CreateBranchPayload,
@@ -9,6 +10,9 @@ import type {
   UpdateCompanyPayload,
 } from '@farmacia/contracts';
 import { apiRequest } from '../../../api/http-client';
+
+export const fetchCompanyLetterhead = () =>
+  apiRequest<CompanyLetterheadResponse>('company/letterhead');
 
 export const fetchCompanySettings = () => apiRequest<CompanySettingsDto>('company');
 
