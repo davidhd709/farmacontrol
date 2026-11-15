@@ -45,6 +45,7 @@ import {
   accountNatureLabels,
   accountTypeLabels,
 } from '../components/AccountFormDialog';
+import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import {
   useAccounts,
   useConfigurationStatus,
@@ -177,19 +178,18 @@ export function AccountsPage() {
       else next.add(id);
       return next;
     });
+  // El error queda en el diálogo de confirmación (antes quedaba en la página, detrás del diálogo)
   const changeStatus = async () => {
     if (!statusTarget) return;
     setActionError(null);
-    try {
-      await update.mutateAsync({
-        id: statusTarget.id,
-        payload: { isActive: !statusTarget.isActive },
-      });
-      setNotice(`Cuenta ${statusTarget.isActive ? 'inactivada' : 'reactivada'} correctamente.`);
-      setStatusTarget(null);
-    } catch (error) {
-      setActionError(error instanceof Error ? error.message : 'No se pudo cambiar el estado.');
-    }
+    await update.mutateAsync({
+      id: statusTarget.id,
+      payload: { isActive: !statusTarget.isActive },
+    });
+    setNotice(
+      `Cuenta ${statusTarget.code} ${statusTarget.isActive ? 'inactivada' : 'reactivada'}.`,
+    );
+    setStatusTarget(null);
   };
   return (
     <AccountingAccess>
@@ -374,35 +374,23 @@ export function AccountsPage() {
               onClose={() => setFormOpen(false)}
             />
           )}
-          <Dialog
+          <ConfirmDialog
             open={!!statusTarget}
-            onClose={update.isPending ? undefined : () => setStatusTarget(null)}
-            aria-labelledby="account-status-title"
-          >
-            <DialogTitle id="account-status-title">
-              {statusTarget?.isActive ? '¿Inactivar cuenta?' : '¿Reactivar cuenta?'}
-            </DialogTitle>
-            <DialogContent>
-              <Typography>
-                {statusTarget?.code} — {statusTarget?.name}.{' '}
-                {statusTarget?.isActive
-                  ? 'Una cuenta inactiva no debe seleccionarse para nuevos movimientos.'
-                  : 'La cuenta volverá a estar disponible según las reglas del servidor.'}
-              </Typography>
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={() => setStatusTarget(null)} disabled={update.isPending}>
-                Cancelar
-              </Button>
-              <Button
-                variant="contained"
-                onClick={() => void changeStatus()}
-                disabled={update.isPending}
-              >
-                {update.isPending ? 'Guardando…' : 'Confirmar'}
-              </Button>
-            </DialogActions>
-          </Dialog>
+            operationType={statusTarget?.isActive ? 'deactivate' : 'confirm'}
+            title={statusTarget?.isActive ? '¿Inactivar la cuenta?' : '¿Reactivar la cuenta?'}
+            subject={statusTarget ? `${statusTarget.code} — ${statusTarget.name}` : null}
+            effects={
+              statusTarget?.isActive
+                ? [
+                    'No debe seleccionarse para nuevos movimientos.',
+                    'Sus saldos y asientos registrados no cambian.',
+                  ]
+                : ['Vuelve a estar disponible según las reglas del servidor.']
+            }
+            confirmText={statusTarget?.isActive ? 'Inactivar cuenta' : 'Reactivar cuenta'}
+            onConfirm={changeStatus}
+            onCancel={() => setStatusTarget(null)}
+          />
         </Stack>
       </Container>
     </AccountingAccess>

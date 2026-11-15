@@ -1,6 +1,6 @@
 import { ThemeProvider } from '@mui/material';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   SYSTEM_PERMISSIONS,
@@ -252,6 +252,44 @@ describe('Gestión de Presentaciones Comerciales y Factores de Conversión (UX-0
     await waitFor(() => {
       expect(deactivateSpy).toHaveBeenCalledWith('prod-amox', 'pres-1');
     });
+  });
+
+  it('fijar la principal de venta pide confirmación con su efecto y deja el error en el diálogo', async () => {
+    vi.spyOn(presentationsApi, 'fetchProductPresentations').mockResolvedValue([
+      { ...mockPresentations[0], saleEnabled: true },
+      mockPresentations[1],
+    ]);
+    const updateSpy = vi
+      .spyOn(presentationsApi, 'updateProductPresentation')
+      .mockRejectedValueOnce(new Error('La presentación cambió; recarga la lista.'))
+      .mockResolvedValueOnce({ ...mockPresentations[0], isDefault: true, isDefaultSale: true });
+
+    renderPresentationsDialog();
+    fireEvent.click(await screen.findByRole('button', { name: 'Fijar venta' }));
+
+    const dialog = await screen.findByRole('dialog', {
+      name: '¿Fijar como presentación principal de venta?',
+    });
+    expect(within(dialog).getByTestId('confirm-subject')).toHaveTextContent('Unidad individual');
+    expect(within(dialog).getByTestId('confirm-effects')).toHaveTextContent(
+      'La presentación principal actual deja de serlo.',
+    );
+    expect(updateSpy).not.toHaveBeenCalled();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Fijar presentación principal' }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'La presentación cambió; recarga la lista.',
+    );
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Fijar presentación principal' }));
+    await waitFor(() => expect(updateSpy).toHaveBeenCalledTimes(2));
+    expect(updateSpy.mock.calls[1]).toEqual([
+      'prod-amox',
+      'pres-1',
+      { isDefault: true, isDefaultSale: true },
+    ]);
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Unidad individual es ahora la presentación principal de venta.',
+    );
   });
 
   it('ejecuta el simulador de conversión matemática exacta (RN-004)', async () => {

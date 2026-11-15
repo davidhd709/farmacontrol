@@ -46,6 +46,40 @@ interface ProductPresentationsDialogProps {
   product: ProductDto | null;
 }
 
+type PresentationAction = {
+  kind: 'deactivate' | 'reactivate' | 'defaultSale';
+  pres: ProductPresentationDto;
+};
+
+const ACTION_TEXTS: Record<
+  PresentationAction['kind'],
+  { title: string; confirm: string; effects: string[] }
+> = {
+  deactivate: {
+    title: '¿Inactivar la presentación?',
+    confirm: 'Inactivar presentación',
+    effects: [
+      'Deja de ofrecerse en ventas y compras nuevas.',
+      'Las existencias, el Kardex y los documentos registrados no cambian.',
+      'Puede reactivarse cuando se necesite.',
+    ],
+  },
+  reactivate: {
+    title: '¿Reactivar la presentación?',
+    confirm: 'Reactivar presentación',
+    effects: ['Vuelve a ofrecerse en ventas y compras según su configuración.'],
+  },
+  defaultSale: {
+    title: '¿Fijar como presentación principal de venta?',
+    confirm: 'Fijar presentación principal',
+    effects: [
+      'Se ofrece primero al vender este producto.',
+      'La presentación principal actual deja de serlo.',
+      'Precios, factores y existencias no cambian.',
+    ],
+  },
+};
+
 export function ProductPresentationsDialog({
   open,
   onClose,
@@ -55,7 +89,8 @@ export function ProductPresentationsDialog({
   const [selectedPresentation, setSelectedPresentation] = useState<ProductPresentationDto | null>(
     null,
   );
-  const [presToDeactivate, setPresToDeactivate] = useState<ProductPresentationDto | null>(null);
+  const [pendingAction, setPendingAction] = useState<PresentationAction | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   // Conversion calculator state
@@ -89,49 +124,28 @@ export function ProductPresentationsDialog({
     setActionError(null);
   };
 
-  const handleDeactivate = async (pres: ProductPresentationDto) => {
+  // Inactivar, reactivar y fijar la principal de venta pasan por la confirmación común: el
+  // error se queda en el diálogo y el éxito se anuncia en la lista
+  const runPresentationAction = async ({ kind, pres }: PresentationAction) => {
     setActionError(null);
-    try {
+    setNotice(null);
+    if (kind === 'deactivate') {
       await deactivateMutation.mutateAsync(pres.id);
-    } catch (err) {
-      if (err instanceof Error) {
-        setActionError(err.message);
-      } else {
-        setActionError('No fue posible inactivar la presentación.');
-      }
-    }
-  };
-
-  const handleReactivate = async (pres: ProductPresentationDto) => {
-    setActionError(null);
-    try {
+    } else {
       await updateMutation.mutateAsync({
         presentationId: pres.id,
-        payload: { isActive: true },
+        payload:
+          kind === 'reactivate' ? { isActive: true } : { isDefault: true, isDefaultSale: true },
       });
-    } catch (err) {
-      if (err instanceof Error) {
-        setActionError(err.message);
-      } else {
-        setActionError('No fue posible reactivar la presentación.');
-      }
     }
-  };
-
-  const handleSetDefaultSale = async (pres: ProductPresentationDto) => {
-    setActionError(null);
-    try {
-      await updateMutation.mutateAsync({
-        presentationId: pres.id,
-        payload: { isDefault: true, isDefaultSale: true },
-      });
-    } catch (err) {
-      if (err instanceof Error) {
-        setActionError(err.message);
-      } else {
-        setActionError('No fue posible marcar la presentación como principal de venta.');
-      }
-    }
+    setPendingAction(null);
+    setNotice(
+      kind === 'deactivate'
+        ? `Presentación ${pres.name} inactivada.`
+        : kind === 'reactivate'
+          ? `Presentación ${pres.name} reactivada.`
+          : `${pres.name} es ahora la presentación principal de venta.`,
+    );
   };
 
   const handleRunConversion = async () => {
@@ -240,6 +254,11 @@ export function ProductPresentationsDialog({
             {actionError ? (
               <Alert severity="error" onClose={() => setActionError(null)}>
                 {actionError}
+              </Alert>
+            ) : null}
+            {notice ? (
+              <Alert severity="success" role="status" onClose={() => setNotice(null)}>
+                {notice}
               </Alert>
             ) : null}
 
@@ -465,11 +484,13 @@ export function ProductPresentationsDialog({
                                     <Button
                                       size="small"
                                       variant="text"
-                                      onClick={() => handleSetDefaultSale(pres)}
+                                      onClick={() =>
+                                        setPendingAction({ kind: 'defaultSale', pres })
+                                      }
                                       disabled={!pres.isActive || !pres.saleEnabled}
                                       sx={{ fontSize: '0.7rem', py: 0 }}
                                     >
-                                      Fijar Venta
+                                      Fijar venta
                                     </Button>
                                   </PermissionGate>
                                 )}
@@ -517,7 +538,7 @@ export function ProductPresentationsDialog({
                                       variant="outlined"
                                       color="error"
                                       disabled={pres.isDefault || pres.isDefaultSale}
-                                      onClick={() => setPresToDeactivate(pres)}
+                                      onClick={() => setPendingAction({ kind: 'deactivate', pres })}
                                     >
                                       Inactivar
                                     </Button>
@@ -526,7 +547,7 @@ export function ProductPresentationsDialog({
                                       size="small"
                                       variant="outlined"
                                       color="success"
-                                      onClick={() => handleReactivate(pres)}
+                                      onClick={() => setPendingAction({ kind: 'reactivate', pres })}
                                     >
                                       Reactivar
                                     </Button>
@@ -653,22 +674,19 @@ export function ProductPresentationsDialog({
         availablePresentations={presentations}
       />
 
-      {/* Diálogo de Confirmación: Inactivar Presentación */}
       <ConfirmDialog
-        open={Boolean(presToDeactivate)}
-        onClose={() => setPresToDeactivate(null)}
-        onConfirm={async () => {
-          if (presToDeactivate) {
-            const target = presToDeactivate;
-            setPresToDeactivate(null);
-            await handleDeactivate(target);
-          }
-        }}
-        isLoading={deactivateMutation.isPending}
-        title="Inactivar Presentación Comercial"
-        description={`¿Estás seguro de que deseas inactivar la presentación "${presToDeactivate?.name}"? Esta presentación dejará de estar disponible para dispensación en POS y compras.`}
-        confirmText="Inactivar Presentación"
-        confirmColor="error"
+        open={Boolean(pendingAction)}
+        operationType={pendingAction?.kind === 'deactivate' ? 'deactivate' : 'update'}
+        title={pendingAction ? ACTION_TEXTS[pendingAction.kind].title : undefined}
+        subject={
+          pendingAction
+            ? `${product.name} · ${pendingAction.pres.name} (${pendingAction.pres.baseFactor} ${pendingAction.pres.baseFactor === 1 ? 'unidad base' : 'unidades base'})`
+            : null
+        }
+        effects={pendingAction ? ACTION_TEXTS[pendingAction.kind].effects : []}
+        confirmText={pendingAction ? ACTION_TEXTS[pendingAction.kind].confirm : undefined}
+        onConfirm={() => (pendingAction ? runPresentationAction(pendingAction) : undefined)}
+        onCancel={() => setPendingAction(null)}
       />
     </>
   );

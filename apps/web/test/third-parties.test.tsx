@@ -112,6 +112,26 @@ describe('ThirdPartiesPage (Gestión Unificada de Terceros)', () => {
       </ThemeProvider>,
     );
 
+  it('inactivar un tercero confirma con su nombre y efecto; un error queda en el diálogo', async () => {
+    const deactivate = vi
+      .spyOn(thirdPartiesApi, 'deactivateThirdParty')
+      .mockRejectedValueOnce(new Error('Sin conexión con el servidor.'))
+      .mockResolvedValueOnce(mockThirdParties[0]);
+    renderComponent();
+    const buttons = await screen.findAllByRole('button', { name: 'Desactivar Tercero' });
+    fireEvent.click(buttons[0]);
+
+    const dialog = await screen.findByRole('dialog', { name: '¿Inactivar el tercero?' });
+    expect(dialog).toHaveTextContent('NIT 900123456');
+    expect(dialog).toHaveTextContent('Sus documentos, saldos e historial se conservan.');
+    fireEvent.click(screen.getByRole('button', { name: 'Inactivar tercero' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Sin conexión con el servidor.');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Inactivar tercero' }));
+    await waitFor(() => expect(deactivate).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText(/quedó inactivo\./)).toBeInTheDocument();
+  });
+
   it('debe renderizar el título de la página, los tabs de rol y la lista de terceros', async () => {
     renderComponent();
 

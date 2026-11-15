@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import {
   Dialog,
   DialogTitle,
@@ -102,8 +103,36 @@ export const ExpenseCategoriesModal: React.FC<Props> = ({ open, onClose, onCateg
     setSuccess(null);
   };
 
+  const persist = async () => {
+    if (editingId) {
+      await updateExpenseCategory(editingId, {
+        name: name.trim(),
+        description: description.trim() || undefined,
+        accountId,
+        isActive,
+      });
+      setSuccess(`Categoría ${name.trim()} actualizada.`);
+    } else {
+      await createExpenseCategory({
+        name: name.trim(),
+        description: description.trim() || undefined,
+        accountId,
+      });
+      setSuccess(`Categoría ${name.trim()} creada.`);
+    }
+    setFormOpen(false);
+    await loadData();
+    if (onCategoriesChanged) onCategoriesChanged();
+  };
+
+  // Inactivar una categoría la saca de las causaciones nuevas: se confirma antes de guardar
+  const editingCategory = categories.find((c) => c.id === editingId) ?? null;
+  const deactivating = Boolean(editingCategory?.isActive) && !isActive;
+  const [confirmDeactivate, setConfirmDeactivate] = useState(false);
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saving) return;
     if (!name.trim()) {
       setError('El nombre de la categoría es requerido.');
       return;
@@ -112,29 +141,15 @@ export const ExpenseCategoriesModal: React.FC<Props> = ({ open, onClose, onCateg
       setError('Debe seleccionar una cuenta contable del PUC.');
       return;
     }
+    setError(null);
+    if (deactivating) {
+      setConfirmDeactivate(true);
+      return;
+    }
 
     setSaving(true);
-    setError(null);
     try {
-      if (editingId) {
-        await updateExpenseCategory(editingId, {
-          name: name.trim(),
-          description: description.trim() || undefined,
-          accountId,
-          isActive,
-        });
-        setSuccess('Categoría actualizada exitosamente.');
-      } else {
-        await createExpenseCategory({
-          name: name.trim(),
-          description: description.trim() || undefined,
-          accountId,
-        });
-        setSuccess('Categoría creada exitosamente.');
-      }
-      setFormOpen(false);
-      await loadData();
-      if (onCategoriesChanged) onCategoriesChanged();
+      await persist();
     } catch (err: any) {
       setError(err?.message || 'Error al guardar la categoría.');
     } finally {
@@ -154,7 +169,7 @@ export const ExpenseCategoriesModal: React.FC<Props> = ({ open, onClose, onCateg
       </DialogTitle>
 
       <DialogContent dividers>
-        {error && (
+        {error && !formOpen && (
           <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
             {error}
           </Alert>
@@ -243,13 +258,24 @@ export const ExpenseCategoriesModal: React.FC<Props> = ({ open, onClose, onCateg
         )}
 
         {/* Modal interno para Crear / Editar Categoría */}
-        <Dialog open={formOpen} onClose={() => setFormOpen(false)} maxWidth="sm" fullWidth>
+        <Dialog
+          open={formOpen}
+          onClose={saving ? undefined : () => setFormOpen(false)}
+          maxWidth="sm"
+          fullWidth
+        >
           <form onSubmit={handleSave}>
             <DialogTitle>
               {editingId ? 'Editar Categoría de Gasto' : 'Nueva Categoría de Gasto'}
             </DialogTitle>
             <DialogContent dividers>
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+                {/* El error se muestra en el formulario abierto, no detrás de él */}
+                {error && (
+                  <Alert severity="error" role="alert" onClose={() => setError(null)}>
+                    {error}
+                  </Alert>
+                )}
                 <TextField
                   label="Nombre de la Categoría"
                   value={name}
@@ -308,15 +334,36 @@ export const ExpenseCategoriesModal: React.FC<Props> = ({ open, onClose, onCateg
               </Box>
             </DialogContent>
             <DialogActions>
-              <Button onClick={() => setFormOpen(false)} color="inherit">
+              <Button onClick={() => setFormOpen(false)} color="inherit" disabled={saving}>
                 Cancelar
               </Button>
               <Button type="submit" variant="contained" color="primary" disabled={saving}>
-                {saving ? 'Guardando...' : editingId ? 'Actualizar' : 'Crear'}
+                {saving ? 'Guardando…' : editingId ? 'Guardar categoría' : 'Crear categoría'}
               </Button>
             </DialogActions>
           </form>
         </Dialog>
+        <ConfirmDialog
+          open={confirmDeactivate}
+          operationType="deactivate"
+          title="¿Inactivar la categoría de gasto?"
+          subject={
+            editingCategory
+              ? `${editingCategory.name} · ${editingCategory.accountCode} ${editingCategory.accountName}`
+              : null
+          }
+          effects={[
+            'No se podrá elegir para causaciones nuevas.',
+            'Los gastos ya causados, sus saldos y sus asientos no cambian.',
+            'Puede activarse de nuevo cuando se necesite.',
+          ]}
+          confirmText="Inactivar categoría"
+          onConfirm={async () => {
+            await persist();
+            setConfirmDeactivate(false);
+          }}
+          onCancel={() => setConfirmDeactivate(false)}
+        />
       </DialogContent>
 
       <DialogActions>

@@ -1,17 +1,13 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
+  Alert,
   Box,
   Button,
   Card,
   CardContent,
   Chip,
   CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogContentText,
-  DialogTitle,
   IconButton,
   InputAdornment,
   Pagination,
@@ -45,6 +41,7 @@ import {
 import { ThirdPartyFormDialog } from '../components/ThirdPartyFormDialog';
 import GavelIcon from '@mui/icons-material/Gavel';
 import { SupplierFiscalDialog } from '../../taxes/components/SupplierFiscalDialog';
+import { ConfirmDialog } from '../../../components/ConfirmDialog';
 
 type RoleTab = 'ALL' | 'CUSTOMER' | 'SUPPLIER' | 'EMPLOYEE' | 'OTHER';
 type ScopedRole = 'CUSTOMER' | 'SUPPLIER';
@@ -109,6 +106,7 @@ export const ThirdPartiesPage: React.FC = () => {
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   // Estados de modal y edición
   const [formDialogOpen, setFormDialogOpen] = useState(false);
@@ -185,19 +183,20 @@ export const ThirdPartiesPage: React.FC = () => {
     });
   };
 
+  // Activar o inactivar (rediseño, fase 5): el error queda en el diálogo y el éxito en la página
   const handleConfirmToggleStatus = async () => {
-    if (!confirmDialog.thirdParty) return;
-    try {
-      if (confirmDialog.action === 'deactivate') {
-        await deactivateThirdParty(confirmDialog.thirdParty.id);
-      } else {
-        await activateThirdParty(confirmDialog.thirdParty.id);
-      }
-      handleCloseConfirm();
-      loadThirdParties();
-    } catch (err: any) {
-      alert(err?.message || 'Error al actualizar el estado del tercero');
+    const target = confirmDialog.thirdParty;
+    if (!target) return;
+    if (confirmDialog.action === 'deactivate') {
+      await deactivateThirdParty(target.id);
+    } else {
+      await activateThirdParty(target.id);
     }
+    handleCloseConfirm();
+    setNotice(
+      `${target.name} quedó ${confirmDialog.action === 'deactivate' ? 'inactivo' : 'activo'}.`,
+    );
+    loadThirdParties();
   };
 
   return (
@@ -236,6 +235,12 @@ export const ThirdPartiesPage: React.FC = () => {
           </Button>
         )}
       </Box>
+
+      {notice && (
+        <Alert severity="success" onClose={() => setNotice(null)}>
+          {notice}
+        </Alert>
+      )}
 
       {/* Tarjeta principal con tabs y filtros */}
       <Card variant="outlined" sx={{ borderRadius: 2 }}>
@@ -546,30 +551,33 @@ export const ThirdPartiesPage: React.FC = () => {
         allowedRoles={fullManage ? undefined : managedRoles}
       />
 
-      {/* Diálogo de Confirmación Desactivación / Activación */}
-      <Dialog open={confirmDialog.open} onClose={handleCloseConfirm}>
-        <DialogTitle>
-          {confirmDialog.action === 'deactivate' ? 'Desactivar Tercero' : 'Activar Tercero'}
-        </DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            ¿Está seguro que desea{' '}
-            {confirmDialog.action === 'deactivate' ? 'desactivar' : 'activar'} al tercero{' '}
-            <strong>{confirmDialog.thirdParty?.name}</strong> (
-            {confirmDialog.thirdParty?.documentType} {confirmDialog.thirdParty?.documentNumber})?
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseConfirm}>Cancelar</Button>
-          <Button
-            onClick={handleConfirmToggleStatus}
-            color={confirmDialog.action === 'deactivate' ? 'warning' : 'success'}
-            variant="contained"
-          >
-            Confirmar
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {/* Confirmación de activar o inactivar: nombra el tercero y el efecto */}
+      <ConfirmDialog
+        open={confirmDialog.open}
+        operationType={confirmDialog.action === 'deactivate' ? 'deactivate' : 'confirm'}
+        title={
+          confirmDialog.action === 'deactivate' ? '¿Inactivar el tercero?' : '¿Activar el tercero?'
+        }
+        subject={
+          confirmDialog.thirdParty
+            ? `${confirmDialog.thirdParty.name} · ${confirmDialog.thirdParty.documentType} ${confirmDialog.thirdParty.documentNumber}`
+            : null
+        }
+        effects={
+          confirmDialog.action === 'deactivate'
+            ? [
+                'Queda marcado como inactivo.',
+                'Sus documentos, saldos e historial se conservan.',
+                'Puede activarse de nuevo cuando se necesite.',
+              ]
+            : ['Queda marcado como activo y vuelve a estar disponible para operar.']
+        }
+        confirmText={
+          confirmDialog.action === 'deactivate' ? 'Inactivar tercero' : 'Activar tercero'
+        }
+        onConfirm={handleConfirmToggleStatus}
+        onCancel={handleCloseConfirm}
+      />
       <SupplierFiscalDialog
         supplierId={fiscalSupplier?.id ?? null}
         supplierName={fiscalSupplier?.name ?? ''}

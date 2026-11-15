@@ -1,6 +1,6 @@
 import { ThemeProvider, createTheme } from '@mui/material';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SYSTEM_PERMISSIONS, SYSTEM_ROLES } from '@farmacia/contracts';
@@ -226,6 +226,43 @@ describe('TreasuryBankAccountsPage (Slice 11.4 Frontend)', () => {
         }),
       );
     });
+  });
+
+  it('inactivar una cuenta bancaria pide confirmación con su efecto antes de guardar', async () => {
+    vi.mocked(treasuryApi.updateBankAccount)
+      .mockRejectedValueOnce(new Error('La cuenta tiene un traslado pendiente.'))
+      .mockResolvedValueOnce({ ...mockAccounts[0], isActive: false } as any);
+    renderWithProviders();
+
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Editar' }))[0]);
+    await screen.findByRole('heading', { name: 'Editar Cuenta Bancaria' });
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: /Estado de la Cuenta/ }));
+    fireEvent.click(await screen.findByRole('option', { name: /Inactiva/ }));
+    fireEvent.click(screen.getByTestId('submit-bank-account-btn'));
+
+    const confirm = await screen.findByRole('dialog', { name: '¿Inactivar la cuenta bancaria?' });
+    expect(within(confirm).getByTestId('confirm-subject')).toHaveTextContent(
+      'Bancolombia · 1234567890',
+    );
+    expect(within(confirm).getByTestId('confirm-effects')).toHaveTextContent(
+      'No se podrá elegir para nuevos recaudos, pagos ni traslados.',
+    );
+    expect(treasuryApi.updateBankAccount).not.toHaveBeenCalled();
+
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Inactivar cuenta' }));
+    expect(await within(confirm).findByRole('alert')).toHaveTextContent(
+      'La cuenta tiene un traslado pendiente.',
+    );
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Inactivar cuenta' }));
+    await waitFor(() =>
+      expect(treasuryApi.updateBankAccount).toHaveBeenLastCalledWith(
+        'acc-1',
+        expect.objectContaining({ isActive: false }),
+      ),
+    );
+    expect(
+      await screen.findByText('Cuenta bancaria actualizada correctamente.'),
+    ).toBeInTheDocument();
   });
 
   it('es de solo consulta: sin registro de movimientos, con tipos en español, filtro Débito/Crédito y orden', async () => {

@@ -21,6 +21,7 @@ import type {
   UpdateBankAccountDto,
 } from '@farmacia/contracts';
 import { useAccounts } from '../../accounting/hooks/useAccounting';
+import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import type { AccountDto } from '../../accounting/api/accounting.api';
 
 interface BankAccountDialogProps {
@@ -103,6 +104,19 @@ export const BankAccountDialog: React.FC<BankAccountDialogProps> = ({
     setErrorMessage(null);
   }, [accountToEdit, open]);
 
+  const updatePayload = (): UpdateBankAccountDto => ({
+    name: name.trim(),
+    notes: notes.trim() || null,
+    isActive,
+    ...(ledgerAccountId && ledgerAccountId !== accountToEdit?.ledgerAccountId
+      ? { ledgerAccountId }
+      : {}),
+  });
+
+  // Inactivar una cuenta la saca de los pagos y recaudos: se confirma con su efecto antes
+  const deactivating = isEditing && Boolean(accountToEdit?.isActive) && !isActive;
+  const [confirmDeactivate, setConfirmDeactivate] = useState(false);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
@@ -112,16 +126,14 @@ export const BankAccountDialog: React.FC<BankAccountDialogProps> = ({
       return;
     }
 
+    if (deactivating) {
+      setConfirmDeactivate(true);
+      return;
+    }
+
     try {
       if (isEditing) {
-        await onSubmit({
-          name: name.trim(),
-          notes: notes.trim() || null,
-          isActive,
-          ...(ledgerAccountId && ledgerAccountId !== accountToEdit?.ledgerAccountId
-            ? { ledgerAccountId }
-            : {}),
-        });
+        await onSubmit(updatePayload());
       } else {
         if (!bankName.trim()) {
           setErrorMessage('El nombre del banco o entidad es obligatorio.');
@@ -156,7 +168,7 @@ export const BankAccountDialog: React.FC<BankAccountDialogProps> = ({
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={isSubmitting ? undefined : onClose} maxWidth="sm" fullWidth>
       <form onSubmit={handleSubmit}>
         <DialogTitle sx={{ fontWeight: 600 }}>
           {isEditing ? 'Editar Cuenta Bancaria' : 'Nueva Cuenta Bancaria'}
@@ -298,6 +310,28 @@ export const BankAccountDialog: React.FC<BankAccountDialogProps> = ({
           </Button>
         </DialogActions>
       </form>
+      <ConfirmDialog
+        open={confirmDeactivate}
+        operationType="deactivate"
+        title="¿Inactivar la cuenta bancaria?"
+        subject={
+          accountToEdit
+            ? `${accountToEdit.bankName} · ${accountToEdit.accountNumber} · ${name.trim() || accountToEdit.name}`
+            : null
+        }
+        effects={[
+          'No se podrá elegir para nuevos recaudos, pagos ni traslados.',
+          'Su saldo, sus movimientos y sus asientos registrados no cambian.',
+          'Puede activarse de nuevo cuando se necesite.',
+        ]}
+        confirmText="Inactivar cuenta"
+        onConfirm={async () => {
+          await onSubmit(updatePayload());
+          setConfirmDeactivate(false);
+          onClose();
+        }}
+        onCancel={() => setConfirmDeactivate(false)}
+      />
     </Dialog>
   );
 };
