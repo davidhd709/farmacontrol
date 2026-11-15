@@ -7,7 +7,6 @@ import {
   Button,
   Box,
   Typography,
-  Chip,
   Table,
   TableBody,
   TableCell,
@@ -20,7 +19,11 @@ import {
 } from '@mui/material';
 import PrintIcon from '@mui/icons-material/Print';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
-import type { PurchaseDto } from '@farmacia/contracts';
+import { SYSTEM_PERMISSIONS, type PurchaseDto } from '@farmacia/contracts';
+import { Link as RouterLink } from 'react-router-dom';
+import { PermissionGate } from '../../auth/components/PermissionGate';
+import { StatusChip } from '../../../components/StatusChip';
+import { purchaseStatus } from '../purchase-labels';
 import { expirationDateLabel, lotNumberLabel } from '../../catalog/utils/inventory-control';
 import { formatDate, formatDateTime } from '../../../utils/date-format';
 import { useCompanyInfo } from '../../company/hooks/useCompanyInfo';
@@ -30,12 +33,15 @@ interface PurchaseDetailDialogProps {
   open: boolean;
   onClose: () => void;
   purchase: PurchaseDto | null;
+  /** Abre la devolución al proveedor de esta compra (solo si la compra la admite) */
+  onStartReturn?: () => void;
 }
 
 export const PurchaseDetailDialog: React.FC<PurchaseDetailDialogProps> = ({
   open,
   onClose,
   purchase,
+  onStartReturn,
 }) => {
   const company = useCompanyInfo();
   if (!purchase) return null;
@@ -88,16 +94,10 @@ export const PurchaseDetailDialog: React.FC<PurchaseDetailDialogProps> = ({
         }}
       >
         <span>Detalle de Factura de Compra: {purchase.invoiceNumber}</span>
-        <Chip
-          label={purchase.status}
-          color="success"
-          size="small"
-          variant="outlined"
-          sx={{
-            fontWeight: 700,
-            bgcolor: 'rgba(46, 125, 50, 0.04)',
-            borderColor: 'rgba(46, 125, 50, 0.4)',
-          }}
+        <StatusChip
+          label={purchaseStatus(purchase.status).label}
+          tone={purchaseStatus(purchase.status).tone}
+          data-testid="purchase-status"
         />
       </DialogTitle>
 
@@ -292,7 +292,7 @@ export const PurchaseDetailDialog: React.FC<PurchaseDetailDialogProps> = ({
       </DialogContent>
 
       <DialogActions className="no-print" sx={{ p: 2, display: 'flex', justifyContent: 'space-between' }}>
-        <Stack direction="row" spacing={1}>
+        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
           <Button
             variant="contained"
             color="primary"
@@ -311,6 +311,27 @@ export const PurchaseDetailDialog: React.FC<PurchaseDetailDialogProps> = ({
           >
             Descargar PDF
           </Button>
+          <PermissionGate permission={SYSTEM_PERMISSIONS.INVENTORY_READ}>
+            <Button
+              variant="outlined"
+              component={RouterLink}
+              to={`/inventory/movements?ref=${encodeURIComponent(purchase.id)}&refLabel=${encodeURIComponent(`la compra ${purchase.invoiceNumber}`)}`}
+              sx={{ textTransform: 'none', fontWeight: 600 }}
+            >
+              Ver movimientos
+            </Button>
+          </PermissionGate>
+          {onStartReturn && (
+            <Button
+              variant="outlined"
+              color="warning"
+              onClick={onStartReturn}
+              data-testid="purchase-detail-return-btn"
+              sx={{ textTransform: 'none', fontWeight: 600 }}
+            >
+              Devolución al proveedor
+            </Button>
+          )}
         </Stack>
 
         <Button

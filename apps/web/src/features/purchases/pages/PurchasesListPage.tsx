@@ -27,6 +27,10 @@ import { PermissionGate } from '../../auth/components/PermissionGate';
 import { DebitNoteDialog } from '../components/DebitNoteDialog';
 import { formatDate } from '../../../utils/date-format';
 import { FilterBar } from '../../../components/layout/FilterBar';
+import { StatusChip } from '../../../components/StatusChip';
+import { purchaseStatus } from '../purchase-labels';
+import { formatCop } from '../../../utils/money';
+import { usePermissions } from '../../auth/hooks/usePermissions';
 
 export const PurchasesListPage: React.FC = () => {
   const [purchases, setPurchases] = useState<PurchaseDto[]>([]);
@@ -68,6 +72,9 @@ export const PurchasesListPage: React.FC = () => {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  const { hasPermission } = usePermissions();
+  const canReturn = hasPermission(SYSTEM_PERMISSIONS.PURCHASES_DEBIT_NOTE);
 
   const handleOpenDetail = (purchase: PurchaseDto) => {
     setSelectedPurchase(purchase);
@@ -229,22 +236,15 @@ export const PurchasesListPage: React.FC = () => {
                   </TableCell>
                   <TableCell>{formatDate(purchase.purchaseDate)}</TableCell>
                   <TableCell sx={{ textAlign: 'right', fontWeight: 800, color: 'text.primary', fontVariantNumeric: 'tabular-nums' }}>
-                    ${Number(purchase.totalAmount).toLocaleString()}
+                    {formatCop(purchase.totalAmount)}
                   </TableCell>
                   <TableCell sx={{ textAlign: 'center' }}>
                     <Chip label={`${purchase.lines.length} productos`} size="small" variant="outlined" sx={{ fontWeight: 600 }} />
                   </TableCell>
                   <TableCell sx={{ textAlign: 'center' }}>
-                    <Chip
-                      label={purchase.status}
-                      color="success"
-                      size="small"
-                      variant="outlined"
-                      sx={{
-                        fontWeight: 700,
-                        bgcolor: 'rgba(46, 125, 50, 0.04)',
-                        borderColor: 'rgba(46, 125, 50, 0.4)',
-                      }}
+                    <StatusChip
+                      label={purchaseStatus(purchase.status).label}
+                      tone={purchaseStatus(purchase.status).tone}
                     />
                   </TableCell>
                   <TableCell sx={{ textAlign: 'right' }}>
@@ -308,6 +308,14 @@ export const PurchasesListPage: React.FC = () => {
         open={detailOpen}
         onClose={() => setDetailOpen(false)}
         purchase={selectedPurchase}
+        onStartReturn={
+          canReturn && selectedPurchase?.status === 'RECEIVED'
+            ? () => {
+                setDetailOpen(false);
+                setPurchaseForDebitNote(selectedPurchase);
+              }
+            : undefined
+        }
       />
 
       {/* Nota Débito / Devolución a proveedor (RF-033) */}

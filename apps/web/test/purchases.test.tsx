@@ -9,6 +9,7 @@ import {
   type PurchaseDto,
   type SupplierDto,
   type ProductDto,
+  type InventoryLotDto,
 } from '@farmacia/contracts';
 import { AuthContext, type AuthContextValue } from '../src/features/auth/context/auth-context';
 import * as purchasesApi from '../src/features/purchases/api/purchases.api';
@@ -18,6 +19,8 @@ import { PurchasesListPage } from '../src/features/purchases/pages/PurchasesList
 import { ReceivePurchasePage } from '../src/features/purchases/pages/ReceivePurchasePage';
 import { DebitNoteDialog } from '../src/features/purchases/components/DebitNoteDialog';
 import * as accountingApi from '../src/features/accounting/api/accounting.api';
+import * as inventoryApi from '../src/features/inventory/api/inventory.api';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { businessToday, addDaysToDate } from '../src/utils/business-date';
 import { appTheme } from '../src/theme/app-theme';
 import { setDateField } from './support-date';
@@ -128,7 +131,25 @@ describe('Purchases Frontend (UX-15 & UX-16)', () => {
       totalPages: 1,
     });
     vi.spyOn(purchasesApi, 'receivePurchase').mockResolvedValue(mockPurchases[0]);
+    vi.spyOn(accountingApi, 'fetchPurchaseDebitNotes').mockResolvedValue([]);
+    vi.spyOn(inventoryApi, 'fetchInventoryLots').mockResolvedValue({
+      items: [{ id: 'lot-1', currentQuantity: 100 } as InventoryLotDto],
+      total: 1,
+      page: 1,
+      pageSize: 100,
+      totalPages: 1,
+    });
   });
+
+  function renderDebitNote(onCreated = vi.fn()) {
+    return render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <DebitNoteDialog open purchase={mockPurchases[0]} onClose={vi.fn()} onCreated={onCreated} />
+      </QueryClientProvider>,
+    );
+  }
 
   describe('PurchasesListPage (UX-15)', () => {
     it('renderiza la lista de facturas de compras y abre el detalle', async () => {
@@ -152,7 +173,7 @@ describe('Purchases Frontend (UX-15 & UX-16)', () => {
         expect(screen.getByText(/Historial de Compras y Abastecimiento/i)).toBeInTheDocument();
         expect(screen.getByText('FAC-2026-789')).toBeInTheDocument();
         expect(screen.getByText('Distribuidora Médica del Norte')).toBeInTheDocument();
-        expect(screen.getByText(/\$80[.,]000/)).toBeInTheDocument();
+        expect(screen.getByText(/\$\s?80[.,]000/)).toBeInTheDocument();
       });
 
       // Clic en Ver Detalle
@@ -183,7 +204,7 @@ describe('Purchases Frontend (UX-15 & UX-16)', () => {
       await waitFor(() => {
         expect(screen.getByText(/Recepción de Compras e Ingreso de Lotes/i)).toBeInTheDocument();
         expect(screen.getByText('Datos del Comprobante / Factura')).toBeInTheDocument();
-        expect(screen.getByText('Confirmar Recepción de Compra')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Continuar a productos' })).toBeInTheDocument();
       });
     });
   });
@@ -192,13 +213,22 @@ describe('Purchases Frontend (UX-15 & UX-16)', () => {
     await user.click(screen.getByRole('option', { name: option }));
   }
 
+  // Paso 1 válido para llegar a productos y lotes
+  async function fillHeaderAndContinue(user: ReturnType<typeof userEvent.setup>) {
+    await screen.findByRole('button', { name: 'Continuar a productos' });
+    await choose(user, /Proveedor/, /Distribuidora/);
+    fireEvent.change(screen.getByLabelText(/Número de Factura/), { target: { value: ' fac-42 ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar a productos' }));
+    await screen.findByRole('button', { name: 'Revisar totales' });
+  }
+
   it('recepción inválida muestra errores por campo, enfoca el proveedor y no llama a la API', async () => {
     render(
       <MemoryRouter>
         <ReceivePurchasePage />
       </MemoryRouter>,
     );
-    const submit = await screen.findByRole('button', { name: 'Confirmar Recepción de Compra' });
+    const submit = await screen.findByRole('button', { name: 'Continuar a productos' });
     fireEvent.click(submit);
     expect(await screen.findByText('Debes seleccionar un proveedor.')).toBeInTheDocument();
     expect(screen.getByText('El número de factura es obligatorio.')).toBeInTheDocument();
@@ -214,18 +244,29 @@ describe('Purchases Frontend (UX-15 & UX-16)', () => {
         <ReceivePurchasePage />
       </MemoryRouter>,
     );
-    await screen.findByRole('button', { name: 'Confirmar Recepción de Compra' });
+    await screen.findByRole('button', { name: 'Continuar a productos' });
     await choose(user, /Proveedor/, /Distribuidora/);
     fireEvent.change(screen.getByLabelText(/Número de Factura/), { target: { value: ' fac-42 ' } });
+    fireEvent.change(screen.getByLabelText(/Observaciones/), {
+      target: { value: ' Entrega completa ' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar a productos' }));
+    await screen.findByRole('button', { name: 'Revisar totales' });
+    // Proveedor y comprobante siguen a la vista en los pasos siguientes
+    expect(screen.getByTestId('purchase-summary')).toHaveTextContent(/Distribuidora/);
+    expect(screen.getByTestId('purchase-summary')).toHaveTextContent('FAC-42');
     await choose(user, /^Producto/, /Amoxicilina/);
     fireEvent.change(screen.getByLabelText(/Número de Lote/), { target: { value: ' lote-42 ' } });
     setDateField(/^Fecha de Vencimiento \*/, '2099-12-31');
     fireEvent.change(screen.getByLabelText(/^Cantidad/), { target: { value: '2' } });
-    fireEvent.change(screen.getByLabelText(/Observaciones/), {
-      target: { value: ' Entrega completa ' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Confirmar Recepción de Compra' }));
-    const confirm = await screen.findByRole('button', { name: 'Sí, Confirmar Recepción' });
+    fireEvent.click(screen.getByRole('button', { name: 'Revisar totales' }));
+    const confirm = await screen.findByRole('button', { name: 'Confirmar recepción de compra' });
+    const review = screen.getByRole('table', { name: 'Líneas a recibir' });
+    expect(review).toHaveTextContent('LOTE-42');
+    expect(screen.getByTestId('purchase-effects')).toHaveTextContent(/Entran 2 unidades base/);
+    expect(screen.getByTestId('purchase-effects')).toHaveTextContent(
+      /Se abre una cuenta por pagar a Distribuidora/,
+    );
     fireEvent.click(confirm);
     fireEvent.click(confirm);
     const date = businessToday();
@@ -250,19 +291,22 @@ describe('Purchases Frontend (UX-15 & UX-16)', () => {
         ],
       }),
     );
-    expect(screen.getByRole('button', { name: 'Procesando Transacción...' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Registrando compra…' })).toBeDisabled();
   });
 
   it('la pistola lectora llena la primera línea, suma unidades al repetir y avisa códigos inexistentes', async () => {
-    const lookup = vi.spyOn(productsApi, 'lookupProductByCode').mockImplementation(async (code) =>
-      code === '7700000000001' ? { product: mockProducts[0], presentationId: null } : null,
-    );
+    const lookup = vi
+      .spyOn(productsApi, 'lookupProductByCode')
+      .mockImplementation(async (code) =>
+        code === '7700000000001' ? { product: mockProducts[0], presentationId: null } : null,
+      );
+    const user = userEvent.setup();
     render(
       <MemoryRouter>
         <ReceivePurchasePage />
       </MemoryRouter>,
     );
-    await screen.findByRole('button', { name: 'Confirmar Recepción de Compra' });
+    await fillHeaderAndContinue(user);
     const scan = screen.getByLabelText('Escanear código de barras');
     for (const code of ['7700000000001', '7700000000001']) {
       fireEvent.change(scan, { target: { value: code } });
@@ -275,17 +319,20 @@ describe('Purchases Frontend (UX-15 & UX-16)', () => {
 
     fireEvent.change(scan, { target: { value: '123' } });
     fireEvent.keyDown(scan, { key: 'Enter' });
-    expect(await screen.findByText('El código "123" no existe en el catálogo.')).toBeInTheDocument();
+    expect(
+      await screen.findByText('El código "123" no existe en el catálogo.'),
+    ).toBeInTheDocument();
     expect(scan).toHaveValue('');
   });
 
   it('las líneas dinámicas conservan sus valores al eliminar otra y cambiar de vista', async () => {
+    const user = userEvent.setup();
     render(
       <MemoryRouter>
         <ReceivePurchasePage />
       </MemoryRouter>,
     );
-    await screen.findByRole('button', { name: 'Confirmar Recepción de Compra' });
+    await fillHeaderAndContinue(user);
     // Lote y vencimiento solo aparecen con un producto que los requiere; el costo siempre está
     fireEvent.change(screen.getByLabelText(/Costo por/), { target: { value: '111' } });
     fireEvent.click(screen.getByRole('button', { name: 'Agregar Producto' }));
@@ -294,16 +341,40 @@ describe('Purchases Frontend (UX-15 & UX-16)', () => {
     expect(screen.getByLabelText(/Costo por/)).toHaveValue(222);
     fireEvent.click(screen.getByRole('button', { name: 'Tabla', exact: true }));
     expect(screen.getByRole('spinbutton', { name: 'Costo línea 1' })).toHaveValue(222);
-    fireEvent.click(screen.getByRole('button', { name: 'Confirmar Recepción de Compra' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Revisar totales' }));
     expect(await screen.findByText('Selecciona un producto.')).toBeInTheDocument();
     expect(purchasesApi.receivePurchase).not.toHaveBeenCalled();
   });
 
+  it('si el servidor rechaza la recepción se queda en la revisión y permite volver a corregir (fase 3)', async () => {
+    const user = userEvent.setup();
+    vi.mocked(purchasesApi.receivePurchase).mockRejectedValue(
+      new Error('Ya existe la factura FAC-42 de este proveedor.'),
+    );
+    render(
+      <MemoryRouter>
+        <ReceivePurchasePage />
+      </MemoryRouter>,
+    );
+    await fillHeaderAndContinue(user);
+    await choose(user, /^Producto/, /Amoxicilina/);
+    fireEvent.change(screen.getByLabelText(/Número de Lote/), { target: { value: 'L-1' } });
+    setDateField(/^Fecha de Vencimiento \*/, '2099-12-31');
+    fireEvent.change(screen.getByLabelText(/^Cantidad/), { target: { value: '1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Revisar totales' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirmar recepción de compra' }));
+    expect(
+      await screen.findByText('Ya existe la factura FAC-42 de este proveedor.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('table', { name: 'Líneas a recibir' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Revisar factura' }));
+    expect(screen.getByLabelText(/Número de Factura/)).toHaveValue(' fac-42 ');
+  });
+
   it('nota débito inválida muestra errores por campo y enfoca la cantidad sin enviar', async () => {
     const api = vi.spyOn(accountingApi, 'createPurchaseDebitNote');
-    render(
-      <DebitNoteDialog open purchase={mockPurchases[0]} onClose={vi.fn()} onCreated={vi.fn()} />,
-    );
+    renderDebitNote();
+    await screen.findByText('100 u. base');
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar nota débito' }));
     expect(
       await screen.findByText('Selecciona al menos una cantidad a devolver.'),
@@ -318,9 +389,8 @@ describe('Purchases Frontend (UX-15 & UX-16)', () => {
       .spyOn(accountingApi, 'createPurchaseDebitNote')
       .mockRejectedValueOnce(new Error('Fallo temporal'))
       .mockReturnValue(new Promise(() => {}));
-    render(
-      <DebitNoteDialog open purchase={mockPurchases[0]} onClose={vi.fn()} onCreated={vi.fn()} />,
-    );
+    renderDebitNote();
+    await screen.findByText('100 u. base');
     fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '2' } });
     fireEvent.change(screen.getByLabelText(/Motivo de la devolución/), {
       target: { value: '  Envase roto  ' },
@@ -343,5 +413,65 @@ describe('Purchases Frontend (UX-15 & UX-16)', () => {
     expect(api.mock.calls[0]).toEqual(expected);
     expect(api.mock.calls[1]).toEqual(api.mock.calls[0]);
     expect(screen.getByRole('button', { name: 'Registrando…' })).toBeDisabled();
+  });
+
+  it('la devolución al proveedor muestra lo devuelto, lo devolvible y su efecto (fase 3)', async () => {
+    const create = vi.spyOn(accountingApi, 'createPurchaseDebitNote');
+    vi.mocked(accountingApi.fetchPurchaseDebitNotes).mockResolvedValue([
+      {
+        id: 'nd-1',
+        debitNoteNumber: 'ND-000001',
+        lines: [{ purchaseLineId: 'line-1', quantityBaseUnits: 30 }],
+      } as accountingApi.DebitNoteDto,
+    ]);
+    vi.mocked(inventoryApi.fetchInventoryLots).mockResolvedValue({
+      items: [{ id: 'lot-1', currentQuantity: 50 } as InventoryLotDto],
+      total: 1,
+      page: 1,
+      pageSize: 100,
+      totalPages: 1,
+    });
+    renderDebitNote();
+    expect(await screen.findByText('50 u. base')).toBeInTheDocument();
+    expect(screen.getByText('30')).toBeInTheDocument();
+    expect(screen.getByTestId('returnable-line-1')).toHaveTextContent('50');
+    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '60' } });
+    fireEvent.change(screen.getByLabelText(/Motivo de la devolución/), {
+      target: { value: 'Envase roto' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar nota débito' }));
+    expect(await screen.findByText('Solo se pueden devolver 50.')).toBeInTheDocument();
+    expect(create).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '5' } });
+    const effects = screen.getByTestId('debit-note-effects');
+    expect(effects).toHaveTextContent('Salen 5 unidades base del lote LOTE-AMX-2026');
+    expect(effects).toHaveTextContent(
+      /Baja \$4\.000,00 la cuenta por pagar a Distribuidora Médica del Norte/,
+    );
+  });
+
+  it('si la existencia cambió el error del servidor ofrece actualizar sin perder lo escrito (fase 3)', async () => {
+    vi.spyOn(accountingApi, 'createPurchaseDebitNote').mockRejectedValue(
+      new Error('Existencias insuficientes en el lote LOTE-AMX-2026 para devolver la mercancía.'),
+    );
+    renderDebitNote();
+    await screen.findByText('100 u. base');
+    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '10' } });
+    fireEvent.change(screen.getByLabelText(/Motivo de la devolución/), {
+      target: { value: 'Producto averiado' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar nota débito' }));
+    expect(await screen.findByText(/Existencias insuficientes en el lote/)).toBeInTheDocument();
+    vi.mocked(inventoryApi.fetchInventoryLots).mockResolvedValue({
+      items: [{ id: 'lot-1', currentQuantity: 4 } as InventoryLotDto],
+      total: 1,
+      page: 1,
+      pageSize: 100,
+      totalPages: 1,
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Actualizar existencias' }));
+    expect(await screen.findByText('4 u. base')).toBeInTheDocument();
+    expect(screen.getByTestId('returnable-line-1')).toHaveTextContent('4');
+    expect(screen.getByRole('spinbutton')).toHaveValue(10);
   });
 });
