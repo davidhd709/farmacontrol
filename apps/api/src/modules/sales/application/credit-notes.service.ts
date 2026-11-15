@@ -50,6 +50,8 @@ function isRetryableConcurrencyError(error: unknown): boolean {
       msg.includes('40001') ||
       msg.includes('40p01') ||
       msg.includes('could not serialize access') ||
+      // Conflicto al confirmar informado por el adaptador de PostgreSQL
+      msg.includes('transactionwriteconflict') ||
       msg.includes('deadlock detected') ||
       msg.includes('write conflict')
     ) {

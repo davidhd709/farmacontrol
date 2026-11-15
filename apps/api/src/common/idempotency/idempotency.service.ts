@@ -12,6 +12,8 @@ export interface IdempotencyRecord {
 /**
  * Fallos transitorios de una transacción serializable que se resuelven repitiéndola entera:
  * conflicto de serialización, interbloqueo o transacción interactiva expirada bajo carga.
+ * Con el adaptador de PostgreSQL, un conflicto detectado al confirmar (COMMIT) llega como
+ * DriverAdapterError «TransactionWriteConflict», sin código de Prisma ni SQLSTATE.
  */
 export function isRetryableTransactionError(error: unknown): boolean {
   return (
@@ -20,7 +22,9 @@ export function isRetryableTransactionError(error: unknown): boolean {
         error.code === 'P2028' ||
         (error.code === 'P2010' && ['40001', '40P01'].includes(String(error.meta?.code))))) ||
     (error instanceof Error &&
-      /40001|40P01|could not serialize access|deadlock detected/i.test(error.message))
+      /40001|40P01|could not serialize access|deadlock detected|TransactionWriteConflict/i.test(
+        error.message,
+      ))
   );
 }
 

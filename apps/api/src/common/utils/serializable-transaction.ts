@@ -2,6 +2,8 @@ import { Prisma, prisma } from '@farmacia/database';
 
 /** Conflicto de serialización o interbloqueo: la transacción se puede repetir completa. */
 function isSerializationConflict(error: unknown): boolean {
+  // Conflicto detectado al confirmar: el adaptador de PostgreSQL lo informa sin código de Prisma
+  if (error instanceof Error && /TransactionWriteConflict/i.test(error.message)) return true;
   if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
   if (error.code === 'P2034') return true;
   const code = (error.meta as { code?: string } | undefined)?.code;

@@ -16,6 +16,13 @@ const known = (code: string, meta?: Record<string, unknown>) =>
     meta,
   });
 
+/** Así llega un conflicto de serialización detectado en el COMMIT con @prisma/adapter-pg. */
+function driverWriteConflict() {
+  const error = new Error('TransactionWriteConflict');
+  error.name = 'DriverAdapterError';
+  return Object.assign(error, { cause: { kind: 'TransactionWriteConflict' } });
+}
+
 const input = {
   entryId: '11111111-1111-4111-8111-111111111111',
   entryDate: '2026-11-15',
@@ -32,6 +39,7 @@ describe('isRetryableTransactionError', () => {
     ['40001 por SQL directo (P2010)', known('P2010', { code: '40001' })],
     ['interbloqueo por SQL directo (P2010)', known('P2010', { code: '40P01' })],
     ['mensaje de PostgreSQL', new Error('could not serialize access due to concurrent update')],
+    ['conflicto al confirmar (adaptador de PostgreSQL)', driverWriteConflict()],
   ])('reintenta %s', (_name, error) => {
     expect(isRetryableTransactionError(error)).toBe(true);
   });
@@ -50,6 +58,7 @@ describe('JournalService.reverse ante fallos transitorios', () => {
     ['transacción expirada', known('P2028')],
     ['40001 por SQL directo', known('P2010', { code: '40001' })],
     ['interbloqueo', new Error('deadlock detected')],
+    ['conflicto al confirmar', driverWriteConflict()],
   ])('repite la transacción tras %s y devuelve la reversa', async (_name, error) => {
     const reversal = { id: 'reversa', lines: [] };
     const transaction = vi
