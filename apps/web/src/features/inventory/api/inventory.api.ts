@@ -58,9 +58,7 @@ export async function fetchLocations(): Promise<LocationDto[]> {
   return res.data;
 }
 
-export async function createLocation(
-  payload: CreateLocationPayload,
-): Promise<LocationDto> {
+export async function createLocation(payload: CreateLocationPayload): Promise<LocationDto> {
   const res = await apiRequest<{ data: LocationDto }>('inventory/locations', {
     method: 'POST',
     body: JSON.stringify(payload),
@@ -68,13 +66,12 @@ export async function createLocation(
   return res.data;
 }
 
-export async function fetchInventoryMovements(
-  filters: any = {},
-): Promise<any> {
+export async function fetchInventoryMovements(filters: any = {}): Promise<any> {
   const query = new URLSearchParams();
   if (filters.productId) query.set('productId', filters.productId);
   if (filters.lotId) query.set('lotId', filters.lotId);
   if (filters.movementType) query.set('movementType', filters.movementType);
+  if (filters.referenceDocumentId) query.set('referenceDocumentId', filters.referenceDocumentId);
   if (filters.page) query.set('page', String(filters.page));
   if (filters.pageSize) query.set('pageSize', String(filters.pageSize));
 
@@ -84,16 +81,14 @@ export async function fetchInventoryMovements(
   });
 }
 
-export async function adjustInventory(
-  payload: {
-    productId: string;
-    lotId: string;
-    adjustmentType: 'INCREMENTO' | 'DECREMENTO';
-    quantityBaseUnits: number;
-    reason: string;
-    notes?: string;
-  },
-): Promise<any> {
+export async function adjustInventory(payload: {
+  productId: string;
+  lotId: string;
+  adjustmentType: 'INCREMENTO' | 'DECREMENTO';
+  quantityBaseUnits: number;
+  reason: string;
+  notes?: string;
+}): Promise<any> {
   const res = await apiRequest<{ data: any }>('inventory/movements/adjust', {
     method: 'POST',
     body: JSON.stringify(payload),

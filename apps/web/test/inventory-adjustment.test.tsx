@@ -97,7 +97,7 @@ describe('Historial de movimientos: motivo del ajuste (FARM-AUD-012)', () => {
 
     const legacyRow = screen.getByText('+2').closest('tr') as HTMLElement;
     expect(
-      within(legacyRow).getByText('AJUSTE_MANUAL: MOTIVO: Sobrante en conteo'),
+      within(legacyRow).getByText('Ajuste manual: MOTIVO: Sobrante en conteo'),
     ).toBeInTheDocument();
   });
 });

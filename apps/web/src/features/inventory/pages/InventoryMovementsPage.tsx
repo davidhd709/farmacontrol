@@ -27,12 +27,32 @@ import type { InventoryMovementDto, ProductDto } from '@farmacia/contracts';
 import { fetchInventoryMovements } from '../api/inventory.api';
 import { fetchProducts } from '../../catalog/api/products.api';
 import { formatSignedQuantity, movementDirection } from '../movement-direction';
+import {
+  MOVEMENT_TYPE_LABELS,
+  movementTypeLabel,
+  referenceDocumentLabel,
+} from '../movement-labels';
 import { formatDateTime } from '../../../utils/date-format';
 import { FilterBar } from '../../../components/layout/FilterBar';
 
 export const InventoryMovementsPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+  // El contexto llega por la URL (desde Stock, una compra o un lote) y se conserva al filtrar
   const lotId = searchParams.get('lotId') || '';
+  const referenceDocumentId = searchParams.get('ref') || '';
+  const referenceLabel = searchParams.get('refLabel') || 'el documento seleccionado';
+  const selectedProductId = searchParams.get('productId') || '';
+  const setSelectedProductId = (productId: string) =>
+    setSearchParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        if (productId) next.set('productId', productId);
+        else next.delete('productId');
+        next.delete('lotId');
+        return next;
+      },
+      { replace: true },
+    );
   const [movements, setMovements] = useState<InventoryMovementDto[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
@@ -42,7 +62,6 @@ export const InventoryMovementsPage = () => {
 
   // Filtros
   const [products, setProducts] = useState<ProductDto[]>([]);
-  const [selectedProductId, setSelectedProductId] = useState('');
   const [selectedType, setSelectedType] = useState('');
 
   const loadFilterData = useCallback(async () => {
@@ -61,6 +80,7 @@ export const InventoryMovementsPage = () => {
       const res = await fetchInventoryMovements({
         productId: selectedProductId || undefined,
         lotId: lotId || undefined,
+        referenceDocumentId: referenceDocumentId || undefined,
         movementType: selectedType || undefined,
         page: page + 1,
         pageSize,
@@ -72,7 +92,7 @@ export const InventoryMovementsPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedProductId, selectedType, page, pageSize, lotId]);
+  }, [selectedProductId, selectedType, page, pageSize, lotId, referenceDocumentId]);
 
   useEffect(() => {
     loadFilterData();
@@ -130,7 +150,11 @@ export const InventoryMovementsPage = () => {
         <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
           <Button
             component={Link}
-            to="/inventory/lots"
+            to={
+              selectedProductId
+                ? `/inventory/lots?productId=${selectedProductId}`
+                : '/inventory/lots'
+            }
             variant="outlined"
             size="small"
             sx={{
@@ -181,10 +205,31 @@ export const InventoryMovementsPage = () => {
           Mostrando movimientos del lote seleccionado
         </Alert>
       )}
+      {referenceDocumentId && (
+        <Alert
+          severity="info"
+          sx={{ mb: 2 }}
+          action={
+            <Button
+              onClick={() => {
+                setSearchParams((previous) => {
+                  const next = new URLSearchParams(previous);
+                  next.delete('ref');
+                  next.delete('refLabel');
+                  return next;
+                });
+                setPage(0);
+              }}
+            >
+              Ver todos los movimientos
+            </Button>
+          }
+        >
+          Mostrando los movimientos de {referenceLabel}
+        </Alert>
+      )}
       {/* Filtros */}
-      <FilterBar
-        sx={{ mb: 3 }}
-      >
+      <FilterBar sx={{ mb: 3 }}>
         <TextField
           select
           label="Filtrar por Producto"
@@ -216,10 +261,11 @@ export const InventoryMovementsPage = () => {
           size="small"
         >
           <MenuItem value="">Todos los tipos</MenuItem>
-          <MenuItem value="ENTRADA_COMPRA">Entrada por Compra</MenuItem>
-          <MenuItem value="SALIDA_VENTA">Salida por Venta</MenuItem>
-          <MenuItem value="AJUSTE_POSITIVO">Ajuste Positivo (+)</MenuItem>
-          <MenuItem value="AJUSTE_NEGATIVO">Ajuste Negativo (-)</MenuItem>
+          {Object.entries(MOVEMENT_TYPE_LABELS).map(([code, label]) => (
+            <MenuItem key={code} value={code}>
+              {label}
+            </MenuItem>
+          ))}
         </TextField>
       </FilterBar>
 
@@ -271,7 +317,7 @@ export const InventoryMovementsPage = () => {
                           return (
                             <Chip
                               size="small"
-                              label={m.movementType}
+                              label={movementTypeLabel(m.movementType)}
                               color={meta.color}
                               icon={meta.icon}
                               variant="outlined"
@@ -299,7 +345,7 @@ export const InventoryMovementsPage = () => {
                         {m.reason
                           ? `Motivo: ${m.reason}`
                           : m.referenceDocumentType
-                            ? `${m.referenceDocumentType}: ${m.referenceDocumentId || ''}`
+                            ? `${referenceDocumentLabel(m.referenceDocumentType)}: ${m.referenceDocumentId || ''}`
                             : m.notes || '—'}
                       </TableCell>
                     </TableRow>
