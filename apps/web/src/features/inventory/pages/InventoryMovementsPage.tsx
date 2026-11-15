@@ -345,7 +345,7 @@ export const InventoryMovementsPage = () => {
                         {m.reason
                           ? `Motivo: ${m.reason}`
                           : m.referenceDocumentType
-                            ? `${referenceDocumentLabel(m.referenceDocumentType)}: ${m.referenceDocumentId || ''}`
+                            ? `${referenceDocumentLabel(m.referenceDocumentType)}: ${m.referenceDocumentNumber || m.referenceDocumentId || ''}`
                             : m.notes || '—'}
                       </TableCell>
                     </TableRow>

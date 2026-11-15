@@ -612,6 +612,8 @@ export interface InventoryMovementDto {
   balanceAfterBaseUnits: number;
   referenceDocumentType?: string | null;
   referenceDocumentId?: string | null;
+  /** Número visible del documento cuando la referencia guarda un id interno (factura de compra) */
+  referenceDocumentNumber?: string | null;
   /** Motivo de un ajuste manual (FARM-AUD-012); null en movimientos anteriores o no manuales. */
   reason?: string | null;
   notes?: string | null;

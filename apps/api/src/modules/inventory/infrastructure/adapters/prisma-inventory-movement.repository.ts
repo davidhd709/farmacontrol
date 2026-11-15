@@ -195,6 +195,29 @@ export class PrismaInventoryMovementRepository implements IInventoryMovementRepo
       }),
     ]);
 
+    // Las entradas por compra guardan el id interno de la compra: el Kardex muestra la factura
+    // (rediseño, fase 4). Solo lectura, en una consulta por página.
+    const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const purchaseIds = [
+      ...new Set(
+        items
+          .filter(
+            (m) => m.referenceDocumentType === 'COMPRA' && UUID.test(m.referenceDocumentId ?? ''),
+          )
+          .map((m) => m.referenceDocumentId!),
+      ),
+    ];
+    const invoiceById = new Map(
+      purchaseIds.length
+        ? (
+            await prisma.purchase.findMany({
+              where: { id: { in: purchaseIds } },
+              select: { id: true, invoiceNumber: true },
+            })
+          ).map((p) => [p.id, p.invoiceNumber])
+        : [],
+    );
+
     return {
       items: items.map((m) => ({
         id: m.id,
@@ -208,6 +231,8 @@ export class PrismaInventoryMovementRepository implements IInventoryMovementRepo
         balanceAfterBaseUnits: m.balanceAfterBaseUnits,
         referenceDocumentType: m.referenceDocumentType,
         referenceDocumentId: m.referenceDocumentId,
+        referenceDocumentNumber:
+          (m.referenceDocumentId && invoiceById.get(m.referenceDocumentId)) ?? null,
         reason: m.reason,
         notes: m.notes,
         createdByUserId: m.createdByUserId,

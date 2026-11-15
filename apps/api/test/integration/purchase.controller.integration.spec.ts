@@ -218,6 +218,18 @@ describe('PurchaseController (Integration with PostgreSQL, Inventory & RBAC)', (
         where: { action: 'purchases:purchase_received', entityId: res.body.id },
       }),
     ).toBe(1);
+
+    // 3. El Kardex filtrado por la compra muestra el número de factura (rediseño, fase 4)
+    const kardex = await request(app.getHttpServer())
+      .get(`/api/v1/inventory/movements?referenceDocumentId=${res.body.id}`)
+      .set('Cookie', [adminCookie])
+      .expect(200);
+    expect(kardex.body.items).toHaveLength(1);
+    expect(kardex.body.items[0]).toMatchObject({
+      referenceDocumentType: 'COMPRA',
+      referenceDocumentId: res.body.id,
+      referenceDocumentNumber: 'FACT-2026-999',
+    });
   });
 
   it('revierte recepción, inventario y asiento si PostgreSQL rechaza una línea contable', async () => {
