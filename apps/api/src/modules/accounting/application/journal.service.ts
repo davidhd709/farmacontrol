@@ -12,6 +12,7 @@ import {
   type JournalEntryLineDto,
   type JournalEntryQueryFilters,
   type AccountingPurpose,
+  getAccountingPurposeLabel,
 } from '@farmacia/contracts';
 import {
   parseJournalDate,
@@ -215,7 +216,9 @@ export class JournalService {
         !mappings[0].account?.isActive ||
         !mappings[0].account.allowsMovement
       )
-        throw new AccountingValidationError(`Falta un mapeo activo e imputable para ${purpose}.`);
+        throw new AccountingValidationError(
+          `Falta un mapeo activo e imputable para «${getAccountingPurposeLabel(purpose)}» (${purpose}): asígnale una cuenta en Contabilidad → Propósitos contables.`,
+        );
       accounts.set(purpose, mappings[0].account.id);
     }
 

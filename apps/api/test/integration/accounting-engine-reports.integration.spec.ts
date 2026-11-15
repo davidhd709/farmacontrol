@@ -363,7 +363,7 @@ describe('Accounting Engine, Double-Entry, Journal & Reports Integration (Postgr
         const id = '33333333-3333-3333-3333-333333333333';
         const product = await createDiscountProduct(id);
         await expect(discountedSale(id, product.id)).rejects.toThrow(
-          /mapeo activo e imputable para SALES_DISCOUNTS/,
+          /mapeo activo e imputable para «.+» \(SALES_DISCOUNTS\)/,
         );
         expect(
           await prisma.journalEntry.count({ where: { sourceType: 'SALE', sourceId: id } }),
