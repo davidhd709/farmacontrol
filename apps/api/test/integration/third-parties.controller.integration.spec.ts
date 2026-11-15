@@ -217,6 +217,41 @@ describe('ThirdPartyController (Integration with PostgreSQL & RBAC)', () => {
     expect(reactivated.body.isActive).toBe(true);
   });
 
+  it('no permite inactivar desde terceros al cliente Consumidor final (rediseño fase 2, D5)', async () => {
+    const defaultCustomer = await prisma.customer.create({
+      data: {
+        documentType: 'CC',
+        documentNumber: '222222222222',
+        name: 'Consumidor Final',
+        isDefault: true,
+        isActive: true,
+      },
+    });
+    const linked = await request(app.getHttpServer())
+      .post('/api/v1/third-parties')
+      .set('Cookie', adminCookie)
+      .send({
+        documentType: 'CC',
+        documentNumber: '222222222222',
+        name: 'Consumidor Final',
+        isCustomer: true,
+      })
+      .expect(201);
+
+    const res = await request(app.getHttpServer())
+      .patch(`/api/v1/third-parties/${linked.body.id}/deactivate`)
+      .set('Cookie', adminCookie);
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(res.status).toBeLessThan(500);
+    expect(JSON.stringify(res.body)).toMatch(/Consumidor Final/);
+
+    // La transacción se revierte completa: ni el cliente ni el tercero quedan inactivos
+    const customer = await prisma.customer.findUniqueOrThrow({ where: { id: defaultCustomer.id } });
+    expect(customer.isActive).toBe(true);
+    const third = await prisma.thirdParty.findUniqueOrThrow({ where: { id: linked.body.id } });
+    expect(third.isActive).toBe(true);
+  });
+
   it('debe rechazar acceso a usuarios sin permisos (403 Forbidden)', async () => {
     await request(app.getHttpServer())
       .post('/api/v1/third-parties')

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@farmacia/database';
+import { CustomerCannotBeDeactivatedException } from '../domain/customer.exceptions';
 
 type Tx = Prisma.TransactionClient;
 
@@ -32,6 +33,9 @@ export class CustomersLedger {
 
   /** Crea o actualiza el cliente con ese documento; devuelve su id. */
   async upsert(tx: Tx, data: CustomerFromThirdParty): Promise<string> {
+    if (!data.isActive) {
+      await this.assertNotDefault(tx, { documentNumber: data.documentNumber });
+    }
     const customer = await tx.customer.upsert({
       where: { documentNumber: data.documentNumber },
       create: data,
@@ -52,10 +56,24 @@ export class CustomersLedger {
     id: string,
     changes: Omit<CustomerFromThirdParty, 'documentType' | 'documentNumber'>,
   ): Promise<void> {
+    if (!changes.isActive) await this.assertNotDefault(tx, { id });
     await tx.customer.update({ where: { id }, data: changes });
   }
 
   async setActive(tx: Tx, id: string, isActive: boolean): Promise<void> {
+    if (!isActive) await this.assertNotDefault(tx, { id });
     await tx.customer.update({ where: { id }, data: { isActive } });
+  }
+
+  /**
+   * El POS factura al consumidor final cuando no se elige cliente; inactivarlo desde terceros
+   * dejaría la caja sin poder vender (la venta responde 409). Misma regla que CustomerService.
+   */
+  private async assertNotDefault(
+    tx: Tx,
+    where: { id: string } | { documentNumber: string },
+  ): Promise<void> {
+    const customer = await tx.customer.findUnique({ where, select: { isDefault: true } });
+    if (customer?.isDefault) throw new CustomerCannotBeDeactivatedException();
   }
 }
