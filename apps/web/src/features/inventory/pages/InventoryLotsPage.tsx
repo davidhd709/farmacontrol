@@ -187,6 +187,7 @@ export const InventoryLotsPage = () => {
   const [pageSize, setPageSize] = useState(10);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   // Filtros
   const [products, setProducts] = useState<ProductDto[]>([]);
@@ -494,6 +495,11 @@ export const InventoryLotsPage = () => {
               {errorMessage}
             </Alert>
           )}
+          {notice && (
+            <Alert severity="success" role="status" sx={{ mb: 3 }} onClose={() => setNotice(null)}>
+              {notice}
+            </Alert>
+          )}
 
           {/* Tabla de Lotes */}
           <Paper variant="outlined">
@@ -615,6 +621,7 @@ export const InventoryLotsPage = () => {
         open={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}
         onSuccess={() => {
+          setNotice('Lote registrado con su existencia inicial.');
           loadLots();
         }}
         products={products}
@@ -626,6 +633,7 @@ export const InventoryLotsPage = () => {
         open={isAdjustOpen}
         onClose={() => setIsAdjustOpen(false)}
         onSuccess={() => {
+          setNotice('Ajuste asentado: el lote, el Kardex y la contabilidad quedaron actualizados.');
           loadLots();
         }}
         products={products}

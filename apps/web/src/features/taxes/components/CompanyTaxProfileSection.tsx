@@ -75,6 +75,7 @@ export function CompanyTaxProfileSection({ canManage }: { canManage: boolean }) 
   const [icaWithholdingAgent, setIcaWithholdingAgent] = useState(false);
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const toggle = (code: string) =>
@@ -88,6 +89,7 @@ export function CompanyTaxProfileSection({ canManage }: { canManage: boolean }) 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
+    setNotice(null);
     setSaving(true);
     try {
       await createCompanyTaxProfile({
@@ -99,6 +101,9 @@ export function CompanyTaxProfileSection({ canManage }: { canManage: boolean }) 
         reason,
       });
       setReason('');
+      setNotice(
+        `Perfil tributario registrado, vigente desde el ${effectiveFrom.split('-').reverse().join('/')}.`,
+      );
       await queryClient.invalidateQueries({ queryKey: ['company-tax-profiles'] });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo registrar el perfil tributario.');
@@ -141,6 +146,16 @@ export function CompanyTaxProfileSection({ canManage }: { canManage: boolean }) 
             {error && (
               <Alert severity="error" sx={{ mb: 2 }}>
                 {error}
+              </Alert>
+            )}
+            {notice && (
+              <Alert
+                severity="success"
+                role="status"
+                sx={{ mb: 2 }}
+                onClose={() => setNotice(null)}
+              >
+                {notice}
               </Alert>
             )}
             <Grid container spacing={2}>

@@ -76,6 +76,7 @@ export function AccountingSetupPage() {
   const [applying, setApplying] = useState(false);
   const [templateResult, setTemplateResult] = useState<ApplyPucTemplateResultDto | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [entryDate, setEntryDate] = useState(localIsoDate(new Date()));
   const [reason, setReason] = useState('');
   const [lines, setLines] = useState<OpeningLine[]>([emptyLine(), emptyLine()]);
@@ -117,6 +118,7 @@ export function AccountingSetupPage() {
 
   const saveOpening = async () => {
     setError(null);
+    setNotice(null);
     setSaving(true);
     try {
       const payload = {
@@ -132,6 +134,7 @@ export function AccountingSetupPage() {
       }
       await createOpeningBalance(payload, openingRequest.current.key);
       openingRequest.current = null;
+      setNotice('Saldos de apertura registrados con su asiento.');
       setLines([emptyLine(), emptyLine()]);
       setReason('');
       await refresh();
@@ -184,6 +187,11 @@ export function AccountingSetupPage() {
         {error && (
           <Alert severity="error" onClose={() => setError(null)}>
             {error}
+          </Alert>
+        )}
+        {notice && (
+          <Alert severity="success" role="status" onClose={() => setNotice(null)}>
+            {notice}
           </Alert>
         )}
 

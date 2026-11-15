@@ -61,6 +61,7 @@ export function ProductTaxClassificationDialog({
   const [effectiveFrom, setEffectiveFrom] = useState(localIsoDate(new Date()));
   const [documentReference, setDocumentReference] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const rules = (catalog.data?.rules ?? []).filter(
@@ -70,6 +71,7 @@ export function ProductTaxClassificationDialog({
   const submit = async () => {
     if (!product) return;
     setError(null);
+    setNotice(null);
     setSaving(true);
     try {
       const created = await createProductTaxProfile({
@@ -81,6 +83,9 @@ export function ProductTaxClassificationDialog({
       });
       await activateProductTaxProfile(created.id);
       setTaxRuleCode('');
+      setNotice(
+        `Clasificación ${taxRuleCode} registrada y activa desde el ${effectiveFrom.split('-').reverse().join('/')}.`,
+      );
       await queryClient.invalidateQueries({ queryKey: ['product-tax-profiles', product.id] });
       await queryClient.invalidateQueries({ queryKey: ['products'] });
     } catch (err) {
@@ -102,6 +107,11 @@ export function ProductTaxClassificationDialog({
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
             {error}
+          </Alert>
+        )}
+        {notice && (
+          <Alert severity="success" role="status" sx={{ mb: 2 }} onClose={() => setNotice(null)}>
+            {notice}
           </Alert>
         )}
         <Grid container spacing={2} sx={{ mb: 3 }}>
