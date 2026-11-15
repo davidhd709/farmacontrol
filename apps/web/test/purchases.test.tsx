@@ -246,8 +246,10 @@ describe('Purchases Frontend (UX-15 & UX-16)', () => {
     expect(noteDialog).toHaveTextContent('NIT 900123456-8');
     expect(noteDialog).not.toHaveTextContent('900.000.000-1');
     await user.click(screen.getByRole('button', { name: 'Cerrar' }));
+    // Esperar a que termine la transición de salida: mientras tanto el fondo sigue aria-hidden
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 
-    await user.click(screen.getByRole('button', { name: 'Ver Detalle' }));
+    await user.click(await screen.findByRole('button', { name: 'Ver Detalle' }));
     await user.click(await screen.findByRole('button', { name: 'Imprimir' }));
     await waitFor(() => expect(screen.getAllByRole('dialog')).toHaveLength(1));
     const purchaseDialog = screen.getByRole('dialog');
