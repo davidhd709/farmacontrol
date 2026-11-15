@@ -94,6 +94,25 @@ export interface CompanyDto {
   updatedAt: string;
 }
 
+/**
+ * Datos públicos del emisor para encabezar documentos impresos (tirilla, comprobantes).
+ * Lo consulta quien emite o consulta ventas y compras sin acceder a las políticas contables.
+ */
+export interface CompanyLetterheadDto {
+  legalName: string;
+  tradeName: string | null;
+  taxId: string;
+  taxIdCheckDigit: string;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+}
+
+export interface CompanyLetterheadResponse {
+  /** `null` mientras la empresa no esté configurada */
+  company: CompanyLetterheadDto | null;
+}
+
 export interface AccountingPolicyDto {
   id: string | null;
   /** YYYY-MM-DD; `null` en los valores por defecto de una instalación sin configurar */

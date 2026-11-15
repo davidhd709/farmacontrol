@@ -17,6 +17,7 @@ import {
   type AccountingPolicyDto,
   type BranchDto,
   type CompanyDto,
+  type CompanyLetterheadResponse,
   type CompanySettingsDto,
   type CreateAccountingPolicyPayload,
   type CreateBranchPayload,
@@ -30,7 +31,10 @@ import { CompanyService, type CompanyAuditContext } from '../application/company
 import { CompanyTaxProfileService } from '../application/company-tax-profile.service';
 import { SessionAuthGuard } from '../../identity/presentation/guards/session-auth.guard';
 import { PermissionsGuard } from '../../identity/presentation/guards/permissions.guard';
-import { RequirePermissions } from '../../identity/presentation/decorators/require-permissions.decorator';
+import {
+  RequireAnyPermissions,
+  RequirePermissions,
+} from '../../identity/presentation/decorators/require-permissions.decorator';
 import { CurrentUser } from '../../identity/presentation/decorators/current-user.decorator';
 import type { AuthenticatedUserContext } from '../../identity/presentation/guards/session-auth.guard';
 
@@ -83,6 +87,25 @@ export class CompanyController {
       body<CreateCompanyTaxProfilePayload>(payload),
       auditContext(req, user),
     );
+  }
+
+  @Get('letterhead')
+  @RequireAnyPermissions(
+    SYSTEM_PERMISSIONS.COMPANY_READ,
+    SYSTEM_PERMISSIONS.SALES_READ,
+    SYSTEM_PERMISSIONS.SALES_CREATE,
+    SYSTEM_PERMISSIONS.PURCHASES_READ,
+  )
+  @ApiOperation({
+    summary:
+      'Membrete del emisor (razón social, NIT, dirección y contacto) para documentos impresos',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Membrete; `company` es null si la empresa no está configurada.',
+  })
+  getLetterhead(): Promise<CompanyLetterheadResponse> {
+    return this.companyService.getLetterhead();
   }
 
   @Get()

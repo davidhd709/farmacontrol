@@ -14,6 +14,7 @@ import { addCalendarDays, businessToday } from '../../src/common/utils/business-
 describe('Empresa y políticas contables (PostgreSQL real)', () => {
   let app: INestApplication;
   let cookie: string;
+  let cashierCookie: string;
 
   beforeAll(async () => {
     const module = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -31,6 +32,12 @@ describe('Empresa y políticas contables (PostgreSQL real)', () => {
     const adminRole = await prisma.role.findUniqueOrThrow({ where: { name: 'admin' } });
     await prisma.userRole.create({ data: { userId: admin.id!, roleId: adminRole.id } });
     cookie = `${SESSION_COOKIE_NAME}=${(await auth.login('company_admin', 'AdminPassword#2026')).rawToken}`;
+    const cashier = await prisma.user.create({
+      data: { username: 'company_cajero', passwordHash: admin.passwordHash, isActive: true },
+    });
+    const cashierRole = await prisma.role.findUniqueOrThrow({ where: { name: 'cajero' } });
+    await prisma.userRole.create({ data: { userId: cashier.id, roleId: cashierRole.id } });
+    cashierCookie = `${SESSION_COOKIE_NAME}=${(await auth.login('company_cajero', 'AdminPassword#2026')).rawToken}`;
   }, 45000);
 
   beforeEach(async () => {
@@ -77,6 +84,30 @@ describe('Empresa y políticas contables (PostgreSQL real)', () => {
       purchaseReturnVariancePurpose: 'COST_OF_SALES',
     });
     expect(res.body.availableCostingMethods).toEqual(['WEIGHTED_AVERAGE', 'FIFO', 'SPECIFIC_LOT']);
+  });
+
+  it('el membrete lo lee caja sin acceso a las políticas contables (rediseño fase 2)', async () => {
+    const empty = await api()
+      .get('/api/v1/company/letterhead')
+      .set('Cookie', cashierCookie)
+      .expect(200);
+    expect(empty.body).toEqual({ company: null });
+    await setup().expect(201);
+    const res = await api()
+      .get('/api/v1/company/letterhead')
+      .set('Cookie', cashierCookie)
+      .expect(200);
+    expect(res.body.company).toEqual({
+      legalName: 'Droguería La Esperanza S.A.S.',
+      tradeName: 'La Esperanza',
+      taxId: '900123456',
+      taxIdCheckDigit: '8',
+      address: null,
+      phone: null,
+      email: null,
+    });
+    await api().get('/api/v1/company').set('Cookie', cashierCookie).expect(403);
+    await api().get('/api/v1/company/letterhead').expect(401);
   });
 
   it('configura la empresa una sola vez, con sucursal principal y auditoría', async () => {

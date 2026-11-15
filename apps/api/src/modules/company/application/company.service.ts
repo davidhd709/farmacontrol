@@ -5,6 +5,7 @@ import {
   type AccountingPolicyDto,
   type BranchDto,
   type CompanyDto,
+  type CompanyLetterheadResponse,
   type CompanySettingsDto,
   type CreateAccountingPolicyPayload,
   type CreateBranchPayload,
@@ -136,6 +137,22 @@ export class CompanyService {
       policyHistory: history.map(toPolicyDto),
       availableCostingMethods: [...AVAILABLE_COSTING_METHODS],
     };
+  }
+
+  async getLetterhead(): Promise<CompanyLetterheadResponse> {
+    const company = await prisma.company.findFirst({
+      where: { status: 'ACTIVE' },
+      select: {
+        legalName: true,
+        tradeName: true,
+        taxId: true,
+        taxIdCheckDigit: true,
+        address: true,
+        phone: true,
+        email: true,
+      },
+    });
+    return { company: company ?? null };
   }
 
   async setup(payload: SetupCompanyPayload, ctx: CompanyAuditContext): Promise<CompanyDto> {
