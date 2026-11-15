@@ -541,8 +541,9 @@ export function PurposesPage() {
                                 variant="outlined"
                                 onClick={() => void save(mapping.purpose, selected)}
                                 disabled={unchanged || mutation.isPending}
+                                aria-label={`Guardar la cuenta de ${purposeLabel}`}
                               >
-                                Guardar
+                                Guardar cuenta
                               </Button>
                             </TableCell>
                           )}

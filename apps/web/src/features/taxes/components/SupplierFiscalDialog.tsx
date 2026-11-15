@@ -23,10 +23,13 @@ export function SupplierFiscalDialog({
   supplierId,
   supplierName,
   onClose,
+  onSaved,
 }: {
   supplierId: string | null;
   supplierName: string;
   onClose: () => void;
+  /** Se llama tras guardar, para anunciar el resultado en la pantalla que abrió el diálogo */
+  onSaved?: () => void;
 }) {
   const [responsibilities, setResponsibilities] = useState<string[]>([]);
   const [declarant, setDeclarant] = useState(true);
@@ -60,6 +63,7 @@ export function SupplierFiscalDialog({
         taxResponsibilities: responsibilities,
         isIncomeTaxDeclarant: declarant,
       });
+      onSaved?.();
       onClose();
     } catch (err) {
       setError(
@@ -73,7 +77,7 @@ export function SupplierFiscalDialog({
   return (
     <Dialog
       open={Boolean(supplierId)}
-      onClose={onClose}
+      onClose={saving ? undefined : onClose}
       maxWidth="sm"
       fullWidth
       aria-labelledby="supplier-fiscal-title"
@@ -108,11 +112,11 @@ export function SupplierFiscalDialog({
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} color="inherit">
+        <Button onClick={onClose} color="inherit" disabled={saving}>
           Cancelar
         </Button>
         <Button variant="contained" onClick={save} disabled={saving}>
-          Guardar
+          {saving ? 'Guardando…' : 'Guardar datos tributarios'}
         </Button>
       </DialogActions>
     </Dialog>

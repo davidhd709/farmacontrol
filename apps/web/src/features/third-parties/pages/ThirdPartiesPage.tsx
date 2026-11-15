@@ -491,9 +491,10 @@ export const ThirdPartiesPage: React.FC = () => {
                           )}
 
                           {!canDeactivate ? null : tp.isActive ? (
-                            <Tooltip title="Desactivar Tercero">
+                            <Tooltip title="Inactivar tercero">
                               <IconButton
                                 size="small"
+                                aria-label={`Inactivar ${tp.name}`}
                                 onClick={() => handleOpenConfirm(tp, 'deactivate')}
                                 color="warning"
                               >
@@ -501,9 +502,10 @@ export const ThirdPartiesPage: React.FC = () => {
                               </IconButton>
                             </Tooltip>
                           ) : (
-                            <Tooltip title="Activar Tercero">
+                            <Tooltip title="Activar tercero">
                               <IconButton
                                 size="small"
+                                aria-label={`Activar ${tp.name}`}
                                 onClick={() => handleOpenConfirm(tp, 'activate')}
                                 color="success"
                               >
@@ -582,6 +584,9 @@ export const ThirdPartiesPage: React.FC = () => {
         supplierId={fiscalSupplier?.id ?? null}
         supplierName={fiscalSupplier?.name ?? ''}
         onClose={() => setFiscalSupplier(null)}
+        onSaved={() =>
+          setNotice(`Datos tributarios de ${fiscalSupplier?.name ?? 'el proveedor'} guardados.`)
+        }
       />
     </Box>
   );

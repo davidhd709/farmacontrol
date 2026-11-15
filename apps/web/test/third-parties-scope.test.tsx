@@ -82,7 +82,7 @@ describe('Directorio de terceros por rol (2026-11-03)', () => {
     );
     expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Clientes']);
     expect(screen.getByRole('button', { name: 'Editar Tercero' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Desactivar Tercero' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Inactivar / })).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Nuevo Tercero' }));
     const dialog = await screen.findByRole('dialog');
@@ -111,7 +111,7 @@ describe('Directorio de terceros por rol (2026-11-03)', () => {
     expect(
       screen.getByRole('button', { name: 'Datos tributarios de Droguería Mayorista' }),
     ).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Desactivar Tercero' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Inactivar / })).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Nuevo Tercero' }));
     const dialog = await screen.findByRole('dialog');
@@ -135,7 +135,7 @@ describe('Directorio de terceros por rol (2026-11-03)', () => {
     ]);
     expect(await screen.findByText('Carlos Gómez')).toBeInTheDocument();
     expect(screen.getAllByRole('tab')).toHaveLength(5);
-    expect(screen.getAllByRole('button', { name: 'Desactivar Tercero' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: /^Inactivar / })).toHaveLength(2);
   });
 
   it('supervisor (third_parties:manage sin desactivar) edita pero no desactiva', async () => {
@@ -148,7 +148,7 @@ describe('Directorio de terceros por rol (2026-11-03)', () => {
     });
     renderPage([SYSTEM_PERMISSIONS.THIRD_PARTIES_READ, SYSTEM_PERMISSIONS.THIRD_PARTIES_MANAGE]);
     expect(await screen.findByRole('button', { name: 'Editar Tercero' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Desactivar Tercero' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Inactivar / })).toBeNull();
   });
 
   it.each([

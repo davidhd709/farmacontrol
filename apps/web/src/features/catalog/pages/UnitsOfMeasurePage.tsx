@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -110,8 +110,13 @@ export const UnitsOfMeasurePage: React.FC = () => {
     setFormOpen(true);
   };
 
+  const savingUnit = createMutation.isPending || updateMutation.isPending;
+  // Un segundo clic llega antes de que React pinte el botón deshabilitado
+  const savingRef = useRef(false);
+
   const handleSaveForm = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (savingUnit || savingRef.current) return;
     setFormError(null);
 
     if (!formCode.trim()) {
@@ -123,6 +128,7 @@ export const UnitsOfMeasurePage: React.FC = () => {
       return;
     }
 
+    savingRef.current = true;
     try {
       if (editingUnit) {
         await updateMutation.mutateAsync({
@@ -156,6 +162,8 @@ export const UnitsOfMeasurePage: React.FC = () => {
       const msg = err instanceof Error ? err.message : 'Error al guardar la unidad de medida.';
       setFormError(msg);
       setSnackbar({ open: true, message: msg, severity: 'error' });
+    } finally {
+      savingRef.current = false;
     }
   };
 
@@ -390,7 +398,12 @@ export const UnitsOfMeasurePage: React.FC = () => {
       </TableContainer>
 
       {/* Modal de Crear / Editar Unidad */}
-      <Dialog open={formOpen} onClose={() => setFormOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog
+        open={formOpen}
+        onClose={savingUnit ? undefined : () => setFormOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
         <form onSubmit={handleSaveForm}>
           <DialogTitle sx={{ fontWeight: 700 }}>
             {editingUnit ? `Editar Unidad: ${editingUnit.name}` : 'Nueva Unidad de Medida'}
@@ -458,11 +471,17 @@ export const UnitsOfMeasurePage: React.FC = () => {
             </Stack>
           </DialogContent>
           <DialogActions sx={{ p: 2.5 }}>
-            <Button onClick={() => setFormOpen(false)} color="inherit">
+            <Button onClick={() => setFormOpen(false)} color="inherit" disabled={savingUnit}>
               Cancelar
             </Button>
-            <Button type="submit" variant="contained" color="primary" sx={{ fontWeight: 700 }}>
-              {editingUnit ? 'Guardar Cambios' : 'Crear Unidad'}
+            <Button
+              type="submit"
+              variant="contained"
+              color="primary"
+              sx={{ fontWeight: 700 }}
+              disabled={savingUnit}
+            >
+              {savingUnit ? 'Guardando…' : editingUnit ? 'Guardar unidad' : 'Crear unidad'}
             </Button>
           </DialogActions>
         </form>

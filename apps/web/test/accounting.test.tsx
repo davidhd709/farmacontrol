@@ -100,7 +100,7 @@ describe('Configuración contable', () => {
     const select = await screen.findByRole('combobox', { name: 'Cuenta para Caja general' });
     fireEvent.mouseDown(select);
     fireEvent.click(await screen.findByRole('option', { name: '11 — Disponible' }));
-    fireEvent.click(screen.getAllByRole('button', { name: 'Guardar' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: /^Guardar la cuenta de / })[0]);
     await waitFor(() => expect(save).toHaveBeenCalledWith('CASH', 'child'));
   });
 

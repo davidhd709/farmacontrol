@@ -118,7 +118,7 @@ describe('ThirdPartiesPage (Gestión Unificada de Terceros)', () => {
       .mockRejectedValueOnce(new Error('Sin conexión con el servidor.'))
       .mockResolvedValueOnce(mockThirdParties[0]);
     renderComponent();
-    const buttons = await screen.findAllByRole('button', { name: 'Desactivar Tercero' });
+    const buttons = await screen.findAllByRole('button', { name: /^Inactivar / });
     fireEvent.click(buttons[0]);
 
     const dialog = await screen.findByRole('dialog', { name: '¿Inactivar el tercero?' });

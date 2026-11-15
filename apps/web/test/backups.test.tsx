@@ -143,7 +143,7 @@ describe('BackupManagementPage (UX-31 — Copias de Seguridad y Resiliencia)', (
 
     expect(screen.getByText('¿Generar nueva copia de seguridad?')).toBeInTheDocument();
 
-    const confirmBtn = screen.getByTestId('confirm-create-backup-btn');
+    const confirmBtn = screen.getByRole('button', { name: 'Generar copia de seguridad' });
     fireEvent.click(confirmBtn);
 
     await waitFor(() => {

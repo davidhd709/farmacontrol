@@ -1,3 +1,4 @@
+import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { useState } from 'react';
 import {
   Alert,
@@ -8,11 +9,6 @@ import {
   Chip,
   CircularProgress,
   Container,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogContentText,
-  DialogTitle,
   Paper,
   Stack,
   Table,
@@ -53,11 +49,6 @@ export function BackupManagementPage() {
       setConfirmOpen(false);
       setSuccessMessage(res.message || 'Copia de seguridad creada exitosamente.');
       void queryClient.invalidateQueries({ queryKey: ['backup-status'] });
-    },
-    onError: (err: unknown) => {
-      setConfirmOpen(false);
-      const msg = err instanceof Error ? err.message : 'Error al crear la copia de seguridad.';
-      setErrorMessage(msg);
     },
   });
 
@@ -384,30 +375,20 @@ export function BackupManagementPage() {
           </Box>
         </Paper>
 
-        {/* Diálogo de Confirmación para Crear Respaldo */}
-        <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
-          <DialogTitle sx={{ fontWeight: 700 }}>¿Generar nueva copia de seguridad?</DialogTitle>
-          <DialogContent>
-            <DialogContentText>
-              Esta acción extraerá un volcado lógico consistente de PostgreSQL mediante{' '}
-              <code>pg_dump</code>, calculará su checksum SHA-256 y validará su integridad física
-              inmediatamente.
-            </DialogContentText>
-          </DialogContent>
-          <DialogActions sx={{ p: 2 }}>
-            <Button onClick={() => setConfirmOpen(false)} color="inherit">
-              Cancelar
-            </Button>
-            <Button
-              variant="contained"
-              onClick={() => createMutation.mutate()}
-              disabled={createMutation.isPending}
-              data-testid="confirm-create-backup-btn"
-            >
-              {createMutation.isPending ? 'Generando copia…' : 'Confirmar y Generar'}
-            </Button>
-          </DialogActions>
-        </Dialog>
+        {/* Confirmación común: no se cierra mientras se genera y un error queda en el diálogo */}
+        <ConfirmDialog
+          open={confirmOpen}
+          operationType="confirm"
+          title="¿Generar nueva copia de seguridad?"
+          effects={[
+            'Se extrae un volcado lógico consistente de PostgreSQL con pg_dump.',
+            'Se calcula su checksum SHA-256 y se valida su integridad.',
+            'Los datos del sistema no cambian; la copia queda en el historial de respaldos.',
+          ]}
+          confirmText="Generar copia de seguridad"
+          onConfirm={() => createMutation.mutateAsync()}
+          onCancel={() => setConfirmOpen(false)}
+        />
       </Stack>
     </Container>
   );
