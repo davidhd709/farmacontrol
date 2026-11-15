@@ -46,7 +46,10 @@ test('una venta a crédito se abona con un recibo de caja y el saldo baja', asyn
   await dialog.getByLabel(`Valor a aplicar a ${sale.invoiceNumber}`).fill('3000');
   await dialog.getByLabel(/Concepto/).fill('Abono parcial E2E');
   await dialog.getByRole('button', { name: 'Registrar' }).click();
-  await page.getByRole('button', { name: 'Confirmar' }).click();
+  await page
+    .getByRole('dialog', { name: '¿Registrar el recibo de caja?' })
+    .getByRole('button', { name: 'Registrar recibo de caja' })
+    .click();
   await expect(page.getByText(/Recibo de caja RC-\d+ registrado/)).toBeVisible();
 
   const receivables = await call<{

@@ -250,7 +250,13 @@ describe('Recibos de caja y comprobantes de egreso', () => {
       target: { value: 'Abono de octubre' },
     });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Registrar' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Confirmar' }));
+    // La confirmación nombra al cliente, el valor y la factura que recibe el abono
+    const confirm = await screen.findByRole('dialog', { name: '¿Registrar el recibo de caja?' });
+    expect(within(confirm).getByTestId('confirm-subject')).toHaveTextContent(
+      /Cliente: Marta Crédito/,
+    );
+    expect(within(confirm).getByTestId('confirm-effects')).toHaveTextContent(/FAC-001: abono de/);
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Registrar recibo de caja' }));
 
     await waitFor(() =>
       expect(create).toHaveBeenCalledWith(

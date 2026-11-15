@@ -334,9 +334,9 @@ export function VoucherFormDialog({
         };
   };
 
+  // Lo ejecuta la confirmación: un error queda en ella y el formulario conserva los datos
   const submit = async () => {
     if (submitting) return;
-    setConfirmOpen(false);
     setSubmitting(true);
     setError(null);
     try {
@@ -370,12 +370,36 @@ export function VoucherFormDialog({
       ]) {
         void queryClient.invalidateQueries({ queryKey: [key] });
       }
+      setConfirmOpen(false);
       onCreated(document);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'No se pudo registrar el documento.');
+      throw e instanceof Error ? e : new Error('No se pudo registrar el documento.');
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const documentName = isReceipt ? 'recibo de caja' : 'comprobante de egreso';
+  const bankAccount = (bankAccounts.data ?? []).find((a) => a.id === bankAccountId);
+  const confirmEffects = (): string[] => {
+    const effects: string[] = [];
+    if (mode === 'MANUAL') {
+      effects.push('El valor se registra contra la cuenta de contrapartida elegida.');
+    } else {
+      for (const [id, value] of Object.entries(selected)) {
+        const item = items.find((i) => i.documentId === id);
+        effects.push(
+          `${item?.documentNumber ?? 'Factura'}: ${isReceipt ? 'abono' : 'pago'} de ${formatMoney(centsOf(value))}; su saldo baja en ese valor.`,
+        );
+      }
+    }
+    effects.push(
+      paymentMethod === 'TRANSFERENCIA'
+        ? `El dinero ${labels.destination}${bankAccount ? ` ${bankAccount.name} · ${bankAccount.bankName}` : ''}.`
+        : `El dinero ${labels.destination}.`,
+    );
+    effects.push('Se registra su asiento contable.');
+    return effects;
   };
 
   const toggle = (item: OpenItem, checked: boolean) =>
@@ -699,14 +723,17 @@ export function VoucherFormDialog({
 
       <ConfirmDialog
         open={confirmOpen}
-        title={`Confirmar ${isReceipt ? 'recibo de caja' : 'comprobante de egreso'}`}
-        description={`Se registrará un ${isReceipt ? 'recibo de caja' : 'comprobante de egreso'} por ${formatMoney(
-          Number.isFinite(totalCents) ? totalCents : 0,
-        )}: el dinero ${labels.destination}.`}
-        confirmText="Confirmar"
-        isLoading={submitting}
+        operationType="create"
+        title={`¿Registrar el ${documentName}?`}
+        subject={[
+          `${labels.party}: ${(isReceipt && mode !== 'MANUAL' ? customer?.name : party?.name) ?? 'sin tercero'}`,
+          formatMoney(Number.isFinite(totalCents) ? totalCents : 0),
+          paymentMethod === 'TRANSFERENCIA' ? 'Transferencia' : 'Efectivo',
+        ].join(' · ')}
+        effects={confirmOpen ? confirmEffects() : []}
+        confirmText={`Registrar ${documentName}`}
         onConfirm={submit}
-        onClose={() => setConfirmOpen(false)}
+        onCancel={() => setConfirmOpen(false)}
       />
 
       {statementOpen && supplierId && (
