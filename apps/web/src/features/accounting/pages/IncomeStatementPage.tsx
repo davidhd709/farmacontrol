@@ -133,6 +133,7 @@ export const IncomeStatementPage = () => {
           <DateField
             label="Fecha Hasta"
             size="small"
+            helperText="Movimientos del rango, ambos días incluidos"
             value={toDate}
             onChange={(value) => setToDate(value)}
           />

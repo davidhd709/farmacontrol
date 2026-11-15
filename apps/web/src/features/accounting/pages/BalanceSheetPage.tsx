@@ -168,6 +168,7 @@ export const BalanceSheetPage = () => {
               <DateField
                 label="Fecha de Corte"
                 size="small"
+                helperText="Saldos acumulados hasta este día, incluido"
                 value={asOfDate}
                 onChange={(value) => setAsOfDate(value)}
               />

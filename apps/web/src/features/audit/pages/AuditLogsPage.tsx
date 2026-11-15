@@ -164,10 +164,12 @@ export const AuditLogsPage = () => {
         <Box>
           <Typography component="h1" variant="h4" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
             <HistoryIcon fontSize="large" color="primary" />
-            Auditoría y Trazabilidad
+            Auditoría del sistema
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Registro inmutable de eventos sensibles, mutaciones operativas y correlación de peticiones HTTP
+            Quién hizo qué y cuándo: ingresos, cambios, anulaciones y permisos, en un registro que no
+            se modifica. La revisión de los libros (descuadres y anulaciones) está en Contabilidad ›
+            Auditoría contable.
           </Typography>
         </Box>
         <Button

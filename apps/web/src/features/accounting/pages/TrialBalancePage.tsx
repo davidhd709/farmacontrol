@@ -106,6 +106,7 @@ export const TrialBalancePage = () => {
             <DateField
               label="Fecha Hasta"
               size="small"
+              helperText="Movimientos del rango, ambos días incluidos"
               value={toDate}
               onChange={(value) => setToDate(value)}
               sx={{ minWidth: 170 }}

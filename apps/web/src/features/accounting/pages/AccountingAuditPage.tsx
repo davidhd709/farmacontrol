@@ -77,10 +77,12 @@ export function AccountingAuditPage() {
         <HomeBackButton />
         <Box>
           <Typography variant="h5" component="h1" sx={{ fontWeight: 700 }}>
-            Auditoría Contable
+            Auditoría contable
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Documentos descuadrados y documentos anulados o revertidos.
+            Revisa los libros: documentos descuadrados y documentos anulados o revertidos. Las
+            acciones de los usuarios (ingresos, cambios, permisos) están en Configuración ›
+            Auditoría del sistema.
           </Typography>
         </Box>
       </Box>
