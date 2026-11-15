@@ -8,6 +8,8 @@ import {
   FormControl,
   InputAdornment,
   InputLabel,
+  ListItemIcon,
+  Menu,
   MenuItem,
   Paper,
   Select,
@@ -43,6 +45,8 @@ import { downloadProductTemplate, exportProductsToExcel } from '../api/products.
 import DownloadIcon from '@mui/icons-material/Download';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
+import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
+import { usePermissions } from '../../auth/hooks/usePermissions';
 
 type StatusFilterOption = 'active' | 'inactive' | 'all';
 type LotFilterOption = 'all' | InventoryControlMode;
@@ -60,6 +64,9 @@ export function ProductsPage() {
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isDownloadingTemplate, setIsDownloadingTemplate] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [fileMenuAnchor, setFileMenuAnchor] = useState<HTMLElement | null>(null);
+  const { hasPermission } = usePermissions();
+  const canManageProducts = hasPermission(SYSTEM_PERMISSIONS.PRODUCTS_MANAGE);
   const [selectedProduct, setSelectedProduct] = useState<ProductDto | null>(null);
   const [productToDeactivate, setProductToDeactivate] = useState<ProductDto | null>(null);
   const [productForPresentations, setProductForPresentations] = useState<ProductDto | null>(null);
@@ -195,41 +202,13 @@ export function ProductsPage() {
             </Box>
           </Box>
 
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: 'center' }}>
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<DownloadIcon />}
-              onClick={handleDownloadTemplate}
-              disabled={isDownloadingTemplate}
-              sx={{ textTransform: 'none', fontWeight: 600 }}
-            >
-              {isDownloadingTemplate ? 'Descargando…' : 'Descargar Plantilla'}
-            </Button>
-
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<FileDownloadIcon />}
-              onClick={handleExportProducts}
-              disabled={isExporting}
-              sx={{ textTransform: 'none', fontWeight: 600 }}
-            >
-              {isExporting ? 'Exportando…' : 'Exportar (.xlsx)'}
-            </Button>
-
+          <Stack
+            direction="row"
+            spacing={1.5}
+            sx={{ alignItems: 'center', flexWrap: 'wrap' }}
+            useFlexGap
+          >
             <PermissionGate permission={SYSTEM_PERMISSIONS.PRODUCTS_MANAGE}>
-              <Button
-                variant="outlined"
-                color="primary"
-                size="small"
-                startIcon={<UploadFileIcon />}
-                onClick={() => setIsImportOpen(true)}
-                sx={{ textTransform: 'none', fontWeight: 600 }}
-              >
-                Importar (.xlsx)
-              </Button>
-
               <Button
                 variant="contained"
                 color="primary"
@@ -246,6 +225,65 @@ export function ProductsPage() {
                 Nuevo Producto
               </Button>
             </PermissionGate>
+            {/* Plantilla, importación y exportación agrupadas: la acción principal es crear */}
+            <Button
+              variant="outlined"
+              size="small"
+              id="products-file-menu-btn"
+              aria-haspopup="menu"
+              aria-controls={fileMenuAnchor ? 'products-file-menu' : undefined}
+              aria-expanded={fileMenuAnchor ? 'true' : undefined}
+              endIcon={<ArrowDropDownIcon />}
+              onClick={(e) => setFileMenuAnchor(e.currentTarget)}
+              sx={{ textTransform: 'none', fontWeight: 600 }}
+            >
+              Importar y exportar
+            </Button>
+            <Menu
+              id="products-file-menu"
+              anchorEl={fileMenuAnchor}
+              open={Boolean(fileMenuAnchor)}
+              onClose={() => setFileMenuAnchor(null)}
+              slotProps={{ list: { 'aria-labelledby': 'products-file-menu-btn' } }}
+            >
+              <MenuItem
+                disabled={isDownloadingTemplate}
+                onClick={() => {
+                  setFileMenuAnchor(null);
+                  void handleDownloadTemplate();
+                }}
+              >
+                <ListItemIcon>
+                  <DownloadIcon fontSize="small" />
+                </ListItemIcon>
+                {isDownloadingTemplate ? 'Descargando…' : 'Descargar Plantilla'}
+              </MenuItem>
+              {canManageProducts && (
+                <MenuItem
+                  onClick={() => {
+                    setFileMenuAnchor(null);
+                    setIsImportOpen(true);
+                  }}
+                >
+                  <ListItemIcon>
+                    <UploadFileIcon fontSize="small" />
+                  </ListItemIcon>
+                  Importar (.xlsx)
+                </MenuItem>
+              )}
+              <MenuItem
+                disabled={isExporting}
+                onClick={() => {
+                  setFileMenuAnchor(null);
+                  void handleExportProducts();
+                }}
+              >
+                <ListItemIcon>
+                  <FileDownloadIcon fontSize="small" />
+                </ListItemIcon>
+                {isExporting ? 'Exportando…' : 'Exportar (.xlsx)'}
+              </MenuItem>
+            </Menu>
           </Stack>
         </Box>
 

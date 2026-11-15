@@ -103,10 +103,10 @@ describe('ThirdPartiesPage (Gestión Unificada de Terceros)', () => {
     });
   });
 
-  const renderComponent = () =>
+  const renderComponent = (path = '/third-parties') =>
     render(
       <ThemeProvider theme={appTheme}>
-        <MemoryRouter>
+        <MemoryRouter initialEntries={[path]}>
           <ThirdPartiesPage />
         </MemoryRouter>
       </ThemeProvider>
@@ -165,6 +165,19 @@ describe('ThirdPartiesPage (Gestión Unificada de Terceros)', () => {
         })
       );
     });
+  });
+
+  it('recupera la pestaña y la búsqueda desde la URL al volver (rediseño fase 3)', async () => {
+    renderComponent('/third-parties?rol=SUPPLIER&q=drogue');
+    await waitFor(() =>
+      expect(thirdPartiesApi.fetchThirdParties).toHaveBeenCalledWith(
+        expect.objectContaining({ role: 'SUPPLIER', search: 'drogue' }),
+      ),
+    );
+    expect(screen.getByRole('tab', { name: 'Proveedores' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
   });
 });
 

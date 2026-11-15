@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -78,8 +79,26 @@ export const ThirdPartiesPage: React.FC = () => {
   const canEditFiscal = hasPermission(SYSTEM_PERMISSIONS.SUPPLIERS_MANAGE);
 
   // Estados de consulta y filtros
-  const [activeTab, setActiveTab] = useState<RoleTab>(visibleTabs[0]?.value ?? 'ALL');
-  const [search, setSearch] = useState('');
+  // Pestaña y búsqueda viven en la URL: se conservan al volver desde otra pantalla o recargar
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlTab = searchParams.get('rol') as RoleTab | null;
+  const activeTab: RoleTab =
+    urlTab && visibleTabs.some((tab) => tab.value === urlTab)
+      ? urlTab
+      : (visibleTabs[0]?.value ?? 'ALL');
+  const search = searchParams.get('q') ?? '';
+  const updateParam = (key: string, value: string) =>
+    setSearchParams(
+      (previous) => {
+        const next = new URLSearchParams(previous);
+        if (value) next.set(key, value);
+        else next.delete(key);
+        return next;
+      },
+      { replace: true },
+    );
+  const setActiveTab = (tab: RoleTab) => updateParam('rol', tab);
+  const setSearch = (value: string) => updateParam('q', value);
   const [fiscalSupplier, setFiscalSupplier] = useState<{ id: string; name: string } | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);

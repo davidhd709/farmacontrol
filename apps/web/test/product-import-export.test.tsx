@@ -69,10 +69,12 @@ describe('Product Import / Export Actions on ProductsPage', () => {
     renderProductsPage([SYSTEM_PERMISSIONS.PRODUCTS_READ]);
 
     expect(await screen.findByRole('heading', { name: 'Catálogo de Productos' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Descargar Plantilla' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Exportar (.xlsx)' })).toBeInTheDocument();
+    // Plantilla, importación y exportación quedan agrupadas en un menú (rediseño fase 3)
+    fireEvent.click(screen.getByRole('button', { name: 'Importar y exportar' }));
+    expect(await screen.findByRole('menuitem', { name: 'Descargar Plantilla' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Exportar (.xlsx)' })).toBeInTheDocument();
     // Con sólo lectura NO debe mostrar Importar (.xlsx) ni Nuevo Producto
-    expect(screen.queryByRole('button', { name: 'Importar (.xlsx)' })).toBeNull();
+    expect(screen.queryByRole('menuitem', { name: 'Importar (.xlsx)' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Nuevo Producto' })).toBeNull();
   });
 
@@ -83,10 +85,12 @@ describe('Product Import / Export Actions on ProductsPage', () => {
     ]);
 
     expect(await screen.findByRole('heading', { name: 'Catálogo de Productos' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Importar (.xlsx)' })).toBeInTheDocument();
+    // Crear es la acción principal y va primero
+    expect(screen.getByRole('button', { name: 'Nuevo Producto' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Importar y exportar' }));
 
     // Al hacer clic en Importar (.xlsx), abre el diálogo de importación
-    fireEvent.click(screen.getByRole('button', { name: 'Importar (.xlsx)' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Importar (.xlsx)' }));
     expect(await screen.findByText(/Importar Productos desde Excel/)).toBeInTheDocument();
   });
 });
