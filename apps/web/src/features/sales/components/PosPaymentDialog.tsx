@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -73,6 +73,13 @@ export const PosPaymentDialog: React.FC<PosPaymentDialogProps> = ({
   const [notes, setNotes] = useState<string>('');
   const [bankAccountId, setBankAccountId] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // F2 abre el cobro con el foco en el efectivo recibido y el valor seleccionado, para escribir
+  // el billete sin tocar el ratón (autoFocus no basta: el Dialog enfoca su contenedor al abrir).
+  const cashInputRef = useRef<HTMLInputElement>(null);
+  const focusCashInput = () => {
+    cashInputRef.current?.focus();
+    cashInputRef.current?.select();
+  };
   const bankAccounts = useBankAccountOptions(open && paymentMethod === 'TRANSFERENCIA');
 
   useEffect(() => {
@@ -152,6 +159,7 @@ export const PosPaymentDialog: React.FC<PosPaymentDialogProps> = ({
       maxWidth="xs"
       fullWidth
       slotProps={{
+        transition: { onEntered: focusCashInput },
         paper: {
           sx: {
             borderRadius: 2.5,
@@ -310,6 +318,7 @@ export const PosPaymentDialog: React.FC<PosPaymentDialogProps> = ({
                     required
                     disabled={loading}
                     autoFocus
+                    inputRef={cashInputRef}
                     slotProps={{ htmlInput: { min: total, step: 'any' } }}
                     sx={{ mb: 1 }}
                   />

@@ -14,6 +14,7 @@ import { AuthContext, type AuthContextValue } from '../src/features/auth/context
 import * as customersApi from '../src/features/customers/api/customers.api';
 import * as productsApi from '../src/features/catalog/api/products.api';
 import * as salesApi from '../src/features/sales/api/sales.api';
+import { ApiError } from '../src/api/http-client';
 import { PosPage } from '../src/features/sales/pages/PosPage';
 import { appTheme } from '../src/theme/app-theme';
 
@@ -454,6 +455,52 @@ describe('PosPage (Frontend POS UX-03 / HU-017)', () => {
     expect(await screen.findByRole('cell', { name: /Segundo producto/ })).toBeInTheDocument();
     expect(screen.queryByRole('cell', { name: /Acetaminofén/ })).not.toBeInTheDocument();
     expect(productsApi.fetchProducts).toHaveBeenCalledTimes(1);
+  });
+
+  it('sin Consumidor final activo lo dice y no deja cobrar hasta elegir cliente (fase 2)', async () => {
+    vi.mocked(customersApi.fetchDefaultCustomer).mockRejectedValue(
+      new ApiError('Cliente no encontrado', 404),
+    );
+    renderComponent();
+    expect(
+      await screen.findByText(/no hay un Consumidor final activo\. Elija un cliente para cobrar/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Cargando cliente…')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Volver a Consumidor final' }),
+    ).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/Buscar producto por nombre/i), {
+      target: { value: 'Aceta' },
+    });
+    fireEvent.click(await screen.findByRole('option'));
+    expect(screen.getByRole('button', { name: /Cobrar y Liquidar/i })).toBeDisabled();
+    expect(screen.getByTestId('pos-charge-blocked')).toHaveTextContent(
+      'Elija un cliente para cobrar.',
+    );
+    fireEvent.keyDown(window, { key: 'F2' });
+    expect(screen.queryByText('Cobro y Liquidación de Venta')).not.toBeInTheDocument();
+  });
+
+  it('si falla la carga del cliente ofrece reintentar en lugar de quedarse cargando (fase 2)', async () => {
+    vi.mocked(customersApi.fetchDefaultCustomer)
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce(mockDefaultCustomer);
+    renderComponent();
+    expect(await screen.findByText('No se pudo cargar el cliente.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
+    expect(await screen.findByText('Consumidor Final')).toBeInTheDocument();
+    expect(customersApi.fetchDefaultCustomer).toHaveBeenCalledTimes(2);
+  });
+
+  it('tras cobrar y cerrar el comprobante el foco vuelve al buscador (fase 2)', async () => {
+    renderComponent();
+    await screen.findByText('Consumidor Final');
+    await addProductAndPay();
+    await waitFor(() => expect(screen.getByTestId('confirm-payment-btn')).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId('confirm-payment-btn'));
+    await waitFor(() => expect(salesApi.confirmSale).toHaveBeenCalledOnce());
+    fireEvent.keyDown(window, { key: 'Enter' });
+    await waitFor(() => expect(screen.getByLabelText(/Buscar producto por nombre/i)).toHaveFocus());
   });
 
   it('asigna un cliente existente al payload de confirmación', async () => {

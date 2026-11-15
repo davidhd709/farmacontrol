@@ -10,9 +10,12 @@ import { useDebouncedValue } from '../../../hooks/useDebouncedValue';
 export function PosCustomerSelector({
   onSelect,
   onCreate,
+  showDefaultAction = true,
 }: {
   onSelect: (customer: CustomerDto) => void;
   onCreate: () => void;
+  /** Oculta «Volver a Consumidor final» cuando ese ya es el cliente de la venta */
+  showDefaultAction?: boolean;
 }) {
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +31,7 @@ export function PosCustomerSelector({
     retry: false,
   });
   return (
-    <Stack spacing={1} sx={{ minWidth: { xs: 0, sm: 230 }, width: { xs: '100%', sm: 260 } }}>
+    <Stack spacing={0.5} sx={{ minWidth: { xs: 0, sm: 230 }, width: { xs: '100%', sm: 260 } }}>
       {canRead && (
         <Autocomplete
           clearText="Limpiar búsqueda"
@@ -58,25 +61,32 @@ export function PosCustomerSelector({
         />
       )}
       {query.isError && <Alert severity="warning">No se pudieron buscar los clientes.</Alert>}
-      <PermissionGate permission={SYSTEM_PERMISSIONS.CUSTOMERS_CREATE}>
-        <Button onClick={onCreate}>Crear cliente nuevo</Button>
-      </PermissionGate>
-      <Button
-        disabled={loadingDefault}
-        onClick={async () => {
-          setLoadingDefault(true);
-          setError(null);
-          try {
-            onSelect(await fetchDefaultCustomer());
-          } catch {
-            setError('No se pudo cargar Consumidor final. Intenta nuevamente.');
-          } finally {
-            setLoadingDefault(false);
-          }
-        }}
-      >
-        Volver a Consumidor final
-      </Button>
+      <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap' }} useFlexGap>
+        <PermissionGate permission={SYSTEM_PERMISSIONS.CUSTOMERS_CREATE}>
+          <Button size="small" onClick={onCreate}>
+            Crear cliente nuevo
+          </Button>
+        </PermissionGate>
+        {showDefaultAction && (
+          <Button
+            size="small"
+            disabled={loadingDefault}
+            onClick={async () => {
+              setLoadingDefault(true);
+              setError(null);
+              try {
+                onSelect(await fetchDefaultCustomer());
+              } catch {
+                setError('No se pudo cargar Consumidor final. Intenta nuevamente.');
+              } finally {
+                setLoadingDefault(false);
+              }
+            }}
+          >
+            Volver a Consumidor final
+          </Button>
+        )}
+      </Stack>
       {error && <Alert severity="warning">{error}</Alert>}
     </Stack>
   );

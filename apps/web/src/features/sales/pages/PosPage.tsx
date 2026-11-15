@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Box,
@@ -18,6 +18,7 @@ import {
   MenuItem,
   IconButton,
   Tooltip,
+  CircularProgress,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import type {
@@ -40,6 +41,7 @@ import { PosSerialPicker } from '../components/PosSerialPicker';
 import { SaleReceiptDialog } from '../components/SaleReceiptDialog';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { SweetModal } from '../../../components/SweetModal';
+import { ApiError } from '../../../api/http-client';
 
 interface CartItem {
   productId: string;
@@ -70,6 +72,11 @@ interface CartItem {
 export const PosPage: React.FC = () => {
   // Cliente Seleccionado (por defecto Consumidor Final)
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerDto | null>(null);
+  // Consumidor final: el servidor solo factura sin cliente si existe uno activo (sale.service
+  // responde 409 en caso contrario), así que su ausencia se muestra y obliga a elegir cliente.
+  const [defaultCustomerState, setDefaultCustomerState] = useState<
+    'loading' | 'ready' | 'missing' | 'error'
+  >('loading');
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
 
   // Cambio de producto: la venta nueva reemplaza la devolución de esta nota crédito
@@ -109,7 +116,7 @@ export const PosPage: React.FC = () => {
       item.inventoryControlMode === 'SERIAL' &&
       item.serialNumbers.length !== item.quantityCommercial * item.presentationFactor,
   );
-  const canCharge = cart.length > 0 && !serialsPending;
+  const canCharge = cart.length > 0 && !serialsPending && Boolean(selectedCustomer);
 
   // Referencia al buscador para autoenfoque
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -152,18 +159,21 @@ export const PosPage: React.FC = () => {
     };
   }, [exchangeCreditNoteId]);
 
-  // Cargar cliente por defecto al iniciar
-  useEffect(() => {
-    const initDefaultCustomer = async () => {
-      try {
-        const def = await fetchDefaultCustomer();
-        setSelectedCustomer((current) => current ?? def);
-      } catch (err) {
-        console.error('Error al cargar cliente por defecto:', err);
-      }
-    };
-    initDefaultCustomer();
+  // Cargar cliente por defecto al iniciar (y al reintentar)
+  const loadDefaultCustomer = useCallback(async () => {
+    setDefaultCustomerState('loading');
+    try {
+      const def = await fetchDefaultCustomer();
+      setSelectedCustomer((current) => current ?? def);
+      setDefaultCustomerState('ready');
+    } catch (err) {
+      setDefaultCustomerState(err instanceof ApiError && err.status === 404 ? 'missing' : 'error');
+    }
   }, []);
+
+  useEffect(() => {
+    void loadDefaultCustomer();
+  }, [loadDefaultCustomer]);
 
   // Calcular el total de unidades base de un producto ya reservadas en las demás líneas del carrito
   const getCartProductTotalBaseUnits = (
@@ -434,7 +444,14 @@ export const PosPage: React.FC = () => {
   };
 
   return (
-    <Box sx={{ py: { xs: 1, md: 2 }, maxWidth: 1400, margin: '0 auto' }}>
+    <Box
+      sx={{
+        py: { xs: 1, md: 2 },
+        pb: { xs: cart.length > 0 ? 10 : 1, lg: 2 },
+        maxWidth: 1400,
+        margin: '0 auto',
+      }}
+    >
       {/* Encabezado y Selector de Cliente */}
       <Box
         sx={{
@@ -455,34 +472,62 @@ export const PosPage: React.FC = () => {
           </Typography>
         </Box>
 
-        {/* Tarjeta de Cliente Activo */}
+        {/* Cliente de la venta: activo, cargando, ausente o con error (nunca un «Cargando» eterno) */}
         <Paper
           variant="outlined"
+          component="section"
+          aria-label="Cliente de la venta"
           sx={{
-            p: 1.5,
+            p: 1.25,
             display: 'flex',
             alignItems: 'center',
             flexWrap: 'wrap',
             maxWidth: '100%',
-            gap: 2,
+            gap: 1.5,
             bgcolor: 'background.paper',
           }}
         >
-          <Box sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+          <Box
+            data-testid="pos-customer"
+            role="status"
+            sx={{ minWidth: 0, maxWidth: 260, overflowWrap: 'anywhere' }}
+          >
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-              Cliente Actual:
+              Cliente
             </Typography>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-              {selectedCustomer ? selectedCustomer.name : 'Cargando cliente...'}
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              Doc: {selectedCustomer?.documentNumber}{' '}
-              {selectedCustomer?.isDefault && '(Consumidor Final)'}
-            </Typography>
+            {selectedCustomer ? (
+              <>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                  {selectedCustomer.name}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Doc: {selectedCustomer.documentNumber}
+                </Typography>
+              </>
+            ) : defaultCustomerState === 'loading' ? (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <CircularProgress size={14} aria-hidden />
+                <Typography variant="body2">Cargando cliente…</Typography>
+              </Box>
+            ) : defaultCustomerState === 'missing' ? (
+              <Typography variant="body2" color="warning.dark" sx={{ fontWeight: 600 }}>
+                Sin cliente: no hay un Consumidor final activo. Elija un cliente para cobrar.
+              </Typography>
+            ) : (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                <Typography variant="body2" color="error" sx={{ fontWeight: 600 }}>
+                  No se pudo cargar el cliente.
+                </Typography>
+                <Button size="small" onClick={() => void loadDefaultCustomer()}>
+                  Reintentar
+                </Button>
+              </Box>
+            )}
           </Box>
           <PosCustomerSelector
             onSelect={setSelectedCustomer}
             onCreate={() => setCustomerModalOpen(true)}
+            showDefaultAction={defaultCustomerState !== 'missing' && !selectedCustomer?.isDefault}
           />
         </Paper>
       </Box>
@@ -762,7 +807,12 @@ export const PosPage: React.FC = () => {
         </Box>
 
         {/* Panel Lateral de Liquidación y Totales */}
-        <Paper sx={{ p: 2.5, position: 'sticky', top: 20 }} elevation={2}>
+        <Paper
+          component="section"
+          aria-label="Resumen de venta"
+          sx={{ p: 2.5, position: { lg: 'sticky' }, top: { lg: 80 } }}
+          elevation={2}
+        >
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
             Resumen de Venta
           </Typography>
@@ -773,7 +823,7 @@ export const PosPage: React.FC = () => {
                 Artículos:
               </Typography>
               <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                {cart.length} líneas
+                {cart.length} {cart.length === 1 ? 'línea' : 'líneas'}
               </Typography>
             </Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -849,6 +899,18 @@ export const PosPage: React.FC = () => {
               F2
             </Box>
           </Button>
+          {cart.length > 0 && !canCharge && (
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              data-testid="pos-charge-blocked"
+              sx={{ display: 'block', textAlign: 'center', mb: 1 }}
+            >
+              {!selectedCustomer
+                ? 'Elija un cliente para cobrar.'
+                : 'Asigne una serie por cada unidad antes de cobrar.'}
+            </Typography>
+          )}
 
           <Button
             variant="text"
@@ -864,6 +926,45 @@ export const PosPage: React.FC = () => {
         </Paper>
       </Box>
 
+      {/* En pantallas sin columna lateral el total y el cobro quedan siempre a la vista */}
+      {cart.length > 0 && (
+        <Paper
+          elevation={8}
+          data-testid="pos-mobile-total"
+          sx={{
+            display: { xs: 'flex', lg: 'none' },
+            position: 'fixed',
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: (theme) => theme.zIndex.appBar - 1,
+            px: 2,
+            py: 1,
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 2,
+            borderRadius: 0,
+          }}
+        >
+          <Box>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+              Total · {cart.length} {cart.length === 1 ? 'línea' : 'líneas'}
+            </Typography>
+            <Typography variant="h6" component="p" sx={{ fontWeight: 800, color: 'primary.main' }}>
+              {formatMoney(cartTotal)}
+            </Typography>
+          </Box>
+          <Button
+            variant="contained"
+            disabled={!canCharge}
+            onClick={() => setPaymentDialogOpen(true)}
+            sx={{ fontWeight: 800, textTransform: 'none' }}
+          >
+            Cobrar
+          </Button>
+        </Paper>
+      )}
+
       {/* Diálogo de Cobro y Medio de Pago */}
       <PosPaymentDialog
         open={paymentDialogOpen}
@@ -876,7 +977,10 @@ export const PosPage: React.FC = () => {
         productNames={Object.fromEntries(cart.map((item) => [item.productId, item.productName]))}
         customerName={selectedCustomer?.name}
         customerIsDefault={!selectedCustomer || Boolean(selectedCustomer.isDefault)}
-        onClose={() => setPaymentDialogOpen(false)}
+        onClose={() => {
+          setPaymentDialogOpen(false);
+          setTimeout(() => searchInputRef.current?.focus(), 50);
+        }}
         onConfirm={handleConfirmSale}
         loading={paymentLoading}
       />
