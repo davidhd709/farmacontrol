@@ -64,6 +64,10 @@ jobs:
       - name: Install dependencies (frozen lockfile)
         run: pnpm install --frozen-lockfile
 
+      # Antes del build: falla rápido si un cambio llega sin formato (pnpm format lo corrige)
+      - name: Check formatting (Prettier)
+        run: pnpm format:check
+
       - name: Prisma Generate
         run: pnpm db:generate
 

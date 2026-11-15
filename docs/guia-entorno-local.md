@@ -92,6 +92,7 @@ pnpm test
 pnpm test:watch
 
 # Ejecutar validaciones estáticas y compilación
+pnpm format:check   # el CI lo exige; pnpm format lo corrige
 pnpm build
 pnpm lint
 pnpm typecheck

@@ -9,6 +9,8 @@
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "typecheck:e2e": "tsc -p tests/e2e",
+    "format": "prettier --write \"{apps,packages}/**/*.{ts,tsx}\" \"tests/**/*.ts\"",
+    "format:check": "prettier --check \"{apps,packages}/**/*.{ts,tsx}\" \"tests/**/*.ts\"",
     "test": "bash infra/scripts/test-with-ephemeral-db.sh",
     "test:watch": "FARMACIA_TEST_VITEST_MODE=watch bash infra/scripts/test-with-ephemeral-db.sh",
     "test:integration": "bash infra/scripts/test-with-ephemeral-db.sh",

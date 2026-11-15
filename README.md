@@ -186,6 +186,9 @@ pnpm build
 
 # Ejecutar linter estricto de código
 pnpm lint
+
+# Verificar el formato (lo exige el CI); pnpm format lo corrige
+pnpm format:check
 ```
 
 ### 5.1 Aislamiento de la base de pruebas

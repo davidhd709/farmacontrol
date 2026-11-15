@@ -1,0 +1,10 @@
+# Artefactos generados o de terceros: no se formatean
+node_modules
+dist
+build
+coverage
+.test-runs
+playwright-report
+test-results
+packages/database/generated
+**/*.d.ts
