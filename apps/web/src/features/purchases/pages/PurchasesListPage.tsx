@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { HomeBackButton } from '../../../components/HomeBackButton';
 import {
   Box,
@@ -48,7 +48,9 @@ export const PurchasesListPage: React.FC = () => {
 
   // Filtros
   const [selectedSupplierId, setSelectedSupplierId] = useState('');
-  const [invoiceQuery, setInvoiceQuery] = useState('');
+  // ?q=FAC-123 llega desde el documento de origen de un asiento y filtra por esa factura
+  const [searchParams] = useSearchParams();
+  const [invoiceQuery, setInvoiceQuery] = useState(() => searchParams.get('q') ?? '');
 
   // Detalle Modal
   const [selectedPurchase, setSelectedPurchase] = useState<PurchaseDto | null>(null);

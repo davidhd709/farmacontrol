@@ -58,12 +58,12 @@ const statement: PayableStatementDto = {
   },
 };
 
-const renderPage = () => {
+const renderPage = (initialEntries: string[] = ['/']) => {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <ThemeProvider theme={appTheme}>
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter>{withAuth(<PayablesPage />)}</MemoryRouter>
+        <MemoryRouter initialEntries={initialEntries}>{withAuth(<PayablesPage />)}</MemoryRouter>
       </QueryClientProvider>
     </ThemeProvider>,
   );
@@ -96,6 +96,23 @@ describe('PayablesPage: consulta por proveedor y fechas con edades', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Consultar' }));
     expect(await screen.findByText(/Elige un proveedor o un rango de fechas/)).toBeInTheDocument();
     expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('abre los pagos de la cuenta por pagar que pide la URL, sin elegir proveedor', async () => {
+    const movements = vi.spyOn(payablesApi, 'fetchPayableMovements').mockResolvedValue({
+      payableId: 'pay-9',
+      invoiceNumber: 'FAC-PROV-909',
+      supplierName: 'Distribuciones del Valle',
+      totalAmount: '500000.00',
+      amountPaid: '0.00',
+      balance: '500000.00',
+      status: 'PENDIENTE',
+      dueDate: '2026-08-31',
+      movements: [],
+    });
+    renderPage(['/payables?cxp=pay-9']);
+    expect(await screen.findByText(/FAC-PROV-909/)).toBeInTheDocument();
+    expect(movements).toHaveBeenCalledWith('pay-9');
   });
 
   it('consulta por proveedor y fechas, clasifica por edad y abre el detalle de cada documento', async () => {

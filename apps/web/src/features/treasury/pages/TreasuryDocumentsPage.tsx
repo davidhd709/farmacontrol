@@ -7,6 +7,7 @@ import {
   CircularProgress,
   Container,
   Link,
+  MenuItem,
   Paper,
   Stack,
   Table,
@@ -24,9 +25,14 @@ import {
   SYSTEM_PERMISSIONS,
   type TreasuryDocumentApplicationDto,
   type TreasuryDocumentDto,
+  type TreasuryDocumentStatus,
   type TreasuryDocumentType,
 } from '@farmacia/contracts';
-import { cancelTreasuryDocument, getTreasuryDocuments } from '../api/treasury.api';
+import {
+  cancelTreasuryDocument,
+  exportTreasuryDocuments,
+  getTreasuryDocuments,
+} from '../api/treasury.api';
 import { QuickDateRange } from '../../../components/QuickDateRange';
 import { HomeBackButton } from '../../../components/HomeBackButton';
 import { SweetModal } from '../../../components/SweetModal';
@@ -118,6 +124,9 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
   const fromDate = searchParams.get('desde') ?? '';
   const toDate = searchParams.get('hasta') ?? '';
   const search = searchParams.get('q') ?? '';
+  const statusParam = searchParams.get('estado');
+  const status: TreasuryDocumentStatus | '' =
+    statusParam === 'VIGENTE' || statusParam === 'ANULADO' ? statusParam : '';
   const setFilters = (changes: Record<string, string>) =>
     setSearchParams(
       (current) => {
@@ -143,6 +152,8 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
   const [annulOpen, setAnnulOpen] = useState(false);
   const [annulError, setAnnulError] = useState<string | null>(null);
   const [annulling, setAnnulling] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const { hasPermission, hasAnyPermission } = usePermissions();
   // El recibo se registra con abono a cartera o manual; el egreso con su permiso
@@ -155,10 +166,11 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
       : hasPermission(SYSTEM_PERMISSIONS.DISBURSEMENTS_CREATE);
 
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ['treasury-documents', type, fromDate, toDate, search, page, pageSize],
+    queryKey: ['treasury-documents', type, status, fromDate, toDate, search, page, pageSize],
     queryFn: () =>
       getTreasuryDocuments({
         type,
+        status: status || undefined,
         fromDate: fromDate || undefined,
         toDate: toDate || undefined,
         search: search || undefined,
@@ -166,6 +178,30 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
         pageSize,
       }),
   });
+
+  // Exporta exactamente lo filtrado: mismo tipo, estado, fechas y búsqueda
+  const exportExcel = async () => {
+    setExporting(true);
+    setExportError(null);
+    const base = type === 'RECIBO_CAJA' ? 'recibos_caja' : 'comprobantes_egreso';
+    const range = fromDate || toDate ? `_${fromDate || 'inicio'}_${toDate || 'hoy'}` : '';
+    try {
+      await exportTreasuryDocuments(
+        {
+          type,
+          status: status || undefined,
+          fromDate: fromDate || undefined,
+          toDate: toDate || undefined,
+          search: search || undefined,
+        },
+        `${base}${range}.xlsx`,
+      );
+    } catch (e) {
+      setExportError(e instanceof Error ? e.message : 'No se pudo exportar.');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   // Qué se puede hacer con el documento abierto y, si algo no, por qué (mismas reglas del servidor)
   const actions = selected ? treasuryDocumentActions(selected, hasPermission) : null;
@@ -247,6 +283,26 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
               }}
             />
             <TextField
+              select
+              label="Estado"
+              size="small"
+              value={status}
+              onChange={(e) => {
+                setFilters({ estado: e.target.value });
+                setPage(0);
+              }}
+              sx={{ minWidth: 150 }}
+              slotProps={{
+                select: { displayEmpty: true },
+                inputLabel: { shrink: true },
+                htmlInput: { 'data-testid': 'treasury-status-filter' },
+              }}
+            >
+              <MenuItem value="">Todos</MenuItem>
+              <MenuItem value="VIGENTE">Vigentes</MenuItem>
+              <MenuItem value="ANULADO">Anulados</MenuItem>
+            </TextField>
+            <TextField
               label="Buscar número, concepto o documento"
               size="small"
               value={search}
@@ -257,17 +313,36 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
               sx={{ flexGrow: 1 }}
             />
           </Stack>
-          <Box sx={{ mt: 1.5 }}>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={1.5}
+            sx={{ mt: 1.5, justifyContent: 'space-between', alignItems: { sm: 'center' } }}
+          >
             <QuickDateRange
               onSelect={({ from, to }) => {
                 setFilters({ desde: from, hasta: to });
                 setPage(0);
               }}
             />
-          </Box>
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={() => void exportExcel()}
+              disabled={exporting || !data?.total}
+              startIcon={exporting ? <CircularProgress size={16} /> : undefined}
+              sx={{ whiteSpace: 'nowrap', alignSelf: { xs: 'flex-start', sm: 'center' } }}
+            >
+              {exporting ? 'Exportando…' : `Exportar a Excel (${data?.total ?? 0})`}
+            </Button>
+          </Stack>
         </Paper>
 
         {isError && <Alert severity="error">{(error as Error).message}</Alert>}
+        {exportError && (
+          <Alert severity="error" onClose={() => setExportError(null)}>
+            {exportError}
+          </Alert>
+        )}
 
         <TableContainer component={Paper}>
           <Table size="small" aria-label={labels.title}>

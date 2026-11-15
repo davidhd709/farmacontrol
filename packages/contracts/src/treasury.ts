@@ -153,6 +153,13 @@ export interface CreateDisbursementPayload {
   }>;
 }
 
+export interface TreasurySourceDocumentDto {
+  kind: 'NOTA_CREDITO' | 'CUENTA_POR_COBRAR' | 'CUENTA_POR_PAGAR' | 'GASTO';
+  id: string;
+  /** NC-000012, la factura de venta o compra, o el número del gasto */
+  number: string | null;
+}
+
 export interface TreasuryDocumentDto {
   id: string;
   documentType: TreasuryDocumentType;
@@ -174,6 +181,11 @@ export interface TreasuryDocumentDto {
   customerId?: string | null;
   supplierId?: string | null;
   origin: TreasuryDocumentOrigin;
+  /**
+   * Documento que emitió un recibo o egreso automático, cuando se puede abrir: la nota crédito,
+   * la cuenta por cobrar o por pagar del abono revertido, o el gasto. Ahí se corrige o anula.
+   */
+  sourceDocument?: TreasurySourceDocumentDto | null;
   counterpartAccount: string | null;
   counterpartAccountId?: string | null;
   /** Facturas abonadas o pagadas por el documento */
@@ -187,7 +199,11 @@ export interface TreasuryDocumentDto {
   createdAt: string;
 }
 
-export type TreasuryDocumentStatus = 'VIGENTE' | 'ANULADO';
+export const TREASURY_DOCUMENT_STATUSES = ['VIGENTE', 'ANULADO'] as const;
+export type TreasuryDocumentStatus = (typeof TREASURY_DOCUMENT_STATUSES)[number];
+
+/** Máximo de filas que exporta el listado de recibos y egresos; más exige acotar los filtros */
+export const TREASURY_DOCUMENTS_EXPORT_LIMIT = 5000;
 
 export interface CancelTreasuryDocumentPayload {
   reason: string;
@@ -205,6 +221,8 @@ export interface CorrectTreasuryDocumentPayload {
 
 export interface TreasuryDocumentFilters {
   type?: TreasuryDocumentType;
+  /** VIGENTE o ANULADO; sin valor, ambos */
+  status?: TreasuryDocumentStatus;
   fromDate?: string;
   toDate?: string;
   search?: string;

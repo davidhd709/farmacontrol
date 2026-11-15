@@ -9,9 +9,11 @@ interface EntryRef {
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const search = (path: string, number: string) => `${path}?buscar=${encodeURIComponent(number)}`;
+// Enlaces que la pantalla destino abre directamente (rediseño): tesorería filtra por `q`, la
+// venta tiene su detalle, y notas crédito y gastos abren el documento pedido en la URL
 const treasuryHref = (number: string) =>
-  search(number.startsWith('CE-') ? '/treasury/disbursements' : '/treasury/receipts', number);
+  `${number.startsWith('CE-') ? '/treasury/disbursements' : '/treasury/receipts'}?q=${encodeURIComponent(number)}`;
+const saleHref = (id: string) => `/sales/${encodeURIComponent(id)}`;
 
 /**
  * Número legible del documento que originó cada asiento (FAC-000007, NC-000001, RC-000003…) y
@@ -64,7 +66,7 @@ export async function resolveSourceDocuments(
     }),
     prisma.creditNote.findMany({
       where: { id: { in: ids(['CREDIT_NOTE', 'CREDIT_NOTE_CANCEL']) } },
-      select: { id: true, creditNoteNumber: true, sale: { select: { invoiceNumber: true } } },
+      select: { id: true, creditNoteNumber: true },
     }),
     prisma.purchase.findMany({
       where: { id: { in: ids(['PURCHASE']) } },
@@ -99,16 +101,16 @@ export async function resolveSourceDocuments(
 
   const byId = new Map<string, JournalSourceDocumentDto>();
   for (const s of sales)
-    byId.set(`SALE:${s.id}`, { number: s.invoiceNumber, href: search('/sales', s.invoiceNumber) });
+    byId.set(`SALE:${s.id}`, { number: s.invoiceNumber, href: saleHref(s.id) });
   for (const n of creditNotes)
     byId.set(`CREDIT_NOTE:${n.id}`, {
       number: n.creditNoteNumber,
-      href: search('/sales', n.sale.invoiceNumber),
+      href: `/credit-notes?nota=${encodeURIComponent(n.creditNoteNumber)}`,
     });
   for (const p of purchases)
     byId.set(`PURCHASE:${p.id}`, {
       number: p.invoiceNumber,
-      href: search('/purchases', p.invoiceNumber),
+      href: `/purchases?q=${encodeURIComponent(p.invoiceNumber)}`,
     });
   for (const p of [...receivablePayments, ...payablePayments, ...expensePayments]) {
     if (p.treasuryDocument)
@@ -120,7 +122,7 @@ export async function resolveSourceDocuments(
   for (const e of expenses)
     byId.set(`EXPENSE:${e.id}`, {
       number: e.documentNumber || 'Causación',
-      href: e.documentNumber ? search('/expenses', e.documentNumber) : '/expenses',
+      href: `/expenses?gasto=${encodeURIComponent(e.id)}`,
     });
   for (const d of treasury) {
     const key = d.cashMovementId ? `CASH:${d.cashMovementId}` : `BANK:${d.bankMovementId}`;

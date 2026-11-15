@@ -28,6 +28,7 @@ import { PageHeader } from '../../../components/layout/PageHeader';
 import { AgingSummaryCards } from '../../../components/AgingSummaryCards';
 
 import { ReceivableMovementsDialog } from '../components/ReceivableMovementsDialog';
+import { useLinkedDocumentParam } from '../../../hooks/useLinkedDocumentParam';
 import { isOverdue, getStatusDisplay } from '../utils/status';
 import { formatDate } from '../../../utils/date-format';
 import { FilterBar } from '../../../components/layout/FilterBar';
@@ -42,6 +43,8 @@ export function ReceivablesPage() {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [movementsReceivableId, setMovementsReceivableId] = useState<string | null>(null);
+  // «Ir a la cuenta por cobrar» desde un egreso automático abre sus abonos directamente
+  const [linkedReceivableId, clearLinkedReceivable] = useLinkedDocumentParam('cxc');
 
   const { data: agingData } = useQuery({
     queryKey: ['receivables-aging'],
@@ -300,10 +303,13 @@ export function ReceivablesPage() {
       </Paper>
 
       {/* Modal de consulta de abonos */}
-      {movementsReceivableId && (
+      {(movementsReceivableId ?? linkedReceivableId) && (
         <ReceivableMovementsDialog
-          receivableId={movementsReceivableId}
-          onClose={() => setMovementsReceivableId(null)}
+          receivableId={(movementsReceivableId ?? linkedReceivableId)!}
+          onClose={() => {
+            setMovementsReceivableId(null);
+            clearLinkedReceivable();
+          }}
         />
       )}
     </Box>

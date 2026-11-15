@@ -120,12 +120,12 @@ describe('Auditoría contable y estado de cuenta por tercero', () => {
     const saleEntry = res.body.items.find((e: { sourceType: string }) => e.sourceType === 'SALE');
     expect(saleEntry.sourceDocument).toEqual({
       number: sale.body.invoiceNumber,
-      href: `/sales?buscar=${sale.body.invoiceNumber}`,
+      href: `/sales/${sale.body.id}`,
     });
     const payment = res.body.items.find((e: { sourceType: string }) => e.sourceType === 'RECEIVABLE_PAYMENT');
     expect(payment.sourceDocument).toEqual({
       number: receipt.body.documentNumber,
-      href: `/treasury/receipts?buscar=${receipt.body.documentNumber}`,
+      href: `/treasury/receipts?q=${receipt.body.documentNumber}`,
     });
     const detail = await request(app.getHttpServer())
       .get(`/api/v1/journal-entries/${saleEntry.id}`)

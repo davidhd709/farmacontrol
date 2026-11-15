@@ -8,6 +8,7 @@ import { AppModule } from '../../src/app.module';
 import { UserProvisioningService } from '../../src/modules/identity/application/services/user-provisioning.service';
 import { AuthService } from '../../src/modules/identity/application/services/auth.service';
 import { SESSION_COOKIE_NAME } from '../../src/modules/identity/presentation/utils/session-cookie.util';
+import ExcelJS from 'exceljs';
 
 /**
  * Recibos de caja y comprobantes de egreso (acuerdo del 4 de octubre): cada movimiento de
@@ -180,6 +181,7 @@ describe('Recibos de caja y comprobantes de egreso', () => {
       source: 'CAJA',
       amount: '185000.00',
       thirdPartyName: 'Air-e S.A. E.S.P.',
+      sourceDocument: { kind: 'GASTO', id: expense.id, number: null },
     });
 
     const detail = await request(app.getHttpServer())
@@ -190,5 +192,60 @@ describe('Recibos de caja y comprobantes de egreso', () => {
 
     await request(app.getHttpServer()).get('/api/v1/treasury/documents?type=OTRO').set('Cookie', adminCookie).expect(400);
     await request(app.getHttpServer()).get('/api/v1/treasury/documents').set('Cookie', cashierCookie).expect(403);
+  });
+
+  it('filtra por estado y exporta a Excel lo mismo que lista (rediseño, pendiente de la fase 4)', async () => {
+    await cash('INGRESO_MANUAL', '28000.00', { reason: 'Aporte de socio' });
+    await cash('INGRESO_MANUAL', '1250.50', { reason: 'Reintegro' });
+    await cash('EGRESO_MANUAL', '9000.00', { reason: 'Mensajería' });
+    const annulled = await prisma.treasuryDocument.findFirstOrThrow({ where: { documentNumber: 'RC-000002' } });
+    await prisma.treasuryDocument.update({
+      where: { id: annulled.id },
+      data: { status: 'ANULADO', cancelledAt: new Date(), cancelledById: userId, cancellationReason: 'Registrado dos veces' },
+    });
+    const server = app.getHttpServer();
+
+    const vigentes = await request(server)
+      .get('/api/v1/treasury/documents?type=RECIBO_CAJA&status=VIGENTE')
+      .set('Cookie', adminCookie)
+      .expect(200);
+    expect(vigentes.body.items.map((d: { documentNumber: string }) => d.documentNumber)).toEqual(['RC-000001']);
+    const anulados = await request(server)
+      .get('/api/v1/treasury/documents?status=ANULADO')
+      .set('Cookie', adminCookie)
+      .expect(200);
+    expect(anulados.body.items.map((d: { documentNumber: string }) => d.documentNumber)).toEqual(['RC-000002']);
+    await request(server).get('/api/v1/treasury/documents?status=BORRADO').set('Cookie', adminCookie).expect(400);
+
+    const file = await request(server)
+      .get('/api/v1/treasury/documents/export?type=RECIBO_CAJA')
+      .set('Cookie', adminCookie)
+      .buffer(true)
+      .parse((res, done) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (chunk: Buffer) => chunks.push(chunk));
+        res.on('end', () => done(null, Buffer.concat(chunks)));
+      })
+      .expect(200);
+    expect(file.headers['content-type']).toContain('spreadsheetml');
+    expect(file.headers['content-disposition']).toContain('recibos_caja.xlsx');
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(file.body as Buffer);
+    const sheet = workbook.getWorksheet('Recibos y egresos')!;
+    const rows = sheet.getSheetValues().slice(2) as unknown[][];
+    // Mismo orden del listado: el más reciente primero; el anulado conserva su motivo
+    expect(rows.map((r) => [r[1], r[4], r[11], r[12]])).toEqual([
+      ['RC-000002', 'Anulado', 1250.5, 'Registrado dos veces'],
+      ['RC-000001', 'Vigente', 28000, ''],
+    ]);
+
+    const onlyAnnulled = await request(server)
+      .get('/api/v1/treasury/documents/export?status=ANULADO&fromDate=2000-01-01')
+      .set('Cookie', adminCookie)
+      .expect(200);
+    expect(onlyAnnulled.headers['content-disposition']).toContain('recibos_y_egresos_2000-01-01_hoy.xlsx');
+    await request(server).get('/api/v1/treasury/documents/export?status=BORRADO').set('Cookie', adminCookie).expect(400);
+    await request(server).get('/api/v1/treasury/documents/export').set('Cookie', cashierCookie).expect(403);
+    await request(server).get('/api/v1/treasury/documents/export').expect(401);
   });
 });

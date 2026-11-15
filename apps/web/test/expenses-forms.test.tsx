@@ -22,6 +22,7 @@ import * as receivables from '../src/features/receivables/api/receivables.api';
 import * as payables from '../src/features/payables/api/payables.api';
 import * as parties from '../src/features/third-parties/api/third-parties.api';
 import { appTheme } from '../src/theme/app-theme';
+import { MemoryRouter } from 'react-router-dom';
 import { setDateField } from './support-date';
 
 const expense = {
@@ -47,7 +48,7 @@ const expense = {
 const categories = [
   { id: 'category', name: 'Servicios', accountCode: '51', accountName: 'Servicios' },
 ] as ExpenseCategoryDto[];
-function mount(content: ReactNode) {
+function mount(content: ReactNode, initialEntries: string[] = ['/']) {
   return render(
     <ThemeProvider theme={appTheme}>
       <QueryClientProvider
@@ -57,7 +58,7 @@ function mount(content: ReactNode) {
           })
         }
       >
-        {content}
+        <MemoryRouter initialEntries={initialEntries}>{content}</MemoryRouter>
       </QueryClientProvider>
     </ThemeProvider>,
   );
@@ -271,6 +272,29 @@ it('sin comprobante_egreso.anular (supervisor) el detalle no ofrece revertir el 
   // La fila del pago vigente se muestra, sin la acción de revertir
   expect(await screen.findByText('$0,10')).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Revertir pago' })).toBeNull();
+});
+
+it('abre el detalle del gasto que pide la URL (desde un recibo o egreso automático)', async () => {
+  vi.spyOn(api, 'fetchExpenses').mockResolvedValue({
+    items: [],
+    total: 0,
+    page: 1,
+    pageSize: 15,
+    totalPages: 1,
+  });
+  vi.spyOn(api, 'fetchExpensesSummary').mockResolvedValue({
+    totalAmount: '0.00',
+    totalPaid: '0.00',
+    totalPending: '0.00',
+  } as never);
+  vi.spyOn(api, 'fetchExpenseCategories').mockResolvedValue(categories);
+  const byId = vi.spyOn(api, 'fetchExpenseById').mockResolvedValue(expense);
+  mount(withAuth(<ExpensesPage />, [SYSTEM_PERMISSIONS.EXPENSES_MANAGE]), [
+    '/expenses?gasto=expense',
+  ]);
+  expect(await screen.findByText('Detalle de Gasto e Historial de Pagos')).toBeInTheDocument();
+  expect(byId).toHaveBeenCalledWith('expense');
+  expect(await screen.findByText('$0,10')).toBeInTheDocument();
 });
 
 it('lista las causaciones sin proveedor y asigna uno con confirmación', async () => {

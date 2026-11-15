@@ -23,6 +23,7 @@ import { AgingSummaryCards } from '../../../components/AgingSummaryCards';
 import { ThirdPartyAutocomplete } from '../../third-parties/components/ThirdPartyAutocomplete';
 import { PayableStatementTable } from '../components/PayableStatementTable';
 import { PayableMovementsDialog } from '../components/PayableMovementsDialog';
+import { useLinkedDocumentParam } from '../../../hooks/useLinkedDocumentParam';
 import { ExpenseMovementsDialog } from '../../expenses/components/ExpenseMovementsDialog';
 import { DateField } from '../../../components/DateField';
 
@@ -39,6 +40,8 @@ export function PayablesPage() {
   const [query, setQuery] = useState<PayableStatementFilters | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [detail, setDetail] = useState<PayableStatementItemDto | null>(null);
+  // «Ir a la cuenta por pagar» desde un recibo automático abre sus pagos sin elegir proveedor
+  const [linkedPayableId, clearLinkedPayable] = useLinkedDocumentParam('cxp');
 
   const { data, isFetching, isError, error } = useQuery({
     queryKey: ['payables-statement', query],
@@ -150,6 +153,9 @@ export function PayablesPage() {
       )}
       {detail?.documentType === 'CAUSACION_GASTO' && (
         <ExpenseMovementsDialog expenseId={detail.documentId} onClose={() => setDetail(null)} />
+      )}
+      {!detail && linkedPayableId && (
+        <PayableMovementsDialog payableId={linkedPayableId} onClose={clearLinkedPayable} />
       )}
     </Box>
   );

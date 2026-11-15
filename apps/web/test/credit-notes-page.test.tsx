@@ -144,7 +144,10 @@ const mockCancelledSale: SaleDto = {
   ],
 };
 
-const renderCreditNotesPage = (permissions: string[] = [SYSTEM_PERMISSIONS.SALES_READ]) => {
+const renderCreditNotesPage = (
+  permissions: string[] = [SYSTEM_PERMISSIONS.SALES_READ],
+  initialEntries: string[] = ['/'],
+) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
   });
@@ -171,7 +174,7 @@ const renderCreditNotesPage = (permissions: string[] = [SYSTEM_PERMISSIONS.SALES
     <QueryClientProvider client={queryClient}>
       <ThemeProvider theme={appTheme}>
         <AuthContext.Provider value={authValue}>
-          <MemoryRouter>
+          <MemoryRouter initialEntries={initialEntries}>
             <CreditNotesPage />
           </MemoryRouter>
         </AuthContext.Provider>
@@ -223,6 +226,21 @@ describe('CreditNotesPage (REQ-005)', () => {
     await waitFor(() => {
       expect(screen.queryByTestId('credit-note-detail-dialog')).not.toBeInTheDocument();
     });
+  });
+
+  it('abre la nota crédito que pide la URL (desde un recibo o egreso automático)', async () => {
+    renderCreditNotesPage([SYSTEM_PERMISSIONS.SALES_READ], ['/credit-notes?nota=NC-000001']);
+    expect(await screen.findByText('Detalle de Nota Crédito NC-000001')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Cerrar' }));
+    await waitFor(() =>
+      expect(screen.queryByTestId('credit-note-detail-dialog')).not.toBeInTheDocument(),
+    );
+  });
+
+  it('avisa cuando la nota crédito pedida por la URL no existe', async () => {
+    renderCreditNotesPage([SYSTEM_PERMISSIONS.SALES_READ], ['/credit-notes?nota=NC-999999']);
+    expect(await screen.findByText('No se encontró la nota crédito NC-999999.')).toBeInTheDocument();
+    expect(screen.queryByTestId('credit-note-detail-dialog')).toBeNull();
   });
 
   it('permite anular una nota confirmada con motivo obligatorio cuando tiene SALES_CANCEL', async () => {

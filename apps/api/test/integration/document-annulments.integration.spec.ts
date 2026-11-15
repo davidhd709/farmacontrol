@@ -292,6 +292,19 @@ describe('Anulación de nota crédito, recibo de caja y comprobante de egreso', 
         .set('Cookie', adminCookie)
         .send({ reason: 'Abono duplicado' })
         .expect(200);
+      // El egreso automático de la reversión identifica al cliente y abre su cuenta por cobrar
+      const reversalDoc = await prisma.treasuryDocument.findFirstOrThrow({
+        where: { referenceDocumentType: 'RECEIVABLE_PAYMENT_REVERSAL', referenceDocumentId: p2.id },
+      });
+      const reversalDto = await request(app.getHttpServer())
+        .get(`/api/v1/treasury/documents/${reversalDoc.id}`)
+        .set('Cookie', adminCookie)
+        .expect(200);
+      expect(reversalDto.body).toMatchObject({
+        origin: 'AUTOMATICO',
+        thirdPartyName: (await prisma.customer.findUniqueOrThrow({ where: { id: customerId } })).name,
+        sourceDocument: { kind: 'CUENTA_POR_COBRAR', id: r2.id, number: second.invoiceNumber },
+      });
       const cashBefore = Number(await cashBalance());
 
       const manualRoute = await post(`treasury/cash-receipts/${receipt.body.id}/cancel`, { reason: 'Error' });

@@ -14,7 +14,7 @@ import type {
   TreasuryDocumentFilters,
   UpdateBankAccountDto,
 } from '@farmacia/contracts';
-import { apiRequest } from '../../../api/http-client';
+import { apiRequest, downloadFile } from '../../../api/http-client';
 
 export interface MovementFilterParams {
   fromDate?: string;
@@ -93,6 +93,18 @@ export async function getTreasuryDocuments(
   return apiRequest<PaginatedResponse<TreasuryDocumentDto>>(
     `treasury/documents?${query.toString()}`,
   );
+}
+
+/** Excel con los mismos filtros del listado, sin paginar */
+export async function exportTreasuryDocuments(
+  params: Omit<TreasuryDocumentFilters, 'page' | 'pageSize'>,
+  filename: string,
+): Promise<void> {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== '') query.set(key, String(value));
+  }
+  await downloadFile(`treasury/documents/export?${query.toString()}`, filename);
 }
 
 export async function getTreasuryDocument(id: string): Promise<TreasuryDocumentDto> {

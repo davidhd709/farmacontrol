@@ -1,4 +1,8 @@
-import { SYSTEM_PERMISSIONS, type TreasuryDocumentDto } from '@farmacia/contracts';
+import {
+  SYSTEM_PERMISSIONS,
+  type TreasuryDocumentDto,
+  type TreasurySourceDocumentDto,
+} from '@farmacia/contracts';
 
 /**
  * Qué se puede hacer con un recibo o un egreso y por qué (rediseño, fase 4). Repite las reglas
@@ -54,6 +58,37 @@ const SOURCE_PAGES: Record<string, { label: string; to: string }> = {
   EXPENSE_PAYMENT_REVERSAL: { label: 'Ir a gastos', to: '/expenses' },
 };
 
+/** Enlace al documento exacto que emitió el automático; cada página lo abre desde la URL */
+function sourceLink(source: TreasurySourceDocumentDto): { label: string; to: string } {
+  const id = encodeURIComponent(source.id);
+  switch (source.kind) {
+    case 'NOTA_CREDITO':
+      return {
+        label: `Abrir la nota crédito ${source.number ?? ''}`.trim(),
+        to: `/credit-notes?nota=${encodeURIComponent(source.number ?? '')}`,
+      };
+    case 'CUENTA_POR_COBRAR':
+      return {
+        label: source.number
+          ? `Abrir la cuenta por cobrar de ${source.number}`
+          : 'Abrir la cuenta por cobrar',
+        to: `/receivables?cxc=${id}`,
+      };
+    case 'CUENTA_POR_PAGAR':
+      return {
+        label: source.number
+          ? `Abrir la cuenta por pagar de ${source.number}`
+          : 'Abrir la cuenta por pagar',
+        to: `/payables?cxp=${id}`,
+      };
+    case 'GASTO':
+      return {
+        label: source.number ? `Abrir el gasto ${source.number}` : 'Abrir el gasto',
+        to: `/expenses?gasto=${id}`,
+      };
+  }
+}
+
 /** «la nota crédito NC-000012», «la venta FV-000034» o, sin referencia, un movimiento de caja */
 export function treasuryOriginDescription(doc: TreasuryDocumentDto): string {
   const type = doc.referenceDocumentType;
@@ -61,6 +96,14 @@ export function treasuryOriginDescription(doc: TreasuryDocumentDto): string {
   const label = TREASURY_REFERENCE_LABELS[type] ?? `el documento ${type}`;
   // La anulación de un recibo o egreso guarda el id interno: no se muestra
   if (type === 'TREASURY_DOCUMENT_CANCEL' || !doc.referenceDocumentId) return label;
+  // Las referencias por id interno se muestran con el número del documento que las resolvió
+  const source = doc.sourceDocument;
+  if (source) {
+    if (!source.number) return label;
+    const invoice = source.kind === 'CUENTA_POR_COBRAR' || source.kind === 'CUENTA_POR_PAGAR';
+    return invoice ? `${label} de la factura ${source.number}` : `${label} ${source.number}`;
+  }
+  if (/^[0-9a-f-]{36}$/i.test(doc.referenceDocumentId)) return label;
   return `${label} ${doc.referenceDocumentId}`;
 }
 
@@ -79,7 +122,9 @@ export function treasuryDocumentActions(
   }
   if (doc.origin === 'AUTOMATICO') {
     const type = doc.referenceDocumentType ?? '';
-    const page = SOURCE_PAGES[type] ?? (type ? null : { label: 'Ir a caja', to: '/cash' });
+    const page = doc.sourceDocument
+      ? sourceLink(doc.sourceDocument)
+      : (SOURCE_PAGES[type] ?? (type ? null : { label: 'Ir a caja', to: '/cash' }));
     return {
       ...none,
       restriction: `Lo generó ${treasuryOriginDescription(doc)}. Solo se imprime aquí: se corrige o anula desde ese documento.`,

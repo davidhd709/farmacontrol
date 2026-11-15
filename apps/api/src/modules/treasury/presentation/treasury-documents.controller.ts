@@ -8,13 +8,16 @@ import {
   NotFoundException,
   Param,
   Query,
+  Res,
   UseGuards,
   ParseUUIDPipe,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import {
   SYSTEM_PERMISSIONS,
   type PaginatedResponse,
   type TreasuryDocumentDto,
+  type TreasuryDocumentStatus,
   type TreasuryDocumentType,
 } from '@farmacia/contracts';
 import { TreasuryDocumentsService } from '../application/treasury-documents.service';
@@ -64,6 +67,7 @@ export class TreasuryDocumentsController {
   async list(
     @CurrentUser() user: AuthenticatedUserContext,
     @Query('type', new QueryFieldValidationPipe('type', 'text?')) type?: TreasuryDocumentType,
+    @Query('status', new QueryFieldValidationPipe('status', 'text?')) status?: TreasuryDocumentStatus,
     @Query('fromDate', new QueryFieldValidationPipe('fromDate', 'date?')) fromDate?: string,
     @Query('toDate', new QueryFieldValidationPipe('toDate', 'date?')) toDate?: string,
     @Query('search', new QueryFieldValidationPipe('search', 'text?')) search?: string,
@@ -76,6 +80,7 @@ export class TreasuryDocumentsController {
     try {
       return await this.documentsService.list({
         type,
+        status,
         fromDate,
         toDate,
         search,
@@ -85,6 +90,31 @@ export class TreasuryDocumentsController {
     } catch (error) {
       toHttp(error);
     }
+  }
+
+  /** Los mismos filtros del listado, sin paginar, en un libro de Excel */
+  @Get('export')
+  @RequireAnyPermissions(...READ_DOCUMENTS)
+  async export(
+    @CurrentUser() user: AuthenticatedUserContext,
+    @Res() res: Response,
+    @Query('type', new QueryFieldValidationPipe('type', 'text?')) type?: TreasuryDocumentType,
+    @Query('status', new QueryFieldValidationPipe('status', 'text?')) status?: TreasuryDocumentStatus,
+    @Query('fromDate', new QueryFieldValidationPipe('fromDate', 'date?')) fromDate?: string,
+    @Query('toDate', new QueryFieldValidationPipe('toDate', 'date?')) toDate?: string,
+    @Query('search', new QueryFieldValidationPipe('search', 'text?')) search?: string,
+  ): Promise<void> {
+    if (!canReadDocumentType(user.permissions, type)) {
+      throw new ForbiddenException('No tiene permiso para consultar ese tipo de documento.');
+    }
+    const buffer = await this.documentsService
+      .exportToExcel({ type, status, fromDate, toDate, search })
+      .catch(toHttp);
+    const name = type === 'RECIBO_CAJA' ? 'recibos_caja' : type === 'COMPROBANTE_EGRESO' ? 'comprobantes_egreso' : 'recibos_y_egresos';
+    const range = fromDate || toDate ? `_${fromDate ?? 'inicio'}_${toDate ?? 'hoy'}` : '';
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${name}${range}.xlsx"`);
+    res.send(buffer);
   }
 
   @Get(':id')

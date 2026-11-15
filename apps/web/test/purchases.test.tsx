@@ -188,6 +188,28 @@ describe('Purchases Frontend (UX-15 & UX-16)', () => {
     });
   });
 
+  it('filtra por la factura que llega en la URL (enlace desde el Libro Diario)', async () => {
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <ThemeProvider theme={appTheme}>
+          <MemoryRouter initialEntries={['/purchases?q=FAC-2026-789']}>
+            <AuthContext.Provider
+              value={createMockAuthContext([SYSTEM_PERMISSIONS.PURCHASES_READ])}
+            >
+              <PurchasesListPage />
+            </AuthContext.Provider>
+          </MemoryRouter>
+        </ThemeProvider>
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByText('FAC-2026-789')).toBeInTheDocument();
+    expect(purchasesApi.fetchPurchases).toHaveBeenCalledWith(
+      expect.objectContaining({ invoiceNumber: 'FAC-2026-789' }),
+    );
+  });
+
   it('la compra y su nota débito se imprimen con el formato común y el membrete real (fase 4)', async () => {
     vi.spyOn(companyApi, 'fetchCompanyLetterhead').mockResolvedValue({
       company: {

@@ -1,6 +1,7 @@
 import { SYSTEM_PERMISSIONS } from '@farmacia/contracts';
 import { ExpensesWithoutSupplierDialog } from '../components/ExpensesWithoutSupplierDialog';
 import { usePermissions } from '../../auth/hooks/usePermissions';
+import { useLinkedDocumentParam } from '../../../hooks/useLinkedDocumentParam';
 import { ExpenseFormDialog } from '../components/ExpenseFormDialog';
 import { ExpenseReasonDialog } from '../components/ExpenseReasonDialog';
 import type { ExpenseReasonFormData } from '../validation/expense-reason.schema';
@@ -53,6 +54,7 @@ import {
   cancelExpense,
   reverseExpensePayment,
   fetchExpenseCategories,
+  fetchExpenseById,
 } from '../api/expenses.api';
 import { ExpenseCategoriesModal } from '../components/ExpenseCategoriesModal';
 import { localIsoDate } from '../../../components/QuickDateRange';
@@ -148,6 +150,29 @@ export const ExpensesPage: React.FC = () => {
   useEffect(() => {
     loadExpenses();
   }, [loadExpenses]);
+
+  // «Ir al gasto» desde un recibo o egreso automático: ?gasto=<id> abre su detalle e historial
+  const [linkedExpenseId, clearLinkedExpense] = useLinkedDocumentParam('gasto');
+  useEffect(() => {
+    if (!linkedExpenseId) return;
+    let active = true;
+    fetchExpenseById(linkedExpenseId)
+      .then((expense) => {
+        if (!active) return;
+        setSelectedExpense(expense);
+        setDetailModalOpen(true);
+      })
+      .catch((e: unknown) => {
+        if (active) setError(e instanceof Error ? e.message : 'No se encontró el gasto.');
+      })
+      .finally(() => {
+        if (active) clearLinkedExpense();
+      });
+    return () => {
+      active = false;
+    };
+    // Solo importa el id pedido: clearLinkedExpense cambia en cada render
+  }, [linkedExpenseId]);
 
   // Acciones de presets de fechas
   const setTodayPreset = () => {

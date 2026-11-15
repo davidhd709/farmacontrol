@@ -83,6 +83,72 @@ describe('Recibos de caja y comprobantes de egreso', () => {
     expect(spy).toHaveBeenCalledWith(expect.objectContaining({ type: 'RECIBO_CAJA' }));
   });
 
+  it('filtra por estado desde la URL y exporta a Excel exactamente lo filtrado', async () => {
+    const list = vi.spyOn(treasuryApi, 'getTreasuryDocuments').mockResolvedValue({
+      items: [{ ...egreso, status: 'ANULADO' as const }],
+      total: 1,
+      page: 1,
+      pageSize: 25,
+      totalPages: 1,
+    });
+    const exportSpy = vi.spyOn(treasuryApi, 'exportTreasuryDocuments').mockResolvedValue();
+    renderPage(<DisbursementVouchersPage />, ADMIN_PERMISSIONS, [
+      '/?estado=ANULADO&desde=2026-10-01&hasta=2026-10-31',
+    ]);
+    expect(await screen.findByText('Air-e S.A. E.S.P.')).toBeInTheDocument();
+    expect(list).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'COMPROBANTE_EGRESO',
+        status: 'ANULADO',
+        fromDate: '2026-10-01',
+        toDate: '2026-10-31',
+      }),
+    );
+    expect(screen.getByTestId('treasury-status-filter')).toHaveValue('ANULADO');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Exportar a Excel (1)' }));
+    await waitFor(() =>
+      expect(exportSpy).toHaveBeenCalledWith(
+        {
+          type: 'COMPROBANTE_EGRESO',
+          status: 'ANULADO',
+          fromDate: '2026-10-01',
+          toDate: '2026-10-31',
+          search: undefined,
+        },
+        'comprobantes_egreso_2026-10-01_2026-10-31.xlsx',
+      ),
+    );
+  });
+
+  it('sin documentos no se ofrece exportar', async () => {
+    vi.spyOn(treasuryApi, 'getTreasuryDocuments').mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      pageSize: 25,
+      totalPages: 1,
+    });
+    renderPage(<CashReceiptsPage />);
+    expect(await screen.findByRole('button', { name: 'Exportar a Excel (0)' })).toBeDisabled();
+  });
+
+  it('si el servidor rechaza la exportación muestra su motivo', async () => {
+    vi.spyOn(treasuryApi, 'getTreasuryDocuments').mockResolvedValue({
+      items: [egreso],
+      total: 1,
+      page: 1,
+      pageSize: 25,
+      totalPages: 1,
+    });
+    vi.spyOn(treasuryApi, 'exportTreasuryDocuments').mockRejectedValue(
+      new Error('La consulta tiene 6000 documentos y la exportación admite hasta 5000.'),
+    );
+    renderPage(<DisbursementVouchersPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Exportar a Excel (1)' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('admite hasta 5000');
+  });
+
   it('lista el comprobante con su tercero y muestra el detalle imprimible', async () => {
     vi.spyOn(treasuryApi, 'getTreasuryDocuments').mockResolvedValue({
       items: [egreso],
@@ -732,6 +798,31 @@ describe('Rediseño fase 4: acciones de cada documento y su motivo', () => {
     expect(screen.queryByRole('button', { name: 'Anular Documento' })).toBeNull();
     expect(screen.getByTestId('treasury-doc-origin')).toHaveTextContent(
       'Emitido automáticamente por el gasto exp-1',
+    );
+  });
+
+  it('un automático con documento de origen identificado enlaza a ese documento exacto', async () => {
+    list([
+      {
+        ...egreso,
+        referenceDocumentType: 'EXPENSE_PAYMENT_REVERSAL',
+        referenceDocumentId: '5b0c1f3e-8a7d-4c2b-9e6f-1a2b3c4d5e6f',
+        sourceDocument: { kind: 'GASTO', id: 'f1e2d3c4-b5a6-4978-8a9b-0c1d2e3f4a5b', number: 'G-0012' },
+        status: 'VIGENTE',
+        cancelledAt: null,
+        cancelledByName: null,
+        cancellationReason: null,
+      },
+    ]);
+    renderPage(<DisbursementVouchersPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'CE-000001' }));
+    const notice = await screen.findByTestId('treasury-actions-restriction');
+    // El id interno no se muestra: se nombra el gasto por su número
+    expect(notice).toHaveTextContent('Lo generó la reversión del pago del gasto G-0012');
+    expect(notice).not.toHaveTextContent('5b0c1f3e');
+    expect(within(notice).getByRole('link', { name: 'Abrir el gasto G-0012' })).toHaveAttribute(
+      'href',
+      '/expenses?gasto=f1e2d3c4-b5a6-4978-8a9b-0c1d2e3f4a5b',
     );
   });
 

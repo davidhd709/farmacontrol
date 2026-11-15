@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useLinkedDocumentParam } from '../../../hooks/useLinkedDocumentParam';
 import {
   Box,
   Typography,
@@ -67,6 +68,8 @@ export const CreditNotesPage: React.FC = () => {
 
   // Modal Detalle
   const [selectedNote, setSelectedNote] = useState<CreditNoteDto | null>(null);
+  // «Ir a la nota crédito» desde un recibo o egreso automático: ?nota=NC-000012
+  const [linkedNumber, clearLinkedNumber] = useLinkedDocumentParam('nota');
 
   // Diálogo Anular Nota
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
@@ -97,6 +100,15 @@ export const CreditNotesPage: React.FC = () => {
   useEffect(() => {
     loadCreditNotes();
   }, [loadCreditNotes]);
+
+  const linkedNote = linkedNumber
+    ? (creditNotes.find((note) => note.creditNoteNumber === linkedNumber) ?? null)
+    : null;
+  const shownNote = selectedNote ?? linkedNote;
+  const closeNote = () => {
+    setSelectedNote(null);
+    clearLinkedNumber();
+  };
 
   // Filtrado reactivo en memoria
   const filteredNotes = useMemo(() => {
@@ -213,6 +225,11 @@ export const CreditNotesPage: React.FC = () => {
       {errorMsg && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setErrorMsg(null)}>
           {errorMsg}
+        </Alert>
+      )}
+      {linkedNumber && !loading && !linkedNote && (
+        <Alert severity="warning" sx={{ mb: 2 }} onClose={clearLinkedNumber}>
+          No se encontró la nota crédito {linkedNumber}.
         </Alert>
       )}
 
@@ -436,18 +453,18 @@ export const CreditNotesPage: React.FC = () => {
 
       {/* Modal Imprimible de Nota Crédito (REQ-010) */}
       <CreditNotePrintDialog
-        open={Boolean(selectedNote)}
-        creditNote={selectedNote}
-        onClose={() => setSelectedNote(null)}
+        open={Boolean(shownNote)}
+        creditNote={shownNote}
+        onClose={closeNote}
         actions={
-          selectedNote?.status === 'CONFIRMADA' ? (
+          shownNote?.status === 'CONFIRMADA' ? (
             <PermissionGate permission={SYSTEM_PERMISSIONS.SALES_CANCEL}>
               <Button
                 variant="outlined"
                 color="error"
                 onClick={() => {
-                  const note = selectedNote;
-                  setSelectedNote(null);
+                  const note = shownNote;
+                  closeNote();
                   handleOpenCancel(note);
                 }}
               >

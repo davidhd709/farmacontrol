@@ -102,3 +102,36 @@ export async function apiRequestData<T>(path: string, options: RequestInit = {})
   }
   return response.data;
 }
+
+/**
+ * Descarga un archivo del API (exportaciones a Excel) con la sesión y los errores de siempre: un
+ * 401 cierra la sesión y el mensaje del servidor llega al usuario.
+ */
+export async function downloadFile(path: string, filename: string): Promise<void> {
+  let response: Response;
+  try {
+    response = await fetch(`${apiUrl}/${path.replace(/^\//, '')}`, { credentials: 'include' });
+  } catch {
+    throw new ApiError(
+      'No fue posible comunicarse con el servidor. Verifica tu conexión e intenta nuevamente.',
+      0,
+    );
+  }
+  if (response.status === 401) unauthorizedHandler?.();
+  if (!response.ok) {
+    const payload = await parseResponse(response).catch(() => undefined);
+    throw new ApiError(
+      getErrorMessage(payload, 'No fue posible descargar el archivo.'),
+      response.status,
+      payload,
+    );
+  }
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}

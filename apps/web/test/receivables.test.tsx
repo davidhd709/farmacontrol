@@ -49,6 +49,7 @@ const renderPage = (
     SYSTEM_PERMISSIONS.RECEIVABLES_MANAGE,
     SYSTEM_PERMISSIONS.CASH_RECEIPTS_ANNUL,
   ],
+  initialEntries: string[] = ['/'],
 ) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -56,7 +57,7 @@ const renderPage = (
   return render(
     <ThemeProvider theme={appTheme}>
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
+        <MemoryRouter initialEntries={initialEntries}>
           {withAuth(<ReceivablesPage />, permissions)}
         </MemoryRouter>
       </QueryClientProvider>
@@ -104,6 +105,13 @@ describe('ReceivablesPage (Frontend Cuentas por Cobrar — UX-21)', () => {
         { date: '2026-09-10T10:00:00.000Z', type: 'ABONO', documentNumber: 'RC-000007', description: 'Abono', paymentMethod: 'EFECTIVO', paymentId: 'pay-1', isReversed: false, charge: '0.00', credit: '50000.00', balance: '100000.00' },
       ],
     });
+
+  it('abre los abonos de la cuenta por cobrar que pide la URL', async () => {
+    const movements = movementsWithPayment();
+    renderPage(undefined, ['/receivables?cxc=rec-1']);
+    expect(await screen.findByText('RC-000007')).toBeInTheDocument();
+    expect(movements).toHaveBeenCalledWith('rec-1');
+  });
 
   it('es un módulo exclusivamente de consulta: no muestra botones para crear recibos ni revertir abonos (REQ-001)', async () => {
     movementsWithPayment();

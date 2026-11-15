@@ -134,7 +134,7 @@ describe('Libro Diario', () => {
 
   it('muestra fecha dd/mm/aaaa, estado en español, el documento legible con enlace y la paginación en español', async () => {
     const withDoc = entry({
-      sourceDocument: { number: 'FAC-000007', href: '/sales?buscar=FAC-000007' },
+      sourceDocument: { number: 'FAC-000007', href: '/sales/sale-7' },
     });
     const annulled = entry({ id: 'je-9', reversedByEntryId: 'je-10', sourceDocument: null });
     vi.spyOn(accountingApi, 'fetchJournalEntries').mockResolvedValue({
@@ -147,7 +147,7 @@ describe('Libro Diario', () => {
     renderPage([SYSTEM_PERMISSIONS.ACCOUNTING_READ]);
     const table = await loadedTable('FAC-000007');
     const link = table.getByRole('link', { name: 'FAC-000007' });
-    expect(link).toHaveAttribute('href', '/sales?buscar=FAC-000007');
+    expect(link).toHaveAttribute('href', '/sales/sale-7');
     expect(screen.queryByText(withDoc.sourceId)).toBeNull();
     expect(screen.getAllByText('02/11/2026')).toHaveLength(2);
     expect(screen.getByText('Contabilizado')).toBeInTheDocument();
