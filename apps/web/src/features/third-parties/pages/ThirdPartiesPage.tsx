@@ -216,7 +216,7 @@ export const ThirdPartiesPage: React.FC = () => {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
             <PeopleIcon color="primary" sx={{ fontSize: 32 }} />
             <Typography component="h1" variant="h5" sx={{ fontWeight: 700 }} color="text.primary">
-              Directorio de Terceros
+              Clientes, proveedores y otros
             </Typography>
           </Box>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>

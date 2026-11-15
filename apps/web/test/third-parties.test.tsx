@@ -115,7 +115,9 @@ describe('ThirdPartiesPage (Gestión Unificada de Terceros)', () => {
   it('debe renderizar el título de la página, los tabs de rol y la lista de terceros', async () => {
     renderComponent();
 
-    expect(screen.getByText('Directorio de Terceros')).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Clientes, proveedores y otros' }),
+    ).toBeInTheDocument();
     expect(
       screen.getByText('Gestión centralizada de clientes, proveedores, colaboradores y beneficiarios')
     ).toBeInTheDocument();

@@ -117,7 +117,7 @@ export function CategoriesPage() {
             <HomeBackButton />
             <Box>
               <Typography component="h1" variant="h4" sx={{ fontWeight: 800, color: 'text.primary' }}>
-                Categorías de Productos
+                Categorías
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                 Administra las clasificaciones y familias de productos del inventario farmacéutico.

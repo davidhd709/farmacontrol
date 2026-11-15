@@ -101,7 +101,7 @@ describe('Pantalla de Categorías (UX-08)', () => {
     expect(screen.getByText('Antibióticos')).toBeInTheDocument();
     expect(screen.getByText('Cuidado Personal')).toBeInTheDocument();
     expect(screen.getByText('Medicamentos para el dolor')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Categorías de Productos' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Categorías' })).toBeInTheDocument();
   });
 
   it('permite buscar categorías mediante el campo de búsqueda', async () => {

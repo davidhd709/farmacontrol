@@ -189,7 +189,7 @@ export const UnitsOfMeasurePage: React.FC = () => {
           <HomeBackButton />
           <Box>
             <Typography variant="h5" component="h1" sx={{ fontWeight: 800 }}>
-              Unidades de Medida y Presentaciones
+              Unidades de medida
             </Typography>
             <Typography variant="body2" color="text.secondary">
               Gestión centralizada de unidades base farmacéuticas, empaques y retail (snacks, bebidas, etc.).
