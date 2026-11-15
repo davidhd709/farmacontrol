@@ -216,7 +216,9 @@ export const ExpensesPage: React.FC = () => {
       await cancelExpense(selectedExpense.id, {
         cancellationReason: reason.trim(),
       });
-      setSuccess('Gasto anulado exitosamente con reversión contable y reintegro a tesorería.');
+      setSuccess(
+        `${selectedExpense.documentNumber ? `Gasto ${selectedExpense.documentNumber}` : 'Gasto'} anulado: se registró el asiento que reversa la causación.`,
+      );
       setCancelModalOpen(false);
       await loadExpenses();
     } catch (err: any) {
@@ -239,7 +241,7 @@ export const ExpensesPage: React.FC = () => {
       const updated = await reverseExpensePayment(selectedPaymentId, {
         reversalReason: reason.trim(),
       });
-      setSuccess('Pago revertido exitosamente.');
+      setSuccess('Pago del gasto revertido: el gasto recuperó su saldo pendiente.');
       setSelectedExpense(updated);
       setReversePaymentModalOpen(false);
       await loadExpenses();
@@ -791,6 +793,7 @@ export const ExpensesPage: React.FC = () => {
       {cancelModalOpen && (
         <ExpenseReasonDialog
           kind="cancel"
+          expense={selectedExpense}
           onClose={() => setCancelModalOpen(false)}
           onSubmit={handleCancelSubmit}
         />
@@ -798,6 +801,8 @@ export const ExpensesPage: React.FC = () => {
       {reversePaymentModalOpen && (
         <ExpenseReasonDialog
           kind="reverse"
+          expense={selectedExpense}
+          payment={selectedExpense?.payments.find((p) => p.id === selectedPaymentId) ?? null}
           onClose={() => setReversePaymentModalOpen(false)}
           onSubmit={handleReversePaymentSubmit}
         />

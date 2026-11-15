@@ -1,6 +1,6 @@
 import { ThemeProvider } from '@mui/material';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -269,21 +269,26 @@ describe('CreditNotesPage (REQ-005)', () => {
 
     fireEvent.click(cancelBtn);
 
-    expect(await screen.findByTestId('cancel-credit-note-dialog')).toBeInTheDocument();
+    const dialog = await screen.findByRole('dialog', {
+      name: '¿Anular la nota crédito NC-000001?',
+    });
+    expect(within(dialog).getByTestId('confirm-subject')).toHaveTextContent('NC-000001');
+    expect(within(dialog).getByTestId('confirm-effects')).toHaveTextContent(
+      'Se reversa su asiento contable.',
+    );
 
-    // Motivo menor a 5 caracteres no permite confirmar
-    const reasonInput = screen.getByLabelText(/Motivo de anulación/);
+    // Motivo menor a 5 caracteres no se envía
+    const reasonInput = within(dialog).getByLabelText(/Motivo de anulación/);
     fireEvent.change(reasonInput, { target: { value: 'Err' } });
-
-    const confirmBtn = screen.getByRole('button', { name: 'Confirmar Anulación' });
-    expect(confirmBtn).toBeDisabled();
+    const confirmBtn = within(dialog).getByRole('button', { name: 'Anular nota crédito' });
+    fireEvent.click(confirmBtn);
+    expect(await within(dialog).findByText(/al menos 5 caracteres/)).toBeInTheDocument();
+    expect(cancelSpy).not.toHaveBeenCalled();
 
     // Con motivo válido
     fireEvent.change(reasonInput, {
       target: { value: 'Error en digitación de unidades devueltas' },
     });
-    expect(confirmBtn).not.toBeDisabled();
-
     fireEvent.click(confirmBtn);
 
     await waitFor(() => {

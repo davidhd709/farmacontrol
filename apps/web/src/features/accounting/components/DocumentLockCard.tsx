@@ -18,6 +18,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchDocumentLock, setDocumentLock } from '../api/accounting.api';
 import { formatDate, formatDateTime } from '../../../utils/date-format';
 import { DateField } from '../../../components/DateField';
+import { ConfirmDialog } from '../../../components/ConfirmDialog';
 
 /**
  * Bloqueo de documentos por fecha: distinto del cierre de período. Impide registrar o
@@ -27,7 +28,8 @@ export function DocumentLockCard({ canManage }: { canManage: boolean }) {
   const queryClient = useQueryClient();
   const [lockedThrough, setLockedThrough] = useState('');
   const [reason, setReason] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['document-lock'],
@@ -36,13 +38,17 @@ export function DocumentLockCard({ canManage }: { canManage: boolean }) {
 
   const mutation = useMutation({
     mutationFn: setDocumentLock,
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       setLockedThrough('');
       setReason('');
-      setError(null);
+      setConfirmOpen(false);
+      setNotice(
+        variables.lockedThrough
+          ? `Documentos bloqueados hasta el ${formatDate(variables.lockedThrough)}.`
+          : 'Bloqueo retirado.',
+      );
       queryClient.invalidateQueries({ queryKey: ['document-lock'] });
     },
-    onError: (e: Error) => setError(e.message),
   });
 
   const current = data?.current?.lockedThrough ?? null;
@@ -80,7 +86,9 @@ export function DocumentLockCard({ canManage }: { canManage: boolean }) {
             spacing={2}
             onSubmit={(e) => {
               e.preventDefault();
-              mutation.mutate({ lockedThrough: lockedThrough || null, reason: reason.trim() });
+              // El bloqueo afecta a todos los módulos: se confirma con su alcance antes de aplicarlo
+              setNotice(null);
+              setConfirmOpen(true);
             }}
           >
             <DateField
@@ -116,7 +124,38 @@ export function DocumentLockCard({ canManage }: { canManage: boolean }) {
             </Box>
           </Stack>
         )}
-        {error && <Alert severity="error">{error}</Alert>}
+        {notice && (
+          <Alert severity="success" role="status" onClose={() => setNotice(null)}>
+            {notice}
+          </Alert>
+        )}
+        <ConfirmDialog
+          open={confirmOpen}
+          operationType={lockedThrough ? 'close' : 'confirm'}
+          title={lockedThrough ? '¿Aplicar el bloqueo de documentos?' : '¿Retirar el bloqueo?'}
+          subject={
+            lockedThrough
+              ? `Bloquear hasta el ${formatDate(lockedThrough)} (incluido)`
+              : `Bloqueo vigente hasta el ${current ? formatDate(current) : '—'}`
+          }
+          effects={
+            lockedThrough
+              ? [
+                  `Ningún módulo podrá registrar ni reversar movimientos con fecha hasta el ${formatDate(lockedThrough)}.`,
+                  'Las compras o gastos pendientes de esas fechas se registran en el período siguiente.',
+                  `Queda en el historial con el motivo «${reason.trim()}».`,
+                ]
+              : [
+                  'Se vuelven a aceptar movimientos de cualquier fecha de un período abierto.',
+                  `Queda en el historial con el motivo «${reason.trim()}».`,
+                ]
+          }
+          confirmText={lockedThrough ? 'Aplicar bloqueo' : 'Retirar bloqueo'}
+          onConfirm={() =>
+            mutation.mutateAsync({ lockedThrough: lockedThrough || null, reason: reason.trim() })
+          }
+          onCancel={() => setConfirmOpen(false)}
+        />
 
         {data && data.history.length > 0 && (
           <TableContainer>

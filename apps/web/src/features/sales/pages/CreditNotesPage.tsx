@@ -17,10 +17,6 @@ import {
   Chip,
   CircularProgress,
   Alert,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Tooltip,
   Stack,
 } from '@mui/material';
@@ -30,6 +26,7 @@ import { fetchCreditNotes, cancelCreditNote } from '../api/sales.api';
 import { HomeBackButton } from '../../../components/HomeBackButton';
 import { PermissionGate } from '../../auth/components/PermissionGate';
 import { SweetModal } from '../../../components/SweetModal';
+import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { formatDateTime } from '../../../utils/date-format';
 import { FilterBar } from '../../../components/layout/FilterBar';
 import { DateField } from '../../../components/DateField';
@@ -53,6 +50,23 @@ function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
+/** Efectos de anular una nota crédito (credit-notes.service: cancelCreditNote) */
+function creditNoteCancelEffects(note: CreditNoteDto): string[] {
+  const effects: string[] = [];
+  if (note.restock)
+    effects.push('La mercancía reintegrada vuelve a salir de sus lotes originales.');
+  if (note.refundMethod === 'CREDITO_CARTERA') {
+    effects.push('La cartera del cliente recupera el saldo que la nota descontó.');
+  } else if (note.refundMethod === 'TRANSFERENCIA') {
+    effects.push('Se registra de nuevo en el banco el valor que se reembolsó.');
+  } else {
+    effects.push('Vuelve a la caja el efectivo que se reembolsó.');
+  }
+  effects.push('Se reversa su asiento contable.');
+  effects.push('La nota queda anulada con su motivo; no se puede deshacer.');
+  return effects;
+}
+
 export const CreditNotesPage: React.FC = () => {
   const navigate = useNavigate();
   const [creditNotes, setCreditNotes] = useState<CreditNoteDto[]>([]);
@@ -74,8 +88,6 @@ export const CreditNotesPage: React.FC = () => {
   // Diálogo Anular Nota
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [noteToCancel, setNoteToCancel] = useState<CreditNoteDto | null>(null);
-  const [cancelReason, setCancelReason] = useState('');
-  const [actionLoading, setActionLoading] = useState(false);
 
   // Diálogo Nueva Nota Crédito
   const [selectSaleOpen, setSelectSaleOpen] = useState(false);
@@ -147,29 +159,17 @@ export const CreditNotesPage: React.FC = () => {
 
   const handleOpenCancel = (note: CreditNoteDto) => {
     setNoteToCancel(note);
-    setCancelReason('');
     setCancelDialogOpen(true);
   };
 
-  const handleConfirmCancel = async () => {
+  // La confirmación común exige el motivo y muestra el error dentro del diálogo
+  const handleConfirmCancel = async (reason?: string) => {
     if (!noteToCancel) return;
-    if (cancelReason.trim().length < 5) {
-      setErrorMsg('El motivo de anulación debe tener al menos 5 caracteres.');
-      return;
-    }
-
-    setActionLoading(true);
-    try {
-      const cancelled = await cancelCreditNote(noteToCancel.id, cancelReason.trim());
-      setCancelDialogOpen(false);
-      setNoteToCancel(null);
-      setToastMsg(`Nota crédito ${cancelled.creditNoteNumber} anulada correctamente.`);
-      await loadCreditNotes();
-    } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Error al anular la nota crédito');
-    } finally {
-      setActionLoading(false);
-    }
+    const cancelled = await cancelCreditNote(noteToCancel.id, (reason ?? '').trim());
+    setCancelDialogOpen(false);
+    setNoteToCancel(null);
+    setToastMsg(`Nota crédito ${cancelled.creditNoteNumber} anulada correctamente.`);
+    await loadCreditNotes();
   };
 
   const handleSelectSale = (sale: SaleDto) => {
@@ -481,57 +481,29 @@ export const CreditNotesPage: React.FC = () => {
         }
       />
 
-      {/* Diálogo de Anulación de Nota Crédito */}
-      <Dialog
+      {/* Anulación de nota crédito con la confirmación común */}
+      <ConfirmDialog
         open={cancelDialogOpen}
-        onClose={() => !actionLoading && setCancelDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-        data-testid="cancel-credit-note-dialog"
-      >
-        <DialogTitle sx={{ fontWeight: 'bold', color: 'error.main' }}>
-          Anular Nota Crédito {noteToCancel?.creditNoteNumber}
-        </DialogTitle>
-        <DialogContent dividers>
-          <Alert severity="warning" sx={{ mb: 2 }}>
-            <strong>ADVERTENCIA:</strong> Anular esta nota crédito reversará sus efectos: si
-            reintegró inventario la mercancía volverá a salir de los lotes originales, si se
-            reembolsó dinero o cartera se reversará el saldo correspondiente y se reversará su
-            asiento contable. Esta operación es definitiva.
-          </Alert>
-
-          <TextField
-            autoFocus
-            label="Motivo de anulación *"
-            fullWidth
-            multiline
-            rows={3}
-            value={cancelReason}
-            onChange={(e) => setCancelReason(e.target.value)}
-            placeholder="Indica detalladamente por qué se anula esta devolución (mínimo 5 caracteres)…"
-            disabled={actionLoading}
-            error={cancelReason.length > 0 && cancelReason.trim().length < 5}
-            helperText={
-              cancelReason.length > 0 && cancelReason.trim().length < 5
-                ? 'El motivo debe tener al menos 5 caracteres.'
-                : undefined
-            }
-          />
-        </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button onClick={() => setCancelDialogOpen(false)} disabled={actionLoading}>
-            Cancelar
-          </Button>
-          <Button
-            variant="contained"
-            color="error"
-            onClick={handleConfirmCancel}
-            disabled={actionLoading || cancelReason.trim().length < 5}
-          >
-            {actionLoading ? 'Anulando…' : 'Confirmar Anulación'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        operationType="annul"
+        title={`¿Anular la nota crédito ${noteToCancel?.creditNoteNumber ?? ''}?`}
+        subject={
+          noteToCancel
+            ? [
+                noteToCancel.creditNoteNumber,
+                noteToCancel.saleInvoiceNumber ? `Factura ${noteToCancel.saleInvoiceNumber}` : null,
+                noteToCancel.customerName,
+                formatCurrency(noteToCancel.total),
+              ]
+                .filter(Boolean)
+                .join(' · ')
+            : null
+        }
+        effects={noteToCancel ? creditNoteCancelEffects(noteToCancel) : []}
+        reason={{ label: 'Motivo de anulación', minLength: 5 }}
+        confirmText="Anular nota crédito"
+        onConfirm={handleConfirmCancel}
+        onCancel={() => setCancelDialogOpen(false)}
+      />
 
       {/* Diálogo de selección de factura para nueva nota crédito */}
       <SelectSaleForCreditNoteDialog

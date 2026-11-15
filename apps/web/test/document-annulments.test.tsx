@@ -150,10 +150,18 @@ describe('Anulación de documentos en la web', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'RC-000001' }));
     const dialog = await screen.findByRole('dialog');
     fireEvent.click(within(dialog).getByRole('button', { name: /^Anular/ }));
-    fireEvent.change(within(dialog).getByLabelText(/Motivo de la anulación/), {
+    // La anulación abre la confirmación común: nombra el recibo, sus efectos y pide motivo
+    const confirm = await screen.findByRole('dialog', {
+      name: /¿Anular el recibo de caja RC-000001\?/i,
+    });
+    expect(within(confirm).getByTestId('confirm-subject')).toHaveTextContent('RC-000001');
+    expect(within(confirm).getByTestId('confirm-effects')).toHaveTextContent(
+      'Se registra el asiento que reversa el documento.',
+    );
+    fireEvent.change(within(confirm).getByLabelText(/Motivo de la anulación/), {
       target: { value: 'Cliente equivocado' },
     });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Confirmar anulación' }));
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Anular RC-000001' }));
     await waitFor(() =>
       expect(cancel).toHaveBeenCalledWith(
         expect.objectContaining({ id: 'rc-1' }),

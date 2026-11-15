@@ -106,13 +106,42 @@ describe('Libro Diario', () => {
     fireEvent.change(within(confirm).getByLabelText(/Motivo de la anulación/), {
       target: { value: 'Nota duplicada' },
     });
-    fireEvent.click(within(confirm).getByRole('button', { name: 'Confirmar anulación' }));
+    // El diálogo nombra el asiento y sus totales; el botón dice la acción
+    expect(within(confirm).getByTestId('annul-entry-subject')).toHaveTextContent('Débitos');
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Anular asiento' }));
     await waitFor(() =>
       expect(annul).toHaveBeenCalledWith(
         'je-2',
         expect.objectContaining({ reason: 'Nota duplicada' }),
       ),
     );
+    expect(
+      await screen.findByText(/anulado: se registró el asiento que lo reversa/),
+    ).toBeInTheDocument();
+  });
+
+  it('un motivo de menos de 5 caracteres no anula el asiento', async () => {
+    vi.spyOn(accountingApi, 'fetchJournalEntries').mockResolvedValue({
+      items: [manual()],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+      totalPages: 1,
+    });
+    vi.spyOn(accountingApi, 'fetchJournalEntryById').mockResolvedValue(manual());
+    const annul = vi.spyOn(accountingApi, 'annulJournalEntry');
+    renderPage([SYSTEM_PERMISSIONS.ACCOUNTING_READ, SYSTEM_PERMISSIONS.ACCOUNTING_MANAGE]);
+    const table = await loadedTable('Nota manual');
+    fireEvent.click(table.getByRole('button', { name: 'Detalle' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Anular' }));
+    const confirm = await screen.findByRole('dialog', { name: /Anular asiento/ });
+    fireEvent.change(within(confirm).getByLabelText(/Motivo de la anulación/), {
+      target: { value: 'Dup' },
+    });
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Anular asiento' }));
+    expect(await within(confirm).findByText(/mínimo 5 caracteres/)).toBeInTheDocument();
+    expect(annul).not.toHaveBeenCalled();
   });
 
   it('sin permiso contable de gestión la nota manual no se puede anular', async () => {

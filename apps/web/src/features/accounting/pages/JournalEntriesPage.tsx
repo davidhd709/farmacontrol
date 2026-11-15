@@ -43,11 +43,18 @@ import {
 import { ManualNoteDialog } from '../components/ManualNoteDialog';
 import { QuickDateRange, localIsoDate } from '../../../components/QuickDateRange';
 import { formatDate } from '../../../utils/date-format';
+import { formatCurrencyCop } from '../../../utils/print-document';
 import { FilterBar } from '../../../components/layout/FilterBar';
 import { DateField } from '../../../components/DateField';
 import PrintIcon from '@mui/icons-material/Print';
 import { JournalEntryPrintDialog } from '../../../components/documents/JournalEntryPrintDialog';
 import { journalSourceType } from '../journal-source-types';
+
+/** Cómo se nombra un asiento ante el usuario: su documento de origen o su consecutivo */
+const entryLabel = (entry: JournalEntryDto) =>
+  entry.sourceDocument?.number ??
+  (entry as JournalEntryDto & { consecutiveNumber?: string }).consecutiveNumber ??
+  entry.description;
 
 /** Estado del asiento en palabras del usuario (no se depende solo del color). */
 function statusOf(entry: JournalEntryDto): {
@@ -102,6 +109,7 @@ export const JournalEntriesPage = () => {
   const [annulReason, setAnnulReason] = useState('');
   const [noteOpen, setNoteOpen] = useState(false);
   const [createdNote, setCreatedNote] = useState<string | null>(null);
+  const [annulledNotice, setAnnulledNotice] = useState<string | null>(null);
   const [annulDate, setAnnulDate] = useState(localIsoDate(new Date()));
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -136,6 +144,11 @@ export const JournalEntriesPage = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['journal-entries'] });
       queryClient.invalidateQueries({ queryKey: ['trial-balance'] });
+      if (annullingEntry) {
+        setAnnulledNotice(
+          `Asiento ${entryLabel(annullingEntry)} anulado: se registró el asiento que lo reversa.`,
+        );
+      }
       setAnnullingEntry(null);
       setAnnulReason('');
       setActionError(null);
@@ -165,8 +178,8 @@ export const JournalEntriesPage = () => {
 
   const handleConfirmAnnul = () => {
     if (!annullingEntry) return;
-    if (!annulReason.trim()) {
-      setActionError('El motivo de la anulación es obligatorio.');
+    if (annulReason.trim().length < 5) {
+      setActionError('Escribe el motivo de la anulación (mínimo 5 caracteres).');
       return;
     }
     annulMutation.mutate({
@@ -213,6 +226,11 @@ export const JournalEntriesPage = () => {
         {createdNote && (
           <Alert severity="success" onClose={() => setCreatedNote(null)}>
             Nota contable {createdNote} registrada.
+          </Alert>
+        )}
+        {annulledNotice && (
+          <Alert severity="success" onClose={() => setAnnulledNotice(null)}>
+            {annulledNotice}
           </Alert>
         )}
         <ManualNoteDialog
@@ -577,13 +595,31 @@ export const JournalEntriesPage = () => {
       {/* Anulación de una nota contable, un saldo inicial o un cierre anual */}
       <Dialog
         open={Boolean(annullingEntry)}
-        onClose={() => setAnnullingEntry(null)}
+        onClose={annulMutation.isPending ? undefined : () => setAnnullingEntry(null)}
         maxWidth="sm"
         fullWidth
+        aria-labelledby="annul-entry-title"
       >
-        <DialogTitle sx={{ fontWeight: 700 }}>Anular asiento</DialogTitle>
+        <DialogTitle id="annul-entry-title" sx={{ fontWeight: 700 }}>
+          Anular asiento {annullingEntry ? entryLabel(annullingEntry) : ''}
+        </DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2}>
+            {annullingEntry && (
+              <Box
+                data-testid="annul-entry-subject"
+                sx={{ p: 1.5, borderRadius: 1, bgcolor: 'action.hover' }}
+              >
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  {annullingEntry.description}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {formatDate(annullingEntry.entryDate)} · Débitos{' '}
+                  {formatCurrencyCop(Number(annullingEntry.totalDebit))} · Créditos{' '}
+                  {formatCurrencyCop(Number(annullingEntry.totalCredit))}
+                </Typography>
+              </Box>
+            )}
             <Alert severity="warning">
               Se registrará un asiento que invierte exactamente los débitos y créditos de este
               asiento. El original se conserva. Esta acción no se puede deshacer.
@@ -604,6 +640,8 @@ export const JournalEntriesPage = () => {
               onChange={(e) => setAnnulReason(e.target.value)}
               fullWidth
               required
+              helperText="Mínimo 5 caracteres; queda en el historial."
+              slotProps={{ htmlInput: { maxLength: 300 } }}
             />
           </Stack>
         </DialogContent>
@@ -617,7 +655,7 @@ export const JournalEntriesPage = () => {
             color="warning"
             disabled={annulMutation.isPending}
           >
-            {annulMutation.isPending ? 'Anulando…' : 'Confirmar anulación'}
+            {annulMutation.isPending ? 'Anulando…' : 'Anular asiento'}
           </Button>
         </DialogActions>
       </Dialog>

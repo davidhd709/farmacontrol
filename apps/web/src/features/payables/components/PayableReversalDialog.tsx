@@ -1,107 +1,81 @@
-import { useRef, useState } from 'react';
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Typography,
-  TextField,
-  Button,
-  Alert,
-} from '@mui/material';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Controller, useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import type { PayablePaymentDto } from '@farmacia/contracts';
+import { ConfirmDialog } from '../../../components/ConfirmDialog';
+import { formatMoney } from '../../../components/DocumentMovementsTable';
 import { revertPayablePayment } from '../api/payables.api';
-import { reversalSchema, type ReversalFormData } from '../validation/reversal.schema';
 
 interface Props {
   accountId: string;
-  payment: Pick<PayablePaymentDto, 'id' | 'paymentMethod'>;
+  payment: {
+    id: string;
+    paymentMethod: string;
+    amount?: string | null;
+    /** Comprobante de egreso con que se hizo el pago */
+    documentNumber?: string | null;
+    date?: string | null;
+  };
+  /** Factura de compra a la que vuelve el saldo */
+  invoiceNumber?: string | null;
   onClose: () => void;
+  onReverted?: () => void;
 }
-export function PayableReversalDialog({ accountId, payment, onClose }: Props) {
+
+/**
+ * Reversión de un pago al proveedor con la confirmación común: nombra el pago, muestra el
+ * efecto sobre la factura y la caja o el banco, exige motivo y bloquea un segundo envío.
+ */
+export function PayableReversalDialog({
+  accountId,
+  payment,
+  invoiceNumber,
+  onClose,
+  onReverted,
+}: Props) {
   const queryClient = useQueryClient();
-  const reversing = useRef(false);
-  const [error, setError] = useState<string | null>(null);
-  const reversal = useForm<ReversalFormData>({
-    resolver: zodResolver(reversalSchema),
-    defaultValues: { reason: '' },
-    mode: 'onBlur',
-  });
+  const where = payment.paymentMethod === 'TRANSFERENCIA' ? 'al banco' : 'a la caja';
   const reverseMutation = useMutation({
-    mutationFn: (data: ReversalFormData) => {
-      if (!payment) throw new Error('No se seleccionó pago para revertir');
-      return revertPayablePayment(accountId, payment.id, { reason: data.reason });
-    },
+    mutationFn: (reason: string) => revertPayablePayment(accountId, payment.id, { reason }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['payables'] });
-      queryClient.invalidateQueries({ queryKey: ['payable-detail', accountId] });
-      queryClient.invalidateQueries({ queryKey: ['payables-aging'] });
-      queryClient.invalidateQueries({ queryKey: ['payable-movements', accountId] });
-      queryClient.invalidateQueries({ queryKey: ['payables-statement'] });
+      for (const key of [
+        'payables',
+        'payables-aging',
+        'payables-statement',
+        'treasury-documents',
+      ]) {
+        void queryClient.invalidateQueries({ queryKey: [key] });
+      }
+      void queryClient.invalidateQueries({ queryKey: ['payable-detail', accountId] });
+      void queryClient.invalidateQueries({ queryKey: ['payable-movements', accountId] });
+      onReverted?.();
       onClose();
-    },
-    onSettled: () => {
-      reversing.current = false;
-    },
-    onError: (err: Error) => {
-      setError(err.message || 'Error al revertir el pago.');
     },
   });
 
+  const subject = [
+    payment.documentNumber ? `Pago ${payment.documentNumber}` : 'Pago al proveedor',
+    payment.amount ? formatMoney(payment.amount) : null,
+    payment.date ?? null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
   return (
-    <Dialog open onClose={() => !reverseMutation.isPending && onClose()} maxWidth="xs" fullWidth>
-      <DialogTitle>Revertir Pago al Proveedor</DialogTitle>
-      <DialogContent>
-        <Typography variant="body2" sx={{ mb: 2 }}>
-          Esta acción restituirá el saldo pendiente de la obligación y registrará una operación
-          compensatoria en {payment?.paymentMethod === 'TRANSFERENCIA' ? 'el banco' : 'la caja'}.
-        </Typography>
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
-        )}
-        <Controller
-          name="reason"
-          control={reversal.control}
-          render={({ field: { ref, ...field } }) => (
-            <TextField
-              autoFocus
-              fullWidth
-              size="small"
-              label="Motivo de la reversión"
-              error={!!reversal.formState.errors.reason}
-              helperText={reversal.formState.errors.reason?.message}
-              {...field}
-              inputRef={ref}
-              placeholder="Ej: Monto ingresado por error / Factura equivocada"
-              multiline
-              rows={2}
-              required
-            />
-          )}
-        />
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={() => onClose()} disabled={reverseMutation.isPending}>
-          Cancelar
-        </Button>
-        <Button
-          variant="contained"
-          color="error"
-          onClick={reversal.handleSubmit((data) => {
-            if (reversing.current) return;
-            reversing.current = true;
-            reverseMutation.mutate(data);
-          })}
-          disabled={reverseMutation.isPending}
-        >
-          {reverseMutation.isPending ? 'Revirtiendo…' : 'Confirmar Reversión'}
-        </Button>
-      </DialogActions>
-    </Dialog>
+    <ConfirmDialog
+      open
+      operationType="revert"
+      title="¿Revertir el pago al proveedor?"
+      subject={subject}
+      effects={[
+        invoiceNumber
+          ? `La factura ${invoiceNumber} recupera el saldo pagado.`
+          : 'La factura recupera el saldo pagado.',
+        `El dinero del pago vuelve ${where}.`,
+        'Se registra el asiento que reversa el pago.',
+        'El pago queda marcado como revertido con su motivo; no se puede deshacer.',
+      ]}
+      reason={{ label: 'Motivo de la reversión', minLength: 3 }}
+      confirmText="Revertir pago"
+      onConfirm={(reason) => reverseMutation.mutateAsync(reason ?? '')}
+      onCancel={onClose}
+    />
   );
 }

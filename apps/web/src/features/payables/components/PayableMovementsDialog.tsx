@@ -22,6 +22,7 @@ export function PayableMovementsDialog({
 }) {
   const { hasPermission } = usePermissions();
   const [reversal, setReversal] = useState<DocumentMovementDto | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const { data, isLoading, error } = useQuery({
     queryKey: ['payable-movements', payableId],
     queryFn: () => fetchPayableMovements(payableId),
@@ -57,18 +58,37 @@ export function PayableMovementsDialog({
             : undefined
         }
         footer={
-          data?.status === 'PENDIENTE' && (
-            <Alert severity="info" variant="outlined">
-              Para pagar, registra un comprobante de egreso en Tesorería → Comprobantes de egreso.
-            </Alert>
-          )
+          <>
+            {notice && (
+              <Alert severity="success" role="status" onClose={() => setNotice(null)}>
+                {notice}
+              </Alert>
+            )}
+            {data?.status === 'PENDIENTE' && (
+              <Alert severity="info" variant="outlined">
+                Para pagar, registra un comprobante de egreso en Tesorería → Comprobantes de egreso.
+              </Alert>
+            )}
+          </>
         }
         onClose={onClose}
       />
       {reversal?.paymentId && (
         <PayableReversalDialog
           accountId={payableId}
-          payment={{ id: reversal.paymentId, paymentMethod: reversal.paymentMethod ?? 'EFECTIVO' }}
+          payment={{
+            id: reversal.paymentId,
+            paymentMethod: reversal.paymentMethod ?? 'EFECTIVO',
+            amount: reversal.credit,
+            documentNumber: reversal.documentNumber,
+            date: reversal.date,
+          }}
+          invoiceNumber={data?.invoiceNumber}
+          onReverted={() =>
+            setNotice(
+              `${reversal.documentNumber ? `Pago ${reversal.documentNumber}` : 'Pago'} revertido: la factura recuperó su saldo.`,
+            )
+          }
           onClose={() => setReversal(null)}
         />
       )}

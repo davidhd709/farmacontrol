@@ -9,10 +9,6 @@ import {
   Chip,
   CircularProgress,
   Container,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   FormControl,
   FormControlLabel,
   Grid,
@@ -27,7 +23,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TextField,
   Typography,
 } from '@mui/material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -42,6 +37,7 @@ import {
   type FiscalPeriodStatus,
 } from '../api/accounting.api';
 import { DocumentLockCard } from '../components/DocumentLockCard';
+import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { AnnualClosingCard } from '../components/AnnualClosingCard';
 import { businessYear } from '../../../utils/business-date';
 import { formatDate } from '../../../utils/date-format';
@@ -63,11 +59,9 @@ export const FiscalPeriodsPage = () => {
   // Modal de Cierre
   const [closingPeriod, setClosingPeriod] = useState<FiscalPeriodDto | null>(null);
   const [generateClosingEntry, setGenerateClosingEntry] = useState(true);
-  const [closeNotes, setCloseNotes] = useState('');
 
   // Modal de Reapertura
   const [reopeningPeriod, setReopeningPeriod] = useState<FiscalPeriodDto | null>(null);
-  const [reopenReason, setReopenReason] = useState('');
 
   // Mensajes de error/éxito
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(
@@ -113,14 +107,10 @@ export const FiscalPeriodsPage = () => {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['fiscal-periods'] });
       setClosingPeriod(null);
-      setCloseNotes('');
       setFeedback({
         type: 'success',
         message: `El período ${data.name} ha sido cerrado exitosamente. Los asientos históricos dentro de sus fechas han quedado bloqueados.`,
       });
-    },
-    onError: (err: any) => {
-      setFeedback({ type: 'error', message: err.message || 'Error al cerrar el período fiscal.' });
     },
   });
 
@@ -130,14 +120,10 @@ export const FiscalPeriodsPage = () => {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['fiscal-periods'] });
       setReopeningPeriod(null);
-      setReopenReason('');
       setFeedback({
         type: 'success',
         message: `El período ${data.name} ha sido reabierto exitosamente. Se ha registrado la auditoría correspondiente.`,
       });
-    },
-    onError: (err: any) => {
-      setFeedback({ type: 'error', message: err.message || 'Error al reabrir el período fiscal.' });
     },
   });
 
@@ -398,7 +384,6 @@ export const FiscalPeriodsPage = () => {
                               size="small"
                               onClick={() => {
                                 setReopeningPeriod(period);
-                                setReopenReason('');
                               }}
                             >
                               Reabrir
@@ -410,7 +395,6 @@ export const FiscalPeriodsPage = () => {
                               size="small"
                               onClick={() => {
                                 setClosingPeriod(period);
-                                setCloseNotes('');
                                 setGenerateClosingEntry(true);
                               }}
                             >
@@ -427,134 +411,89 @@ export const FiscalPeriodsPage = () => {
         )}
       </Stack>
 
-      {/* Modal de Cierre de Período */}
-      <Dialog
+      {/* Cierre y reapertura con la confirmación común: un error queda dentro del diálogo */}
+      <ConfirmDialog
         open={Boolean(closingPeriod)}
-        onClose={() => !closeMutation.isPending && setClosingPeriod(null)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle sx={{ fontWeight: 700 }}>
-          Cerrar Período Contable: {closingPeriod?.name}
-        </DialogTitle>
-        <DialogContent dividers>
-          <Stack spacing={2.5}>
-            <Alert severity="warning">
-              <b>Bloqueo histórico de seguridad:</b> Al cerrar este período, no se permitirá crear,
-              editar ni reversar ningún asiento contable cuya fecha pertenezca al intervalo{' '}
-              <b>{formatDate(closingPeriod?.startDate)}</b> al{' '}
-              <b>{formatDate(closingPeriod?.endDate)}</b>.
-            </Alert>
+        operationType="close"
+        title={`¿Cerrar el período ${closingPeriod?.name ?? ''}?`}
+        subject={
+          closingPeriod
+            ? `${closingPeriod.name} · ${formatDate(closingPeriod.startDate)} al ${formatDate(closingPeriod.endDate)}`
+            : null
+        }
+        effects={[
+          `No se podrán crear, editar ni reversar asientos con fecha del ${formatDate(closingPeriod?.startDate)} al ${formatDate(closingPeriod?.endDate)}.`,
+          generateClosingEntry
+            ? 'Se genera el asiento de cierre que cancela los saldos de ingresos, gastos y costos contra el resultado del ejercicio.'
+            : 'No se genera asiento de cierre del ejercicio.',
+          'El período puede reabrirse después con un motivo, que queda en la auditoría.',
+        ]}
+        description={
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={generateClosingEntry}
+                onChange={(e) => setGenerateClosingEntry(e.target.checked)}
+              />
+            }
+            label={
+              <Box>
+                <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>
+                  Generar asiento contable de cierre del ejercicio
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Cancela los saldos de cuentas de Ingresos (4), Gastos (5) y Costos (6) trasladando
+                  el resultado neto a la cuenta 3605 - Resultado del Ejercicio.
+                </Typography>
+              </Box>
+            }
+          />
+        }
+        reason={{
+          label: 'Notas u observaciones de cierre (opcional)',
+          required: false,
+          maxLength: 500,
+        }}
+        confirmText="Cerrar período"
+        onConfirm={(notes) =>
+          closingPeriod
+            ? closeMutation.mutateAsync({
+                id: closingPeriod.id,
+                payload: { generateClosingEntry, notes: notes ?? '' },
+              })
+            : undefined
+        }
+        onCancel={() => setClosingPeriod(null)}
+      />
 
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={generateClosingEntry}
-                  onChange={(e) => setGenerateClosingEntry(e.target.checked)}
-                />
-              }
-              label={
-                <Box>
-                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                    Generar asiento contable de cierre del ejercicio
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Cancela los saldos de cuentas de Ingresos (4), Gastos (5) y Costos (6)
-                    trasladando el resultado neto a la cuenta 3605 - Resultado del Ejercicio.
-                  </Typography>
-                </Box>
-              }
-            />
-
-            <TextField
-              label="Notas u observaciones de cierre (opcional)"
-              multiline
-              rows={2}
-              fullWidth
-              value={closeNotes}
-              onChange={(e) => setCloseNotes(e.target.value)}
-              placeholder="Ej. Cierre contable mensual según arqueo y conciliaciones bancarias"
-            />
-          </Stack>
-        </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
-          <Button onClick={() => setClosingPeriod(null)} disabled={closeMutation.isPending}>
-            Cancelar
-          </Button>
-          <Button
-            variant="contained"
-            color="error"
-            disabled={closeMutation.isPending}
-            onClick={() => {
-              if (closingPeriod) {
-                closeMutation.mutate({
-                  id: closingPeriod.id,
-                  payload: {
-                    generateClosingEntry,
-                    notes: closeNotes,
-                  },
-                });
-              }
-            }}
-          >
-            {closeMutation.isPending ? 'Cerrando...' : 'Confirmar Cierre y Bloqueo'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Modal de Reapertura de Período */}
-      <Dialog
+      <ConfirmDialog
         open={Boolean(reopeningPeriod)}
-        onClose={() => !reopenMutation.isPending && setReopeningPeriod(null)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle sx={{ fontWeight: 700, color: 'warning.main' }}>
-          Reapertura de Período Contable: {reopeningPeriod?.name}
-        </DialogTitle>
-        <DialogContent dividers>
-          <Stack spacing={2.5}>
-            <Alert severity="error">
-              <b>Acción delicada de auditoría:</b> Reabrir un período permite nuevamente registrar y
-              reversar asientos en fechas históricas. Si el período tiene un asiento de cierre
-              fiscal asociado, este será <b>revertido automáticamente</b>.
-            </Alert>
-
-            <TextField
-              label="Motivo justificado de reapertura (Obligatorio, mín. 10 caracteres)"
-              multiline
-              rows={3}
-              fullWidth
-              required
-              value={reopenReason}
-              onChange={(e) => setReopenReason(e.target.value)}
-              placeholder="Indique la justificación formal o solicitud de auditoría externa que autoriza la reapertura..."
-              helperText={`${reopenReason.trim().length} / 10 caracteres mínimos`}
-              error={reopenReason.trim().length > 0 && reopenReason.trim().length < 10}
-            />
-          </Stack>
-        </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
-          <Button onClick={() => setReopeningPeriod(null)} disabled={reopenMutation.isPending}>
-            Cancelar
-          </Button>
-          <Button
-            variant="contained"
-            color="warning"
-            disabled={reopenMutation.isPending || reopenReason.trim().length < 10}
-            onClick={() => {
-              if (reopeningPeriod) {
-                reopenMutation.mutate({
-                  id: reopeningPeriod.id,
-                  reason: reopenReason.trim(),
-                });
-              }
-            }}
-          >
-            {reopenMutation.isPending ? 'Reabriendo...' : 'Confirmar Reapertura'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        operationType="revert"
+        title={`¿Reabrir el período ${reopeningPeriod?.name ?? ''}?`}
+        subject={
+          reopeningPeriod
+            ? `${reopeningPeriod.name} · ${formatDate(reopeningPeriod.startDate)} al ${formatDate(reopeningPeriod.endDate)}`
+            : null
+        }
+        effects={[
+          'Se vuelven a permitir asientos y reversiones en las fechas del período.',
+          'Si el período tiene asiento de cierre, se revierte automáticamente.',
+          'La reapertura y su motivo quedan en la auditoría.',
+        ]}
+        reason={{
+          label: 'Motivo de la reapertura',
+          minLength: 10,
+          maxLength: 500,
+          helperText: 'Mínimo 10 caracteres: la justificación o solicitud que la autoriza.',
+        }}
+        confirmText="Reabrir período"
+        onConfirm={(reason) =>
+          reopeningPeriod
+            ? reopenMutation.mutateAsync({ id: reopeningPeriod.id, reason: reason ?? '' })
+            : undefined
+        }
+        onCancel={() => setReopeningPeriod(null)}
+      />
     </Container>
   );
 };

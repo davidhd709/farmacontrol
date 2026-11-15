@@ -44,6 +44,7 @@ import { TreasuryDocumentPrintDialog } from '../../../components/documents/Treas
 import { TreasuryDocumentCorrectionDialog } from '../components/TreasuryDocumentCorrectionDialog';
 import { treasuryDocumentActions } from '../treasury-document-actions';
 import { StatusChip } from '../../../components/StatusChip';
+import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { Link as RouterLink, useSearchParams } from 'react-router-dom';
 
 const LABELS: Record<
@@ -110,6 +111,29 @@ const originOf = (doc: TreasuryDocumentDto) => {
   return ORIGIN_LABELS[doc.origin];
 };
 
+/** Efectos de anular según el origen (mismas reglas de treasury-vouchers.service) */
+function annulEffects(doc: TreasuryDocumentDto): string[] {
+  const receipt = doc.documentType === 'RECIBO_CAJA';
+  const where = doc.source === 'BANCO' ? (doc.bankAccountName ?? 'el banco') : 'caja';
+  const active = doc.applications.filter((a) => !a.isReversed);
+  const invoices = active.map((a) => a.documentNumber ?? a.documentId).join(', ');
+  const effects: string[] = [];
+  if (doc.origin === 'CARTERA' && active.length) {
+    effects.push(`Las facturas abonadas recuperan su saldo: ${invoices}.`);
+  }
+  if (doc.origin === 'PROVEEDOR' && active.length) {
+    effects.push(`Las facturas y causaciones pagadas recuperan su saldo: ${invoices}.`);
+  }
+  effects.push(
+    receipt
+      ? `Sale de ${where} el dinero que el recibo seguía aplicando.`
+      : `Vuelve a ${where} el dinero que el egreso seguía aplicando.`,
+  );
+  effects.push('Se registra el asiento que reversa el documento.');
+  effects.push('El documento queda anulado con su motivo; no se puede deshacer.');
+  return effects;
+}
+
 const money = (value: string) =>
   `$${Number(value).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -148,10 +172,7 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
   const [correctionDoc, setCorrectionDoc] = useState<TreasuryDocumentDto | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [annulReason, setAnnulReason] = useState('');
   const [annulOpen, setAnnulOpen] = useState(false);
-  const [annulError, setAnnulError] = useState<string | null>(null);
-  const [annulling, setAnnulling] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const queryClient = useQueryClient();
@@ -206,29 +227,22 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
   // Qué se puede hacer con el documento abierto y, si algo no, por qué (mismas reglas del servidor)
   const actions = selected ? treasuryDocumentActions(selected, hasPermission) : null;
 
-  const annul = async () => {
+  // Anulación con el componente común: nombra el documento, sus efectos y exige motivo; un
+  // error se queda en el diálogo con el documento intacto
+  const annul = async (reason?: string) => {
     if (!selected) return;
-    setAnnulling(true);
-    setAnnulError(null);
-    try {
-      const updated = await cancelTreasuryDocument(selected, annulReason.trim());
-      setSelected(updated);
-      setAnnulOpen(false);
-      setAnnulReason('');
-      setToast(`${labels.singular} ${updated.documentNumber} anulado.`);
-      for (const key of [
-        'treasury-documents',
-        'receivables',
-        'payables-statement',
-        'expenses',
-        'cash',
-      ]) {
-        void queryClient.invalidateQueries({ queryKey: [key] });
-      }
-    } catch (e) {
-      setAnnulError(e instanceof Error ? e.message : 'No se pudo anular el documento.');
-    } finally {
-      setAnnulling(false);
+    const updated = await cancelTreasuryDocument(selected, (reason ?? '').trim());
+    setSelected(updated);
+    setAnnulOpen(false);
+    setToast(`${labels.singular} ${updated.documentNumber} anulado.`);
+    for (const key of [
+      'treasury-documents',
+      'receivables',
+      'payables-statement',
+      'expenses',
+      'cash',
+    ]) {
+      void queryClient.invalidateQueries({ queryKey: [key] });
     }
   };
 
@@ -439,8 +453,6 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
         onClose={() => {
           setSelected(null);
           setAnnulOpen(false);
-          setAnnulError(null);
-          setAnnulReason('');
         }}
         notice={
           actions?.restriction ? (
@@ -466,69 +478,48 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
         }
         actions={
           selected && actions?.canAnnul ? (
-            annulOpen ? (
-              <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                {annulError && (
-                  <Alert severity="error" sx={{ py: 0, px: 1 }}>
-                    {annulError}
-                  </Alert>
-                )}
-                <TextField
-                  size="small"
-                  label="Motivo de la anulación *"
-                  value={annulReason}
-                  onChange={(e) => setAnnulReason(e.target.value)}
-                  placeholder="Mínimo 3 caracteres…"
-                  disabled={annulling}
-                  sx={{ width: 220 }}
-                />
+            <Stack direction="row" spacing={1}>
+              {actions.canCorrect && (
                 <Button
-                  color="error"
-                  variant="contained"
-                  disabled={annulling || annulReason.trim().length < 3}
-                  onClick={() => void annul()}
+                  color="warning"
+                  variant="outlined"
+                  onClick={() => {
+                    const toCorrect = selected;
+                    setSelected(null);
+                    setCorrectionDoc(toCorrect);
+                  }}
                   sx={{ textTransform: 'none', fontWeight: 600 }}
                 >
-                  {annulling ? 'Anulando…' : 'Confirmar anulación'}
+                  Corregir Documento
                 </Button>
-                <Button
-                  variant="outlined"
-                  color="inherit"
-                  onClick={() => setAnnulOpen(false)}
-                  disabled={annulling}
-                  sx={{ textTransform: 'none' }}
-                >
-                  Cancelar
-                </Button>
-              </Stack>
-            ) : (
-              <Stack direction="row" spacing={1}>
-                {actions.canCorrect && (
-                  <Button
-                    color="warning"
-                    variant="outlined"
-                    onClick={() => {
-                      const toCorrect = selected;
-                      setSelected(null);
-                      setCorrectionDoc(toCorrect);
-                    }}
-                    sx={{ textTransform: 'none', fontWeight: 600 }}
-                  >
-                    Corregir Documento
-                  </Button>
-                )}
-                <Button
-                  color="error"
-                  variant="outlined"
-                  onClick={() => setAnnulOpen(true)}
-                  sx={{ textTransform: 'none', fontWeight: 600 }}
-                >
-                  Anular Documento
-                </Button>
-              </Stack>
-            )
+              )}
+              <Button
+                color="error"
+                variant="outlined"
+                onClick={() => setAnnulOpen(true)}
+                sx={{ textTransform: 'none', fontWeight: 600 }}
+              >
+                Anular Documento
+              </Button>
+            </Stack>
           ) : undefined
         }
+      />
+
+      <ConfirmDialog
+        open={annulOpen && Boolean(selected)}
+        operationType="annul"
+        title={`¿Anular el ${labels.singular.toLowerCase()} ${selected?.documentNumber ?? ''}?`}
+        subject={
+          selected
+            ? `${selected.documentNumber} · ${money(selected.amount)}${selected.thirdPartyName ? ` · ${selected.thirdPartyName}` : ''}`
+            : null
+        }
+        effects={selected ? annulEffects(selected) : []}
+        reason={{ label: 'Motivo de la anulación', minLength: 3, maxLength: 500 }}
+        confirmText={`Anular ${selected?.documentNumber ?? ''}`.trim()}
+        onConfirm={annul}
+        onCancel={() => setAnnulOpen(false)}
       />
 
       <TreasuryDocumentCorrectionDialog

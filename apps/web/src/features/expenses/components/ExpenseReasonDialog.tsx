@@ -1,115 +1,84 @@
-import { useRef, useState } from 'react';
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Typography,
-  TextField,
-  Button,
-  Alert,
-} from '@mui/material';
-import { Controller, useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import {
-  expenseReasonSchema,
-  type ExpenseReasonFormData,
-} from '../validation/expense-reason.schema';
+import type { ExpenseDto, ExpensePaymentDto } from '@farmacia/contracts';
+import { ConfirmDialog } from '../../../components/ConfirmDialog';
+import { formatMoney } from '../../../components/DocumentMovementsTable';
+import type { ExpenseReasonFormData } from '../validation/expense-reason.schema';
 
 interface Props {
   kind: 'cancel' | 'reverse';
+  /** Gasto que se anula o al que pertenece el pago */
+  expense?: ExpenseDto | null;
+  /** Pago que se revierte */
+  payment?: ExpensePaymentDto | null;
   onClose: () => void;
   onSubmit: (data: ExpenseReasonFormData) => Promise<void>;
 }
-export function ExpenseReasonDialog({ kind, onClose, onSubmit }: Props) {
+
+const expenseLabel = (expense?: ExpenseDto | null) =>
+  expense ? (expense.documentNumber ? `Gasto ${expense.documentNumber}` : 'Gasto') : 'Gasto';
+
+/**
+ * Anulación de un gasto o reversión de uno de sus pagos con la confirmación común: nombra el
+ * registro, muestra sus efectos y exige el motivo (mínimo 5 caracteres, como el servidor).
+ */
+export function ExpenseReasonDialog({ kind, expense, payment, onClose, onSubmit }: Props) {
   const cancel = kind === 'cancel';
-  const busy = useRef(false);
-  const [isSubmitting, setSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const {
-    control,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<ExpenseReasonFormData>({
-    resolver: zodResolver(expenseReasonSchema),
-    defaultValues: { reason: '' },
-    mode: 'onBlur',
-  });
-  const submit = async (data: ExpenseReasonFormData) => {
-    if (busy.current) return;
-    busy.current = true;
-    setSending(true);
-    setError(null);
-    try {
-      await onSubmit(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al procesar la operación.');
-    } finally {
-      busy.current = false;
-      setSending(false);
-    }
-  };
+  const activePaid = expense?.payments.some((p) => !p.isReversed) ?? false;
+
+  const subject = cancel
+    ? expense
+      ? [
+          expenseLabel(expense),
+          expense.description,
+          expense.supplierName ?? expense.beneficiary,
+          formatMoney(expense.amount),
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      : null
+    : payment
+      ? [
+          `Pago del ${payment.paymentDate.slice(0, 10)}`,
+          formatMoney(payment.amount),
+          payment.paymentMethod === 'TRANSFERENCIA'
+            ? (payment.bankAccountName ?? 'Transferencia')
+            : 'Efectivo',
+          expense ? `${expenseLabel(expense)} · ${expense.description}` : null,
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      : null;
+
+  const effects = cancel
+    ? [
+        'Se registra el asiento contable que reversa la causación.',
+        activePaid
+          ? 'Los pagos de contado vuelven a la caja o al banco de donde salieron.'
+          : 'La cuenta por pagar del gasto queda sin saldo.',
+        'El gasto queda anulado con su motivo; no se puede deshacer.',
+      ]
+    : [
+        'El gasto recupera el saldo pendiente del pago.',
+        payment?.paymentMethod === 'TRANSFERENCIA'
+          ? 'El dinero vuelve a la cuenta bancaria del pago.'
+          : 'El dinero vuelve a la caja.',
+        'Se registra el asiento que reversa el pago.',
+        'El pago queda marcado como revertido con su motivo; no se puede deshacer.',
+      ];
+
   return (
-    <Dialog open onClose={() => !isSubmitting && onClose()} maxWidth="xs" fullWidth>
-      <form noValidate onSubmit={handleSubmit(submit)}>
-        <DialogTitle sx={{ color: cancel ? 'error.main' : 'warning.main', fontWeight: 'bold' }}>
-          {cancel ? 'Anular Gasto Operativo' : 'Revertir Pago de Gasto'}
-        </DialogTitle>
-        <DialogContent dividers>
-          <Typography variant="body2" sx={{ mb: 2 }}>
-            {cancel
-              ? '¿Está seguro de anular este gasto? Se generará un asiento contable de reversión y se devolverán los fondos a tesorería si fue pagado de contado.'
-              : 'Esta operación revertirá el pago, reintegrará el saldo pendiente a la obligación y registrará una entrada compensatoria en tesorería.'}
-          </Typography>
-          {error && <Alert severity="error">{error}</Alert>}
-          <Controller
-            name="reason"
-            control={control}
-            render={({ field: { ref, ...field } }) => (
-              <TextField
-                {...field}
-                inputRef={ref}
-                label={
-                  cancel
-                    ? 'Motivo de la Anulación (Obligatorio)'
-                    : 'Motivo de la Reversión (Obligatorio)'
-                }
-                error={!!errors.reason}
-                helperText={errors.reason?.message}
-                required
-                fullWidth
-                multiline
-                rows={3}
-                size="small"
-                placeholder={
-                  cancel
-                    ? 'Describa la razón de la anulación (mínimo 5 caracteres)...'
-                    : 'Describa la razón de la reversión...'
-                }
-              />
-            )}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={onClose} color="inherit" disabled={isSubmitting}>
-            Cancelar
-          </Button>
-          <Button
-            type="submit"
-            variant="contained"
-            color={cancel ? 'error' : 'warning'}
-            disabled={isSubmitting}
-          >
-            {isSubmitting
-              ? cancel
-                ? 'Anulando...'
-                : 'Revirtiendo...'
-              : cancel
-                ? 'Confirmar Anulación'
-                : 'Confirmar Reversión'}
-          </Button>
-        </DialogActions>
-      </form>
-    </Dialog>
+    <ConfirmDialog
+      open
+      operationType={cancel ? 'annul' : 'revert'}
+      title={cancel ? '¿Anular el gasto?' : '¿Revertir el pago del gasto?'}
+      subject={subject}
+      effects={effects}
+      reason={{
+        label: cancel ? 'Motivo de la anulación' : 'Motivo de la reversión',
+        minLength: 5,
+      }}
+      confirmText={cancel ? 'Anular gasto' : 'Revertir pago'}
+      onConfirm={(reason) => onSubmit({ reason: reason ?? '' })}
+      onCancel={onClose}
+    />
   );
 }

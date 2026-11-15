@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { ThemeProvider } from '@mui/material';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   ExpenseCategoryDto,
@@ -168,14 +168,16 @@ it.each(['cancel', 'reverse'] as const)(
     const submit = vi.fn().mockResolvedValue(undefined);
     mount(<ExpenseReasonDialog kind={kind} onClose={vi.fn()} onSubmit={submit} />);
     const button = screen.getByRole('button', {
-      name: kind === 'cancel' ? 'Confirmar Anulación' : 'Confirmar Reversión',
+      name: kind === 'cancel' ? 'Anular gasto' : 'Revertir pago',
     });
+    change(/Motivo de la/, ' abc ');
     fireEvent.click(button);
-    expect(await screen.findByText(/mínimo 5 caracteres/)).toBeInTheDocument();
+    expect(await screen.findByText(/al menos 5 caracteres/)).toBeInTheDocument();
     expect(submit).not.toHaveBeenCalled();
     change(/Motivo de la/, ' Motivo válido ');
     fireEvent.click(button);
-    await waitFor(() => expect(submit).toHaveBeenCalledWith({ reason: ' Motivo válido ' }));
+    // La confirmación común entrega el motivo recortado
+    await waitFor(() => expect(submit).toHaveBeenCalledWith({ reason: 'Motivo válido' }));
   },
 );
 
@@ -203,16 +205,20 @@ it.each(['receivable', 'payable'] as const)(
       ),
     );
     const button = screen.getByRole('button', {
-      name: kind === 'receivable' ? 'Confirmar Anulación' : 'Confirmar Reversión',
+      name: kind === 'receivable' ? 'Confirmar Anulación' : 'Revertir pago',
     });
     fireEvent.click(button);
-    expect(await screen.findByText(/El motivo es obligatorio/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        kind === 'receivable' ? /El motivo es obligatorio/ : 'Escribe el motivo.',
+      ),
+    ).toBeInTheDocument();
     expect(spy).not.toHaveBeenCalled();
     change(/Motivo de la/, ' Motivo válido ');
     fireEvent.click(button);
-    await waitFor(() =>
-      expect(spy).toHaveBeenCalledWith('account', 'payment', { reason: ' Motivo válido ' }),
-    );
+    // La confirmación común entrega el motivo recortado
+    const reason = kind === 'receivable' ? ' Motivo válido ' : 'Motivo válido';
+    await waitFor(() => expect(spy).toHaveBeenCalledWith('account', 'payment', { reason }));
   },
 );
 
@@ -239,15 +245,15 @@ it('integra los diálogos en gastos y conserva cancellationReason/reversalReason
     ]),
   );
   fireEvent.click(await screen.findByRole('button', { name: 'Anular gasto' }));
-  change(/Motivo de la Anulación/, ' Motivo válido ');
-  fireEvent.click(screen.getByRole('button', { name: 'Confirmar Anulación' }));
+  change(/Motivo de la anulación/, ' Motivo válido ');
+  fireEvent.click(screen.getByRole('button', { name: 'Anular gasto' }));
   await waitFor(() =>
     expect(cancel).toHaveBeenCalledWith('expense', { cancellationReason: 'Motivo válido' }),
   );
   fireEvent.click(screen.getByRole('button', { name: 'Ver detalle del gasto' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Revertir pago' }));
-  change(/Motivo de la Reversión/, ' Motivo válido ');
-  fireEvent.click(screen.getByRole('button', { name: 'Confirmar Reversión' }));
+  change(/Motivo de la reversión/, ' Motivo válido ');
+  fireEvent.click(screen.getByRole('button', { name: 'Revertir pago' }));
   await waitFor(() =>
     expect(reverse).toHaveBeenCalledWith('payment', { reversalReason: 'Motivo válido' }),
   );
@@ -337,7 +343,13 @@ it('lista las causaciones sin proveedor y asigna uno con confirmación', async (
   fireEvent.click(screen.getByRole('button', { name: 'Asignar proveedor' }));
   fireEvent.mouseDown(screen.getByRole('combobox', { name: /Proveedor/ }));
   fireEvent.click(await screen.findByRole('option', { name: /Enel/ }));
-  fireEvent.click(screen.getByRole('button', { name: 'Asignar' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Asignar', hidden: false }));
+  fireEvent.click(screen.getByRole('button', { name: 'Revisar asignación' }));
+  const confirm = await screen.findByRole('dialog', {
+    name: '¿Asignar el proveedor a la causación?',
+  });
+  expect(within(confirm).getByTestId('confirm-effects')).toHaveTextContent(
+    'Queda a nombre de Enel y aparece en su estado de cuenta.',
+  );
+  fireEvent.click(within(confirm).getByRole('button', { name: 'Asignar proveedor' }));
   await waitFor(() => expect(assign).toHaveBeenCalledWith('exp-old', 'sup-1'));
 });

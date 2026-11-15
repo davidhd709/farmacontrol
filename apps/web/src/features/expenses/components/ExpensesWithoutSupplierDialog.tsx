@@ -62,11 +62,11 @@ export function ExpensesWithoutSupplierDialog({
       setDone(`Proveedor ${expense.supplierName} asignado a "${expense.description}".`);
       setSelected(null);
       setSupplier(null);
+      setConfirming(false);
       for (const key of ['expenses-without-supplier', 'expenses', 'payables-statement']) {
         void queryClient.invalidateQueries({ queryKey: [key] });
       }
     },
-    onSettled: () => setConfirming(false),
   });
   const total = (list.data ?? []).reduce((acc, e) => acc + Number(e.balance), 0);
 
@@ -100,7 +100,6 @@ export function ExpensesWithoutSupplierDialog({
               {done}
             </Alert>
           )}
-          {assign.isError && <Alert severity="error">{(assign.error as Error).message}</Alert>}
           {list.isLoading ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
               <CircularProgress size={28} />
@@ -205,7 +204,7 @@ export function ExpensesWithoutSupplierDialog({
                   onClick={() => setConfirming(true)}
                   sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}
                 >
-                  Asignar
+                  Revisar asignación
                 </Button>
               </Stack>
             </Box>
@@ -219,12 +218,23 @@ export function ExpensesWithoutSupplierDialog({
       </DialogActions>
       <ConfirmDialog
         open={confirming}
-        title="Confirmar proveedor"
-        description={`La causación "${selected?.description ?? ''}" quedará a nombre de ${supplier?.name ?? ''} y aparecerá en su estado de cuenta. La asignación no se puede cambiar después y queda en auditoría.`}
-        confirmText="Asignar"
-        isLoading={assign.isPending}
-        onConfirm={() => assign.mutate()}
-        onClose={() => setConfirming(false)}
+        operationType="update"
+        title="¿Asignar el proveedor a la causación?"
+        subject={
+          selected
+            ? [selected.documentNumber, selected.description, money(selected.balance)]
+                .filter(Boolean)
+                .join(' · ')
+            : null
+        }
+        effects={[
+          `Queda a nombre de ${supplier?.name ?? 'el proveedor'} y aparece en su estado de cuenta.`,
+          'Su saldo pendiente podrá pagarse con un comprobante de egreso.',
+          'La asignación queda en auditoría y no se puede cambiar después.',
+        ]}
+        confirmText="Asignar proveedor"
+        onConfirm={() => assign.mutateAsync()}
+        onCancel={() => setConfirming(false)}
       />
     </Dialog>
   );
