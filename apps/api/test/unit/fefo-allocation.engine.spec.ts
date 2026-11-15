@@ -20,12 +20,7 @@ describe('FefoAllocationEngine (Domain Unit)', () => {
       },
     ];
 
-    const result = FefoAllocationEngine.allocate(
-      'prod-1',
-      30,
-      candidates,
-      refDate,
-    );
+    const result = FefoAllocationEngine.allocate('prod-1', 30, candidates, refDate);
 
     expect(result.totalAllocated).toBe(30);
     expect(result.allocations).toHaveLength(1);
@@ -55,12 +50,7 @@ describe('FefoAllocationEngine (Domain Unit)', () => {
       },
     ];
 
-    const result = FefoAllocationEngine.allocate(
-      'prod-1',
-      50,
-      candidates,
-      refDate,
-    );
+    const result = FefoAllocationEngine.allocate('prod-1', 50, candidates, refDate);
 
     expect(result.totalAllocated).toBe(50);
     expect(result.allocations).toHaveLength(2);
@@ -86,12 +76,7 @@ describe('FefoAllocationEngine (Domain Unit)', () => {
       },
     ];
 
-    const result = FefoAllocationEngine.allocate(
-      'prod-1',
-      20,
-      candidates,
-      refDate,
-    );
+    const result = FefoAllocationEngine.allocate('prod-1', 20, candidates, refDate);
 
     expect(result.allocations).toHaveLength(1);
     expect(result.allocations[0].lotId).toBe('lot-vigente');
@@ -108,8 +93,8 @@ describe('FefoAllocationEngine (Domain Unit)', () => {
       },
     ];
 
-    expect(() =>
-      FefoAllocationEngine.allocate('prod-1', 20, candidates, refDate),
-    ).toThrow('Inventario no vencido insuficiente. Requerido: 20, Disponible: 15');
+    expect(() => FefoAllocationEngine.allocate('prod-1', 20, candidates, refDate)).toThrow(
+      'Inventario no vencido insuficiente. Requerido: 20, Disponible: 15',
+    );
   });
 });

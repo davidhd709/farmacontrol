@@ -20,7 +20,9 @@ describe('ConfirmDialog & SweetModal (REQ-011, REQ-012)', () => {
     );
 
     expect(screen.getByText('¿Confirmar registro?')).toBeInTheDocument();
-    expect(screen.getByText('Está a punto de registrar el producto seleccionado.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Está a punto de registrar el producto seleccionado.'),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /confirmar/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /cancelar/i })).toBeInTheDocument();
 
@@ -40,7 +42,9 @@ describe('ConfirmDialog & SweetModal (REQ-011, REQ-012)', () => {
     );
 
     expect(screen.getByText('¿Guardar cambios?')).toBeInTheDocument();
-    expect(screen.getByText('Se actualizará la información del tercero seleccionado.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Se actualizará la información del tercero seleccionado.'),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /guardar cambios/i })).toBeInTheDocument();
   });
 
@@ -56,7 +60,9 @@ describe('ConfirmDialog & SweetModal (REQ-011, REQ-012)', () => {
     );
 
     expect(screen.getByText('¿Anular este documento?')).toBeInTheDocument();
-    expect(screen.getByText('La operación puede generar reversiones de caja, cartera y contabilidad.')).toBeInTheDocument();
+    expect(
+      screen.getByText('La operación puede generar reversiones de caja, cartera y contabilidad.'),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /confirmar anulación/i })).toBeInTheDocument();
   });
 
@@ -175,4 +181,3 @@ describe('AlertModalContext Hooks (REQ-011)', () => {
     expect(screen.getByText('No fue posible realizar la operación')).toBeInTheDocument();
   });
 });
-

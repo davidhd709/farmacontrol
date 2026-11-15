@@ -170,9 +170,7 @@ export function UsersPage() {
         window.location.replace('/login');
         return;
       }
-      notify(
-        `Contraseña temporal asignada a "${username}". Deberá cambiarla al iniciar sesión.`,
-      );
+      notify(`Contraseña temporal asignada a "${username}". Deberá cambiarla al iniciar sesión.`);
     },
     onError: (cause: Error) => {
       setResetError(cause.message || 'No fue posible restablecer la contraseña.');
@@ -596,8 +594,8 @@ export function UsersPage() {
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 Asigna una contraseña temporal. Al guardar se cerrarán todas las sesiones de esta
-                cuenta y, en su próximo inicio de sesión, el usuario deberá cambiarla por una propia.
-                Comunícasela por un medio seguro.
+                cuenta y, en su próximo inicio de sesión, el usuario deberá cambiarla por una
+                propia. Comunícasela por un medio seguro.
               </Typography>
               {resetError && (
                 <Alert severity="error" role="alert">

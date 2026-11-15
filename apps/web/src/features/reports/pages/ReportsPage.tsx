@@ -257,7 +257,11 @@ export function ReportsPage() {
             <Box
               sx={{
                 display: 'grid',
-                gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))', md: 'repeat(4, minmax(0, 1fr))' },
+                gridTemplateColumns: {
+                  xs: 'minmax(0, 1fr)',
+                  sm: 'repeat(2, minmax(0, 1fr))',
+                  md: 'repeat(4, minmax(0, 1fr))',
+                },
                 gap: 2,
               }}
             >
@@ -407,21 +411,32 @@ export function ReportsPage() {
           <Paper sx={{ p: 2 }}>
             <Stack spacing={2}>
               <Typography variant="body2" color="text.secondary">
-                Lotes con existencias que vencen en 120 días o menos. Se avisa al proveedor entre 120 y 110 días antes
-                del vencimiento para que retire la mercancía; la devolución se acepta hasta 90 días antes.
+                Lotes con existencias que vencen en 120 días o menos. Se avisa al proveedor entre
+                120 y 110 días antes del vencimiento para que retire la mercancía; la devolución se
+                acepta hasta 90 días antes.
               </Typography>
               {supplierReturnsQuery.isLoading ? (
                 <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
                   <CircularProgress size={32} />
                 </Box>
               ) : supplierReturnsQuery.isError ? (
-                <Alert severity="error">No fue posible cargar el reporte de devoluciones a proveedor.</Alert>
+                <Alert severity="error">
+                  No fue posible cargar el reporte de devoluciones a proveedor.
+                </Alert>
               ) : (
                 <>
                   <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
-                    <Chip color="warning" label={`Avisar ahora: ${supplierReturnsQuery.data?.notifyNowCount ?? 0}`} />
-                    <Chip color="error" label={`Aviso atrasado: ${supplierReturnsQuery.data?.lateNoticeCount ?? 0}`} />
-                    <Chip label={`Fuera de plazo: ${supplierReturnsQuery.data?.outOfWindowCount ?? 0}`} />
+                    <Chip
+                      color="warning"
+                      label={`Avisar ahora: ${supplierReturnsQuery.data?.notifyNowCount ?? 0}`}
+                    />
+                    <Chip
+                      color="error"
+                      label={`Aviso atrasado: ${supplierReturnsQuery.data?.lateNoticeCount ?? 0}`}
+                    />
+                    <Chip
+                      label={`Fuera de plazo: ${supplierReturnsQuery.data?.outOfWindowCount ?? 0}`}
+                    />
                   </Stack>
                   <TableContainer>
                     <Table size="small" aria-label="Lotes para devolución a proveedor">
@@ -432,14 +447,22 @@ export function ReportsPage() {
                           <TableCell sx={{ fontWeight: 700 }}>Producto</TableCell>
                           <TableCell sx={{ fontWeight: 700 }}>Lote</TableCell>
                           <TableCell sx={{ fontWeight: 700 }}>Vence</TableCell>
-                          <TableCell sx={{ fontWeight: 700 }} align="right">Días</TableCell>
-                          <TableCell sx={{ fontWeight: 700 }} align="right">Existencia</TableCell>
+                          <TableCell sx={{ fontWeight: 700 }} align="right">
+                            Días
+                          </TableCell>
+                          <TableCell sx={{ fontWeight: 700 }} align="right">
+                            Existencia
+                          </TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
                         {!supplierReturnsQuery.data?.items.length ? (
                           <TableRow>
-                            <TableCell colSpan={7} align="center" sx={{ py: 4, color: 'text.secondary' }}>
+                            <TableCell
+                              colSpan={7}
+                              align="center"
+                              sx={{ py: 4, color: 'text.secondary' }}
+                            >
                               No hay lotes en la ventana de aviso.
                             </TableCell>
                           </TableRow>
@@ -457,7 +480,11 @@ export function ReportsPage() {
                               <TableCell>
                                 {item.supplierName ?? 'Sin compra registrada'}
                                 {item.supplierPhone && (
-                                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                                  <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                    sx={{ display: 'block' }}
+                                  >
                                     Tel. {item.supplierPhone} · Factura {item.lastPurchaseInvoice}
                                   </Typography>
                                 )}
@@ -465,7 +492,9 @@ export function ReportsPage() {
                               <TableCell>
                                 {item.productCode} — {item.productName}
                               </TableCell>
-                              <TableCell sx={{ fontFamily: 'monospace' }}>{item.lotNumber}</TableCell>
+                              <TableCell sx={{ fontFamily: 'monospace' }}>
+                                {item.lotNumber}
+                              </TableCell>
                               <TableCell>{formatDate(item.expirationDate)}</TableCell>
                               <TableCell align="right">{item.daysRemaining}</TableCell>
                               <TableCell align="right">
@@ -489,7 +518,11 @@ export function ReportsPage() {
             <Box
               sx={{
                 display: 'grid',
-                gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))', md: 'repeat(4, minmax(0, 1fr))' },
+                gridTemplateColumns: {
+                  xs: 'minmax(0, 1fr)',
+                  sm: 'repeat(2, minmax(0, 1fr))',
+                  md: 'repeat(4, minmax(0, 1fr))',
+                },
                 gap: 2,
               }}
             >
@@ -550,7 +583,9 @@ export function ReportsPage() {
                       <TableCell sx={{ fontWeight: 700 }}>Fecha Vencimiento</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Días Restantes</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Severidad</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }} align="right">Stock Actual</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }} align="right">
+                        Stock Actual
+                      </TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Ubicación</TableCell>
                     </TableRow>
                   </TableHead>
@@ -564,7 +599,9 @@ export function ReportsPage() {
                     ) : expirationsQuery.data?.items.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
-                          <Typography color="text.secondary">No hay lotes en riesgo de vencimiento.</Typography>
+                          <Typography color="text.secondary">
+                            No hay lotes en riesgo de vencimiento.
+                          </Typography>
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -575,7 +612,9 @@ export function ReportsPage() {
                           <TableCell>{row.categoryName}</TableCell>
                           <TableCell>{formatDate(row.expirationDate)}</TableCell>
                           <TableCell sx={{ fontWeight: 600 }}>
-                            {row.daysRemaining <= 0 ? `Vencido (${Math.abs(row.daysRemaining)}d)` : `${row.daysRemaining} días`}
+                            {row.daysRemaining <= 0
+                              ? `Vencido (${Math.abs(row.daysRemaining)}d)`
+                              : `${row.daysRemaining} días`}
                           </TableCell>
                           <TableCell>{row.severity}</TableCell>
                           <TableCell align="right" sx={{ fontWeight: 700 }}>
@@ -601,7 +640,11 @@ export function ReportsPage() {
             <Box
               sx={{
                 display: 'grid',
-                gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))', md: 'repeat(3, minmax(0, 1fr))' },
+                gridTemplateColumns: {
+                  xs: 'minmax(0, 1fr)',
+                  sm: 'repeat(2, minmax(0, 1fr))',
+                  md: 'repeat(3, minmax(0, 1fr))',
+                },
                 gap: 2,
               }}
             >
@@ -653,10 +696,18 @@ export function ReportsPage() {
                       <TableCell sx={{ fontWeight: 700 }}>Fecha y Hora</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Cliente</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Medio Pago</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }} align="center">Líneas</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }} align="right">Subtotal</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }} align="right">Impuesto</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }} align="right">Total</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }} align="center">
+                        Líneas
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 700 }} align="right">
+                        Subtotal
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 700 }} align="right">
+                        Impuesto
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 700 }} align="right">
+                        Total
+                      </TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Estado</TableCell>
                     </TableRow>
                   </TableHead>
@@ -670,12 +721,18 @@ export function ReportsPage() {
                     ) : salesQuery.data?.items.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
-                          <Typography color="text.secondary">No hay ventas registradas en el período seleccionado.</Typography>
+                          <Typography color="text.secondary">
+                            No hay ventas registradas en el período seleccionado.
+                          </Typography>
                         </TableCell>
                       </TableRow>
                     ) : (
                       salesQuery.data?.items.map((row) => (
-                        <TableRow key={row.saleId} hover data-testid={`sale-row-${row.invoiceNumber}`}>
+                        <TableRow
+                          key={row.saleId}
+                          hover
+                          data-testid={`sale-row-${row.invoiceNumber}`}
+                        >
                           <TableCell sx={{ fontWeight: 700 }}>{row.invoiceNumber}</TableCell>
                           <TableCell>{formatDateTime(row.soldAt)}</TableCell>
                           <TableCell>{row.customerName}</TableCell>
@@ -683,7 +740,9 @@ export function ReportsPage() {
                           <TableCell align="center">{row.itemsCount}</TableCell>
                           <TableCell align="right">{formatCurrency(row.subtotal)}</TableCell>
                           <TableCell align="right">{formatCurrency(row.taxAmount)}</TableCell>
-                          <TableCell align="right" sx={{ fontWeight: 700 }}>{formatCurrency(row.totalAmount)}</TableCell>
+                          <TableCell align="right" sx={{ fontWeight: 700 }}>
+                            {formatCurrency(row.totalAmount)}
+                          </TableCell>
                           <TableCell>{row.status}</TableCell>
                         </TableRow>
                       ))
@@ -704,7 +763,11 @@ export function ReportsPage() {
             <Box
               sx={{
                 display: 'grid',
-                gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))', md: 'repeat(4, minmax(0, 1fr))' },
+                gridTemplateColumns: {
+                  xs: 'minmax(0, 1fr)',
+                  sm: 'repeat(2, minmax(0, 1fr))',
+                  md: 'repeat(4, minmax(0, 1fr))',
+                },
                 gap: 2,
               }}
             >
@@ -762,9 +825,15 @@ export function ReportsPage() {
                       <TableCell sx={{ fontWeight: 700 }}>Fecha y Hora</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Tipo Flujo</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Concepto</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }} align="right">Débito</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }} align="right">Crédito</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }} align="right">Saldo</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }} align="right">
+                        Débito
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 700 }} align="right">
+                        Crédito
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 700 }} align="right">
+                        Saldo
+                      </TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Medio Pago</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Doc. Referencia</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Usuario</TableCell>
@@ -780,7 +849,9 @@ export function ReportsPage() {
                     ) : cashQuery.data?.items.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
-                          <Typography color="text.secondary">No hay movimientos de caja en el período.</Typography>
+                          <Typography color="text.secondary">
+                            No hay movimientos de caja en el período.
+                          </Typography>
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -809,7 +880,9 @@ export function ReportsPage() {
                           <TableCell align="right">{formatCurrency(row.balanceAfter)}</TableCell>
                           <TableCell>{row.paymentMethod}</TableCell>
                           <TableCell>
-                            {row.referenceDocumentType ? `${row.referenceDocumentType} ${row.referenceDocumentId || ''}` : 'N/A'}
+                            {row.referenceDocumentType
+                              ? `${row.referenceDocumentType} ${row.referenceDocumentId || ''}`
+                              : 'N/A'}
                           </TableCell>
                           <TableCell>{row.userName || 'Sistema'}</TableCell>
                         </TableRow>

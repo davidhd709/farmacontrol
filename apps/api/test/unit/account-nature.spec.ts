@@ -35,13 +35,28 @@ describe('Naturaleza de las cuentas (acuerdo del 4 de octubre)', () => {
 
   it('las correctoras del activo son crédito aunque el padre sea débito', () => {
     expect(
-      inferAccountNature({ code: '1592', name: 'DEPRECIACION ACUMULADA', type: 'ASSET', parentNature: 'DEBIT' }),
+      inferAccountNature({
+        code: '1592',
+        name: 'DEPRECIACION ACUMULADA',
+        type: 'ASSET',
+        parentNature: 'DEBIT',
+      }),
     ).toBe('CREDIT');
     expect(
-      inferAccountNature({ code: '1399', name: 'PROVISIONES', type: 'ASSET', parentNature: 'DEBIT' }),
+      inferAccountNature({
+        code: '1399',
+        name: 'PROVISIONES',
+        type: 'ASSET',
+        parentNature: 'DEBIT',
+      }),
     ).toBe('CREDIT');
     expect(
-      inferAccountNature({ code: '110505', name: 'CAJA GENERAL', type: 'ASSET', parentNature: 'DEBIT' }),
+      inferAccountNature({
+        code: '110505',
+        name: 'CAJA GENERAL',
+        type: 'ASSET',
+        parentNature: 'DEBIT',
+      }),
     ).toBe('DEBIT');
   });
 

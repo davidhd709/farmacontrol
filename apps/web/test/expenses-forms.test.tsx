@@ -311,13 +311,11 @@ it('lista las causaciones sin proveedor y asigna uno con confirmación', async (
       status: 'PENDIENTE',
     },
   ]);
-  const assign = vi
-    .spyOn(api, 'assignExpenseSupplier')
-    .mockResolvedValue({
-      ...expense,
-      supplierName: 'Enel',
-      description: 'Energía agosto',
-    } as ExpenseDto);
+  const assign = vi.spyOn(api, 'assignExpenseSupplier').mockResolvedValue({
+    ...expense,
+    supplierName: 'Enel',
+    description: 'Energía agosto',
+  } as ExpenseDto);
   vi.mocked(parties.fetchThirdParties).mockResolvedValue({
     items: [
       {

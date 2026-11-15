@@ -15,13 +15,7 @@ describe('Username Value Object (Unit)', () => {
   });
 
   it('debe aceptar caracteres permitidos: letras minúsculas, números, puntos, guiones y guiones bajos', () => {
-    const validNames = [
-      'usr.name',
-      'cajero_01',
-      'regente-turno',
-      'user123',
-      'a.b_c-1',
-    ];
+    const validNames = ['usr.name', 'cajero_01', 'regente-turno', 'user123', 'a.b_c-1'];
 
     for (const name of validNames) {
       const vo = Username.create(name);
@@ -47,9 +41,7 @@ describe('Username Value Object (Unit)', () => {
   });
 
   it('debe rechazar nombres de usuario con espacios intermedios', () => {
-    expect(() => Username.create('usuario con espacio')).toThrow(
-      InvalidUsernameException
-    );
+    expect(() => Username.create('usuario con espacio')).toThrow(InvalidUsernameException);
   });
 
   it('debe rechazar nombres de usuario con caracteres especiales no permitidos', () => {

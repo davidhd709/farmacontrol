@@ -3,7 +3,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { SYSTEM_PERMISSIONS, SYSTEM_ROLES, type CreditNoteDto, type SaleDto } from '@farmacia/contracts';
+import {
+  SYSTEM_PERMISSIONS,
+  SYSTEM_ROLES,
+  type CreditNoteDto,
+  type SaleDto,
+} from '@farmacia/contracts';
 import { AuthContext, type AuthContextValue } from '../src/features/auth/context/auth-context';
 import * as salesApi from '../src/features/sales/api/sales.api';
 import * as accountingApi from '../src/features/accounting/api/accounting.api';
@@ -239,7 +244,9 @@ describe('CreditNotesPage (REQ-005)', () => {
 
   it('avisa cuando la nota crédito pedida por la URL no existe', async () => {
     renderCreditNotesPage([SYSTEM_PERMISSIONS.SALES_READ], ['/credit-notes?nota=NC-999999']);
-    expect(await screen.findByText('No se encontró la nota crédito NC-999999.')).toBeInTheDocument();
+    expect(
+      await screen.findByText('No se encontró la nota crédito NC-999999.'),
+    ).toBeInTheDocument();
     expect(screen.queryByTestId('credit-note-detail-dialog')).toBeNull();
   });
 
@@ -249,10 +256,7 @@ describe('CreditNotesPage (REQ-005)', () => {
       status: 'ANULADA',
     });
 
-    renderCreditNotesPage([
-      SYSTEM_PERMISSIONS.SALES_READ,
-      SYSTEM_PERMISSIONS.SALES_CANCEL,
-    ]);
+    renderCreditNotesPage([SYSTEM_PERMISSIONS.SALES_READ, SYSTEM_PERMISSIONS.SALES_CANCEL]);
 
     expect(await screen.findByText('NC-000001')).toBeInTheDocument();
 
@@ -275,7 +279,9 @@ describe('CreditNotesPage (REQ-005)', () => {
     expect(confirmBtn).toBeDisabled();
 
     // Con motivo válido
-    fireEvent.change(reasonInput, { target: { value: 'Error en digitación de unidades devueltas' } });
+    fireEvent.change(reasonInput, {
+      target: { value: 'Error en digitación de unidades devueltas' },
+    });
     expect(confirmBtn).not.toBeDisabled();
 
     fireEvent.click(confirmBtn);
@@ -293,18 +299,12 @@ describe('CreditNotesPage (REQ-005)', () => {
     unmount();
 
     // Con permiso SALES_CREDIT_NOTE
-    renderCreditNotesPage([
-      SYSTEM_PERMISSIONS.SALES_READ,
-      SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE,
-    ]);
+    renderCreditNotesPage([SYSTEM_PERMISSIONS.SALES_READ, SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE]);
     expect(await screen.findByTestId('new-credit-note-btn')).toBeInTheDocument();
   });
 
   it('permite abrir el diálogo de búsqueda, seleccionar una factura elegible y rechazar facturas no elegibles', async () => {
-    renderCreditNotesPage([
-      SYSTEM_PERMISSIONS.SALES_READ,
-      SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE,
-    ]);
+    renderCreditNotesPage([SYSTEM_PERMISSIONS.SALES_READ, SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE]);
 
     const newBtn = await screen.findByTestId('new-credit-note-btn');
     fireEvent.click(newBtn);
@@ -352,16 +352,15 @@ describe('CreditNotesPage (REQ-005)', () => {
       lines: [],
     });
 
-    renderCreditNotesPage([
-      SYSTEM_PERMISSIONS.SALES_READ,
-      SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE,
-    ]);
+    renderCreditNotesPage([SYSTEM_PERMISSIONS.SALES_READ, SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE]);
 
     fireEvent.click(await screen.findByTestId('new-credit-note-btn'));
     fireEvent.click(await screen.findByTestId('select-sale-btn-sale-100'));
 
     // Diálogo de nota crédito abierto
-    expect(await screen.findByText('Devolución / Nota Crédito — Factura FAC-000100')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Devolución / Nota Crédito — Factura FAC-000100'),
+    ).toBeInTheDocument();
 
     // Ingresar cantidad a devolver
     const qtyInput = screen.getByLabelText(/Cantidad a devolver de Ibuprofeno 800mg/);
@@ -369,7 +368,9 @@ describe('CreditNotesPage (REQ-005)', () => {
 
     // Ingresar motivo de devolución
     const reasonInput = screen.getByLabelText(/Motivo de la devolución/);
-    fireEvent.change(reasonInput, { target: { value: 'Producto devuelto por defectos de empaque' } });
+    fireEvent.change(reasonInput, {
+      target: { value: 'Producto devuelto por defectos de empaque' },
+    });
 
     // Confirmar
     const submitBtn = screen.getByRole('button', { name: 'Confirmar nota crédito' });
@@ -398,15 +399,14 @@ describe('CreditNotesPage (REQ-005)', () => {
   it('rechaza cantidades inválidas superiores a lo vendido', async () => {
     const createSpy = vi.spyOn(accountingApi, 'createSaleCreditNote');
 
-    renderCreditNotesPage([
-      SYSTEM_PERMISSIONS.SALES_READ,
-      SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE,
-    ]);
+    renderCreditNotesPage([SYSTEM_PERMISSIONS.SALES_READ, SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE]);
 
     fireEvent.click(await screen.findByTestId('new-credit-note-btn'));
     fireEvent.click(await screen.findByTestId('select-sale-btn-sale-100'));
 
-    expect(await screen.findByText('Devolución / Nota Crédito — Factura FAC-000100')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Devolución / Nota Crédito — Factura FAC-000100'),
+    ).toBeInTheDocument();
 
     // Cantidad vendida es 4: intentamos ingresar 10
     const qtyInput = screen.getByLabelText(/Cantidad a devolver de Ibuprofeno 800mg/);
@@ -419,7 +419,9 @@ describe('CreditNotesPage (REQ-005)', () => {
     fireEvent.click(submitBtn);
 
     // Debe mostrar error de validación y NO enviar la petición
-    expect(await screen.findByText('Ingresa una cantidad entre 0 y lo vendido.')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Ingresa una cantidad entre 0 y lo vendido.'),
+    ).toBeInTheDocument();
     expect(createSpy).not.toHaveBeenCalled();
   });
 
@@ -433,10 +435,7 @@ describe('CreditNotesPage (REQ-005)', () => {
         totalPages: 1,
       });
 
-      renderCreditNotesPage([
-        SYSTEM_PERMISSIONS.SALES_READ,
-        SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE,
-      ]);
+      renderCreditNotesPage([SYSTEM_PERMISSIONS.SALES_READ, SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE]);
 
       fireEvent.click(await screen.findByTestId('new-credit-note-btn'));
       expect(await screen.findByTestId('select-sale-for-credit-note-dialog')).toBeInTheDocument();
@@ -463,10 +462,7 @@ describe('CreditNotesPage (REQ-005)', () => {
         totalPages: 1,
       });
 
-      renderCreditNotesPage([
-        SYSTEM_PERMISSIONS.SALES_READ,
-        SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE,
-      ]);
+      renderCreditNotesPage([SYSTEM_PERMISSIONS.SALES_READ, SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE]);
 
       fireEvent.click(await screen.findByTestId('new-credit-note-btn'));
       expect(await screen.findByTestId('select-sale-for-credit-note-dialog')).toBeInTheDocument();
@@ -493,10 +489,7 @@ describe('CreditNotesPage (REQ-005)', () => {
         totalPages: 1,
       });
 
-      renderCreditNotesPage([
-        SYSTEM_PERMISSIONS.SALES_READ,
-        SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE,
-      ]);
+      renderCreditNotesPage([SYSTEM_PERMISSIONS.SALES_READ, SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE]);
 
       fireEvent.click(await screen.findByTestId('new-credit-note-btn'));
       expect(await screen.findByTestId('select-sale-for-credit-note-dialog')).toBeInTheDocument();
@@ -546,10 +539,7 @@ describe('CreditNotesPage (REQ-005)', () => {
         };
       });
 
-      renderCreditNotesPage([
-        SYSTEM_PERMISSIONS.SALES_READ,
-        SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE,
-      ]);
+      renderCreditNotesPage([SYSTEM_PERMISSIONS.SALES_READ, SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE]);
 
       fireEvent.click(await screen.findByTestId('new-credit-note-btn'));
       expect(await screen.findByTestId('select-sale-for-credit-note-dialog')).toBeInTheDocument();
@@ -584,10 +574,7 @@ describe('CreditNotesPage (REQ-005)', () => {
         totalPages: 1,
       });
 
-      renderCreditNotesPage([
-        SYSTEM_PERMISSIONS.SALES_READ,
-        SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE,
-      ]);
+      renderCreditNotesPage([SYSTEM_PERMISSIONS.SALES_READ, SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE]);
 
       fireEvent.click(await screen.findByTestId('new-credit-note-btn'));
       expect(await screen.findByTestId('select-sale-for-credit-note-dialog')).toBeInTheDocument();
@@ -621,10 +608,7 @@ describe('CreditNotesPage (REQ-005)', () => {
         totalPages: 3,
       });
 
-      renderCreditNotesPage([
-        SYSTEM_PERMISSIONS.SALES_READ,
-        SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE,
-      ]);
+      renderCreditNotesPage([SYSTEM_PERMISSIONS.SALES_READ, SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE]);
 
       fireEvent.click(await screen.findByTestId('new-credit-note-btn'));
       expect(await screen.findByTestId('select-sale-for-credit-note-dialog')).toBeInTheDocument();
@@ -676,10 +660,7 @@ describe('CreditNotesPage (REQ-005)', () => {
         };
       });
 
-      renderCreditNotesPage([
-        SYSTEM_PERMISSIONS.SALES_READ,
-        SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE,
-      ]);
+      renderCreditNotesPage([SYSTEM_PERMISSIONS.SALES_READ, SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE]);
 
       fireEvent.click(await screen.findByTestId('new-credit-note-btn'));
       expect(await screen.findByTestId('select-sale-for-credit-note-dialog')).toBeInTheDocument();
@@ -749,10 +730,7 @@ describe('CreditNotesPage (REQ-005)', () => {
         };
       });
 
-      renderCreditNotesPage([
-        SYSTEM_PERMISSIONS.SALES_READ,
-        SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE,
-      ]);
+      renderCreditNotesPage([SYSTEM_PERMISSIONS.SALES_READ, SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE]);
 
       fireEvent.click(await screen.findByTestId('new-credit-note-btn'));
       expect(await screen.findByTestId('select-sale-for-credit-note-dialog')).toBeInTheDocument();
@@ -796,10 +774,7 @@ describe('CreditNotesPage (REQ-005)', () => {
         totalPages: 1,
       });
 
-      renderCreditNotesPage([
-        SYSTEM_PERMISSIONS.SALES_READ,
-        SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE,
-      ]);
+      renderCreditNotesPage([SYSTEM_PERMISSIONS.SALES_READ, SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE]);
 
       // Abrir diálogo
       fireEvent.click(await screen.findByTestId('new-credit-note-btn'));
@@ -811,7 +786,9 @@ describe('CreditNotesPage (REQ-005)', () => {
       fireEvent.click(screen.getByTestId('search-sale-submit-btn'));
 
       await waitFor(() => {
-        expect(fetchSalesSpy).toHaveBeenCalledWith(expect.objectContaining({ search: 'María Rodríguez' }));
+        expect(fetchSalesSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ search: 'María Rodríguez' }),
+        );
       });
       expect(screen.getByTestId('clear-sale-search-btn')).toBeInTheDocument();
 

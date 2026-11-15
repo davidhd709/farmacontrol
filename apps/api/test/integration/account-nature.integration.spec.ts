@@ -36,9 +36,21 @@ describe('Naturaleza de las cuentas (PostgreSQL real)', () => {
     await cleanTestDatabase();
   });
 
-  async function account(code: string, name: string, type: 'ASSET' | 'INCOME' | 'COST', parentId?: string) {
+  async function account(
+    code: string,
+    name: string,
+    type: 'ASSET' | 'INCOME' | 'COST',
+    parentId?: string,
+  ) {
     return prisma.account.create({
-      data: { code, name, type, level: parentId ? 2 : 1, allowsMovement: !!parentId || code.length > 4, parentId },
+      data: {
+        code,
+        name,
+        type,
+        level: parentId ? 2 : 1,
+        allowsMovement: !!parentId || code.length > 4,
+        parentId,
+      },
     });
   }
 
@@ -57,16 +69,37 @@ describe('Naturaleza de las cuentas (PostgreSQL real)', () => {
       },
     });
     const condicionados = await prisma.account.create({
-      data: { code: '417506', name: 'DESCUENTOS CONDICIONADOS', type: 'INCOME', level: 3, allowsMovement: true, parentId: descuentos.id },
+      data: {
+        code: '417506',
+        name: 'DESCUENTOS CONDICIONADOS',
+        type: 'INCOME',
+        level: 3,
+        allowsMovement: true,
+        parentId: descuentos.id,
+      },
     });
     const ppe = await prisma.account.create({
       data: { code: '15', name: 'PROPIEDADES', type: 'ASSET', level: 1, allowsMovement: false },
     });
     const depreciacion = await prisma.account.create({
-      data: { code: '1592', name: 'DEPRECIACION ACUMULADA', type: 'ASSET', level: 2, allowsMovement: false, parentId: ppe.id },
+      data: {
+        code: '1592',
+        name: 'DEPRECIACION ACUMULADA',
+        type: 'ASSET',
+        level: 2,
+        allowsMovement: false,
+        parentId: ppe.id,
+      },
     });
     const ventas = await prisma.account.create({
-      data: { code: '4135', name: 'COMERCIO', type: 'INCOME', level: 2, allowsMovement: false, parentId: ingresos.id },
+      data: {
+        code: '4135',
+        name: 'COMERCIO',
+        type: 'INCOME',
+        level: 2,
+        allowsMovement: false,
+        parentId: ingresos.id,
+      },
     });
 
     expect(ingresos.nature).toBe('CREDIT');
@@ -85,7 +118,13 @@ describe('Naturaleza de las cuentas (PostgreSQL real)', () => {
     expect(inferred.nature).toBe('DEBIT');
 
     const explicit = await accounting.createAccount(
-      { code: '5905', name: 'GANANCIAS Y PERDIDAS', type: 'EXPENSE', nature: 'CREDIT', allowsMovement: true },
+      {
+        code: '5905',
+        name: 'GANANCIAS Y PERDIDAS',
+        type: 'EXPENSE',
+        nature: 'CREDIT',
+        allowsMovement: true,
+      },
       userId,
     );
     expect(explicit.nature).toBe('CREDIT');

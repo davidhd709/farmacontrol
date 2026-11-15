@@ -34,11 +34,15 @@ describe('Campo de la pistola lectora', () => {
     const input = screen.getByLabelText('Escanear código de barras');
     fireEvent.change(input, { target: { value: '999' } });
     fireEvent.keyDown(input, { key: 'Enter' });
-    expect(await screen.findByText('El código "999" no existe en el catálogo.')).toBeInTheDocument();
+    expect(
+      await screen.findByText('El código "999" no existe en el catálogo.'),
+    ).toBeInTheDocument();
     expect(input).toBeEnabled();
     fireEvent.change(input, { target: { value: '7702001000017' } });
     fireEvent.keyDown(input, { key: 'Enter' });
-    await waitFor(() => expect(screen.queryByText(/no existe en el catálogo/)).not.toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.queryByText(/no existe en el catálogo/)).not.toBeInTheDocument(),
+    );
     expect(onScan).toHaveBeenCalledTimes(2);
   });
 });

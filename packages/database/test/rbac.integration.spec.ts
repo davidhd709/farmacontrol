@@ -48,7 +48,7 @@ describe('RBAC — Integridad de Persistencia y Modelos Relacionales (Integratio
             name: 'farmaceutico',
             description: 'Segundo registro duplicado',
           },
-        })
+        }),
       ).rejects.toThrow();
     });
 
@@ -64,7 +64,7 @@ describe('RBAC — Integridad de Persistencia y Modelos Relacionales (Integratio
           data: {
             name: 'AUDITOR',
           },
-        })
+        }),
       ).rejects.toThrow();
     });
   });
@@ -79,7 +79,9 @@ describe('RBAC — Integridad de Persistencia y Modelos Relacionales (Integratio
       });
 
       expect(permission.id).toBeDefined();
-      expect(permission.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+      expect(permission.id).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+      );
       expect(permission.name).toBe('custom:read');
       expect(permission.description).toBe('Permiso de lectura personalizado');
       expect(permission.createdAt).toBeInstanceOf(Date);
@@ -99,7 +101,7 @@ describe('RBAC — Integridad de Persistencia y Modelos Relacionales (Integratio
             name: 'reportes:financieros',
             description: 'Permiso duplicado',
           },
-        })
+        }),
       ).rejects.toThrow();
     });
 
@@ -115,7 +117,7 @@ describe('RBAC — Integridad de Persistencia y Modelos Relacionales (Integratio
           data: {
             name: 'ALMACEN:AJUSTE',
           },
-        })
+        }),
       ).rejects.toThrow();
     });
   });
@@ -190,7 +192,7 @@ describe('RBAC — Integridad de Persistencia y Modelos Relacionales (Integratio
             userId: user.id,
             roleId: role.id,
           },
-        })
+        }),
       ).rejects.toThrow();
     });
 
@@ -311,7 +313,7 @@ describe('RBAC — Integridad de Persistencia y Modelos Relacionales (Integratio
       await expect(
         prisma.rolePermission.create({
           data: { roleId: role.id, permissionId: perm.id },
-        })
+        }),
       ).rejects.toThrow();
     });
 
@@ -395,7 +397,10 @@ describe('RBAC — Integridad de Persistencia y Modelos Relacionales (Integratio
       const roles = await prisma.role.findMany({
         include: { rolePermissions: { include: { permission: true } } },
       });
-      const annul = [SYSTEM_PERMISSIONS.CASH_RECEIPTS_ANNUL, SYSTEM_PERMISSIONS.DISBURSEMENTS_ANNUL];
+      const annul = [
+        SYSTEM_PERMISSIONS.CASH_RECEIPTS_ANNUL,
+        SYSTEM_PERMISSIONS.DISBURSEMENTS_ANNUL,
+      ];
       for (const role of roles) {
         const names = role.rolePermissions.map((rp) => rp.permission.name);
         const accounting = names.includes(SYSTEM_PERMISSIONS.ACCOUNTING_READ);

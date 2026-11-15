@@ -44,7 +44,7 @@ describe('Sale Domain Entities & Business Rules (Unit)', () => {
           productId: 'prod-1',
           quantityCommercial: 0,
           unitPrice: 1000,
-        })
+        }),
       ).toThrow('La cantidad vendida debe ser mayor a cero');
     });
   });
@@ -96,7 +96,7 @@ describe('Sale Domain Entities & Business Rules (Unit)', () => {
           lines: [line],
           amountPaid: 8000, // Menor a 10000
           createdById: 'user-1',
-        })
+        }),
       ).toThrow('El monto recibido ($8000) no cubre el valor total de la venta ($10000)');
     });
 

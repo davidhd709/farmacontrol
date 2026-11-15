@@ -1,4 +1,7 @@
-import { QueryFieldValidationPipe, RequestFieldValidationPipe } from '../../../../common/pagination/request-shape.pipe';
+import {
+  QueryFieldValidationPipe,
+  RequestFieldValidationPipe,
+} from '../../../../common/pagination/request-shape.pipe';
 import { parsePaginationValue } from '../../../../common/pagination/pagination';
 import {
   BadRequestException,
@@ -231,7 +234,11 @@ export class ProductController {
     });
   }
 
-  private validateUploadedFile(file?: { buffer: Buffer; originalname: string; size: number }): Buffer {
+  private validateUploadedFile(file?: {
+    buffer: Buffer;
+    originalname: string;
+    size: number;
+  }): Buffer {
     if (
       !file ||
       !file.originalname.toLowerCase().endsWith('.xlsx') ||

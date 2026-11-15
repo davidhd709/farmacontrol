@@ -20,7 +20,7 @@ describe('CorrelationId Decorator (Unit)', () => {
 
     const mockExecutionContext = {
       switchToHttp: () => ({
-        getRequest: () => ({ correlationId: 'my-corr-uuid-123' } as Request),
+        getRequest: () => ({ correlationId: 'my-corr-uuid-123' }) as Request,
       }),
     } as unknown as ExecutionContext;
 
@@ -33,14 +33,12 @@ describe('CorrelationId Decorator (Unit)', () => {
 
     const mockExecutionContext = {
       switchToHttp: () => ({
-        getRequest: () => ({} as Request),
+        getRequest: () => ({}) as Request,
       }),
     } as unknown as ExecutionContext;
 
     const result = factory(null, mockExecutionContext);
     expect(result).toBeDefined();
-    expect(result).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    );
+    expect(result).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
   });
 });

@@ -83,7 +83,10 @@ export class AccountsController {
    * sin el permiso contable: solo códigos y nombres del PUC, sin saldos ni movimientos.
    */
   @Get('counterparts')
-  @RequireAnyPermissions(SYSTEM_PERMISSIONS.ACCOUNTING_READ, SYSTEM_PERMISSIONS.CASH_RECEIPTS_MANUAL)
+  @RequireAnyPermissions(
+    SYSTEM_PERMISSIONS.ACCOUNTING_READ,
+    SYSTEM_PERMISSIONS.CASH_RECEIPTS_MANUAL,
+  )
   async counterparts(): Promise<AccountDto[]> {
     return (await this.service.listAccounts()).filter((a) => a.isActive && a.allowsMovement);
   }

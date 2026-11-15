@@ -8,7 +8,7 @@ import type {
 import { apiRequest } from '../../../api/http-client';
 
 export async function fetchThirdParties(
-  filters: ThirdPartyQueryFilters = {}
+  filters: ThirdPartyQueryFilters = {},
 ): Promise<PaginatedResponse<ThirdPartyDto>> {
   const query = new URLSearchParams();
 
@@ -22,7 +22,7 @@ export async function fetchThirdParties(
   const qs = query.toString();
   return apiRequest<PaginatedResponse<ThirdPartyDto>>(
     qs ? `third-parties?${qs}` : 'third-parties',
-    { method: 'GET' }
+    { method: 'GET' },
   );
 }
 
@@ -32,9 +32,7 @@ export async function fetchThirdPartyById(id: string): Promise<ThirdPartyDto> {
   });
 }
 
-export async function createThirdParty(
-  payload: CreateThirdPartyPayload
-): Promise<ThirdPartyDto> {
+export async function createThirdParty(payload: CreateThirdPartyPayload): Promise<ThirdPartyDto> {
   return apiRequest<ThirdPartyDto>('third-parties', {
     method: 'POST',
     body: JSON.stringify(payload),
@@ -43,7 +41,7 @@ export async function createThirdParty(
 
 export async function updateThirdParty(
   id: string,
-  payload: UpdateThirdPartyPayload
+  payload: UpdateThirdPartyPayload,
 ): Promise<ThirdPartyDto> {
   return apiRequest<ThirdPartyDto>(`third-parties/${id}`, {
     method: 'PUT',

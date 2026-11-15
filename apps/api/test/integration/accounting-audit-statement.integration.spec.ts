@@ -25,7 +25,9 @@ describe('Auditoría contable y estado de cuenta por tercero', () => {
   let capitalAccountId: string;
 
   beforeAll(async () => {
-    const module: TestingModule = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    const module: TestingModule = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
     app = module.createNestApplication();
     app.setGlobalPrefix('api/v1');
     await app.init();
@@ -33,7 +35,10 @@ describe('Auditoría contable y estado de cuenta por tercero', () => {
     const auth = module.get(AuthService);
     await cleanTestDatabase();
     await seedRbac(prisma);
-    const admin = await provisioning.provisionInitialUser({ username: 'auditora', password: 'AdminPassword#2026' });
+    const admin = await provisioning.provisionInitialUser({
+      username: 'auditora',
+      password: 'AdminPassword#2026',
+    });
     adminId = admin.id!;
     const adminRole = await prisma.role.findUniqueOrThrow({ where: { name: 'admin' } });
     await prisma.userRole.create({ data: { userId: adminId, roleId: adminRole.id } });
@@ -44,9 +49,15 @@ describe('Auditoría contable y estado de cuenta por tercero', () => {
     await prisma.$executeRaw`TRUNCATE TABLE "journal_entry_lines", "journal_entries", "company_accounting_mappings", "receivable_payments", "receivables", "payable_payments", "payables", "idempotency_keys", "sale_lot_allocations", "sale_lines", "sales", "treasury_documents", "cash_movements", "customers", "purchases", "third_parties", "suppliers", "inventory_valuation_movements", "inventory_cost_balances", "inventory_movements", "inventory_lots", "locations", "products", "categories", "accounts" CASCADE`;
     await prisma.$executeRaw`UPDATE "treasury_document_sequences" SET "last_value" = 0`;
     capitalAccountId = (await seedPurposeMappings()).CAPITAL;
-    await prisma.customer.create({ data: { documentNumber: '222222222222', name: 'Consumidor Final', isDefault: true } });
-    customerId = (await prisma.customer.create({ data: { documentNumber: '900777', name: 'Clínica Aliada' } })).id;
-    supplierId = (await prisma.supplier.create({ data: { taxId: '900777', name: 'Clínica Aliada' } })).id;
+    await prisma.customer.create({
+      data: { documentNumber: '222222222222', name: 'Consumidor Final', isDefault: true },
+    });
+    customerId = (
+      await prisma.customer.create({ data: { documentNumber: '900777', name: 'Clínica Aliada' } })
+    ).id;
+    supplierId = (
+      await prisma.supplier.create({ data: { taxId: '900777', name: 'Clínica Aliada' } })
+    ).id;
     thirdPartyId = (
       await prisma.thirdParty.create({
         data: {
@@ -74,11 +85,21 @@ describe('Auditoría contable y estado de cuenta por tercero', () => {
         },
       })
     ).id;
-    const location = await prisma.location.create({ data: { code: 'POS', name: 'Estante', isDefault: true } });
+    const location = await prisma.location.create({
+      data: { code: 'POS', name: 'Estante', isDefault: true },
+    });
     const expiration = new Date();
     expiration.setDate(expiration.getDate() + 200);
     await prisma.inventoryLot.create({
-      data: { controlMode: 'LOT_EXPIRY', productId, locationId: location.id, lotNumber: 'L1', expirationDate: expiration, currentQuantity: 100, isActive: true },
+      data: {
+        controlMode: 'LOT_EXPIRY',
+        productId,
+        locationId: location.id,
+        lotNumber: 'L1',
+        expirationDate: expiration,
+        currentQuantity: 100,
+        isActive: true,
+      },
     });
   });
 
@@ -88,7 +109,11 @@ describe('Auditoría contable y estado de cuenta por tercero', () => {
   });
 
   const post = (path: string, body: object) =>
-    request(app.getHttpServer()).post(`/api/v1/${path}`).set('Cookie', cookie).set('Idempotency-Key', randomUUID()).send(body);
+    request(app.getHttpServer())
+      .post(`/api/v1/${path}`)
+      .set('Cookie', cookie)
+      .set('Idempotency-Key', randomUUID())
+      .send(body);
   const audit = (query: string) =>
     request(app.getHttpServer()).get(`/api/v1/accounting/audit?${query}`).set('Cookie', cookie);
 
@@ -99,7 +124,9 @@ describe('Auditoría contable y estado de cuenta por tercero', () => {
       items: [{ productId, quantityCommercial: 10 }],
     });
     expect(sale.status, JSON.stringify(sale.body)).toBe(201);
-    const receivable = await prisma.receivable.findUniqueOrThrow({ where: { saleId: sale.body.id } });
+    const receivable = await prisma.receivable.findUniqueOrThrow({
+      where: { saleId: sale.body.id },
+    });
     const receipt = await post('treasury/cash-receipts/collections', {
       kind: 'CARTERA',
       paymentMethod: 'EFECTIVO',
@@ -122,7 +149,9 @@ describe('Auditoría contable y estado de cuenta por tercero', () => {
       number: sale.body.invoiceNumber,
       href: `/sales/${sale.body.id}`,
     });
-    const payment = res.body.items.find((e: { sourceType: string }) => e.sourceType === 'RECEIVABLE_PAYMENT');
+    const payment = res.body.items.find(
+      (e: { sourceType: string }) => e.sourceType === 'RECEIVABLE_PAYMENT',
+    );
     expect(payment.sourceDocument).toEqual({
       number: receipt.body.documentNumber,
       href: `/treasury/receipts?q=${receipt.body.documentNumber}`,
@@ -139,7 +168,9 @@ describe('Auditoría contable y estado de cuenta por tercero', () => {
     const clean = await audit('view=DESCUADRADOS').expect(200);
     expect(clean.body.items).toEqual([]);
     expect(clean.body).toMatchObject({ truncated: false, maxRows: 500 });
-    expect(clean.body.documentTypes).toEqual(expect.arrayContaining(['SALE', 'RECEIVABLE_PAYMENT']));
+    expect(clean.body.documentTypes).toEqual(
+      expect.arrayContaining(['SALE', 'RECEIVABLE_PAYMENT']),
+    );
 
     // Un asiento histórico descuadrado (la base hoy lo rechaza al confirmar la transacción)
     const account = await prisma.account.findFirstOrThrow({ where: { id: capitalAccountId } });
@@ -156,8 +187,18 @@ describe('Auditoría contable y estado de cuenta por tercero', () => {
           postedAt: new Date('2026-09-15T12:00:00Z'),
           lines: {
             create: [
-              { position: 1, accountId: account.id, debit: new Prisma.Decimal('100.00'), credit: new Prisma.Decimal('0') },
-              { position: 2, accountId: account.id, debit: new Prisma.Decimal('0'), credit: new Prisma.Decimal('90.00') },
+              {
+                position: 1,
+                accountId: account.id,
+                debit: new Prisma.Decimal('100.00'),
+                credit: new Prisma.Decimal('0'),
+              },
+              {
+                position: 2,
+                accountId: account.id,
+                debit: new Prisma.Decimal('0'),
+                credit: new Prisma.Decimal('90.00'),
+              },
             ],
           },
         },
@@ -195,18 +236,29 @@ describe('Auditoría contable y estado de cuenta por tercero', () => {
     });
 
     const all = await audit('view=DESCUADRADOS').expect(200);
-    expect(all.body.items.map((i: { documentType: string; difference: string }) => [i.documentType, i.difference]).sort()).toEqual([
+    expect(
+      all.body.items
+        .map((i: { documentType: string; difference: string }) => [i.documentType, i.difference])
+        .sort(),
+    ).toEqual([
       ['LEGACY_IMPORT', '10.00'],
       ['TREASURY_DOCUMENT', '5000.00'],
     ]);
-    const filtered = await audit('view=DESCUADRADOS&documentType=LEGACY_IMPORT&fromDate=2026-09-01&toDate=2026-09-30').expect(200);
+    const filtered = await audit(
+      'view=DESCUADRADOS&documentType=LEGACY_IMPORT&fromDate=2026-09-01&toDate=2026-09-30',
+    ).expect(200);
     expect(filtered.body.items).toHaveLength(1);
-    expect((await audit('view=DESCUADRADOS&fromDate=2026-09-16&documentType=LEGACY_IMPORT').expect(200)).body.items).toHaveLength(0);
+    expect(
+      (await audit('view=DESCUADRADOS&fromDate=2026-09-16&documentType=LEGACY_IMPORT').expect(200))
+        .body.items,
+    ).toHaveLength(0);
   });
 
   it('los anulados muestran el documento reversado con fecha y motivo, filtrables por tipo', async () => {
     const { receivable } = await creditSaleAndReceipt();
-    const payment = await prisma.receivablePayment.findFirstOrThrow({ where: { receivableId: receivable.id } });
+    const payment = await prisma.receivablePayment.findFirstOrThrow({
+      where: { receivableId: receivable.id },
+    });
     await request(app.getHttpServer())
       .post(`/api/v1/receivables/${receivable.id}/payments/${payment.id}/reverse`)
       .set('Cookie', cookie)
@@ -228,7 +280,12 @@ describe('Auditoría contable y estado de cuenta por tercero', () => {
   it('el estado de cuenta del tercero suma lo que nos debe y lo que le debemos', async () => {
     await creditSaleAndReceipt();
     const purchase = await prisma.purchase.create({
-      data: { supplierId, invoiceNumber: 'FC-1', purchaseDate: new Date('2026-10-01'), totalAmount: new Prisma.Decimal('2500.00') },
+      data: {
+        supplierId,
+        invoiceNumber: 'FC-1',
+        purchaseDate: new Date('2026-10-01'),
+        totalAmount: new Prisma.Decimal('2500.00'),
+      },
     });
     await prisma.payable.create({
       data: {
@@ -252,8 +309,14 @@ describe('Auditoría contable y estado de cuenta por tercero', () => {
       totalWeOwe: '2500.00',
       netBalance: '3500.00',
     });
-    expect(res.body.receivables.items[0]).toMatchObject({ balance: '6000.00', agingBucket: 'CORRIENTE' });
-    expect(res.body.payables.items[0]).toMatchObject({ documentNumber: 'FC-1', balance: '2500.00' });
+    expect(res.body.receivables.items[0]).toMatchObject({
+      balance: '6000.00',
+      agingBucket: 'CORRIENTE',
+    });
+    expect(res.body.payables.items[0]).toMatchObject({
+      documentNumber: 'FC-1',
+      balance: '2500.00',
+    });
     await request(app.getHttpServer())
       .get(`/api/v1/third-parties/${randomUUID()}/statement`)
       .set('Cookie', cookie)

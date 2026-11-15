@@ -1,7 +1,4 @@
-import {
-  businessDayStart,
-  businessDayEnd,
-} from '../../../common/utils/business-date';
+import { businessDayStart, businessDayEnd } from '../../../common/utils/business-date';
 import { Injectable, Optional } from '@nestjs/common';
 import { AccountingEngineService } from '../../accounting/application/accounting-engine.service';
 import { Prisma, prisma, type BankAccount, type BankMovement } from '@farmacia/database';
@@ -360,7 +357,11 @@ export class TreasuryService {
         },
       ];
     }
-    if (filter.sortOrder !== undefined && filter.sortOrder !== 'asc' && filter.sortOrder !== 'desc') {
+    if (
+      filter.sortOrder !== undefined &&
+      filter.sortOrder !== 'asc' &&
+      filter.sortOrder !== 'desc'
+    ) {
       throw new TreasuryValidationError('El orden debe ser asc o desc.');
     }
     const order = filter.sortOrder === 'asc' ? 'asc' : 'desc';
@@ -416,5 +417,4 @@ export class TreasuryService {
       total,
     };
   }
-
 }

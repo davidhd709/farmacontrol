@@ -21,7 +21,9 @@ describe('Búsqueda por código de barras', () => {
   let boxId: string;
 
   beforeAll(async () => {
-    const module: TestingModule = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    const module: TestingModule = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
     app = module.createNestApplication();
     app.setGlobalPrefix('api/v1');
     await app.init();
@@ -29,11 +31,16 @@ describe('Búsqueda por código de barras', () => {
     await seedRbac(prisma);
     const provisioning = module.get(UserProvisioningService);
     const auth = module.get(AuthService);
-    const cashier = await provisioning.provisionInitialUser({ username: 'cajero_scan', password: 'CajeroPassword#2026' });
+    const cashier = await provisioning.provisionInitialUser({
+      username: 'cajero_scan',
+      password: 'CajeroPassword#2026',
+    });
     const role = await prisma.role.findUniqueOrThrow({ where: { name: 'cajero' } });
     await prisma.userRole.create({ data: { userId: cashier.id!, roleId: role.id } });
     cookie = `${SESSION_COOKIE_NAME}=${(await auth.login('cajero_scan', 'CajeroPassword#2026')).rawToken}`;
-    const admin = await prisma.user.create({ data: { username: 'admin_scan', passwordHash: cashier.passwordHash } });
+    const admin = await prisma.user.create({
+      data: { username: 'admin_scan', passwordHash: cashier.passwordHash },
+    });
     const adminRole = await prisma.role.findUniqueOrThrow({ where: { name: 'admin' } });
     await prisma.userRole.create({ data: { userId: admin.id, roleId: adminRole.id } });
     adminCookie = `${SESSION_COOKIE_NAME}=${(await auth.login('admin_scan', 'CajeroPassword#2026')).rawToken}`;
@@ -72,7 +79,9 @@ describe('Búsqueda por código de barras', () => {
   });
 
   const lookup = (code: string) =>
-    request(app.getHttpServer()).get(`/api/v1/products/barcode/${encodeURIComponent(code)}`).set('Cookie', cookie);
+    request(app.getHttpServer())
+      .get(`/api/v1/products/barcode/${encodeURIComponent(code)}`)
+      .set('Cookie', cookie);
 
   it('encuentra el producto por su código de barras, el de una presentación o el código interno', async () => {
     const byProduct = await lookup('7702001000017').expect(200);
@@ -109,7 +118,13 @@ describe('Búsqueda por código de barras', () => {
     });
     // Dato antiguo: la presentación de otro producto reutiliza el código del acetaminofén
     await prisma.productPresentation.create({
-      data: { productId: other.id, name: 'Blíster', barcode: '7702001000017', conversionFactor: 10, price: new Prisma.Decimal('7000.00') },
+      data: {
+        productId: other.id,
+        name: 'Blíster',
+        barcode: '7702001000017',
+        conversionFactor: 10,
+        price: new Prisma.Decimal('7000.00'),
+      },
     });
     const res = await lookup('7702001000017').expect(409);
     expect(res.body.message).toMatch(/dos productos distintos/);
@@ -119,7 +134,12 @@ describe('Búsqueda por código de barras', () => {
     const res = await request(app.getHttpServer())
       .post(`/api/v1/products/${productId}/presentations`)
       .set('Cookie', adminCookie)
-      .send({ name: 'Display x 100', barcode: '7702001000017', conversionFactor: 100, price: '40000.00' });
+      .send({
+        name: 'Display x 100',
+        barcode: '7702001000017',
+        conversionFactor: 100,
+        price: '40000.00',
+      });
     expect(res.status).toBe(409);
     expect(await prisma.productPresentation.count({ where: { name: 'Display x 100' } })).toBe(0);
   });

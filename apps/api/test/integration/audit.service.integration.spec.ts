@@ -101,7 +101,7 @@ describe('AuditService (Integration with PostgreSQL)', () => {
           details: { previousStatus: true, newStatus: false },
           correlationId: 'corr-tx-success',
         },
-        tx
+        tx,
       );
     });
 
@@ -126,7 +126,7 @@ describe('AuditService (Integration with PostgreSQL)', () => {
           details: { amount: 50000 },
           correlationId,
         },
-        tx
+        tx,
       );
 
       // Simular un fallo de negocio que aborta la transacción

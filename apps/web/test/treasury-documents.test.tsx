@@ -1,5 +1,12 @@
 import { ThemeProvider } from '@mui/material';
-import { fireEvent, render, screen, waitFor, waitForElementToBeRemoved, within } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  waitForElementToBeRemoved,
+  within,
+} from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -353,7 +360,9 @@ describe('Recibos de caja y comprobantes de egreso', () => {
         SYSTEM_PERMISSIONS.CASH_RECEIPTS_COLLECT,
         SYSTEM_PERMISSIONS.TREASURY_ACCOUNTS_SELECT,
       ]);
-      expect(await screen.findByRole('heading', { name: 'Cuentas por Cobrar' })).toBeInTheDocument();
+      expect(
+        await screen.findByRole('heading', { name: 'Cuentas por Cobrar' }),
+      ).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Nuevo recibo de caja' })).toBeNull();
     });
 
@@ -473,7 +482,9 @@ describe('Recibos de caja y comprobantes de egreso', () => {
       expect(await screen.findByText(/Corregir Recibo de Caja RC-000101/)).toBeInTheDocument();
 
       // Verificar que muestra la información original y el diff view
-      expect(screen.getByText('1. Información del Documento Original a Corregir')).toBeInTheDocument();
+      expect(
+        screen.getByText('1. Información del Documento Original a Corregir'),
+      ).toBeInTheDocument();
       expect(screen.getByText('3. Comparación de Diferencias (Diff View)')).toBeInTheDocument();
 
       // Modificar concepto y valor aplicado
@@ -565,7 +576,9 @@ describe('Recibos de caja y comprobantes de egreso', () => {
 
       fireEvent.click(screen.getByRole('button', { name: 'CE-000201' }));
       fireEvent.click(await screen.findByRole('button', { name: 'Corregir Documento' }));
-      expect(await screen.findByText(/Corregir Comprobante de Egreso CE-000201/)).toBeInTheDocument();
+      expect(
+        await screen.findByText(/Corregir Comprobante de Egreso CE-000201/),
+      ).toBeInTheDocument();
 
       fireEvent.change(screen.getByLabelText('Concepto Corregido *'), {
         target: { value: 'Pago corregido proveedor' },
@@ -720,7 +733,9 @@ describe('Recibos de caja y comprobantes de egreso', () => {
 
       // Cerrar modal y esperar a que desaparezca
       fireEvent.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
-      await waitForElementToBeRemoved(() => screen.queryByRole('dialog', { name: 'Nuevo recibo de caja' }));
+      await waitForElementToBeRemoved(() =>
+        screen.queryByRole('dialog', { name: 'Nuevo recibo de caja' }),
+      );
 
       // Volver a abrir: debe detectar el borrador pendiente
       fireEvent.click(await screen.findByRole('button', { name: 'Nuevo recibo de caja' }));
@@ -787,13 +802,24 @@ describe('Rediseño fase 4: acciones de cada documento y su motivo', () => {
       .mockResolvedValue({ items, total: items.length, page: 1, pageSize: 25, totalPages: 1 });
 
   it('un egreso automático solo se imprime y dice desde dónde se corrige', async () => {
-    list([{ ...egreso, status: 'VIGENTE', cancelledAt: null, cancelledByName: null, cancellationReason: null }]);
+    list([
+      {
+        ...egreso,
+        status: 'VIGENTE',
+        cancelledAt: null,
+        cancelledByName: null,
+        cancellationReason: null,
+      },
+    ]);
     renderPage(<DisbursementVouchersPage />);
     fireEvent.click(await screen.findByRole('button', { name: 'CE-000001' }));
     const notice = await screen.findByTestId('treasury-actions-restriction');
     expect(notice).toHaveTextContent('Lo generó el gasto exp-1');
     expect(notice).toHaveTextContent('se corrige o anula desde ese documento');
-    expect(within(notice).getByRole('link', { name: 'Ir a gastos' })).toHaveAttribute('href', '/expenses');
+    expect(within(notice).getByRole('link', { name: 'Ir a gastos' })).toHaveAttribute(
+      'href',
+      '/expenses',
+    );
     expect(screen.queryByRole('button', { name: 'Corregir Documento' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Anular Documento' })).toBeNull();
     expect(screen.getByTestId('treasury-doc-origin')).toHaveTextContent(
@@ -807,7 +833,11 @@ describe('Rediseño fase 4: acciones de cada documento y su motivo', () => {
         ...egreso,
         referenceDocumentType: 'EXPENSE_PAYMENT_REVERSAL',
         referenceDocumentId: '5b0c1f3e-8a7d-4c2b-9e6f-1a2b3c4d5e6f',
-        sourceDocument: { kind: 'GASTO', id: 'f1e2d3c4-b5a6-4978-8a9b-0c1d2e3f4a5b', number: 'G-0012' },
+        sourceDocument: {
+          kind: 'GASTO',
+          id: 'f1e2d3c4-b5a6-4978-8a9b-0c1d2e3f4a5b',
+          number: 'G-0012',
+        },
         status: 'VIGENTE',
         cancelledAt: null,
         cancelledByName: null,
@@ -872,7 +902,9 @@ describe('Rediseño fase 4: acciones de cada documento y su motivo', () => {
     list([cartera]);
     const correctSpy = vi
       .spyOn(treasuryApi, 'correctTreasuryDocument')
-      .mockRejectedValue(new Error('No es posible reversar asientos: los documentos están bloqueados.'));
+      .mockRejectedValue(
+        new Error('No es posible reversar asientos: los documentos están bloqueados.'),
+      );
     renderPage(<CashReceiptsPage />);
     fireEvent.click(await screen.findByRole('button', { name: 'RC-000500' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Corregir Documento' }));

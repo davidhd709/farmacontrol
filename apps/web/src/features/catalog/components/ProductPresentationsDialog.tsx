@@ -52,8 +52,9 @@ export function ProductPresentationsDialog({
   product,
 }: ProductPresentationsDialogProps) {
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [selectedPresentation, setSelectedPresentation] =
-    useState<ProductPresentationDto | null>(null);
+  const [selectedPresentation, setSelectedPresentation] = useState<ProductPresentationDto | null>(
+    null,
+  );
   const [presToDeactivate, setPresToDeactivate] = useState<ProductPresentationDto | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -152,9 +153,12 @@ export function ProductPresentationsDialog({
       const presName = pres?.name || 'Presentación';
 
       if (calcDirection === 'toBase') {
-        const baseUnits = baseUnitsValue !== undefined ? baseUnitsValue : calcQuantity * (pres?.conversionFactor || 1);
+        const baseUnits =
+          baseUnitsValue !== undefined
+            ? baseUnitsValue
+            : calcQuantity * (pres?.conversionFactor || 1);
         let breakdown = `${calcQuantity} ${presName} = ${baseUnits} ${product.baseUnit}(s)`;
-        
+
         // Si la presentación contiene otra presentación (jerarquía)
         if (pres?.containedPresentationId && pres.containedPresentationName) {
           const intermediateQty = calcQuantity * (pres.quantityContained || 1);
@@ -163,8 +167,9 @@ export function ProductPresentationsDialog({
 
         setCalcResult(breakdown);
       } else {
-        const whole = resData.wholePresentations ?? Math.floor(calcQuantity / (pres?.conversionFactor || 1));
-        const rem = resData.remainderBaseUnits ?? (calcQuantity % (pres?.conversionFactor || 1));
+        const whole =
+          resData.wholePresentations ?? Math.floor(calcQuantity / (pres?.conversionFactor || 1));
+        const rem = resData.remainderBaseUnits ?? calcQuantity % (pres?.conversionFactor || 1);
         setCalcResult(
           `${calcQuantity.toLocaleString('es-CO')} ${product.baseUnit}(s) = ${whole.toLocaleString('es-CO')} ${presName}${
             rem > 0 ? ` + ${rem} ${product.baseUnit}(s) sueltas` : ' (empaque exacto)'
@@ -204,7 +209,8 @@ export function ProductPresentationsDialog({
                 Presentaciones Comerciales y Equivalencias
               </Typography>
               <Typography variant="body2" component="div" color="text.secondary">
-                Producto: <strong>{product.name}</strong> • SKU: <span>{product.code}</span> • Unidad mínima Kardex:{' '}
+                Producto: <strong>{product.name}</strong> • SKU: <span>{product.code}</span> •
+                Unidad mínima Kardex:{' '}
                 <Chip
                   label={product.baseUnit}
                   size="small"
@@ -257,7 +263,8 @@ export function ProductPresentationsDialog({
                   Unidad Base de Inventario (Kardex y Lotes): {product.baseUnit}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  Todas las compras, existencias físicas, lotes con FEFO y movimientos se gestionan estrictamente en esta unidad mínima.
+                  Todas las compras, existencias físicas, lotes con FEFO y movimientos se gestionan
+                  estrictamente en esta unidad mínima.
                 </Typography>
               </Box>
               <Chip
@@ -322,7 +329,11 @@ export function ProductPresentationsDialog({
                           <Typography variant="body2" color="text.secondary">
                             Este producto aún no tiene presentaciones comerciales configuradas.
                           </Typography>
-                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ display: 'block', mt: 0.5 }}
+                          >
                             Se opera por defecto en su unidad base ({product.baseUnit}).
                           </Typography>
                         </TableCell>
@@ -337,9 +348,10 @@ export function ProductPresentationsDialog({
                             : '0.0';
 
                         // Descripción de lo que contiene físicamente
-                        const containsDescription = pres.containedPresentationId && pres.containedPresentationName
-                          ? `${pres.quantityContained} ${pres.containedPresentationName}`
-                          : `${pres.quantityContained} ${product.baseUnit} (Base)`;
+                        const containsDescription =
+                          pres.containedPresentationId && pres.containedPresentationName
+                            ? `${pres.quantityContained} ${pres.containedPresentationName}`
+                            : `${pres.quantityContained} ${product.baseUnit} (Base)`;
 
                         return (
                           <TableRow key={pres.id} hover>
@@ -378,23 +390,33 @@ export function ProductPresentationsDialog({
                             </TableCell>
 
                             <TableCell align="right" sx={{ fontWeight: 600 }}>
-                              ${priceNum.toLocaleString('es-CO', {
+                              $
+                              {priceNum.toLocaleString('es-CO', {
                                 minimumFractionDigits: 2,
                                 maximumFractionDigits: 2,
                               })}
                               {pres.conversionFactor > 1 && priceNum > 0 ? (
-                                <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
-                                  ${(priceNum / pres.conversionFactor).toFixed(2)} / {product.baseUnit}
+                                <Typography
+                                  variant="caption"
+                                  sx={{ display: 'block', color: 'text.secondary' }}
+                                >
+                                  ${(priceNum / pres.conversionFactor).toFixed(2)} /{' '}
+                                  {product.baseUnit}
                                 </Typography>
                               ) : null}
                             </TableCell>
 
                             <TableCell align="right" sx={{ color: 'text.secondary' }}>
-                              ${costNum.toLocaleString('es-CO', {
+                              $
+                              {costNum.toLocaleString('es-CO', {
                                 minimumFractionDigits: 2,
                                 maximumFractionDigits: 2,
                               })}
-                              <Typography variant="caption" sx={{ display: 'block' }} color="text.secondary">
+                              <Typography
+                                variant="caption"
+                                sx={{ display: 'block' }}
+                                color="text.secondary"
+                              >
                                 Margen: {margin}%
                               </Typography>
                             </TableCell>
@@ -402,16 +424,35 @@ export function ProductPresentationsDialog({
                             <TableCell align="center">
                               <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
                                 {pres.purchaseEnabled ? (
-                                  <Chip label="Compra" size="small" color="info" variant="outlined" sx={{ fontSize: '0.65rem', height: 20 }} />
+                                  <Chip
+                                    label="Compra"
+                                    size="small"
+                                    color="info"
+                                    variant="outlined"
+                                    sx={{ fontSize: '0.65rem', height: 20 }}
+                                  />
                                 ) : null}
                                 {pres.saleEnabled ? (
-                                  <Chip label="Venta" size="small" color="success" variant="outlined" sx={{ fontSize: '0.65rem', height: 20 }} />
+                                  <Chip
+                                    label="Venta"
+                                    size="small"
+                                    color="success"
+                                    variant="outlined"
+                                    sx={{ fontSize: '0.65rem', height: 20 }}
+                                  />
                                 ) : null}
                               </Box>
                             </TableCell>
 
                             <TableCell align="center">
-                              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, alignItems: 'center' }}>
+                              <Box
+                                sx={{
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: 0.5,
+                                  alignItems: 'center',
+                                }}
+                              >
                                 {pres.isDefault || pres.isDefaultSale ? (
                                   <Chip
                                     label="★ Principal"
@@ -511,7 +552,8 @@ export function ProductPresentationsDialog({
                   Calculadora de Equivalencia Comercial y Sobrantes
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  Verifica en tiempo real cómo el motor calcula la transformación de empaques a unidades base del Kardex y viceversa.
+                  Verifica en tiempo real cómo el motor calcula la transformación de empaques a
+                  unidades base del Kardex y viceversa.
                 </Typography>
 
                 <Box
@@ -549,9 +591,7 @@ export function ProductPresentationsDialog({
                       id="calc-dir-select"
                       value={calcDirection}
                       label="Dirección"
-                      onChange={(e) =>
-                        setCalcDirection(e.target.value as 'toBase' | 'fromBase')
-                      }
+                      onChange={(e) => setCalcDirection(e.target.value as 'toBase' | 'fromBase')}
                     >
                       <MenuItem value="toBase">
                         Empaque ➔ Unidades Base ({product.baseUnit})

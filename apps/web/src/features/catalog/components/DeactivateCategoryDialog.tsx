@@ -71,13 +71,12 @@ export function DeactivateCategoryDialog({
         ) : null}
 
         <DialogContentText variant="body2" color="text.secondary">
-          ¿Estás seguro de que deseas inactivar la categoría{' '}
-          <strong>{category?.name}</strong>?
+          ¿Estás seguro de que deseas inactivar la categoría <strong>{category?.name}</strong>?
         </DialogContentText>
 
         <DialogContentText variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
-          Esta acción deshabilitará la categoría para la creación de nuevos productos. Los
-          productos que ya la tengan asignada conservarán su información histórica sin alteraciones.
+          Esta acción deshabilitará la categoría para la creación de nuevos productos. Los productos
+          que ya la tengan asignada conservarán su información histórica sin alteraciones.
         </DialogContentText>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2.5 }}>

@@ -132,9 +132,9 @@ describe('Excel Product Import / Export', () => {
 
       const mockPrisma = {
         category: {
-          findMany: vi.fn().mockResolvedValue([
-            { id: 'cat-1', name: 'Analgésicos', isActive: true },
-          ]),
+          findMany: vi
+            .fn()
+            .mockResolvedValue([{ id: 'cat-1', name: 'Analgésicos', isActive: true }]),
         },
         product: { findMany: vi.fn().mockResolvedValue([]) },
         productPresentation: { findMany: vi.fn().mockResolvedValue([]) },

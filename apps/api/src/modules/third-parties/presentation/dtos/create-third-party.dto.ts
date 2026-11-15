@@ -70,17 +70,21 @@ export class CreateThirdPartyValidationPipe implements PipeTransform {
     }
     const trimmedName = record.name.trim();
     if (trimmedName.length < 2 || trimmedName.length > 200) {
-      throw new BadRequestException('El nombre o razón social debe tener entre 2 y 200 caracteres.');
+      throw new BadRequestException(
+        'El nombre o razón social debe tener entre 2 y 200 caracteres.',
+      );
     }
 
     return {
       personType,
       documentType,
       documentNumber: trimmedDoc,
-      verificationDigit: typeof record.verificationDigit === 'string' ? record.verificationDigit.trim() : null,
+      verificationDigit:
+        typeof record.verificationDigit === 'string' ? record.verificationDigit.trim() : null,
       name: trimmedName,
       tradeName: typeof record.tradeName === 'string' ? record.tradeName.trim() || null : null,
-      contactName: typeof record.contactName === 'string' ? record.contactName.trim() || null : null,
+      contactName:
+        typeof record.contactName === 'string' ? record.contactName.trim() || null : null,
       phone: typeof record.phone === 'string' ? record.phone.trim() || null : null,
       email: typeof record.email === 'string' ? record.email.trim() || null : null,
       address: typeof record.address === 'string' ? record.address.trim() || null : null,
@@ -89,10 +93,11 @@ export class CreateThirdPartyValidationPipe implements PipeTransform {
       departmentCode:
         typeof record.departmentCode === 'string' ? record.departmentCode.trim() || null : null,
       municipalityCode:
-        typeof record.municipalityCode === 'string'
-          ? record.municipalityCode.trim() || null
-          : null,
-      taxRegime: typeof record.taxRegime === 'string' ? record.taxRegime.trim().toUpperCase() : 'NO_RESPONSABLE_IVA',
+        typeof record.municipalityCode === 'string' ? record.municipalityCode.trim() || null : null,
+      taxRegime:
+        typeof record.taxRegime === 'string'
+          ? record.taxRegime.trim().toUpperCase()
+          : 'NO_RESPONSABLE_IVA',
       isCustomer: Boolean(record.isCustomer),
       isSupplier: Boolean(record.isSupplier),
       isEmployee: Boolean(record.isEmployee),

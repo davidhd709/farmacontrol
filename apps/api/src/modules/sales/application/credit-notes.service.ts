@@ -526,7 +526,9 @@ export class CreditNotesService {
   ): Promise<CreditNoteDto> {
     const reason = typeof payload?.reason === 'string' ? payload.reason.trim() : '';
     if (reason.length < 3 || reason.length > 500) {
-      throw new BadRequestException('El motivo de la anulación es obligatorio (entre 3 y 500 caracteres).');
+      throw new BadRequestException(
+        'El motivo de la anulación es obligatorio (entre 3 y 500 caracteres).',
+      );
     }
 
     await executeWithRetry(() =>
@@ -545,11 +547,19 @@ export class CreditNotesService {
             include: {
               sale: { select: { invoiceNumber: true, bankAccountId: true } },
               exchangeSale: { select: { invoiceNumber: true, status: true } },
-              lines: { include: { saleLine: { select: { presentationId: true, presentationFactorHistorical: true } } } },
+              lines: {
+                include: {
+                  saleLine: {
+                    select: { presentationId: true, presentationFactorHistorical: true },
+                  },
+                },
+              },
             },
           });
           if (note.status === 'ANULADA') {
-            throw new ConflictException(`La nota crédito ${note.creditNoteNumber} ya está anulada.`);
+            throw new ConflictException(
+              `La nota crédito ${note.creditNoteNumber} ya está anulada.`,
+            );
           }
           if (note.exchangeSale && note.exchangeSale.status !== 'CANCELLED') {
             throw new ConflictException(
@@ -561,7 +571,10 @@ export class CreditNotesService {
           let restockCostCents = 0n;
           let issuedCostCents = 0n;
           if (note.restock) {
-            const byProduct = new Map<string, Array<{ lotId: string; quantityBaseUnits: number }>>();
+            const byProduct = new Map<
+              string,
+              Array<{ lotId: string; quantityBaseUnits: number }>
+            >();
             for (const line of note.lines) {
               if (!line.lotId) continue;
               const lot = await this.inventoryLedger.lockLot(tx, line.lotId);
@@ -570,17 +583,22 @@ export class CreditNotesService {
                   `El lote ${lot?.lot_number ?? line.lotId} ya no tiene las ${line.quantityBaseUnits} unidades devueltas en la nota crédito ${note.creditNoteNumber}; no se puede anular.`,
                 );
               }
-              await this.inventoryLedger.changeLotQuantity(tx, line.lotId, -line.quantityBaseUnits, {
-                movementType: 'SALIDA_ANULACION_DEVOLUCION',
-                productId: line.productId,
-                presentationId: line.saleLine?.presentationId || null,
-                quantityBaseUnits: line.quantityBaseUnits,
-                presentationFactorHistorical: line.saleLine?.presentationFactorHistorical ?? 1,
-                referenceDocumentType: 'CREDIT_NOTE_CANCEL',
-                referenceDocumentId: note.creditNoteNumber,
-                notes: `Anulación de la devolución ${note.creditNoteNumber} (${reason})`,
-                createdByUserId: userId,
-              });
+              await this.inventoryLedger.changeLotQuantity(
+                tx,
+                line.lotId,
+                -line.quantityBaseUnits,
+                {
+                  movementType: 'SALIDA_ANULACION_DEVOLUCION',
+                  productId: line.productId,
+                  presentationId: line.saleLine?.presentationId || null,
+                  quantityBaseUnits: line.quantityBaseUnits,
+                  presentationFactorHistorical: line.saleLine?.presentationFactorHistorical ?? 1,
+                  referenceDocumentType: 'CREDIT_NOTE_CANCEL',
+                  referenceDocumentId: note.creditNoteNumber,
+                  notes: `Anulación de la devolución ${note.creditNoteNumber} (${reason})`,
+                  createdByUserId: userId,
+                },
+              );
               const lots = byProduct.get(line.productId) ?? [];
               lots.push({ lotId: line.lotId, quantityBaseUnits: line.quantityBaseUnits });
               byProduct.set(line.productId, lots);
@@ -597,7 +615,11 @@ export class CreditNotesService {
               });
             }
             const restocked = await tx.inventoryValuationMovement.aggregate({
-              where: { sourceType: 'CREDIT_NOTE', sourceId: note.creditNoteNumber, direction: 'IN' },
+              where: {
+                sourceType: 'CREDIT_NOTE',
+                sourceId: note.creditNoteNumber,
+                direction: 'IN',
+              },
               _sum: { value: true },
             });
             restockCostCents = toCents(restocked._sum.value ?? 0, 'Costo reintegrado');
@@ -638,7 +660,12 @@ export class CreditNotesService {
           // 3. Estado del documento, reverso contable y auditoría
           await tx.creditNote.update({
             where: { id },
-            data: { status: 'ANULADA', cancelledAt: new Date(), cancelledById: userId, cancellationReason: reason },
+            data: {
+              status: 'ANULADA',
+              cancelledAt: new Date(),
+              cancelledById: userId,
+              cancellationReason: reason,
+            },
           });
           await this.accountingEngine.handleCreditNoteCancelled(
             {

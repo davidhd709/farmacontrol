@@ -150,8 +150,7 @@ describe('BackupsController (Integration with PostgreSQL & Backup Scripts — HU
     expect(postRes.status).toBe(403);
 
     // Sin sesión (anónimo)
-    const anonRes = await request(app.getHttpServer())
-      .get('/api/v1/backups/status');
+    const anonRes = await request(app.getHttpServer()).get('/api/v1/backups/status');
     expect(anonRes.status).toBe(401);
   });
 });

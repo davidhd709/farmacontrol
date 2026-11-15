@@ -36,7 +36,7 @@ describe('Session (Domain Entity)', () => {
           userId: '',
           tokenHash: validTokenHash,
           expiresAt: futureDate,
-        })
+        }),
       ).toThrow('El identificador de usuario (userId) es obligatorio.');
     });
 
@@ -47,7 +47,7 @@ describe('Session (Domain Entity)', () => {
           userId: validUserId,
           tokenHash: 'abc123',
           expiresAt: futureDate,
-        })
+        }),
       ).toThrow(InvalidSessionTokenException);
 
       // Caracteres no hexadecimales
@@ -56,7 +56,7 @@ describe('Session (Domain Entity)', () => {
           userId: validUserId,
           tokenHash: 'z'.repeat(64),
           expiresAt: futureDate,
-        })
+        }),
       ).toThrow(InvalidSessionTokenException);
     });
 
@@ -66,7 +66,7 @@ describe('Session (Domain Entity)', () => {
           userId: validUserId,
           tokenHash: validTokenHash,
           expiresAt: new Date('fecha-invalida'),
-        })
+        }),
       ).toThrow('La fecha de expiración (expiresAt) es obligatoria y debe ser una fecha válida.');
     });
   });

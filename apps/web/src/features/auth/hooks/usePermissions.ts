@@ -13,15 +13,9 @@ import { useAuth } from './useAuth';
 export function usePermissions() {
   const { user } = useAuth();
 
-  const permissionsSet = useMemo(
-    () => new Set(user?.permissions ?? []),
-    [user?.permissions],
-  );
+  const permissionsSet = useMemo(() => new Set(user?.permissions ?? []), [user?.permissions]);
 
-  const rolesSet = useMemo(
-    () => new Set(user?.roles ?? []),
-    [user?.roles],
-  );
+  const rolesSet = useMemo(() => new Set(user?.roles ?? []), [user?.roles]);
 
   const hasPermission = (permission: string): boolean => {
     return permissionsSet.has(permission);

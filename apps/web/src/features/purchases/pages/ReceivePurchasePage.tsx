@@ -244,60 +244,60 @@ export const ReceivePurchasePage: React.FC = () => {
 
   const handleConfirmSubmit = handleSubmit(
     async (values) => {
-    if (submittingRef.current) return;
-    submittingRef.current = true;
-    const {
-      supplierId,
-      invoiceNumber,
-      purchaseDate,
-      paymentCondition,
-      creditDays,
-      dueDate,
-      notes,
-      lines,
-    } = values;
-    setErrorMsg(null);
-    try {
-      const conditionLabel =
-        paymentCondition === 'CONTADO'
-          ? 'Contado'
-          : `Crédito (${creditDays !== 'manual' ? `${creditDays} días` : 'personalizado'})`;
-      const invoiceMeta = `[Factura Vence: ${dueDate} | Condición: ${conditionLabel}]`;
-      const fullNotes = notes.trim() ? `${invoiceMeta} ${notes.trim()}` : invoiceMeta;
-
-      const payload: ReceivePurchasePayload = {
+      if (submittingRef.current) return;
+      submittingRef.current = true;
+      const {
         supplierId,
-        invoiceNumber: invoiceNumber.trim().toUpperCase(),
+        invoiceNumber,
         purchaseDate,
-        dueDate,
         paymentCondition,
-        notes: fullNotes,
-        lines: lines.map((l) => {
-          const mode = products.find((p) => p.id === l.productId)?.inventoryControlMode;
-          return {
-            productId: l.productId,
-            presentationId: l.presentationId || null,
-            // Solo se envía lo que el modo del producto admite; el backend lo vuelve a validar
-            ...(mode === 'LOT' || mode === 'LOT_EXPIRY'
-              ? { lotNumber: l.lotNumber.trim().toUpperCase() }
-              : {}),
-            ...(mode === 'LOT_EXPIRY' ? { expirationDate: l.expirationDate } : {}),
-            ...(mode === 'SERIAL' ? { serialNumbers: parseSerialNumbers(l.serialNumbers) } : {}),
-            quantityCommercial: parseFloat(l.quantityCommercial),
-            unitCost: parseFloat(l.unitCost),
-          };
-        }),
-      };
+        creditDays,
+        dueDate,
+        notes,
+        lines,
+      } = values;
+      setErrorMsg(null);
+      try {
+        const conditionLabel =
+          paymentCondition === 'CONTADO'
+            ? 'Contado'
+            : `Crédito (${creditDays !== 'manual' ? `${creditDays} días` : 'personalizado'})`;
+        const invoiceMeta = `[Factura Vence: ${dueDate} | Condición: ${conditionLabel}]`;
+        const fullNotes = notes.trim() ? `${invoiceMeta} ${notes.trim()}` : invoiceMeta;
 
-      await receivePurchase(payload);
-      navigate('/purchases');
-    } catch (err) {
-      // Se queda en la revisión con los datos intactos; el aviso ofrece volver al paso a corregir
-      const msg = err instanceof Error ? err.message : 'Error al registrar la compra.';
-      setErrorMsg(msg);
-    } finally {
-      submittingRef.current = false;
-    }
+        const payload: ReceivePurchasePayload = {
+          supplierId,
+          invoiceNumber: invoiceNumber.trim().toUpperCase(),
+          purchaseDate,
+          dueDate,
+          paymentCondition,
+          notes: fullNotes,
+          lines: lines.map((l) => {
+            const mode = products.find((p) => p.id === l.productId)?.inventoryControlMode;
+            return {
+              productId: l.productId,
+              presentationId: l.presentationId || null,
+              // Solo se envía lo que el modo del producto admite; el backend lo vuelve a validar
+              ...(mode === 'LOT' || mode === 'LOT_EXPIRY'
+                ? { lotNumber: l.lotNumber.trim().toUpperCase() }
+                : {}),
+              ...(mode === 'LOT_EXPIRY' ? { expirationDate: l.expirationDate } : {}),
+              ...(mode === 'SERIAL' ? { serialNumbers: parseSerialNumbers(l.serialNumbers) } : {}),
+              quantityCommercial: parseFloat(l.quantityCommercial),
+              unitCost: parseFloat(l.unitCost),
+            };
+          }),
+        };
+
+        await receivePurchase(payload);
+        navigate('/purchases');
+      } catch (err) {
+        // Se queda en la revisión con los datos intactos; el aviso ofrece volver al paso a corregir
+        const msg = err instanceof Error ? err.message : 'Error al registrar la compra.';
+        setErrorMsg(msg);
+      } finally {
+        submittingRef.current = false;
+      }
     },
     (formErrors) => {
       const headerError = HEADER_FIELDS.find((field) => formErrors[field]);
@@ -341,10 +341,7 @@ export const ReceivePurchasePage: React.FC = () => {
       <Stepper nonLinear activeStep={step} sx={{ mb: 2 }}>
         {STEPS.map((label, index) => (
           <Step key={label} completed={index < step}>
-            <StepButton
-              disabled={index > step || submitting}
-              onClick={() => setStep(index)}
-            >
+            <StepButton disabled={index > step || submitting} onClick={() => setStep(index)}>
               {label}
             </StepButton>
           </Step>
@@ -381,7 +378,9 @@ export const ReceivePurchasePage: React.FC = () => {
           <Box component="span" sx={{ color: 'text.secondary' }}>
             Factura:{' '}
           </Box>
-          <strong>{invoiceNumber.trim() ? invoiceNumber.trim().toUpperCase() : 'sin número'}</strong>
+          <strong>
+            {invoiceNumber.trim() ? invoiceNumber.trim().toUpperCase() : 'sin número'}
+          </strong>
         </Typography>
         <Typography variant="body2">
           <Box component="span" sx={{ color: 'text.secondary' }}>
@@ -429,878 +428,888 @@ export const ReceivePurchasePage: React.FC = () => {
       >
         {/* Paso 1: datos de la factura */}
         {step === 0 && (
-        <Paper sx={{ p: 3, mb: 3 }}>
-          <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-            Datos del Comprobante / Factura
-          </Typography>
+          <Paper sx={{ p: 3, mb: 3 }}>
+            <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
+              Datos del Comprobante / Factura
+            </Typography>
 
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)' },
-              gap: 2.5,
-            }}
-          >
-            <PurchaseFormField
-              name="supplierId"
-              control={control}
-              select
-              label="Proveedor *"
-              required
-              fullWidth
-            >
-              <MenuItem value="">Selecciona un proveedor...</MenuItem>
-              {suppliers.map((s) => (
-                <MenuItem key={s.id} value={s.id}>
-                  {s.name} ({s.taxId})
-                </MenuItem>
-              ))}
-            </PurchaseFormField>
-
-            <PurchaseFormField
-              name="invoiceNumber"
-              control={control}
-              label="Número de Factura / Comprobante *"
-              placeholder="Ej. FAC-2026-00891"
-              required
-              fullWidth
-            />
-
-            <PurchaseFormField
-              name="purchaseDate"
-              control={control}
-              label="Fecha de Emisión / Factura *"
-              type="date"
-              onDateChange={(value) => {
-                const newDate = value;
-                setValue('purchaseDate', newDate);
-                if (paymentCondition === 'CONTADO') {
-                  setValue('dueDate', newDate);
-                } else if (creditDays !== 'manual') {
-                  setValue('dueDate', calculateDefaultDueDate(newDate, Number(creditDays) || 30));
-                }
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: {
+                  xs: 'minmax(0, 1fr)',
+                  sm: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)',
+                },
+                gap: 2.5,
               }}
-              required
-              fullWidth
-            />
-
-            <PurchaseFormField
-              name="paymentCondition"
-              control={control}
-              select
-              label="Condición de Pago *"
-              onChange={(e) => {
-                const val = e.target.value as 'CONTADO' | 'CREDITO';
-                setValue('paymentCondition', val);
-                if (val === 'CONTADO') {
-                  setValue('dueDate', purchaseDate);
-                } else {
-                  setValue(
-                    'dueDate',
-                    calculateDefaultDueDate(purchaseDate, Number(creditDays) || 30),
-                  );
-                }
-              }}
-              required
-              fullWidth
             >
-              <MenuItem value="CONTADO">Contado (Pago Inmediato)</MenuItem>
-              <MenuItem value="CREDITO">Crédito Comercial</MenuItem>
-            </PurchaseFormField>
-
-            {paymentCondition === 'CREDITO' ? (
               <PurchaseFormField
-                name="creditDays"
+                name="supplierId"
                 control={control}
                 select
-                label="Plazo de Crédito"
-                onChange={(e) => {
-                  const days = e.target.value;
-                  setValue('creditDays', days);
-                  if (days !== 'manual') {
-                    setValue('dueDate', calculateDefaultDueDate(purchaseDate, Number(days)));
-                  }
-                }}
+                label="Proveedor *"
+                required
                 fullWidth
               >
-                <MenuItem value="15">15 Días</MenuItem>
-                <MenuItem value="30">30 Días (Estándar)</MenuItem>
-                <MenuItem value="45">45 Días</MenuItem>
-                <MenuItem value="60">60 Días</MenuItem>
-                <MenuItem value="manual">Plazo Personalizado</MenuItem>
+                <MenuItem value="">Selecciona un proveedor...</MenuItem>
+                {suppliers.map((s) => (
+                  <MenuItem key={s.id} value={s.id}>
+                    {s.name} ({s.taxId})
+                  </MenuItem>
+                ))}
               </PurchaseFormField>
-            ) : (
-              <TextField label="Modalidad" value="Pago al recibir" disabled fullWidth />
-            )}
 
-            <PurchaseFormField
-              name="dueDate"
-              control={control}
-              label="Fecha de Vencimiento de Factura *"
-              type="date"
-              onDateChange={(value) => setValue('dueDate', value)}
-              helperText="Fecha límite para el pago al proveedor"
-              required
-              fullWidth
-            />
-
-            <Box sx={{ gridColumn: '1 / -1' }}>
               <PurchaseFormField
-                name="notes"
+                name="invoiceNumber"
                 control={control}
-                label="Observaciones / Notas"
-                placeholder="Detalles sobre entrega, transportadora, número de guía o condiciones especiales..."
+                label="Número de Factura / Comprobante *"
+                placeholder="Ej. FAC-2026-00891"
+                required
                 fullWidth
               />
+
+              <PurchaseFormField
+                name="purchaseDate"
+                control={control}
+                label="Fecha de Emisión / Factura *"
+                type="date"
+                onDateChange={(value) => {
+                  const newDate = value;
+                  setValue('purchaseDate', newDate);
+                  if (paymentCondition === 'CONTADO') {
+                    setValue('dueDate', newDate);
+                  } else if (creditDays !== 'manual') {
+                    setValue('dueDate', calculateDefaultDueDate(newDate, Number(creditDays) || 30));
+                  }
+                }}
+                required
+                fullWidth
+              />
+
+              <PurchaseFormField
+                name="paymentCondition"
+                control={control}
+                select
+                label="Condición de Pago *"
+                onChange={(e) => {
+                  const val = e.target.value as 'CONTADO' | 'CREDITO';
+                  setValue('paymentCondition', val);
+                  if (val === 'CONTADO') {
+                    setValue('dueDate', purchaseDate);
+                  } else {
+                    setValue(
+                      'dueDate',
+                      calculateDefaultDueDate(purchaseDate, Number(creditDays) || 30),
+                    );
+                  }
+                }}
+                required
+                fullWidth
+              >
+                <MenuItem value="CONTADO">Contado (Pago Inmediato)</MenuItem>
+                <MenuItem value="CREDITO">Crédito Comercial</MenuItem>
+              </PurchaseFormField>
+
+              {paymentCondition === 'CREDITO' ? (
+                <PurchaseFormField
+                  name="creditDays"
+                  control={control}
+                  select
+                  label="Plazo de Crédito"
+                  onChange={(e) => {
+                    const days = e.target.value;
+                    setValue('creditDays', days);
+                    if (days !== 'manual') {
+                      setValue('dueDate', calculateDefaultDueDate(purchaseDate, Number(days)));
+                    }
+                  }}
+                  fullWidth
+                >
+                  <MenuItem value="15">15 Días</MenuItem>
+                  <MenuItem value="30">30 Días (Estándar)</MenuItem>
+                  <MenuItem value="45">45 Días</MenuItem>
+                  <MenuItem value="60">60 Días</MenuItem>
+                  <MenuItem value="manual">Plazo Personalizado</MenuItem>
+                </PurchaseFormField>
+              ) : (
+                <TextField label="Modalidad" value="Pago al recibir" disabled fullWidth />
+              )}
+
+              <PurchaseFormField
+                name="dueDate"
+                control={control}
+                label="Fecha de Vencimiento de Factura *"
+                type="date"
+                onDateChange={(value) => setValue('dueDate', value)}
+                helperText="Fecha límite para el pago al proveedor"
+                required
+                fullWidth
+              />
+
+              <Box sx={{ gridColumn: '1 / -1' }}>
+                <PurchaseFormField
+                  name="notes"
+                  control={control}
+                  label="Observaciones / Notas"
+                  placeholder="Detalles sobre entrega, transportadora, número de guía o condiciones especiales..."
+                  fullWidth
+                />
+              </Box>
             </Box>
-          </Box>
-        </Paper>
+          </Paper>
         )}
 
         {/* Paso 2: productos y lotes */}
         {step === 1 && (
-        <Paper sx={{ p: 3, mb: 3, borderRadius: 2 }}>
-          <Box
-            sx={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              gap: 2,
-              mb: 3,
-            }}
-          >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-              <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                Productos y Lotes a Ingresar
-              </Typography>
-              <Chip
-                label={`${lines.length} ${lines.length === 1 ? 'línea' : 'líneas'}`}
-                size="small"
-                color="primary"
-                variant="outlined"
-                sx={{ fontWeight: 'bold' }}
-              />
-            </Box>
+          <Paper sx={{ p: 3, mb: 3, borderRadius: 2 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: 2,
+                mb: 3,
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                  Productos y Lotes a Ingresar
+                </Typography>
+                <Chip
+                  label={`${lines.length} ${lines.length === 1 ? 'línea' : 'líneas'}`}
+                  size="small"
+                  color="primary"
+                  variant="outlined"
+                  sx={{ fontWeight: 'bold' }}
+                />
+              </Box>
 
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-              <ToggleButtonGroup
-                value={viewMode}
-                exclusive
-                size="small"
-                onChange={(_, next) => next && setViewMode(next)}
-                aria-label="Modo de visualización"
-              >
-                <ToggleButton
-                  value="cards"
-                  sx={{ px: 1.5, py: 0.5, textTransform: 'none', gap: 0.75, fontWeight: 600 }}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+                <ToggleButtonGroup
+                  value={viewMode}
+                  exclusive
+                  size="small"
+                  onChange={(_, next) => next && setViewMode(next)}
+                  aria-label="Modo de visualización"
                 >
-                  <ViewAgendaIcon fontSize="small" />
-                  Tarjetas (Espaciosa)
-                </ToggleButton>
-                <ToggleButton
-                  value="table"
-                  sx={{ px: 1.5, py: 0.5, textTransform: 'none', gap: 0.75, fontWeight: 600 }}
-                >
-                  <TableRowsIcon fontSize="small" />
-                  Tabla
-                </ToggleButton>
-              </ToggleButtonGroup>
-
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={handleAddLine}
-                startIcon={<AddIcon />}
-                sx={{ fontWeight: 'bold' }}
-              >
-                Agregar Producto
-              </Button>
-            </Box>
-          </Box>
-
-          <BarcodeScanField onScan={handleScan} />
-
-          {errors.lines?.root?.message && (
-            <Alert severity="error">{errors.lines.root.message}</Alert>
-          )}
-          {viewMode === 'cards' ? (
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-              {lines.map((line, idx) => {
-                const subtotal = calculateSubtotal(line);
-                const p = products.find((prod) => prod.id === line.productId);
-                const selectedPres = p?.presentations?.find((pr) => pr.id === line.presentationId);
-                const factor = selectedPres ? selectedPres.conversionFactor : 1;
-                const qtyCommercial = parseFloat(line.quantityCommercial) || 0;
-                const totalBaseUnits = Math.round(qtyCommercial * factor);
-                const unitCost = parseFloat(line.unitCost) || 0;
-                const costPerBaseUnit = factor > 0 ? unitCost / factor : unitCost;
-
-                return (
-                  <Paper
-                    key={fields[idx].id}
-                    variant="outlined"
-                    sx={{
-                      p: 2.5,
-                      borderRadius: 2,
-                      borderColor: 'divider',
-                      bgcolor: 'background.paper',
-                      boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-                      transition: 'all 0.2s ease-in-out',
-                      '&:hover': {
-                        borderColor: 'primary.main',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                      },
-                    }}
+                  <ToggleButton
+                    value="cards"
+                    sx={{ px: 1.5, py: 0.5, textTransform: 'none', gap: 0.75, fontWeight: 600 }}
                   >
-                    {/* Encabezado de la Tarjeta */}
-                    <Box
+                    <ViewAgendaIcon fontSize="small" />
+                    Tarjetas (Espaciosa)
+                  </ToggleButton>
+                  <ToggleButton
+                    value="table"
+                    sx={{ px: 1.5, py: 0.5, textTransform: 'none', gap: 0.75, fontWeight: 600 }}
+                  >
+                    <TableRowsIcon fontSize="small" />
+                    Tabla
+                  </ToggleButton>
+                </ToggleButtonGroup>
+
+                <Button
+                  variant="contained"
+                  color="primary"
+                  onClick={handleAddLine}
+                  startIcon={<AddIcon />}
+                  sx={{ fontWeight: 'bold' }}
+                >
+                  Agregar Producto
+                </Button>
+              </Box>
+            </Box>
+
+            <BarcodeScanField onScan={handleScan} />
+
+            {errors.lines?.root?.message && (
+              <Alert severity="error">{errors.lines.root.message}</Alert>
+            )}
+            {viewMode === 'cards' ? (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+                {lines.map((line, idx) => {
+                  const subtotal = calculateSubtotal(line);
+                  const p = products.find((prod) => prod.id === line.productId);
+                  const selectedPres = p?.presentations?.find(
+                    (pr) => pr.id === line.presentationId,
+                  );
+                  const factor = selectedPres ? selectedPres.conversionFactor : 1;
+                  const qtyCommercial = parseFloat(line.quantityCommercial) || 0;
+                  const totalBaseUnits = Math.round(qtyCommercial * factor);
+                  const unitCost = parseFloat(line.unitCost) || 0;
+                  const costPerBaseUnit = factor > 0 ? unitCost / factor : unitCost;
+
+                  return (
+                    <Paper
+                      key={fields[idx].id}
+                      variant="outlined"
                       sx={{
-                        display: 'flex',
-                        flexWrap: 'wrap',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        mb: 2.5,
-                        pb: 1.5,
-                        borderBottom: '1px solid',
+                        p: 2.5,
+                        borderRadius: 2,
                         borderColor: 'divider',
-                        gap: 1,
-                      }}
-                    >
-                      <Box
-                        sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}
-                      >
-                        <Chip
-                          label={`#${idx + 1}`}
-                          size="small"
-                          color="primary"
-                          sx={{ fontWeight: 'bold', borderRadius: 1 }}
-                        />
-                        <Typography
-                          variant="subtitle1"
-                          sx={{ fontWeight: 'bold', color: 'text.primary' }}
-                        >
-                          {p ? `${p.name} (${p.code})` : 'Nuevo Producto a Ingresar'}
-                        </Typography>
-                        {p && (
-                          <Chip
-                            label={`Unidad Base: ${p.baseUnit}`}
-                            size="small"
-                            variant="outlined"
-                            sx={{ fontSize: '0.75rem', fontWeight: 600, height: 24 }}
-                          />
-                        )}
-                      </Box>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2.5 }}>
-                        <Box sx={{ textAlign: 'right' }}>
-                          <Typography
-                            variant="caption"
-                            color="text.secondary"
-                            sx={{
-                              display: 'block',
-                              textTransform: 'uppercase',
-                              letterSpacing: 0.5,
-                            }}
-                          >
-                            Subtotal Línea
-                          </Typography>
-                          <Typography
-                            variant="h6"
-                            sx={{ fontWeight: 'bold', color: 'primary.main', lineHeight: 1.2 }}
-                          >
-                            ${subtotal.toLocaleString('es-CO')}
-                          </Typography>
-                        </Box>
-                        <Tooltip title="Eliminar este producto">
-                          <span>
-                            <IconButton
-                              aria-label={`Eliminar línea ${idx + 1}`}
-                              color="error"
-                              size="small"
-                              onClick={() => handleRemoveLine(idx)}
-                              disabled={lines.length <= 1}
-                              sx={{
-                                border: '1px solid',
-                                borderColor: 'error.light',
-                                borderRadius: 1.5,
-                              }}
-                            >
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          </span>
-                        </Tooltip>
-                      </Box>
-                    </Box>
-
-                    {/* Fila 1: Producto y Presentación */}
-                    <Box
-                      sx={{
-                        display: 'grid',
-                        gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: '1.2fr minmax(0, 1fr)' },
-                        gap: 2.5,
-                        mb: 2,
-                      }}
-                    >
-                      <PurchaseFormField
-                        name={`lines.${idx}.productId`}
-                        control={control}
-                        select
-                        size="small"
-                        label="Producto *"
-                        fullWidth
-                        onChange={(e) => handleLineChange(idx, 'productId', e.target.value)}
-                        required
-                        helperText={
-                          p
-                            ? `Código/SKU: ${p.code} | Unidad mínima: ${p.baseUnit}`
-                            : 'Seleccione el medicamento o artículo'
-                        }
-                      >
-                        <MenuItem value="">Selecciona un producto...</MenuItem>
-                        {products.map((prod) => (
-                          <MenuItem key={prod.id} value={prod.id}>
-                            {prod.name} ({prod.code}) — [{prod.baseUnit}]
-                          </MenuItem>
-                        ))}
-                      </PurchaseFormField>
-
-                      <PurchaseFormField
-                        name={`lines.${idx}.presentationId`}
-                        control={control}
-                        select
-                        size="small"
-                        label="Presentación / Empaque Recibido *"
-                        fullWidth
-                        onChange={(e) => handleLineChange(idx, 'presentationId', e.target.value)}
-                        disabled={!line.productId}
-                        helperText={
-                          selectedPres
-                            ? `1 ${selectedPres.name} = ${
-                                selectedPres.containedPresentationId &&
-                                selectedPres.containedPresentationName
-                                  ? `${selectedPres.quantityContained} ${selectedPres.containedPresentationName} = `
-                                  : ''
-                              }${selectedPres.conversionFactor} ${p?.baseUnit}`
-                            : p
-                              ? `Ingreso directo en unidad base (${p.baseUnit})`
-                              : 'Primero elija un producto'
-                        }
-                      >
-                        <MenuItem value="">
-                          <em>[Unidad Base] {p?.baseUnit || 'UNIDAD'} (Factor 1:1)</em>
-                        </MenuItem>
-                        {p?.presentations
-                          ?.filter((pres) => pres.isActive && (pres.purchaseEnabled ?? true))
-                          .map((pres) => (
-                            <MenuItem key={pres.id} value={pres.id}>
-                              {pres.name} (x{pres.conversionFactor} {p.baseUnit})
-                            </MenuItem>
-                          ))}
-                      </PurchaseFormField>
-                    </Box>
-
-                    {/* Fila 2: Lote, Vencimiento, Cantidad y Costo */}
-                    <Box
-                      sx={{
-                        display: 'grid',
-                        gridTemplateColumns: {
-                          xs: 'minmax(0, 1fr)',
-                          sm: 'minmax(0, 1fr) minmax(0, 1fr)',
-                          md: '1.2fr 1.2fr minmax(0, 1fr) 1.2fr',
+                        bgcolor: 'background.paper',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                        transition: 'all 0.2s ease-in-out',
+                        '&:hover': {
+                          borderColor: 'primary.main',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
                         },
-                        gap: 2.5,
                       }}
                     >
-                      {p?.inventoryControlMode === 'SERIAL' ? (
-                        <PurchaseFormField
-                          name={`lines.${idx}.serialNumbers`}
-                          control={control}
-                          size="small"
-                          label="Series *"
-                          fullWidth
-                          multiline
-                          minRows={1}
-                          placeholder="Una por línea o separadas por coma"
-                          onChange={(e) => handleLineChange(idx, 'serialNumbers', e.target.value)}
-                          helperText="Una serie por cada unidad recibida"
-                          required
-                          sx={{ gridColumn: { md: 'span 2' } }}
-                        />
-                      ) : p?.inventoryControlMode === 'LOT' ||
-                        p?.inventoryControlMode === 'LOT_EXPIRY' ? (
-                        <>
-                          <PurchaseFormField
-                            name={`lines.${idx}.lotNumber`}
-                            control={control}
-                            size="small"
-                            label="Número de Lote *"
-                            fullWidth
-                            placeholder="Ej. LOT-2026-X"
-                            onChange={(e) => handleLineChange(idx, 'lotNumber', e.target.value)}
-                            helperText="Identificador del lote del fabricante"
-                            required
-                          />
-                          {p.inventoryControlMode === 'LOT_EXPIRY' ? (
-                            <PurchaseFormField
-                              name={`lines.${idx}.expirationDate`}
-                              control={control}
-                              size="small"
-                              type="date"
-                              label="Fecha de Vencimiento *"
-                              fullWidth
-                              onDateChange={(value) =>
-                                handleLineChange(idx, 'expirationDate', value)
-                              }
-                              helperText="Vencimiento sanitario (FEFO)"
-                              required
-                            />
-                          ) : (
-                            <Typography
-                              variant="body2"
-                              color="text.secondary"
-                              sx={{ alignSelf: 'center' }}
-                            >
-                              Sin vencimiento: sale por orden de entrada
-                            </Typography>
-                          )}
-                        </>
-                      ) : (
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          sx={{ alignSelf: 'center', gridColumn: { md: 'span 2' } }}
-                        >
-                          {p
-                            ? `${inventoryControlModeLabel(p.inventoryControlMode)}: no requiere lote ni vencimiento`
-                            : 'Seleccione un producto para ver si requiere lote'}
-                        </Typography>
-                      )}
-
-                      <PurchaseFormField
-                        name={`lines.${idx}.quantityCommercial`}
-                        control={control}
-                        size="small"
-                        type="number"
-                        label={`Cantidad (${selectedPres ? selectedPres.name : p?.baseUnit || 'Unid.'}) *`}
-                        fullWidth
-                        onChange={(e) =>
-                          handleLineChange(idx, 'quantityCommercial', e.target.value)
-                        }
-                        slotProps={{ htmlInput: { min: '1', step: 'any' } }}
-                        helperText="Unidades o empaques recibidos"
-                        required
-                      />
-
-                      <PurchaseFormField
-                        name={`lines.${idx}.unitCost`}
-                        control={control}
-                        size="small"
-                        type="number"
-                        label={`Costo por ${selectedPres ? selectedPres.name : p?.baseUnit || 'Unid.'} *`}
-                        fullWidth
-                        onChange={(e) => handleLineChange(idx, 'unitCost', e.target.value)}
-                        slotProps={{
-                          htmlInput: { min: '0', step: 'any' },
-                          input: {
-                            startAdornment: (
-                              <Typography
-                                sx={{ mr: 0.5, color: 'text.secondary', fontWeight: 'bold' }}
-                              >
-                                $
-                              </Typography>
-                            ),
-                          },
-                        }}
-                        helperText="Precio de compra facturado"
-                        required
-                      />
-                    </Box>
-
-                    {/* Fila 3: Banner de Impacto en Inventario / Kardex */}
-                    {p && (
+                      {/* Encabezado de la Tarjeta */}
                       <Box
                         sx={{
-                          mt: 2,
-                          p: 1.5,
-                          bgcolor: 'rgba(22, 163, 74, 0.06)',
-                          border: '1px solid rgba(22, 163, 74, 0.25)',
-                          borderRadius: 1.5,
                           display: 'flex',
                           flexWrap: 'wrap',
                           justifyContent: 'space-between',
                           alignItems: 'center',
-                          gap: 1.5,
+                          mb: 2.5,
+                          pb: 1.5,
+                          borderBottom: '1px solid',
+                          borderColor: 'divider',
+                          gap: 1,
                         }}
                       >
                         <Box
-                          sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}
+                          sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}
                         >
-                          <Inventory2Icon sx={{ color: 'success.main', fontSize: 20 }} />
+                          <Chip
+                            label={`#${idx + 1}`}
+                            size="small"
+                            color="primary"
+                            sx={{ fontWeight: 'bold', borderRadius: 1 }}
+                          />
                           <Typography
-                            variant="body2"
-                            sx={{ fontWeight: 600, color: 'success.dark' }}
+                            variant="subtitle1"
+                            sx={{ fontWeight: 'bold', color: 'text.primary' }}
                           >
-                            Ingreso a Kardex: +{totalBaseUnits.toLocaleString('es-CO')} {p.baseUnit}
+                            {p ? `${p.name} (${p.code})` : 'Nuevo Producto a Ingresar'}
                           </Typography>
-                          {selectedPres && (
+                          {p && (
+                            <Chip
+                              label={`Unidad Base: ${p.baseUnit}`}
+                              size="small"
+                              variant="outlined"
+                              sx={{ fontSize: '0.75rem', fontWeight: 600, height: 24 }}
+                            />
+                          )}
+                        </Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2.5 }}>
+                          <Box sx={{ textAlign: 'right' }}>
                             <Typography
                               variant="caption"
+                              color="text.secondary"
                               sx={{
-                                color: 'text.secondary',
-                                bgcolor: 'background.paper',
-                                px: 1,
-                                py: 0.25,
-                                borderRadius: 1,
-                                border: '1px solid',
-                                borderColor: 'divider',
+                                display: 'block',
+                                textTransform: 'uppercase',
+                                letterSpacing: 0.5,
                               }}
                             >
-                              {qtyCommercial} {selectedPres.name}
-                              {selectedPres.containedPresentationId &&
-                                selectedPres.containedPresentationName && (
-                                  <>
-                                    {' '}
-                                    ={' '}
-                                    {(
-                                      qtyCommercial * (selectedPres.quantityContained || 1)
-                                    ).toLocaleString('es-CO')}{' '}
-                                    {selectedPres.containedPresentationName}
-                                  </>
-                                )}{' '}
-                              = {totalBaseUnits.toLocaleString('es-CO')} {p.baseUnit}
+                              Subtotal Línea
                             </Typography>
-                          )}
-                        </Box>
-                        <Box>
-                          <Typography variant="body2" color="text.secondary">
-                            Costo unitario base:{' '}
-                            <strong style={{ color: '#16a34a' }}>
-                              $
-                              {costPerBaseUnit.toLocaleString('es-CO', {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2,
-                              })}
-                            </strong>{' '}
-                            / {p.baseUnit}
-                          </Typography>
-                        </Box>
-                      </Box>
-                    )}
-                  </Paper>
-                );
-              })}
-            </Box>
-          ) : (
-            /* Vista de Tabla Corregida con Anchos Fijos y Alineación Superior */
-            <TableContainer
-              sx={{
-                border: '1px solid',
-                borderColor: 'divider',
-                borderRadius: 2,
-                overflowX: 'auto',
-              }}
-            >
-              <Table
-                size="small"
-                sx={{ minWidth: 1250, '& td, & th': { verticalAlign: 'top', py: 1.5 } }}
-              >
-                <TableHead sx={{ bgcolor: 'action.hover' }}>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 'bold', minWidth: 260 }}>Producto *</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', minWidth: 220 }}>
-                      Presentación / Unidad *
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', minWidth: 140 }}>Lote / Series</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', minWidth: 165 }}>Vence</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', minWidth: 140, textAlign: 'right' }}>
-                      Cantidad *
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', minWidth: 140, textAlign: 'right' }}>
-                      Costo Presentación *
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', minWidth: 120, textAlign: 'right' }}>
-                      Subtotal
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: 'bold', minWidth: 60, textAlign: 'center' }}>
-                      Acción
-                    </TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {lines.map((line, idx) => {
-                    const subtotal = calculateSubtotal(line);
-                    const p = products.find((prod) => prod.id === line.productId);
-                    const selectedPres = p?.presentations?.find(
-                      (pr) => pr.id === line.presentationId,
-                    );
-                    const factor = selectedPres ? selectedPres.conversionFactor : 1;
-                    const qtyCommercial = parseFloat(line.quantityCommercial) || 0;
-                    const totalBaseUnits = Math.round(qtyCommercial * factor);
-                    const unitCost = parseFloat(line.unitCost) || 0;
-                    const costPerBaseUnit = factor > 0 ? unitCost / factor : unitCost;
-
-                    return (
-                      <TableRow
-                        key={fields[idx].id}
-                        sx={{ '&:hover': { bgcolor: 'action.hover' } }}
-                      >
-                        <TableCell sx={{ minWidth: 260 }}>
-                          <PurchaseFormField
-                            name={`lines.${idx}.productId`}
-                            control={control}
-                            select
-                            size="small"
-                            fullWidth
-                            onChange={(e) => handleLineChange(idx, 'productId', e.target.value)}
-                            required
-                          >
-                            <MenuItem value="">Selecciona...</MenuItem>
-                            {products.map((prod) => (
-                              <MenuItem key={prod.id} value={prod.id}>
-                                {prod.name} ({prod.code})
-                              </MenuItem>
-                            ))}
-                          </PurchaseFormField>
-                          {p && (
                             <Typography
-                              variant="caption"
-                              color="text.secondary"
-                              sx={{ display: 'block', mt: 0.75 }}
+                              variant="h6"
+                              sx={{ fontWeight: 'bold', color: 'primary.main', lineHeight: 1.2 }}
                             >
-                              Unidad Base: <strong>{p.baseUnit}</strong>
-                            </Typography>
-                          )}
-                        </TableCell>
-
-                        <TableCell sx={{ minWidth: 220 }}>
-                          <PurchaseFormField
-                            name={`lines.${idx}.presentationId`}
-                            control={control}
-                            select
-                            size="small"
-                            fullWidth
-                            onChange={(e) =>
-                              handleLineChange(idx, 'presentationId', e.target.value)
-                            }
-                            disabled={!line.productId}
-                          >
-                            <MenuItem value="">
-                              <em>[Unidad Base] {p?.baseUnit || 'UNIDAD'} (Factor 1:1)</em>
-                            </MenuItem>
-                            {p?.presentations
-                              ?.filter((pres) => pres.isActive && (pres.purchaseEnabled ?? true))
-                              .map((pres) => (
-                                <MenuItem key={pres.id} value={pres.id}>
-                                  {pres.name} (x{pres.conversionFactor} {p.baseUnit})
-                                </MenuItem>
-                              ))}
-                          </PurchaseFormField>
-                          {selectedPres && (
-                            <Typography
-                              variant="caption"
-                              color="text.secondary"
-                              sx={{ display: 'block', mt: 0.75 }}
-                            >
-                              1 {selectedPres.name} ={' '}
-                              {selectedPres.containedPresentationId &&
-                              selectedPres.containedPresentationName
-                                ? `${selectedPres.quantityContained} ${selectedPres.containedPresentationName} = `
-                                : ''}
-                              {selectedPres.conversionFactor} {p?.baseUnit}
-                            </Typography>
-                          )}
-                        </TableCell>
-
-                        {p?.inventoryControlMode === 'SERIAL' ? (
-                          <TableCell colSpan={2} sx={{ minWidth: 305 }}>
-                            <PurchaseFormField
-                              name={`lines.${idx}.serialNumbers`}
-                              control={control}
-                              size="small"
-                              fullWidth
-                              multiline
-                              placeholder="Series: una por línea o separadas por coma"
-                              onChange={(e) =>
-                                handleLineChange(idx, 'serialNumbers', e.target.value)
-                              }
-                              required
-                            />
-                          </TableCell>
-                        ) : (
-                          <>
-                            <TableCell sx={{ minWidth: 140 }}>
-                              {p?.inventoryControlMode === 'LOT' ||
-                              p?.inventoryControlMode === 'LOT_EXPIRY' ? (
-                                <PurchaseFormField
-                                  name={`lines.${idx}.lotNumber`}
-                                  control={control}
-                                  size="small"
-                                  fullWidth
-                                  placeholder="LOTE-001"
-                                  onChange={(e) =>
-                                    handleLineChange(idx, 'lotNumber', e.target.value)
-                                  }
-                                  required
-                                />
-                              ) : (
-                                <Typography variant="body2" color="text.secondary">
-                                  {p ? 'Sin lote' : '—'}
-                                </Typography>
-                              )}
-                            </TableCell>
-                            <TableCell sx={{ minWidth: 165 }}>
-                              {p?.inventoryControlMode === 'LOT_EXPIRY' ? (
-                                <PurchaseFormField
-                                  name={`lines.${idx}.expirationDate`}
-                                  control={control}
-                                  size="small"
-                                  type="date"
-                                  fullWidth
-                                  onDateChange={(value) =>
-                                    handleLineChange(idx, 'expirationDate', value)
-                                  }
-                                  required
-                                />
-                              ) : (
-                                <Typography variant="body2" color="text.secondary">
-                                  {p ? 'No vence' : '—'}
-                                </Typography>
-                              )}
-                            </TableCell>
-                          </>
-                        )}
-
-                        <TableCell sx={{ minWidth: 140, textAlign: 'right' }}>
-                          <PurchaseFormField
-                            name={`lines.${idx}.quantityCommercial`}
-                            control={control}
-                            size="small"
-                            type="number"
-                            fullWidth
-                            onChange={(e) =>
-                              handleLineChange(idx, 'quantityCommercial', e.target.value)
-                            }
-                            slotProps={{
-                              htmlInput: { min: '1', step: 'any', style: { textAlign: 'right' } },
-                            }}
-                            required
-                          />
-                          <Box sx={{ mt: 0.75, textAlign: 'right' }}>
-                            {selectedPres?.containedPresentationId &&
-                              selectedPres?.containedPresentationName && (
-                                <Typography
-                                  variant="caption"
-                                  color="text.secondary"
-                                  sx={{ display: 'block' }}
-                                >
-                                  Equivale a:{' '}
-                                  {(
-                                    qtyCommercial * (selectedPres.quantityContained || 1)
-                                  ).toLocaleString('es-CO')}{' '}
-                                  {selectedPres.containedPresentationName}
-                                </Typography>
-                              )}
-                            <Typography
-                              variant="caption"
-                              color="primary.main"
-                              sx={{ display: 'block', fontWeight: 'bold' }}
-                            >
-                              Ingreso Kardex: +{totalBaseUnits.toLocaleString('es-CO')}{' '}
-                              {p?.baseUnit || 'unidades'}
+                              ${subtotal.toLocaleString('es-CO')}
                             </Typography>
                           </Box>
-                        </TableCell>
-
-                        <TableCell sx={{ minWidth: 140, textAlign: 'right' }}>
-                          <PurchaseFormField
-                            name={`lines.${idx}.unitCost`}
-                            control={control}
-                            size="small"
-                            type="number"
-                            fullWidth
-                            onChange={(e) => handleLineChange(idx, 'unitCost', e.target.value)}
-                            slotProps={{
-                              htmlInput: { min: '0', step: 'any', style: { textAlign: 'right' } },
-                            }}
-                            required
-                          />
-                          {factor > 1 && (
-                            <Typography
-                              variant="caption"
-                              color="text.secondary"
-                              sx={{ display: 'block', mt: 0.75 }}
-                            >
-                              Costo base: ${costPerBaseUnit.toFixed(2)} / {p?.baseUnit || 'unid'}
-                            </Typography>
-                          )}
-                        </TableCell>
-
-                        <TableCell
-                          sx={{ minWidth: 120, textAlign: 'right', fontWeight: 'bold', pt: 2.2 }}
-                        >
-                          ${subtotal.toLocaleString('es-CO')}
-                        </TableCell>
-
-                        <TableCell sx={{ minWidth: 60, textAlign: 'center', pt: 1.5 }}>
-                          <Tooltip title="Eliminar línea">
+                          <Tooltip title="Eliminar este producto">
                             <span>
                               <IconButton
                                 aria-label={`Eliminar línea ${idx + 1}`}
-                                size="small"
                                 color="error"
+                                size="small"
                                 onClick={() => handleRemoveLine(idx)}
                                 disabled={lines.length <= 1}
+                                sx={{
+                                  border: '1px solid',
+                                  borderColor: 'error.light',
+                                  borderRadius: 1.5,
+                                }}
                               >
                                 <DeleteIcon fontSize="small" />
                               </IconButton>
                             </span>
                           </Tooltip>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
+                        </Box>
+                      </Box>
 
-          {/* Totalizador */}
-          <Box
-            sx={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              mt: 3,
-              pt: 2.5,
-              borderTop: 1,
-              borderColor: 'divider',
-              gap: 2,
-            }}
-          >
-            <Button variant="outlined" onClick={handleAddLine} startIcon={<AddIcon />}>
-              Agregar Otra Línea
-            </Button>
-            <Box sx={{ textAlign: 'right' }}>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                Total Unidades Base a Ingresar:{' '}
-                <strong>
-                  {lines
-                    .reduce((acc, l) => {
-                      const prod = products.find((p) => p.id === l.productId);
-                      const pr = prod?.presentations?.find((pres) => pres.id === l.presentationId);
-                      const f = pr ? pr.conversionFactor : 1;
-                      return acc + Math.round((parseFloat(l.quantityCommercial) || 0) * f);
-                    }, 0)
-                    .toLocaleString('es-CO')}
-                </strong>
-              </Typography>
-              <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                Subtotal de líneas: {formatCop(calculateTotal())}
-              </Typography>
+                      {/* Fila 1: Producto y Presentación */}
+                      <Box
+                        sx={{
+                          display: 'grid',
+                          gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: '1.2fr minmax(0, 1fr)' },
+                          gap: 2.5,
+                          mb: 2,
+                        }}
+                      >
+                        <PurchaseFormField
+                          name={`lines.${idx}.productId`}
+                          control={control}
+                          select
+                          size="small"
+                          label="Producto *"
+                          fullWidth
+                          onChange={(e) => handleLineChange(idx, 'productId', e.target.value)}
+                          required
+                          helperText={
+                            p
+                              ? `Código/SKU: ${p.code} | Unidad mínima: ${p.baseUnit}`
+                              : 'Seleccione el medicamento o artículo'
+                          }
+                        >
+                          <MenuItem value="">Selecciona un producto...</MenuItem>
+                          {products.map((prod) => (
+                            <MenuItem key={prod.id} value={prod.id}>
+                              {prod.name} ({prod.code}) — [{prod.baseUnit}]
+                            </MenuItem>
+                          ))}
+                        </PurchaseFormField>
+
+                        <PurchaseFormField
+                          name={`lines.${idx}.presentationId`}
+                          control={control}
+                          select
+                          size="small"
+                          label="Presentación / Empaque Recibido *"
+                          fullWidth
+                          onChange={(e) => handleLineChange(idx, 'presentationId', e.target.value)}
+                          disabled={!line.productId}
+                          helperText={
+                            selectedPres
+                              ? `1 ${selectedPres.name} = ${
+                                  selectedPres.containedPresentationId &&
+                                  selectedPres.containedPresentationName
+                                    ? `${selectedPres.quantityContained} ${selectedPres.containedPresentationName} = `
+                                    : ''
+                                }${selectedPres.conversionFactor} ${p?.baseUnit}`
+                              : p
+                                ? `Ingreso directo en unidad base (${p.baseUnit})`
+                                : 'Primero elija un producto'
+                          }
+                        >
+                          <MenuItem value="">
+                            <em>[Unidad Base] {p?.baseUnit || 'UNIDAD'} (Factor 1:1)</em>
+                          </MenuItem>
+                          {p?.presentations
+                            ?.filter((pres) => pres.isActive && (pres.purchaseEnabled ?? true))
+                            .map((pres) => (
+                              <MenuItem key={pres.id} value={pres.id}>
+                                {pres.name} (x{pres.conversionFactor} {p.baseUnit})
+                              </MenuItem>
+                            ))}
+                        </PurchaseFormField>
+                      </Box>
+
+                      {/* Fila 2: Lote, Vencimiento, Cantidad y Costo */}
+                      <Box
+                        sx={{
+                          display: 'grid',
+                          gridTemplateColumns: {
+                            xs: 'minmax(0, 1fr)',
+                            sm: 'minmax(0, 1fr) minmax(0, 1fr)',
+                            md: '1.2fr 1.2fr minmax(0, 1fr) 1.2fr',
+                          },
+                          gap: 2.5,
+                        }}
+                      >
+                        {p?.inventoryControlMode === 'SERIAL' ? (
+                          <PurchaseFormField
+                            name={`lines.${idx}.serialNumbers`}
+                            control={control}
+                            size="small"
+                            label="Series *"
+                            fullWidth
+                            multiline
+                            minRows={1}
+                            placeholder="Una por línea o separadas por coma"
+                            onChange={(e) => handleLineChange(idx, 'serialNumbers', e.target.value)}
+                            helperText="Una serie por cada unidad recibida"
+                            required
+                            sx={{ gridColumn: { md: 'span 2' } }}
+                          />
+                        ) : p?.inventoryControlMode === 'LOT' ||
+                          p?.inventoryControlMode === 'LOT_EXPIRY' ? (
+                          <>
+                            <PurchaseFormField
+                              name={`lines.${idx}.lotNumber`}
+                              control={control}
+                              size="small"
+                              label="Número de Lote *"
+                              fullWidth
+                              placeholder="Ej. LOT-2026-X"
+                              onChange={(e) => handleLineChange(idx, 'lotNumber', e.target.value)}
+                              helperText="Identificador del lote del fabricante"
+                              required
+                            />
+                            {p.inventoryControlMode === 'LOT_EXPIRY' ? (
+                              <PurchaseFormField
+                                name={`lines.${idx}.expirationDate`}
+                                control={control}
+                                size="small"
+                                type="date"
+                                label="Fecha de Vencimiento *"
+                                fullWidth
+                                onDateChange={(value) =>
+                                  handleLineChange(idx, 'expirationDate', value)
+                                }
+                                helperText="Vencimiento sanitario (FEFO)"
+                                required
+                              />
+                            ) : (
+                              <Typography
+                                variant="body2"
+                                color="text.secondary"
+                                sx={{ alignSelf: 'center' }}
+                              >
+                                Sin vencimiento: sale por orden de entrada
+                              </Typography>
+                            )}
+                          </>
+                        ) : (
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ alignSelf: 'center', gridColumn: { md: 'span 2' } }}
+                          >
+                            {p
+                              ? `${inventoryControlModeLabel(p.inventoryControlMode)}: no requiere lote ni vencimiento`
+                              : 'Seleccione un producto para ver si requiere lote'}
+                          </Typography>
+                        )}
+
+                        <PurchaseFormField
+                          name={`lines.${idx}.quantityCommercial`}
+                          control={control}
+                          size="small"
+                          type="number"
+                          label={`Cantidad (${selectedPres ? selectedPres.name : p?.baseUnit || 'Unid.'}) *`}
+                          fullWidth
+                          onChange={(e) =>
+                            handleLineChange(idx, 'quantityCommercial', e.target.value)
+                          }
+                          slotProps={{ htmlInput: { min: '1', step: 'any' } }}
+                          helperText="Unidades o empaques recibidos"
+                          required
+                        />
+
+                        <PurchaseFormField
+                          name={`lines.${idx}.unitCost`}
+                          control={control}
+                          size="small"
+                          type="number"
+                          label={`Costo por ${selectedPres ? selectedPres.name : p?.baseUnit || 'Unid.'} *`}
+                          fullWidth
+                          onChange={(e) => handleLineChange(idx, 'unitCost', e.target.value)}
+                          slotProps={{
+                            htmlInput: { min: '0', step: 'any' },
+                            input: {
+                              startAdornment: (
+                                <Typography
+                                  sx={{ mr: 0.5, color: 'text.secondary', fontWeight: 'bold' }}
+                                >
+                                  $
+                                </Typography>
+                              ),
+                            },
+                          }}
+                          helperText="Precio de compra facturado"
+                          required
+                        />
+                      </Box>
+
+                      {/* Fila 3: Banner de Impacto en Inventario / Kardex */}
+                      {p && (
+                        <Box
+                          sx={{
+                            mt: 2,
+                            p: 1.5,
+                            bgcolor: 'rgba(22, 163, 74, 0.06)',
+                            border: '1px solid rgba(22, 163, 74, 0.25)',
+                            borderRadius: 1.5,
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            gap: 1.5,
+                          }}
+                        >
+                          <Box
+                            sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}
+                          >
+                            <Inventory2Icon sx={{ color: 'success.main', fontSize: 20 }} />
+                            <Typography
+                              variant="body2"
+                              sx={{ fontWeight: 600, color: 'success.dark' }}
+                            >
+                              Ingreso a Kardex: +{totalBaseUnits.toLocaleString('es-CO')}{' '}
+                              {p.baseUnit}
+                            </Typography>
+                            {selectedPres && (
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  color: 'text.secondary',
+                                  bgcolor: 'background.paper',
+                                  px: 1,
+                                  py: 0.25,
+                                  borderRadius: 1,
+                                  border: '1px solid',
+                                  borderColor: 'divider',
+                                }}
+                              >
+                                {qtyCommercial} {selectedPres.name}
+                                {selectedPres.containedPresentationId &&
+                                  selectedPres.containedPresentationName && (
+                                    <>
+                                      {' '}
+                                      ={' '}
+                                      {(
+                                        qtyCommercial * (selectedPres.quantityContained || 1)
+                                      ).toLocaleString('es-CO')}{' '}
+                                      {selectedPres.containedPresentationName}
+                                    </>
+                                  )}{' '}
+                                = {totalBaseUnits.toLocaleString('es-CO')} {p.baseUnit}
+                              </Typography>
+                            )}
+                          </Box>
+                          <Box>
+                            <Typography variant="body2" color="text.secondary">
+                              Costo unitario base:{' '}
+                              <strong style={{ color: '#16a34a' }}>
+                                $
+                                {costPerBaseUnit.toLocaleString('es-CO', {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
+                                })}
+                              </strong>{' '}
+                              / {p.baseUnit}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      )}
+                    </Paper>
+                  );
+                })}
+              </Box>
+            ) : (
+              /* Vista de Tabla Corregida con Anchos Fijos y Alineación Superior */
+              <TableContainer
+                sx={{
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  borderRadius: 2,
+                  overflowX: 'auto',
+                }}
+              >
+                <Table
+                  size="small"
+                  sx={{ minWidth: 1250, '& td, & th': { verticalAlign: 'top', py: 1.5 } }}
+                >
+                  <TableHead sx={{ bgcolor: 'action.hover' }}>
+                    <TableRow>
+                      <TableCell sx={{ fontWeight: 'bold', minWidth: 260 }}>Producto *</TableCell>
+                      <TableCell sx={{ fontWeight: 'bold', minWidth: 220 }}>
+                        Presentación / Unidad *
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 'bold', minWidth: 140 }}>
+                        Lote / Series
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 'bold', minWidth: 165 }}>Vence</TableCell>
+                      <TableCell sx={{ fontWeight: 'bold', minWidth: 140, textAlign: 'right' }}>
+                        Cantidad *
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 'bold', minWidth: 140, textAlign: 'right' }}>
+                        Costo Presentación *
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 'bold', minWidth: 120, textAlign: 'right' }}>
+                        Subtotal
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 'bold', minWidth: 60, textAlign: 'center' }}>
+                        Acción
+                      </TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {lines.map((line, idx) => {
+                      const subtotal = calculateSubtotal(line);
+                      const p = products.find((prod) => prod.id === line.productId);
+                      const selectedPres = p?.presentations?.find(
+                        (pr) => pr.id === line.presentationId,
+                      );
+                      const factor = selectedPres ? selectedPres.conversionFactor : 1;
+                      const qtyCommercial = parseFloat(line.quantityCommercial) || 0;
+                      const totalBaseUnits = Math.round(qtyCommercial * factor);
+                      const unitCost = parseFloat(line.unitCost) || 0;
+                      const costPerBaseUnit = factor > 0 ? unitCost / factor : unitCost;
+
+                      return (
+                        <TableRow
+                          key={fields[idx].id}
+                          sx={{ '&:hover': { bgcolor: 'action.hover' } }}
+                        >
+                          <TableCell sx={{ minWidth: 260 }}>
+                            <PurchaseFormField
+                              name={`lines.${idx}.productId`}
+                              control={control}
+                              select
+                              size="small"
+                              fullWidth
+                              onChange={(e) => handleLineChange(idx, 'productId', e.target.value)}
+                              required
+                            >
+                              <MenuItem value="">Selecciona...</MenuItem>
+                              {products.map((prod) => (
+                                <MenuItem key={prod.id} value={prod.id}>
+                                  {prod.name} ({prod.code})
+                                </MenuItem>
+                              ))}
+                            </PurchaseFormField>
+                            {p && (
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                                sx={{ display: 'block', mt: 0.75 }}
+                              >
+                                Unidad Base: <strong>{p.baseUnit}</strong>
+                              </Typography>
+                            )}
+                          </TableCell>
+
+                          <TableCell sx={{ minWidth: 220 }}>
+                            <PurchaseFormField
+                              name={`lines.${idx}.presentationId`}
+                              control={control}
+                              select
+                              size="small"
+                              fullWidth
+                              onChange={(e) =>
+                                handleLineChange(idx, 'presentationId', e.target.value)
+                              }
+                              disabled={!line.productId}
+                            >
+                              <MenuItem value="">
+                                <em>[Unidad Base] {p?.baseUnit || 'UNIDAD'} (Factor 1:1)</em>
+                              </MenuItem>
+                              {p?.presentations
+                                ?.filter((pres) => pres.isActive && (pres.purchaseEnabled ?? true))
+                                .map((pres) => (
+                                  <MenuItem key={pres.id} value={pres.id}>
+                                    {pres.name} (x{pres.conversionFactor} {p.baseUnit})
+                                  </MenuItem>
+                                ))}
+                            </PurchaseFormField>
+                            {selectedPres && (
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                                sx={{ display: 'block', mt: 0.75 }}
+                              >
+                                1 {selectedPres.name} ={' '}
+                                {selectedPres.containedPresentationId &&
+                                selectedPres.containedPresentationName
+                                  ? `${selectedPres.quantityContained} ${selectedPres.containedPresentationName} = `
+                                  : ''}
+                                {selectedPres.conversionFactor} {p?.baseUnit}
+                              </Typography>
+                            )}
+                          </TableCell>
+
+                          {p?.inventoryControlMode === 'SERIAL' ? (
+                            <TableCell colSpan={2} sx={{ minWidth: 305 }}>
+                              <PurchaseFormField
+                                name={`lines.${idx}.serialNumbers`}
+                                control={control}
+                                size="small"
+                                fullWidth
+                                multiline
+                                placeholder="Series: una por línea o separadas por coma"
+                                onChange={(e) =>
+                                  handleLineChange(idx, 'serialNumbers', e.target.value)
+                                }
+                                required
+                              />
+                            </TableCell>
+                          ) : (
+                            <>
+                              <TableCell sx={{ minWidth: 140 }}>
+                                {p?.inventoryControlMode === 'LOT' ||
+                                p?.inventoryControlMode === 'LOT_EXPIRY' ? (
+                                  <PurchaseFormField
+                                    name={`lines.${idx}.lotNumber`}
+                                    control={control}
+                                    size="small"
+                                    fullWidth
+                                    placeholder="LOTE-001"
+                                    onChange={(e) =>
+                                      handleLineChange(idx, 'lotNumber', e.target.value)
+                                    }
+                                    required
+                                  />
+                                ) : (
+                                  <Typography variant="body2" color="text.secondary">
+                                    {p ? 'Sin lote' : '—'}
+                                  </Typography>
+                                )}
+                              </TableCell>
+                              <TableCell sx={{ minWidth: 165 }}>
+                                {p?.inventoryControlMode === 'LOT_EXPIRY' ? (
+                                  <PurchaseFormField
+                                    name={`lines.${idx}.expirationDate`}
+                                    control={control}
+                                    size="small"
+                                    type="date"
+                                    fullWidth
+                                    onDateChange={(value) =>
+                                      handleLineChange(idx, 'expirationDate', value)
+                                    }
+                                    required
+                                  />
+                                ) : (
+                                  <Typography variant="body2" color="text.secondary">
+                                    {p ? 'No vence' : '—'}
+                                  </Typography>
+                                )}
+                              </TableCell>
+                            </>
+                          )}
+
+                          <TableCell sx={{ minWidth: 140, textAlign: 'right' }}>
+                            <PurchaseFormField
+                              name={`lines.${idx}.quantityCommercial`}
+                              control={control}
+                              size="small"
+                              type="number"
+                              fullWidth
+                              onChange={(e) =>
+                                handleLineChange(idx, 'quantityCommercial', e.target.value)
+                              }
+                              slotProps={{
+                                htmlInput: { min: '1', step: 'any', style: { textAlign: 'right' } },
+                              }}
+                              required
+                            />
+                            <Box sx={{ mt: 0.75, textAlign: 'right' }}>
+                              {selectedPres?.containedPresentationId &&
+                                selectedPres?.containedPresentationName && (
+                                  <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                    sx={{ display: 'block' }}
+                                  >
+                                    Equivale a:{' '}
+                                    {(
+                                      qtyCommercial * (selectedPres.quantityContained || 1)
+                                    ).toLocaleString('es-CO')}{' '}
+                                    {selectedPres.containedPresentationName}
+                                  </Typography>
+                                )}
+                              <Typography
+                                variant="caption"
+                                color="primary.main"
+                                sx={{ display: 'block', fontWeight: 'bold' }}
+                              >
+                                Ingreso Kardex: +{totalBaseUnits.toLocaleString('es-CO')}{' '}
+                                {p?.baseUnit || 'unidades'}
+                              </Typography>
+                            </Box>
+                          </TableCell>
+
+                          <TableCell sx={{ minWidth: 140, textAlign: 'right' }}>
+                            <PurchaseFormField
+                              name={`lines.${idx}.unitCost`}
+                              control={control}
+                              size="small"
+                              type="number"
+                              fullWidth
+                              onChange={(e) => handleLineChange(idx, 'unitCost', e.target.value)}
+                              slotProps={{
+                                htmlInput: { min: '0', step: 'any', style: { textAlign: 'right' } },
+                              }}
+                              required
+                            />
+                            {factor > 1 && (
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                                sx={{ display: 'block', mt: 0.75 }}
+                              >
+                                Costo base: ${costPerBaseUnit.toFixed(2)} / {p?.baseUnit || 'unid'}
+                              </Typography>
+                            )}
+                          </TableCell>
+
+                          <TableCell
+                            sx={{ minWidth: 120, textAlign: 'right', fontWeight: 'bold', pt: 2.2 }}
+                          >
+                            ${subtotal.toLocaleString('es-CO')}
+                          </TableCell>
+
+                          <TableCell sx={{ minWidth: 60, textAlign: 'center', pt: 1.5 }}>
+                            <Tooltip title="Eliminar línea">
+                              <span>
+                                <IconButton
+                                  aria-label={`Eliminar línea ${idx + 1}`}
+                                  size="small"
+                                  color="error"
+                                  onClick={() => handleRemoveLine(idx)}
+                                  disabled={lines.length <= 1}
+                                >
+                                  <DeleteIcon fontSize="small" />
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+
+            {/* Totalizador */}
+            <Box
+              sx={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                mt: 3,
+                pt: 2.5,
+                borderTop: 1,
+                borderColor: 'divider',
+                gap: 2,
+              }}
+            >
+              <Button variant="outlined" onClick={handleAddLine} startIcon={<AddIcon />}>
+                Agregar Otra Línea
+              </Button>
+              <Box sx={{ textAlign: 'right' }}>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                  Total Unidades Base a Ingresar:{' '}
+                  <strong>
+                    {lines
+                      .reduce((acc, l) => {
+                        const prod = products.find((p) => p.id === l.productId);
+                        const pr = prod?.presentations?.find(
+                          (pres) => pres.id === l.presentationId,
+                        );
+                        const f = pr ? pr.conversionFactor : 1;
+                        return acc + Math.round((parseFloat(l.quantityCommercial) || 0) * f);
+                      }, 0)
+                      .toLocaleString('es-CO')}
+                  </strong>
+                </Typography>
+                <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                  Subtotal de líneas: {formatCop(calculateTotal())}
+                </Typography>
+              </Box>
             </Box>
-          </Box>
-        </Paper>
+          </Paper>
         )}
 
         {/* Paso 3: totales y revisión. Esta pantalla es la confirmación */}

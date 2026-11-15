@@ -19,7 +19,7 @@ export class AuditService {
 
   constructor(
     @Inject(AUDIT_EVENT_REPOSITORY_PORT)
-    private readonly auditRepository: AuditEventRepositoryPort
+    private readonly auditRepository: AuditEventRepositoryPort,
   ) {}
 
   /**
@@ -27,10 +27,7 @@ export class AuditService {
    * Si se provee un cliente transaccional (tx), la persistencia del evento se ejecuta
    * dentro de dicha transacción para garantizar atomicidad con la mutación de negocio.
    */
-  public async recordEvent(
-    input: RecordAuditEventPayload,
-    tx?: unknown
-  ): Promise<AuditEvent> {
+  public async recordEvent(input: RecordAuditEventPayload, tx?: unknown): Promise<AuditEvent> {
     const event = AuditEvent.create({
       userId: input.userId,
       action: input.action,
@@ -44,7 +41,7 @@ export class AuditService {
     await this.auditRepository.save(event, tx);
 
     this.logger.log(
-      `[Audit] ${event.action} | entity=${event.entity}:${event.entityId ?? 'none'} | user=${event.userId ?? 'system'} | corr=${event.correlationId ?? 'none'}`
+      `[Audit] ${event.action} | entity=${event.entity}:${event.entityId ?? 'none'} | user=${event.userId ?? 'system'} | corr=${event.correlationId ?? 'none'}`,
     );
 
     return event;

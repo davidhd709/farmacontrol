@@ -51,7 +51,7 @@ describe('Identidad y Sesiones — Integridad de Persistencia (Integration)', ()
             username: 'cajero_principal',
             passwordHash: 'hash_dos',
           },
-        })
+        }),
       ).rejects.toThrow();
     });
 
@@ -70,7 +70,7 @@ describe('Identidad y Sesiones — Integridad de Persistencia (Integration)', ()
             username: 'REGENTE_FARMACIA',
             passwordHash: 'hash_duplicado_mayuscula',
           },
-        })
+        }),
       ).rejects.toThrow();
     });
 
@@ -148,7 +148,7 @@ describe('Identidad y Sesiones — Integridad de Persistencia (Integration)', ()
             tokenHash,
             expiresAt: new Date(Date.now() + 3600 * 1000),
           },
-        })
+        }),
       ).rejects.toThrow();
     });
 
@@ -162,7 +162,7 @@ describe('Identidad y Sesiones — Integridad de Persistencia (Integration)', ()
             tokenHash: 'hash_huerfano',
             expiresAt: new Date(Date.now() + 3600 * 1000),
           },
-        })
+        }),
       ).rejects.toThrow();
     });
 

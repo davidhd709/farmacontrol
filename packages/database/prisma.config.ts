@@ -25,6 +25,3 @@ export default defineConfig({
     url: datasourceUrl,
   },
 });
-
-
-

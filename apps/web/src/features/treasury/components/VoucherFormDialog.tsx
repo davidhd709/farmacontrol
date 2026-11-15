@@ -296,9 +296,7 @@ export function VoucherFormDialog({
   };
 
   const buildPayload = () => {
-    const conceptText = notes.trim()
-      ? `${concept.trim()} (Obs: ${notes.trim()})`
-      : concept.trim();
+    const conceptText = notes.trim() ? `${concept.trim()} (Obs: ${notes.trim()})` : concept.trim();
     const base = {
       paymentMethod,
       bankAccountId: paymentMethod === 'TRANSFERENCIA' ? bankAccountId : undefined,
@@ -415,7 +413,8 @@ export function VoucherFormDialog({
                 </Stack>
               }
             >
-              Existe un borrador guardado sin contabilizar. Puedes cargarlo para continuar editándolo o descartarlo.
+              Existe un borrador guardado sin contabilizar. Puedes cargarlo para continuar
+              editándolo o descartarlo.
             </Alert>
           )}
 
@@ -584,7 +583,9 @@ export function VoucherFormDialog({
                             </TableCell>
                             <TableCell>{formatDate(item.documentDate)}</TableCell>
                             <TableCell>{item.dueDate ?? '—'}</TableCell>
-                            <TableCell align="right">{formatMoney(centsOf(item.balance))}</TableCell>
+                            <TableCell align="right">
+                              {formatMoney(centsOf(item.balance))}
+                            </TableCell>
                             <TableCell align="right">
                               <TextField
                                 size="small"

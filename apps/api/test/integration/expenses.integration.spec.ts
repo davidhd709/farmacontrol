@@ -230,8 +230,12 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
         expect(res.body.message).toMatch(/comprobante de egreso/);
       }
       expect(await prisma.expense.count()).toBe(0);
-      expect(await prisma.cashMovement.count({ where: { referenceDocumentType: 'EXPENSE' } })).toBe(0);
-      expect(await prisma.bankMovement.count({ where: { referenceDocumentType: 'EXPENSE' } })).toBe(0);
+      expect(await prisma.cashMovement.count({ where: { referenceDocumentType: 'EXPENSE' } })).toBe(
+        0,
+      );
+      expect(await prisma.bankMovement.count({ where: { referenceDocumentType: 'EXPENSE' } })).toBe(
+        0,
+      );
     });
 
     it('causa con proveedor sin medio de pago: nace la deuda, queda en su estado de cuenta y se ve su detalle', async () => {
@@ -240,7 +244,9 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
         name: 'Energía Eléctrica',
         accountId: accounts.get('513530')!,
       });
-      const supplier = await prisma.supplier.create({ data: { taxId: '860001', name: 'Enel Colombia' } });
+      const supplier = await prisma.supplier.create({
+        data: { taxId: '860001', name: 'Enel Colombia' },
+      });
 
       const res = await request(app.getHttpServer())
         .post('/api/v1/expenses')
@@ -409,8 +415,12 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
         expect(res.body.correlationId).toBeDefined();
         expect(res.body.message).toBe('Error interno del servidor.');
         expect(res.body.message).not.toContain('F1 forced');
-        expect(await prisma.expense.count({ where: { documentNumber: 'EXP-F1-ROLLBACK' } })).toBe(0);
-        expect(await prisma.cashMovement.count({ where: { movementType: 'EGRESO_MANUAL' } })).toBe(0);
+        expect(await prisma.expense.count({ where: { documentNumber: 'EXP-F1-ROLLBACK' } })).toBe(
+          0,
+        );
+        expect(await prisma.cashMovement.count({ where: { movementType: 'EGRESO_MANUAL' } })).toBe(
+          0,
+        );
         expect(await prisma.journalEntry.count({ where: { sourceType: 'EXPENSE' } })).toBe(0);
         expect(
           await prisma.auditEvent.count({ where: { action: 'expenses:expense_created' } }),
@@ -420,7 +430,9 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
         await prisma.$executeRawUnsafe(
           'DROP TRIGGER IF EXISTS f1_raise_expense_journal_line_error ON journal_entry_lines',
         );
-        await prisma.$executeRawUnsafe('DROP FUNCTION IF EXISTS f1_raise_expense_journal_line_error()');
+        await prisma.$executeRawUnsafe(
+          'DROP FUNCTION IF EXISTS f1_raise_expense_journal_line_error()',
+        );
       }
     });
   });
@@ -487,10 +499,16 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
         expect(persistedExpense.amountPaid.toFixed(2)).toBe('0.00');
         expect(persistedExpense.status).toBe('PENDIENTE');
         expect(await prisma.expensePayment.count({ where: { expenseId: expense.id } })).toBe(0);
-        expect(await prisma.cashMovement.count({ where: { referenceDocumentType: 'EXPENSE_PAYMENT' } })).toBe(0);
-        expect(await prisma.journalEntry.count({ where: { sourceType: 'EXPENSE_PAYMENT' } })).toBe(0);
         expect(
-          await prisma.auditEvent.count({ where: { action: 'expenses:expense_payment_registered' } }),
+          await prisma.cashMovement.count({ where: { referenceDocumentType: 'EXPENSE_PAYMENT' } }),
+        ).toBe(0);
+        expect(await prisma.journalEntry.count({ where: { sourceType: 'EXPENSE_PAYMENT' } })).toBe(
+          0,
+        );
+        expect(
+          await prisma.auditEvent.count({
+            where: { action: 'expenses:expense_payment_registered' },
+          }),
         ).toBe(auditCountBefore);
         expect(await prisma.idempotencyKey.count({ where: { key } })).toBe(0);
       } finally {
@@ -604,14 +622,14 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
 
       const paidExpense = (
         await voucherPayment(app.getHttpServer(), 'EXPENSE', expense.id)
-        .set('Cookie', cookie)
-        .set('Idempotency-Key', randomUUID())
-        .send({
-          amount: '150000.00',
-          paymentDate: '2026-10-05',
-          paymentMethod: 'EFECTIVO',
-        })
-        .expect(201)
+          .set('Cookie', cookie)
+          .set('Idempotency-Key', randomUUID())
+          .send({
+            amount: '150000.00',
+            paymentDate: '2026-10-05',
+            paymentMethod: 'EFECTIVO',
+          })
+          .expect(201)
       ).body;
 
       expect(paidExpense.status).toBe('PAGADO');
@@ -811,21 +829,25 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
       const releaseGate = new Promise<void>((resolve) => {
         releaseLock = resolve;
       });
-      const heldLock = prisma.$transaction(async (tx) => {
-        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))::text AS locked`;
-        signalLockAcquired();
-        await releaseGate;
-      }, { timeout: 10000 });
-      void heldLock.catch(() => undefined);
-      const sendBothRequests = () => Promise.all(
-        [0, 1].map(() =>
-          request(app.getHttpServer())
-            .post('/api/v1/expenses')
-            .set('Cookie', cookie)
-            .set('Idempotency-Key', key)
-            .send(payload),
-        ),
+      const heldLock = prisma.$transaction(
+        async (tx) => {
+          await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))::text AS locked`;
+          signalLockAcquired();
+          await releaseGate;
+        },
+        { timeout: 10000 },
       );
+      void heldLock.catch(() => undefined);
+      const sendBothRequests = () =>
+        Promise.all(
+          [0, 1].map(() =>
+            request(app.getHttpServer())
+              .post('/api/v1/expenses')
+              .set('Cookie', cookie)
+              .set('Idempotency-Key', key)
+              .send(payload),
+          ),
+        );
       let responses: ReturnType<typeof sendBothRequests> | undefined;
       let acquireTimer: ReturnType<typeof setTimeout> | undefined;
       let waitingRequests = 0;
@@ -833,7 +855,10 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
         await Promise.race([
           lockAcquired,
           new Promise<void>((_, reject) => {
-            acquireTimer = setTimeout(() => reject(new Error('Timeout acquiring idempotency test lock')), 5000);
+            acquireTimer = setTimeout(
+              () => reject(new Error('Timeout acquiring idempotency test lock')),
+              5000,
+            );
           }),
         ]);
         if (acquireTimer) clearTimeout(acquireTimer);
@@ -977,7 +1002,10 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
   describe('Causaciones sin proveedor', () => {
     it('las lista con fecha, valor y concepto, y permite asignarles proveedor una sola vez con auditoría', async () => {
       const { accounts } = await setupPucAndTreasury();
-      const category = await categoriesService.create({ name: 'Servicios públicos', accountId: accounts.get('513530')! });
+      const category = await categoriesService.create({
+        name: 'Servicios públicos',
+        accountId: accounts.get('513530')!,
+      });
       // Causaciones anteriores a que el proveedor fuera obligatorio
       const legacy = (description: string, expenseDate: string, status = 'PENDIENTE') =>
         prisma.expense.create({
@@ -997,9 +1025,20 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
       await legacy('Agua septiembre', '2026-09-10');
       await legacy('Anulada', '2026-09-11', 'ANULADO');
 
-      const all = await request(app.getHttpServer()).get('/api/v1/expenses/without-supplier').set('Cookie', cookie).expect(200);
-      expect(all.body.map((e: { description: string }) => e.description)).toEqual(['Energía agosto', 'Agua septiembre']);
-      expect(all.body[0]).toMatchObject({ expenseDate: '2026-08-10', amount: '45000.00', beneficiary: 'Texto libre', categoryName: 'Servicios públicos' });
+      const all = await request(app.getHttpServer())
+        .get('/api/v1/expenses/without-supplier')
+        .set('Cookie', cookie)
+        .expect(200);
+      expect(all.body.map((e: { description: string }) => e.description)).toEqual([
+        'Energía agosto',
+        'Agua septiembre',
+      ]);
+      expect(all.body[0]).toMatchObject({
+        expenseDate: '2026-08-10',
+        amount: '45000.00',
+        beneficiary: 'Texto libre',
+        categoryName: 'Servicios públicos',
+      });
       const august = await request(app.getHttpServer())
         .get('/api/v1/expenses/without-supplier?fromDate=2026-08-01&toDate=2026-08-31')
         .set('Cookie', cookie)
@@ -1018,14 +1057,21 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
         .set('Cookie', cookie)
         .send({ supplierId: defaultSupplierId })
         .expect(201);
-      expect(assigned.body).toMatchObject({ supplierId: defaultSupplierId, supplierName: 'Proveedor de gastos', beneficiary: 'Texto libre' });
+      expect(assigned.body).toMatchObject({
+        supplierId: defaultSupplierId,
+        supplierName: 'Proveedor de gastos',
+        beneficiary: 'Texto libre',
+      });
 
       const audit = await prisma.auditEvent.findFirstOrThrow({
         where: { action: 'expenses:supplier_assigned', entityId: energy.id },
       });
       expect(audit.userId).toBe(adminUserId);
       expect(audit.createdAt).toBeInstanceOf(Date);
-      expect(audit.details).toMatchObject({ supplierId: defaultSupplierId, previousBeneficiary: 'Texto libre' });
+      expect(audit.details).toMatchObject({
+        supplierId: defaultSupplierId,
+        previousBeneficiary: 'Texto libre',
+      });
 
       // No se reasigna en silencio; ya aparece en el estado de cuenta del proveedor
       await request(app.getHttpServer())
@@ -1037,9 +1083,16 @@ describe('Expenses Module Integration (PostgreSQL)', () => {
         .get(`/api/v1/payables/statement?supplierId=${defaultSupplierId}`)
         .set('Cookie', cookie)
         .expect(200);
-      expect(statement.body.data.items.map((i: { documentId: string }) => i.documentId)).toContain(energy.id);
-      const remaining = await request(app.getHttpServer()).get('/api/v1/expenses/without-supplier').set('Cookie', cookie).expect(200);
-      expect(remaining.body.map((e: { description: string }) => e.description)).toEqual(['Agua septiembre']);
+      expect(statement.body.data.items.map((i: { documentId: string }) => i.documentId)).toContain(
+        energy.id,
+      );
+      const remaining = await request(app.getHttpServer())
+        .get('/api/v1/expenses/without-supplier')
+        .set('Cookie', cookie)
+        .expect(200);
+      expect(remaining.body.map((e: { description: string }) => e.description)).toEqual([
+        'Agua septiembre',
+      ]);
     });
   });
 

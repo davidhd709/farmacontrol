@@ -14,10 +14,18 @@ import {
   AgingBreakdownDto,
   PayableMovementsDto,
 } from '@farmacia/contracts';
-import { buildDocumentMovements, RawDocumentMovement } from '../../../common/utils/document-movements';
+import {
+  buildDocumentMovements,
+  RawDocumentMovement,
+} from '../../../common/utils/document-movements';
 import { centsToMoneyString, parseMoneyToCents } from '../../treasury/domain/treasury-rules';
 import { recordSourceBankMovement } from '../../treasury/application/record-source-bank-movement';
-import { agingBreakdown, agingBucketOf, agingStartDate, daysOverdue } from '../../../common/utils/aging';
+import {
+  agingBreakdown,
+  agingBucketOf,
+  agingStartDate,
+  daysOverdue,
+} from '../../../common/utils/aging';
 import { accountingPolicyAt } from '../../company/application/accounting-policy.reader';
 
 import { IdempotencyService } from '../../../common/idempotency/idempotency.service';
@@ -190,7 +198,10 @@ export class PayablesService {
     const notes = (row.purchase?.debitNotes ?? []).map((n) => ({
       ...n,
       netCents:
-        toCents(n.total) - toCents(n.withholdingIncome) - toCents(n.withholdingVat) - toCents(n.withholdingIca),
+        toCents(n.total) -
+        toCents(n.withholdingIncome) -
+        toCents(n.withholdingVat) -
+        toCents(n.withholdingIca),
     }));
     const raw: RawDocumentMovement[] = [
       {
@@ -268,7 +279,12 @@ export class PayablesService {
       throw new BadRequestException('El monto del pago debe ser mayor a cero');
     }
     const rows = await tx.$queryRaw<
-      Array<{ supplierId: string; amountPaid: Prisma.Decimal; balance: Prisma.Decimal; status: string }>
+      Array<{
+        supplierId: string;
+        amountPaid: Prisma.Decimal;
+        balance: Prisma.Decimal;
+        status: string;
+      }>
     >`
       SELECT supplier_id AS "supplierId", amount_paid AS "amountPaid", balance, status
       FROM payables
@@ -280,7 +296,9 @@ export class PayablesService {
     }
     const raw = rows[0];
     if (input.expectedSupplierId && raw.supplierId !== input.expectedSupplierId) {
-      throw new BadRequestException('La factura seleccionada no pertenece al proveedor del egreso.');
+      throw new BadRequestException(
+        'La factura seleccionada no pertenece al proveedor del egreso.',
+      );
     }
     if (raw.status !== 'PENDIENTE') {
       throw new BadRequestException(`No se puede pagar una cuenta en estado "${raw.status}"`);
@@ -343,7 +361,12 @@ export class PayablesService {
   async getAgingSummary(): Promise<AgingBreakdownDto> {
     const rows = await prisma.payable.findMany({
       where: { status: 'PENDIENTE', balance: { gt: 0 } },
-      select: { balance: true, dueDate: true, createdAt: true, purchase: { select: { purchaseDate: true } } },
+      select: {
+        balance: true,
+        dueDate: true,
+        createdAt: true,
+        purchase: { select: { purchaseDate: true } },
+      },
     });
     const today = calendarDate(businessToday());
     const { agingBaseDate } = await accountingPolicyAt(prisma, businessToday());
@@ -351,7 +374,13 @@ export class PayablesService {
       rows.map((row) => ({
         balanceCents: parseMoneyToCents(row.balance.toString(), 'Saldo de cuenta por pagar'),
         bucket: agingBucketOf(
-          daysOverdue(agingStartDate(agingBaseDate, { dueDate: row.dueDate, issuedAt: row.purchase?.purchaseDate ?? row.createdAt }), today),
+          daysOverdue(
+            agingStartDate(agingBaseDate, {
+              dueDate: row.dueDate,
+              issuedAt: row.purchase?.purchaseDate ?? row.createdAt,
+            }),
+            today,
+          ),
         ),
       })),
     );
@@ -393,7 +422,13 @@ export class PayablesService {
    */
   async reversePaymentInTransaction(
     tx: any,
-    input: { payableId: string; paymentId: string; reason: string; userId: string; moveMoney: boolean },
+    input: {
+      payableId: string;
+      paymentId: string;
+      reason: string;
+      userId: string;
+      moveMoney: boolean;
+    },
   ) {
     const { payableId, paymentId, userId, moveMoney } = input;
     const trimmedReason = input.reason;

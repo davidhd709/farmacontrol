@@ -40,7 +40,8 @@ describe('GET /api/v1/health (Integración HTTP)', () => {
 
   it('responde 503 cuando la base de datos no responde, sin exponer el error interno', async () => {
     const unreachable = {
-      $queryRaw: () => Promise.reject(new Error('connect ECONNREFUSED 10.0.0.5:5432 password=secreto')),
+      $queryRaw: () =>
+        Promise.reject(new Error('connect ECONNREFUSED 10.0.0.5:5432 password=secreto')),
       $disconnect: () => Promise.resolve(),
     } as never;
     const moduleFixture = await Test.createTestingModule({

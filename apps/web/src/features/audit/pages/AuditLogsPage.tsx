@@ -97,7 +97,16 @@ export const AuditLogsPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, selectedEntity, selectedAction, correlationIdInput, searchQuery, fromDate, toDate]);
+  }, [
+    page,
+    pageSize,
+    selectedEntity,
+    selectedAction,
+    correlationIdInput,
+    searchQuery,
+    fromDate,
+    toDate,
+  ]);
 
   useEffect(() => {
     loadMetadata();
@@ -130,21 +139,40 @@ export const AuditLogsPage = () => {
 
   const getActionColor = (action: string): 'success' | 'info' | 'warning' | 'error' | 'default' => {
     const act = action.toLowerCase();
-    if (act.includes('create') || act.includes('confirm') || act.includes('receive') || act.includes('open')) {
+    if (
+      act.includes('create') ||
+      act.includes('confirm') ||
+      act.includes('receive') ||
+      act.includes('open')
+    ) {
       return 'success';
     }
-    if (act.includes('cancel') || act.includes('reverse') || act.includes('delete') || act.includes('deactivate')) {
+    if (
+      act.includes('cancel') ||
+      act.includes('reverse') ||
+      act.includes('delete') ||
+      act.includes('deactivate')
+    ) {
       return 'error';
     }
-    if (act.includes('adjust') || act.includes('close') || act.includes('reopen') || act.includes('password')) {
+    if (
+      act.includes('adjust') ||
+      act.includes('close') ||
+      act.includes('reopen') ||
+      act.includes('password')
+    ) {
       return 'warning';
     }
-    if (act.includes('update') || act.includes('edit') || act.includes('login') || act.includes('post')) {
+    if (
+      act.includes('update') ||
+      act.includes('edit') ||
+      act.includes('login') ||
+      act.includes('post')
+    ) {
       return 'info';
     }
     return 'default';
   };
-
 
   const activeFiltersCount = [
     selectedEntity,
@@ -160,16 +188,29 @@ export const AuditLogsPage = () => {
       <HomeBackButton />
 
       {/* Encabezado */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3, flexWrap: 'wrap', gap: 2 }}>
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          mb: 3,
+          flexWrap: 'wrap',
+          gap: 2,
+        }}
+      >
         <Box>
-          <Typography component="h1" variant="h4" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography
+            component="h1"
+            variant="h4"
+            sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}
+          >
             <HistoryIcon fontSize="large" color="primary" />
             Auditoría del sistema
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Quién hizo qué y cuándo: ingresos, cambios, anulaciones y permisos, en un registro que no
-            se modifica. La revisión de los libros (descuadres y anulaciones) está en Contabilidad ›
-            Auditoría contable.
+            Quién hizo qué y cuándo: ingresos, cambios, anulaciones y permisos, en un registro que
+            no se modifica. La revisión de los libros (descuadres y anulaciones) está en
+            Contabilidad › Auditoría contable.
           </Typography>
         </Box>
         <Button
@@ -238,7 +279,11 @@ export const AuditLogsPage = () => {
               <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
                 FILTROS ACTIVOS
               </Typography>
-              <Typography variant="h5" color={activeFiltersCount > 0 ? 'warning.main' : 'text.secondary'} sx={{ mt: 0.5, fontWeight: 700 }}>
+              <Typography
+                variant="h5"
+                color={activeFiltersCount > 0 ? 'warning.main' : 'text.secondary'}
+                sx={{ mt: 0.5, fontWeight: 700 }}
+              >
                 {activeFiltersCount}
               </Typography>
             </CardContent>
@@ -382,7 +427,9 @@ export const AuditLogsPage = () => {
                 <TableCell sx={{ fontWeight: 700 }}>ID de Registro</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>IP</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>Correlation ID</TableCell>
-                <TableCell align="center" sx={{ fontWeight: 700 }}>Detalle</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 700 }}>
+                  Detalle
+                </TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -444,11 +491,15 @@ export const AuditLogsPage = () => {
                       {ev.entityId ? (
                         <Tooltip title={ev.entityId}>
                           <span>
-                            {ev.entityId.length > 18 ? `${ev.entityId.slice(0, 18)}...` : ev.entityId}
+                            {ev.entityId.length > 18
+                              ? `${ev.entityId.slice(0, 18)}...`
+                              : ev.entityId}
                           </span>
                         </Tooltip>
                       ) : (
-                        <Typography variant="caption" color="text.disabled">—</Typography>
+                        <Typography variant="caption" color="text.disabled">
+                          —
+                        </Typography>
                       )}
                     </TableCell>
                     <TableCell sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>
@@ -460,9 +511,17 @@ export const AuditLogsPage = () => {
                           <Tooltip title="Filtrar por esta transacción">
                             <Chip
                               size="small"
-                              label={ev.correlationId.length > 12 ? `${ev.correlationId.slice(0, 12)}...` : ev.correlationId}
+                              label={
+                                ev.correlationId.length > 12
+                                  ? `${ev.correlationId.slice(0, 12)}...`
+                                  : ev.correlationId
+                              }
                               onClick={() => handleFilterByCorrelation(ev.correlationId!)}
-                              sx={{ cursor: 'pointer', fontFamily: 'monospace', fontSize: '0.75rem' }}
+                              sx={{
+                                cursor: 'pointer',
+                                fontFamily: 'monospace',
+                                fontSize: '0.75rem',
+                              }}
                             />
                           </Tooltip>
                           <Tooltip title="Copiar Correlation ID">
@@ -475,7 +534,9 @@ export const AuditLogsPage = () => {
                           </Tooltip>
                         </Box>
                       ) : (
-                        <Typography variant="caption" color="text.disabled">—</Typography>
+                        <Typography variant="caption" color="text.disabled">
+                          —
+                        </Typography>
                       )}
                     </TableCell>
                     <TableCell align="center">
@@ -517,7 +578,9 @@ export const AuditLogsPage = () => {
         maxWidth="md"
         fullWidth
       >
-        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <DialogTitle
+          sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+        >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <HistoryIcon color="primary" />
             <Typography variant="h6" sx={{ fontWeight: 700 }}>
@@ -540,7 +603,9 @@ export const AuditLogsPage = () => {
               {/* Metadatos en Grid */}
               <Grid container spacing={2}>
                 <Grid size={{ xs: 12, sm: 6 }}>
-                  <Typography variant="caption" color="text.secondary">ID DE EVENTO</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    ID DE EVENTO
+                  </Typography>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                     <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
                       {selectedEvent.id}
@@ -555,35 +620,47 @@ export const AuditLogsPage = () => {
                   </Box>
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6 }}>
-                  <Typography variant="caption" color="text.secondary">FECHA Y HORA (UTC)</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    FECHA Y HORA (UTC)
+                  </Typography>
                   <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
                     {formatDateTime(selectedEvent.createdAt)}
                   </Typography>
                 </Grid>
                 <Grid size={{ xs: 12, sm: 4 }}>
-                  <Typography variant="caption" color="text.secondary">USUARIO ACTOR</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    USUARIO ACTOR
+                  </Typography>
                   <Typography variant="body2" sx={{ fontWeight: 600 }}>
                     {selectedEvent.user?.username || 'Sistema (Automático)'}
                   </Typography>
                 </Grid>
                 <Grid size={{ xs: 12, sm: 4 }}>
-                  <Typography variant="caption" color="text.secondary">ENTIDAD AFECTADA</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    ENTIDAD AFECTADA
+                  </Typography>
                   <Typography variant="body2" sx={{ fontWeight: 600, textTransform: 'capitalize' }}>
                     {selectedEvent.entity}
                   </Typography>
                 </Grid>
                 <Grid size={{ xs: 12, sm: 4 }}>
-                  <Typography variant="caption" color="text.secondary">ID DE REGISTRO AFECTADO</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    ID DE REGISTRO AFECTADO
+                  </Typography>
                   <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
                     {selectedEvent.entityId || 'N/A'}
                   </Typography>
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6 }}>
-                  <Typography variant="caption" color="text.secondary">DIRECCIÓN IP</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    DIRECCIÓN IP
+                  </Typography>
                   <Typography variant="body2">{selectedEvent.ipAddress || 'N/A'}</Typography>
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6 }}>
-                  <Typography variant="caption" color="text.secondary">CORRELATION ID (TRAZABILIDAD HTTP)</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    CORRELATION ID (TRAZABILIDAD HTTP)
+                  </Typography>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                     <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
                       {selectedEvent.correlationId || 'N/A'}
@@ -592,7 +669,9 @@ export const AuditLogsPage = () => {
                       <IconButton
                         size="small"
                         aria-label="Copiar Correlation ID"
-                        onClick={() => handleCopyText(selectedEvent.correlationId!, 'Correlation ID')}
+                        onClick={() =>
+                          handleCopyText(selectedEvent.correlationId!, 'Correlation ID')
+                        }
                       >
                         <ContentCopyIcon fontSize="inherit" />
                       </IconButton>
@@ -605,7 +684,14 @@ export const AuditLogsPage = () => {
 
               {/* JSON Payload Details */}
               <Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    mb: 1,
+                  }}
+                >
                   <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
                     Carga Útil de Auditoría (Detalles JSONB):
                   </Typography>
@@ -613,7 +699,12 @@ export const AuditLogsPage = () => {
                     <Button
                       size="small"
                       startIcon={<ContentCopyIcon />}
-                      onClick={() => handleCopyText(JSON.stringify(selectedEvent.details, null, 2), 'Detalles JSON')}
+                      onClick={() =>
+                        handleCopyText(
+                          JSON.stringify(selectedEvent.details, null, 2),
+                          'Detalles JSON',
+                        )
+                      }
                     >
                       Copiar JSON
                     </Button>

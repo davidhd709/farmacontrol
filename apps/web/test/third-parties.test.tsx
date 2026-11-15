@@ -109,7 +109,7 @@ describe('ThirdPartiesPage (Gestión Unificada de Terceros)', () => {
         <MemoryRouter initialEntries={[path]}>
           <ThirdPartiesPage />
         </MemoryRouter>
-      </ThemeProvider>
+      </ThemeProvider>,
     );
 
   it('debe renderizar el título de la página, los tabs de rol y la lista de terceros', async () => {
@@ -119,7 +119,9 @@ describe('ThirdPartiesPage (Gestión Unificada de Terceros)', () => {
       screen.getByRole('heading', { name: 'Clientes, proveedores y otros' }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText('Gestión centralizada de clientes, proveedores, colaboradores y beneficiarios')
+      screen.getByText(
+        'Gestión centralizada de clientes, proveedores, colaboradores y beneficiarios',
+      ),
     ).toBeInTheDocument();
 
     expect(screen.getByRole('tab', { name: 'Todos los Terceros' })).toBeInTheDocument();
@@ -164,7 +166,7 @@ describe('ThirdPartiesPage (Gestión Unificada de Terceros)', () => {
       expect(thirdPartiesApi.fetchThirdParties).toHaveBeenCalledWith(
         expect.objectContaining({
           role: 'SUPPLIER',
-        })
+        }),
       );
     });
   });
@@ -206,7 +208,7 @@ describe('ThirdPartyAutocomplete (Selector de Terceros para Contabilidad y Gasto
           placeholder="Buscar tercero..."
           freeSolo
         />
-      </ThemeProvider>
+      </ThemeProvider>,
     );
 
     const input = screen.getByPlaceholderText('Buscar tercero...');
@@ -226,7 +228,7 @@ describe('ThirdPartyAutocomplete (Selector de Terceros para Contabilidad y Gasto
           label="Tercero"
           placeholder="Buscar tercero..."
         />
-      </ThemeProvider>
+      </ThemeProvider>,
     );
 
     const input = screen.getByPlaceholderText('Buscar tercero...');
@@ -255,7 +257,7 @@ describe('ThirdPartyFormDialog — Departamentos y Municipios de Colombia (DANE 
           onSaved={onSaved}
           thirdPartyToEdit={thirdPartyToEdit}
         />
-      </ThemeProvider>
+      </ThemeProvider>,
     );
     return { ...view, onClose, onSaved };
   };
@@ -272,7 +274,7 @@ describe('ThirdPartyFormDialog — Departamentos y Municipios de Colombia (DANE 
 
     // Verificar orden en el DOM: Departamento aparece antes que Ciudad / Municipio
     expect(
-      deptInput.compareDocumentPosition(cityInput) & Node.DOCUMENT_POSITION_FOLLOWING
+      deptInput.compareDocumentPosition(cityInput) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
 
@@ -363,7 +365,7 @@ describe('ThirdPartyFormDialog — Departamentos y Municipios de Colombia (DANE 
           city: 'Medellín',
           departmentCode: '05',
           municipalityCode: '05001',
-        })
+        }),
       );
       expect(onSaved).toHaveBeenCalled();
     });
@@ -400,9 +402,7 @@ describe('ThirdPartyFormDialog — Departamentos y Municipios de Colombia (DANE 
     expect(deptInput).toHaveValue('');
     expect(cityInput).toBeDisabled();
     expect(cityInput).toHaveValue('');
-    expect(
-      screen.getByText(/Ubicación registrada actualmente:/i)
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Ubicación registrada actualmente:/i)).toBeInTheDocument();
 
     // Si se guarda sin tocar la ubicación, conserva el valor original sin corromperlo
     fireEvent.click(screen.getByRole('button', { name: /Guardar Cambios/i }));
@@ -413,7 +413,7 @@ describe('ThirdPartyFormDialog — Departamentos y Municipios de Colombia (DANE 
         expect.objectContaining({
           city: 'Buenavista',
           department: null,
-        })
+        }),
       );
     });
   });

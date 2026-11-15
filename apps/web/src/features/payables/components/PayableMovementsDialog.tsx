@@ -42,7 +42,8 @@ export function PayableMovementsDialog({
                 { label: 'Vence', value: data.dueDate },
                 {
                   label: 'Estado',
-                  value: statusConfig[data.status as keyof typeof statusConfig]?.label ?? data.status,
+                  value:
+                    statusConfig[data.status as keyof typeof statusConfig]?.label ?? data.status,
                 },
                 { label: 'Pagado', value: formatMoney(data.amountPaid) },
                 { label: 'Saldo', value: formatMoney(data.balance) },

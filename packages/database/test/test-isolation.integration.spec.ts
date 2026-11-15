@@ -34,7 +34,12 @@ describe('Aislamiento de la base de pruebas (FARM-AUD-014)', () => {
   const withDatabase = (env: NodeJS.ProcessEnv, database: string): NodeJS.ProcessEnv => {
     const url = new URL(env.DATABASE_TEST_URL as string);
     url.pathname = `/${database}`;
-    return { ...env, DATABASE_URL: url.toString(), DATABASE_TEST_URL: url.toString(), PGDATABASE: database };
+    return {
+      ...env,
+      DATABASE_URL: url.toString(),
+      DATABASE_TEST_URL: url.toString(),
+      PGDATABASE: database,
+    };
   };
   const tempDir = (prefix: string): string => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -50,7 +55,10 @@ describe('Aislamiento de la base de pruebas (FARM-AUD-014)', () => {
     fs.mkdirSync(path.join(dir, 'backups'));
     return dir;
   };
-  const withRunDir = (runDir: string, backupDir = path.join(runDir, 'backups')): NodeJS.ProcessEnv => ({
+  const withRunDir = (
+    runDir: string,
+    backupDir = path.join(runDir, 'backups'),
+  ): NodeJS.ProcessEnv => ({
     ...authorizedEnv(),
     [TEST_RUN_DIR_ENV]: runDir,
     BACKUP_DIR: backupDir,
@@ -84,9 +92,9 @@ describe('Aislamiento de la base de pruebas (FARM-AUD-014)', () => {
     });
 
     it('rechaza otra base *_test del mismo servidor que no lleva la marca de la ejecución', async () => {
-      await expect(assertTestIsolation(withDatabase(authorizedEnv(), probeDb), repoRoot)).rejects.toThrow(
-        /no es la base temporal de esta ejecución/,
-      );
+      await expect(
+        assertTestIsolation(withDatabase(authorizedEnv(), probeDb), repoRoot),
+      ).rejects.toThrow(/no es la base temporal de esta ejecución/);
     });
 
     it('rechaza la base temporal si el identificador de ejecución no coincide', async () => {
@@ -98,8 +106,15 @@ describe('Aislamiento de la base de pruebas (FARM-AUD-014)', () => {
       const env = authorizedEnv();
       const url = new URL(env.DATABASE_TEST_URL as string);
       url.port = '1';
-      const unreachable = { ...env, DATABASE_URL: url.toString(), DATABASE_TEST_URL: url.toString(), PGPORT: '1' };
-      await expect(assertTestIsolation(unreachable, repoRoot)).rejects.toThrow(/no fue posible conectarse/);
+      const unreachable = {
+        ...env,
+        DATABASE_URL: url.toString(),
+        DATABASE_TEST_URL: url.toString(),
+        PGPORT: '1',
+      };
+      await expect(assertTestIsolation(unreachable, repoRoot)).rejects.toThrow(
+        /no fue posible conectarse/,
+      );
     });
 
     it('rechaza DATABASE_URL distinta de DATABASE_TEST_URL', () => {
@@ -112,12 +127,19 @@ describe('Aislamiento de la base de pruebas (FARM-AUD-014)', () => {
       const env = authorizedEnv();
       const url = new URL(env.DATABASE_TEST_URL as string);
       url.hostname = 'db.farmacia.example';
-      const remote = { ...env, DATABASE_URL: url.toString(), DATABASE_TEST_URL: url.toString(), PGHOST: url.hostname };
+      const remote = {
+        ...env,
+        DATABASE_URL: url.toString(),
+        DATABASE_TEST_URL: url.toString(),
+        PGHOST: url.hostname,
+      };
       expect(() => checkTestEnvironment(remote, repoRoot)).toThrow(/debe ser local/);
     });
 
     it('cleanTestDatabase no borra nada si la ejecución no es la propietaria de la base', async () => {
-      const category = await prisma.category.create({ data: { name: `Aislamiento ${Date.now()}` } });
+      const category = await prisma.category.create({
+        data: { name: `Aislamiento ${Date.now()}` },
+      });
       process.env[TEST_RUN_ID_ENV] = otherRunId;
       try {
         await expect(cleanTestDatabase()).rejects.toThrow(/no es la base temporal/);
@@ -139,7 +161,9 @@ describe('Aislamiento de la base de pruebas (FARM-AUD-014)', () => {
       process.chdir(dir);
       delete process.env.DATABASE_TEST_URL;
       try {
-        expect(() => resolveDatabaseUrl({ forceTest: true })).toThrow(/DATABASE_TEST_URL no está configurada/);
+        expect(() => resolveDatabaseUrl({ forceTest: true })).toThrow(
+          /DATABASE_TEST_URL no está configurada/,
+        );
       } finally {
         process.env.DATABASE_TEST_URL = previousUrl;
         process.chdir(previousCwd);
@@ -150,13 +174,21 @@ describe('Aislamiento de la base de pruebas (FARM-AUD-014)', () => {
   describe('variables de entorno', () => {
     it.each([
       ['sin identificador de ejecución', { [TEST_RUN_ID_ENV]: undefined }, /FARMACIA_TEST_RUN_ID/],
-      ['con identificador malformado', { [TEST_RUN_ID_ENV]: 'cualquier-cosa' }, /FARMACIA_TEST_RUN_ID/],
+      [
+        'con identificador malformado',
+        { [TEST_RUN_ID_ENV]: 'cualquier-cosa' },
+        /FARMACIA_TEST_RUN_ID/,
+      ],
       ['con NODE_ENV distinto de test', { NODE_ENV: 'development' }, /NODE_ENV/],
       ['sin DATABASE_TEST_URL', { DATABASE_TEST_URL: undefined }, /DATABASE_TEST_URL/],
       ['con PGPORT del contenedor de desarrollo', { PGPORT: '5434' }, /PGPORT/],
       ['sin PGHOST (backup.sh usaría su valor por defecto)', { PGHOST: undefined }, /PGHOST/],
       ['con PGPASSWORD distinta de la URL', { PGPASSWORD: 'otra' }, /PGPASSWORD/],
-      ['con destino externo de respaldos', { BACKUP_REMOTE: 'offsite:farmacia' }, /destino externo/],
+      [
+        'con destino externo de respaldos',
+        { BACKUP_REMOTE: 'offsite:farmacia' },
+        /destino externo/,
+      ],
       ['exigiendo copia externa', { BACKUP_REQUIRE_OFFSITE: 'true' }, /destino externo/],
     ])('rechaza el entorno %s', (_caso, overrides, message) => {
       const env = { ...authorizedEnv(), ...overrides };
@@ -173,13 +205,20 @@ describe('Aislamiento de la base de pruebas (FARM-AUD-014)', () => {
       ['options', '-c search_path=otro'],
       ['service', 'farmacia_prod'],
       ['sslmode', 'disable'],
-    ])('rechaza el parámetro ?%s= en la URL, que node-postgres antepone a la URL validada', (param, value) => {
-      const env = authorizedEnv();
-      const url = new URL(env.DATABASE_TEST_URL as string);
-      url.searchParams.set(param, value);
-      const overridden = { ...env, DATABASE_URL: url.toString(), DATABASE_TEST_URL: url.toString() };
-      expect(() => checkTestEnvironment(overridden, repoRoot)).toThrow(/parámetros de conexión/);
-    });
+    ])(
+      'rechaza el parámetro ?%s= en la URL, que node-postgres antepone a la URL validada',
+      (param, value) => {
+        const env = authorizedEnv();
+        const url = new URL(env.DATABASE_TEST_URL as string);
+        url.searchParams.set(param, value);
+        const overridden = {
+          ...env,
+          DATABASE_URL: url.toString(),
+          DATABASE_TEST_URL: url.toString(),
+        };
+        expect(() => checkTestEnvironment(overridden, repoRoot)).toThrow(/parámetros de conexión/);
+      },
+    );
 
     it.each([
       ['PGHOSTADDR', '10.0.0.5'],
@@ -189,16 +228,23 @@ describe('Aislamiento de la base de pruebas (FARM-AUD-014)', () => {
       ['PGOPTIONS', '-c search_path=otro'],
       ['PGSSLMODE', 'disable'],
       ['PGCLUSTER', '16/main'],
-    ])('rechaza la variable libpq %s, que podría desviar pg_dump o node-postgres', (name, value) => {
-      const env = { ...authorizedEnv(), [name]: value };
-      expect(() => checkTestEnvironment(env, repoRoot)).toThrow(new RegExp(`no admitidas.*${name}`));
-    });
+    ])(
+      'rechaza la variable libpq %s, que podría desviar pg_dump o node-postgres',
+      (name, value) => {
+        const env = { ...authorizedEnv(), [name]: value };
+        expect(() => checkTestEnvironment(env, repoRoot)).toThrow(
+          new RegExp(`no admitidas.*${name}`),
+        );
+      },
+    );
   });
 
   describe('directorio de respaldos (AUD14-01)', () => {
     it('acepta el directorio temporal legítimo de la ejecución', () => {
       expect(() => checkTestEnvironment(authorizedEnv(), repoRoot)).not.toThrow();
-      expect(path.basename(process.env[TEST_RUN_DIR_ENV] as string)).toMatch(new RegExp(`^farmacontrol-test-${runId}\\.`));
+      expect(path.basename(process.env[TEST_RUN_DIR_ENV] as string)).toMatch(
+        new RegExp(`^farmacontrol-test-${runId}\\.`),
+      );
     });
 
     it.each([
@@ -208,7 +254,14 @@ describe('Aislamiento de la base de pruebas (FARM-AUD-014)', () => {
       ['una ruta relativa', () => 'infra/backups'],
       [
         'una ruta con ../ que sale del directorio autorizado',
-        () => path.join(process.env[TEST_RUN_DIR_ENV] as string, 'backups', '..', '..', path.basename(tempDir('farmacontrol-fuera-'))),
+        () =>
+          path.join(
+            process.env[TEST_RUN_DIR_ENV] as string,
+            'backups',
+            '..',
+            '..',
+            path.basename(tempDir('farmacontrol-fuera-')),
+          ),
       ],
     ])('rechaza BACKUP_DIR = %s', (_caso, backupDir) => {
       const env = { ...authorizedEnv(), BACKUP_DIR: backupDir() };
@@ -219,7 +272,9 @@ describe('Aislamiento de la base de pruebas (FARM-AUD-014)', () => {
       const runDir = fakeRunDir(runId);
       const outside = tempDir('farmacontrol-fuera-');
       fs.symlinkSync(outside, path.join(runDir, 'enlace'));
-      expect(() => checkTestEnvironment(withRunDir(runDir, path.join(runDir, 'enlace')), repoRoot)).toThrow(/BACKUP_DIR/);
+      expect(() =>
+        checkTestEnvironment(withRunDir(runDir, path.join(runDir, 'enlace')), repoRoot),
+      ).toThrow(/BACKUP_DIR/);
     });
 
     it('rechaza que backups/ sea un enlace simbólico hacia otro directorio', () => {
@@ -242,26 +297,33 @@ describe('Aislamiento de la base de pruebas (FARM-AUD-014)', () => {
 
     it('rechaza un directorio cuya marca pertenece a otra ejecución', () => {
       const runDir = fakeRunDir(runId, { stamp: otherRunId });
-      expect(() => checkTestEnvironment(withRunDir(runDir), repoRoot)).toThrow(/marca .* no corresponde/);
+      expect(() => checkTestEnvironment(withRunDir(runDir), repoRoot)).toThrow(
+        /marca .* no corresponde/,
+      );
     });
 
     it('rechaza un directorio de ejecución inexistente', () => {
       const runDir = path.join(os.tmpdir(), `farmacontrol-test-${runId}.no-existe`);
-      expect(() => checkTestEnvironment(withRunDir(runDir), repoRoot)).toThrow(/no existe o no se puede verificar/);
+      expect(() => checkTestEnvironment(withRunDir(runDir), repoRoot)).toThrow(
+        /no existe o no se puede verificar/,
+      );
     });
 
     it('rechaza un directorio de ejecución que es un enlace simbólico', () => {
       const runDir = fakeRunDir(runId);
       const link = path.join(tempDir('farmacontrol-enlaces-'), `farmacontrol-test-${runId}.enlace`);
       fs.symlinkSync(runDir, link);
-      expect(() => checkTestEnvironment(withRunDir(link, path.join(runDir, 'backups')), repoRoot)).toThrow(
-        /enlace simbólico/,
-      );
+      expect(() =>
+        checkTestEnvironment(withRunDir(link, path.join(runDir, 'backups')), repoRoot),
+      ).toThrow(/enlace simbólico/);
     });
 
     it('rechaza un directorio de ejecución no canónico aunque resuelva al autorizado', () => {
       const runDir = process.env[TEST_RUN_DIR_ENV] as string;
-      const env = { ...authorizedEnv(), [TEST_RUN_DIR_ENV]: path.join(runDir, 'backups') + `${path.sep}..` };
+      const env = {
+        ...authorizedEnv(),
+        [TEST_RUN_DIR_ENV]: path.join(runDir, 'backups') + `${path.sep}..`,
+      };
       expect(() => checkTestEnvironment(env, repoRoot)).toThrow(/ruta canónica/);
     });
 
@@ -276,9 +338,9 @@ describe('Aislamiento de la base de pruebas (FARM-AUD-014)', () => {
       const link = path.join(tempDir('farmacontrol-enlaces-'), 'padre');
       fs.symlinkSync(path.dirname(runDir), link);
       const viaLink = path.join(link, path.basename(runDir));
-      expect(() => checkTestEnvironment(withRunDir(viaLink, path.join(viaLink, 'backups')), repoRoot)).toThrow(
-        /ruta canónica/,
-      );
+      expect(() =>
+        checkTestEnvironment(withRunDir(viaLink, path.join(viaLink, 'backups')), repoRoot),
+      ).toThrow(/ruta canónica/);
     });
 
     it('falla si no puede determinar la raíz del repositorio en lugar de omitir la comprobación', () => {
@@ -299,7 +361,9 @@ describe('Aislamiento de la base de pruebas (FARM-AUD-014)', () => {
     it('rechaza un directorio de ejecución con escritura para otros usuarios', () => {
       const runDir = fakeRunDir(runId);
       fs.chmodSync(runDir, 0o777);
-      expect(() => checkTestEnvironment(withRunDir(runDir), repoRoot)).toThrow(/escritura de otros usuarios/);
+      expect(() => checkTestEnvironment(withRunDir(runDir), repoRoot)).toThrow(
+        /escritura de otros usuarios/,
+      );
     });
 
     it('backup.sh se niega antes de aplicar la retención y conserva los respaldos preexistentes', async () => {

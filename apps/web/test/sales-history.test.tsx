@@ -175,9 +175,7 @@ describe('SalesHistoryPage (Frontend Historial y Anulación UX-04 / UX-05)', () 
 
     // Diálogo de confirmación con advertencia irreversible
     expect(await screen.findByTestId('cancel-sale-dialog')).toBeInTheDocument();
-    expect(
-      screen.getByText(/Las unidades vuelven a sus lotes de origen/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Las unidades vuelven a sus lotes de origen/i)).toBeInTheDocument();
 
     const confirmCancelBtn = screen.getByTestId('confirm-cancel-sale-btn');
     expect(confirmCancelBtn).toBeDisabled();
@@ -214,12 +212,10 @@ describe('Formulario nota crédito', () => {
   });
 
   it('"Devolver todo" llena lo vendido y un cambio de producto entrega la nota al punto de venta', async () => {
-    const api = vi
-      .spyOn(accountingApi, 'createSaleCreditNote')
-      .mockResolvedValue({
-        id: 'nc-1',
-        creditNoteNumber: 'NC-000001',
-      } as accountingApi.CreditNoteDto);
+    const api = vi.spyOn(accountingApi, 'createSaleCreditNote').mockResolvedValue({
+      id: 'nc-1',
+      creditNoteNumber: 'NC-000001',
+    } as accountingApi.CreditNoteDto);
     const onCreated = vi.fn();
     render(
       <CreditNoteDialog open sale={mockSalesList[0]} onClose={vi.fn()} onCreated={onCreated} />,
@@ -351,7 +347,9 @@ describe('Historial de Acciones por Factura (REQ-006)', () => {
 
     // Debe abrir el diálogo
     expect(await screen.findByTestId('sale-action-history-dialog')).toBeInTheDocument();
-    expect(screen.getByText(/Historial de Acciones — Factura VEN-20260926-0001/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Historial de Acciones — Factura VEN-20260926-0001/),
+    ).toBeInTheDocument();
 
     // Debe mostrar los eventos
     await waitFor(() => {

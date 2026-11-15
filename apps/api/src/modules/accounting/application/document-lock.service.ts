@@ -9,7 +9,9 @@ import { AccountingValidationError } from '../domain/accounting-rules';
 import { parseJournalDate } from '../domain/journal-rules';
 import { businessToday } from '../../../common/utils/business-date';
 
-type LockRecord = Prisma.DocumentLockGetPayload<{ include: { createdBy: { select: { username: true } } } }>;
+type LockRecord = Prisma.DocumentLockGetPayload<{
+  include: { createdBy: { select: { username: true } } };
+}>;
 
 function toDto(lock: LockRecord): DocumentLockDto {
   return {

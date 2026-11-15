@@ -98,7 +98,10 @@ describe('contraseñas en frontend', () => {
     expect(within(dialog).getByText(/se cerrarán todas las sesiones/i)).toBeInTheDocument();
     expect(within(dialog).getByText(/deberá cambiarla por una propia/i)).toBeInTheDocument();
     await tester.type(within(dialog).getByLabelText(/^Contraseña temporal/), 'Password#2026');
-    await tester.type(within(dialog).getByLabelText(/^Confirmar nueva contraseña/), 'Password#2026');
+    await tester.type(
+      within(dialog).getByLabelText(/^Confirmar nueva contraseña/),
+      'Password#2026',
+    );
     await tester.click(within(dialog).getByRole('button', { name: 'Restablecer contraseña' }));
 
     await waitFor(() =>
@@ -213,7 +216,9 @@ describe('contraseñas en frontend', () => {
     expect(within(dialog).getByLabelText(/^Contraseña temporal/)).toBeInTheDocument();
 
     fireEvent.keyDown(dialog, { key: 'Escape' });
-    expect(screen.getByRole('dialog', { name: 'Cambia tu contraseña temporal' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('dialog', { name: 'Cambia tu contraseña temporal' }),
+    ).toBeInTheDocument();
 
     expect(within(dialog).getByText('laura.caja')).toBeInTheDocument();
     await tester.click(within(dialog).getByRole('button', { name: 'Cerrar sesión' }));

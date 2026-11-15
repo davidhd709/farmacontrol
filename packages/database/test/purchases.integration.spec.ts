@@ -134,7 +134,7 @@ describe('Purchases & PurchaseLines — Integridad de Persistencia en PostgreSQL
     await expect(
       prisma.supplier.delete({
         where: { id: supplierId },
-      })
+      }),
     ).rejects.toThrow();
   });
 });

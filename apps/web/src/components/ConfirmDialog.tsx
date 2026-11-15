@@ -2,13 +2,7 @@ import React from 'react';
 import { SweetModal, SweetModalType } from './SweetModal';
 
 export type ConfirmOperationType =
-  | 'create'
-  | 'update'
-  | 'delete'
-  | 'annul'
-  | 'revert'
-  | 'confirm'
-  | 'custom';
+  'create' | 'update' | 'delete' | 'annul' | 'revert' | 'confirm' | 'custom';
 
 export interface ConfirmDialogProps {
   open: boolean;
@@ -64,14 +58,13 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   const resolvedTitle = title || DEFAULT_TITLES[operationType] || '¿Confirmar acción?';
   const resolvedConfirmText = confirmText || DEFAULT_CONFIRM_TEXTS[operationType] || 'Confirmar';
 
-  const isDanger = operationType === 'delete' || operationType === 'annul' || confirmColor === 'error';
+  const isDanger =
+    operationType === 'delete' || operationType === 'annul' || confirmColor === 'error';
   const isWarning = operationType === 'revert' || confirmColor === 'warning';
 
-  const resolvedColor =
-    confirmColor || (isDanger ? 'error' : isWarning ? 'warning' : 'primary');
+  const resolvedColor = confirmColor || (isDanger ? 'error' : isWarning ? 'warning' : 'primary');
 
-  const resolvedType =
-    modalType || (isDanger ? 'warning' : isWarning ? 'warning' : 'question');
+  const resolvedType = modalType || (isDanger ? 'warning' : isWarning ? 'warning' : 'question');
 
   return (
     <SweetModal

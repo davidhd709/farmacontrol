@@ -71,8 +71,8 @@ export function DeactivateProductDialog({
         ) : null}
 
         <DialogContentText variant="body2" color="text.secondary">
-          ¿Estás seguro de que deseas inactivar el producto{' '}
-          <strong>{product?.name}</strong> (SKU: {product?.code})?
+          ¿Estás seguro de que deseas inactivar el producto <strong>{product?.name}</strong> (SKU:{' '}
+          {product?.code})?
         </DialogContentText>
 
         <DialogContentText variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>

@@ -58,7 +58,7 @@ describe('SessionService (Unit)', () => {
         expect.objectContaining({
           userId: sampleUserId,
           tokenHash: sampleTokenHash,
-        })
+        }),
       );
     });
 
@@ -85,33 +85,33 @@ describe('SessionService (Unit)', () => {
     it('debe rechazar duraciones inválidas: cero, negativas, NaN, Infinity o fraccionarias (F-21)', async () => {
       // Duración cero
       await expect(service.createSession(sampleUserId, 0)).rejects.toThrow(
-        InvalidSessionDurationException
+        InvalidSessionDurationException,
       );
 
       // Duración negativa
       await expect(service.createSession(sampleUserId, -1000)).rejects.toThrow(
-        InvalidSessionDurationException
+        InvalidSessionDurationException,
       );
 
       // Duración NaN
       await expect(service.createSession(sampleUserId, NaN)).rejects.toThrow(
-        InvalidSessionDurationException
+        InvalidSessionDurationException,
       );
 
       // Duración Infinity
       await expect(service.createSession(sampleUserId, Infinity)).rejects.toThrow(
-        InvalidSessionDurationException
+        InvalidSessionDurationException,
       );
 
       // Duración fraccionaria (debe ser entero de milisegundos)
       await expect(service.createSession(sampleUserId, 1000.5)).rejects.toThrow(
-        InvalidSessionDurationException
+        InvalidSessionDurationException,
       );
 
       // Duración no numérica
       // @ts-expect-error test runtime
       await expect(service.createSession(sampleUserId, 'invalid')).rejects.toThrow(
-        InvalidSessionDurationException
+        InvalidSessionDurationException,
       );
 
       // Ninguna sesión debe haberse persistido en el repositorio

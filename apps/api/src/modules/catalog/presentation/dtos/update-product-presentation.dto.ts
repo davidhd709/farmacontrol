@@ -35,7 +35,10 @@ export class UpdateProductPresentationValidationPipe implements PipeTransform {
       if (record.unitOfMeasureId === null || record.unitOfMeasureId === '') {
         result.unitOfMeasureId = null;
       } else {
-        if (typeof record.unitOfMeasureId !== 'string' || !UUID_REGEX.test(record.unitOfMeasureId.trim())) {
+        if (
+          typeof record.unitOfMeasureId !== 'string' ||
+          !UUID_REGEX.test(record.unitOfMeasureId.trim())
+        ) {
           throw new BadRequestException('El campo "unitOfMeasureId" debe ser un UUID válido.');
         }
         result.unitOfMeasureId = record.unitOfMeasureId.trim();
@@ -47,8 +50,13 @@ export class UpdateProductPresentationValidationPipe implements PipeTransform {
       if (record.containedPresentationId === null || record.containedPresentationId === '') {
         result.containedPresentationId = null;
       } else {
-        if (typeof record.containedPresentationId !== 'string' || !UUID_REGEX.test(record.containedPresentationId.trim())) {
-          throw new BadRequestException('El campo "containedPresentationId" debe ser un UUID válido.');
+        if (
+          typeof record.containedPresentationId !== 'string' ||
+          !UUID_REGEX.test(record.containedPresentationId.trim())
+        ) {
+          throw new BadRequestException(
+            'El campo "containedPresentationId" debe ser un UUID válido.',
+          );
         }
         result.containedPresentationId = record.containedPresentationId.trim();
       }
@@ -61,7 +69,9 @@ export class UpdateProductPresentationValidationPipe implements PipeTransform {
       }
       const trimmed = record.name.trim();
       if (trimmed.length < 1 || trimmed.length > 100) {
-        throw new BadRequestException('El nombre de la presentación debe tener entre 1 y 100 caracteres.');
+        throw new BadRequestException(
+          'El nombre de la presentación debe tener entre 1 y 100 caracteres.',
+        );
       }
       result.name = trimmed;
     }
@@ -106,18 +116,24 @@ export class UpdateProductPresentationValidationPipe implements PipeTransform {
 
     // price
     if (record.price !== undefined) {
-      const priceNum = typeof record.price === 'number' ? record.price : parseFloat(String(record.price));
+      const priceNum =
+        typeof record.price === 'number' ? record.price : parseFloat(String(record.price));
       if (isNaN(priceNum) || priceNum < 0) {
-        throw new BadRequestException('El precio de la presentación debe ser un número mayor o igual a 0.');
+        throw new BadRequestException(
+          'El precio de la presentación debe ser un número mayor o igual a 0.',
+        );
       }
       result.price = priceNum;
     }
 
     // cost
     if (record.cost !== undefined) {
-      const costNum = typeof record.cost === 'number' ? record.cost : parseFloat(String(record.cost));
+      const costNum =
+        typeof record.cost === 'number' ? record.cost : parseFloat(String(record.cost));
       if (isNaN(costNum) || costNum < 0) {
-        throw new BadRequestException('El costo de la presentación debe ser un número mayor o igual a 0.');
+        throw new BadRequestException(
+          'El costo de la presentación debe ser un número mayor o igual a 0.',
+        );
       }
       result.cost = costNum;
     }

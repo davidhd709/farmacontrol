@@ -14,10 +14,7 @@ describe('UserProvisioningService (Integration with PostgreSQL & Argon2id)', () 
   });
   const passwordService = new PasswordService(hasher);
   const userRepository = new PrismaUserRepository(prisma);
-  const provisioningService = new UserProvisioningService(
-    userRepository,
-    passwordService
-  );
+  const provisioningService = new UserProvisioningService(userRepository, passwordService);
 
   beforeAll(async () => {
     await cleanTestDatabase();
@@ -45,14 +42,14 @@ describe('UserProvisioningService (Integration with PostgreSQL & Argon2id)', () 
     // Verificar que el hash almacenado en la DB valida exitosamente la contraseña
     const isValid = await passwordService.verifyPassword(
       'ClaveSuperSegura#2026',
-      admin.passwordHash
+      admin.passwordHash,
     );
     expect(isValid).toBe(true);
 
     // Comprobar rechazo con contraseña incorrecta
     const isInvalid = await passwordService.verifyPassword(
       'PasswordErronea#999',
-      admin.passwordHash
+      admin.passwordHash,
     );
     expect(isInvalid).toBe(false);
   });
@@ -67,7 +64,7 @@ describe('UserProvisioningService (Integration with PostgreSQL & Argon2id)', () 
       provisioningService.provisionInitialUser({
         username: 'segundo_admin',
         password: 'OtraClave#456',
-      })
+      }),
     ).rejects.toThrow(/ya existen usuarios registrados en la base de datos/);
   });
 
@@ -75,9 +72,8 @@ describe('UserProvisioningService (Integration with PostgreSQL & Argon2id)', () 
     process.env.INITIAL_ADMIN_USERNAME = 'super_administrador';
     process.env.INITIAL_ADMIN_PASSWORD = 'PasswordSegura#2026';
 
-    const { runProvisionInitialUser } = await import(
-      '../../src/modules/identity/infrastructure/cli/provision-initial-user'
-    );
+    const { runProvisionInitialUser } =
+      await import('../../src/modules/identity/infrastructure/cli/provision-initial-user');
 
     await runProvisionInitialUser();
 
@@ -110,4 +106,3 @@ describe('UserProvisioningService (Integration with PostgreSQL & Argon2id)', () 
     delete process.env.INITIAL_ADMIN_PASSWORD;
   });
 });
-

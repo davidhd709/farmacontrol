@@ -24,13 +24,9 @@ export class PrismaUserRepository implements UserRepositoryPort {
     return this.toDomain(record);
   }
 
-  public async findByUsername(
-    username: Username | string
-  ): Promise<User | null> {
+  public async findByUsername(username: Username | string): Promise<User | null> {
     const normalized =
-      username instanceof Username
-        ? username.value
-        : username.trim().toLowerCase();
+      username instanceof Username ? username.value : username.trim().toLowerCase();
 
     // Consulta con modo insensible a mayúsculas para alinearse con users_username_lower_key
     const record = await this.client.user.findFirst({

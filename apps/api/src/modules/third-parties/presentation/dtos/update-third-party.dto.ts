@@ -62,7 +62,8 @@ export class UpdateThirdPartyValidationPipe implements PipeTransform {
     }
 
     if (record.verificationDigit !== undefined) {
-      result.verificationDigit = typeof record.verificationDigit === 'string' ? record.verificationDigit.trim() : null;
+      result.verificationDigit =
+        typeof record.verificationDigit === 'string' ? record.verificationDigit.trim() : null;
     }
 
     if (record.name !== undefined) {
@@ -71,17 +72,21 @@ export class UpdateThirdPartyValidationPipe implements PipeTransform {
       }
       const trimmed = record.name.trim();
       if (trimmed.length < 2 || trimmed.length > 200) {
-        throw new BadRequestException('El nombre o razón social debe tener entre 2 y 200 caracteres.');
+        throw new BadRequestException(
+          'El nombre o razón social debe tener entre 2 y 200 caracteres.',
+        );
       }
       result.name = trimmed;
     }
 
     if (record.tradeName !== undefined) {
-      result.tradeName = typeof record.tradeName === 'string' ? record.tradeName.trim() || null : null;
+      result.tradeName =
+        typeof record.tradeName === 'string' ? record.tradeName.trim() || null : null;
     }
 
     if (record.contactName !== undefined) {
-      result.contactName = typeof record.contactName === 'string' ? record.contactName.trim() || null : null;
+      result.contactName =
+        typeof record.contactName === 'string' ? record.contactName.trim() || null : null;
     }
 
     if (record.phone !== undefined) {
@@ -101,7 +106,8 @@ export class UpdateThirdPartyValidationPipe implements PipeTransform {
     }
 
     if (record.department !== undefined) {
-      result.department = typeof record.department === 'string' ? record.department.trim() || null : null;
+      result.department =
+        typeof record.department === 'string' ? record.department.trim() || null : null;
     }
 
     if (record.departmentCode !== undefined) {
@@ -111,13 +117,12 @@ export class UpdateThirdPartyValidationPipe implements PipeTransform {
 
     if (record.municipalityCode !== undefined) {
       result.municipalityCode =
-        typeof record.municipalityCode === 'string'
-          ? record.municipalityCode.trim() || null
-          : null;
+        typeof record.municipalityCode === 'string' ? record.municipalityCode.trim() || null : null;
     }
 
     if (record.taxRegime !== undefined) {
-      result.taxRegime = typeof record.taxRegime === 'string' ? record.taxRegime.trim().toUpperCase() : null;
+      result.taxRegime =
+        typeof record.taxRegime === 'string' ? record.taxRegime.trim().toUpperCase() : null;
     }
 
     if (record.isCustomer !== undefined) {

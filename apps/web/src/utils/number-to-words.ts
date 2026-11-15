@@ -164,4 +164,3 @@ export function numberToWordsCop(amount: number | string): string {
 
   return `${texto} ${moneda} M/CTE.`;
 }
-

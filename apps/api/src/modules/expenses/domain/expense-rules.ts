@@ -1,6 +1,10 @@
 import { BadRequestException } from '@nestjs/common';
 import { ExpensePaymentMethod, ExpenseStatus } from '@farmacia/contracts';
-import { parseMoneyToCents, centsToMoneyString, validateUuid } from '../../treasury/domain/treasury-rules';
+import {
+  parseMoneyToCents,
+  centsToMoneyString,
+  validateUuid,
+} from '../../treasury/domain/treasury-rules';
 
 export function validateExpenseAmount(amount: string | number | undefined | null): bigint {
   if (amount === undefined || amount === null || amount === '') {
@@ -28,7 +32,9 @@ export function validateExpenseStatusTransition(
   newStatus: ExpenseStatus,
 ): void {
   if (currentStatus === 'ANULADO') {
-    throw new BadRequestException('No se pueden modificar ni realizar operaciones sobre un gasto anulado.');
+    throw new BadRequestException(
+      'No se pueden modificar ni realizar operaciones sobre un gasto anulado.',
+    );
   }
   if (currentStatus === 'PAGADO' && newStatus === 'PENDIENTE') {
     // Solo permitido mediante reversión formal de pago

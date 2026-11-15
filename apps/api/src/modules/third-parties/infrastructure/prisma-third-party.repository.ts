@@ -94,7 +94,7 @@ export class PrismaThirdPartyRepository implements IThirdPartyRepository {
     scopeRoles?: Array<'CUSTOMER' | 'SUPPLIER'>,
   ): Promise<PaginatedResponse<ThirdParty>> {
     const page = filters.page && filters.page > 0 ? filters.page : 1;
-    const limit = filters.limit && filters.limit > 0 ? filters.limit : (filters.pageSize || 20);
+    const limit = filters.limit && filters.limit > 0 ? filters.limit : filters.pageSize || 20;
     const skip = (page - 1) * limit;
 
     const where: Prisma.ThirdPartyWhereInput = {};

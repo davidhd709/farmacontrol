@@ -237,7 +237,9 @@ export class ThirdPartyService {
         input.isActive !== thirdParty.isActive &&
         !access.canChangeActive
       ) {
-        throw new ThirdPartyAccessDeniedException('Solo un administrador puede desactivar o reactivar terceros.');
+        throw new ThirdPartyAccessDeniedException(
+          'Solo un administrador puede desactivar o reactivar terceros.',
+        );
       }
     }
 

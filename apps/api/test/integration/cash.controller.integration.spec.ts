@@ -148,14 +148,16 @@ describe('CashController (Integration with PostgreSQL & RBAC)', () => {
   });
 
   it('un egreso que supera el saldo de caja física se rechaza y no deja movimiento', async () => {
-    await expect(record('EGRESO_MANUAL', 50000, 'Egreso sin saldo')).rejects.toThrow(/Saldo insuficiente en caja/);
+    await expect(record('EGRESO_MANUAL', 50000, 'Egreso sin saldo')).rejects.toThrow(
+      /Saldo insuficiente en caja/,
+    );
     expect(await prisma.cashMovement.count()).toBe(0);
   });
 
   it('caja solo admite efectivo y conserva la lectura de históricos no efectivos', async () => {
-    await expect(record('INGRESO_MANUAL', 10000, 'Intento no efectivo', 'TRANSFERENCIA')).rejects.toThrow(
-      /efectivo/i,
-    );
+    await expect(
+      record('INGRESO_MANUAL', 10000, 'Intento no efectivo', 'TRANSFERENCIA'),
+    ).rejects.toThrow(/efectivo/i);
     const id = await record('INGRESO_MANUAL', 10000, 'Ingreso físico sin medio explícito');
     const created = await request(app.getHttpServer())
       .get(`/api/v1/cash-movements/${id}`)
@@ -184,7 +186,12 @@ describe('CashController (Integration with PostgreSQL & RBAC)', () => {
     const retired = await request(app.getHttpServer())
       .post('/api/v1/cash-movements')
       .set('Cookie', cajeroCookie)
-      .send({ movementType: 'INGRESO_MANUAL', counterpartAccountId, amount: 50000, reason: 'Ingreso manual' })
+      .send({
+        movementType: 'INGRESO_MANUAL',
+        counterpartAccountId,
+        amount: 50000,
+        reason: 'Ingreso manual',
+      })
       .expect(410);
     expect(retired.body.message).toMatch(/fue retirada/);
     expect(await prisma.cashMovement.count()).toBe(0);
@@ -192,7 +199,12 @@ describe('CashController (Integration with PostgreSQL & RBAC)', () => {
     await request(app.getHttpServer())
       .post('/api/v1/cash-movements')
       .set('Cookie', unauthorizedCookie)
-      .send({ movementType: 'INGRESO_MANUAL', counterpartAccountId, amount: 50000, reason: 'Intento' })
+      .send({
+        movementType: 'INGRESO_MANUAL',
+        counterpartAccountId,
+        amount: 50000,
+        reason: 'Intento',
+      })
       .expect(403);
     await request(app.getHttpServer())
       .get('/api/v1/cash-movements/balance')

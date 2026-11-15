@@ -54,10 +54,10 @@ function validateAndNormalizeLocation(
 
   const isUnchangedLegacy = Boolean(
     existingLegacy &&
-      (input.department?.trim() || null) === (existingLegacy.department?.trim() || null) &&
-      (input.city?.trim() || null) === (existingLegacy.city?.trim() || null) &&
-      !input.departmentCode &&
-      !input.municipalityCode,
+    (input.department?.trim() || null) === (existingLegacy.department?.trim() || null) &&
+    (input.city?.trim() || null) === (existingLegacy.city?.trim() || null) &&
+    !input.departmentCode &&
+    !input.municipalityCode,
   );
 
   switch (resolution.status) {

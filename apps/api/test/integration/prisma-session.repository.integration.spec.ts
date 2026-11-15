@@ -47,9 +47,7 @@ describe('PrismaSessionRepository (Integration with PostgreSQL)', () => {
     const created = await sessionRepository.create(domainSession);
 
     expect(created.id).toBeDefined();
-    expect(created.id).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    );
+    expect(created.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
     expect(created.userId).toBe(user.id);
     expect(created.tokenHash).toBe(tokenHash);
     expect(created.expiresAt).toEqual(expiresAt);
@@ -112,7 +110,7 @@ describe('PrismaSessionRepository (Integration with PostgreSQL)', () => {
         userId: user.id!,
         tokenHash,
         expiresAt,
-      })
+      }),
     );
 
     const usageTime = new Date();
@@ -136,11 +134,13 @@ describe('PrismaSessionRepository (Integration with PostgreSQL)', () => {
   it('no reactiva una sesión revocada si llega tarde una actualización de uso', async () => {
     const user = await createTestUser('user_stale_session_touch');
     const { tokenHash } = tokenAdapter.generate();
-    const session = await sessionRepository.create(Session.create({
-      userId: user.id!,
-      tokenHash,
-      expiresAt: new Date(Date.now() + 3600 * 1000),
-    }));
+    const session = await sessionRepository.create(
+      Session.create({
+        userId: user.id!,
+        tokenHash,
+        expiresAt: new Date(Date.now() + 3600 * 1000),
+      }),
+    );
     const staleSession = await sessionRepository.findById(session.id!);
 
     session.revoke();
@@ -161,7 +161,7 @@ describe('PrismaSessionRepository (Integration with PostgreSQL)', () => {
         userId: user.id!,
         tokenHash,
         expiresAt: new Date(Date.now() + 3600 * 1000),
-      })
+      }),
     );
 
     await sessionRepository.delete(session.id!);
@@ -181,7 +181,7 @@ describe('PrismaSessionRepository (Integration with PostgreSQL)', () => {
           userId: user.id!,
           tokenHash,
           expiresAt: new Date(Date.now() + 3600 * 1000),
-        })
+        }),
       );
     }
 
@@ -203,7 +203,7 @@ describe('PrismaSessionRepository (Integration with PostgreSQL)', () => {
         userId: user.id!,
         tokenHash,
         expiresAt: new Date(Date.now() + 3600 * 1000),
-      })
+      }),
     );
 
     // Eliminar el usuario en PostgreSQL

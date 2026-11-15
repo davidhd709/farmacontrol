@@ -26,7 +26,9 @@ describe('Fechas de negocio cerca de la medianoche de Bogotá', () => {
   let controller: JournalController;
 
   beforeAll(async () => {
-    const module: TestingModule = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    const module: TestingModule = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
     app = module.createNestApplication();
     app.setGlobalPrefix('api/v1');
     await app.init();
@@ -117,7 +119,9 @@ describe('Fechas de negocio cerca de la medianoche de Bogotá', () => {
   });
 
   it('el estado de cuenta del tercero fecha la factura de las 23:30 en el día de Bogotá', async () => {
-    const customer = await prisma.customer.create({ data: { documentNumber: `9${Date.now()}`, name: 'Cliente Nocturno' } });
+    const customer = await prisma.customer.create({
+      data: { documentNumber: `9${Date.now()}`, name: 'Cliente Nocturno' },
+    });
     const thirdParty = await prisma.thirdParty.create({
       data: {
         documentType: 'CC',
@@ -156,7 +160,9 @@ describe('Fechas de negocio cerca de la medianoche de Bogotá', () => {
       .get(`/api/v1/third-parties/${thirdParty.id}/statement`)
       .set('Cookie', cookie)
       .expect(200);
-    const invoice = res.body.receivables.items.find((i: { invoiceNumber: string | null }) => i.invoiceNumber === sale.invoiceNumber);
+    const invoice = res.body.receivables.items.find(
+      (i: { invoiceNumber: string | null }) => i.invoiceNumber === sale.invoiceNumber,
+    );
     expect(invoice.documentDate).toBe('2026-11-02');
   });
 });

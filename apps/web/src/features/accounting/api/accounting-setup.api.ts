@@ -18,7 +18,10 @@ export const applyPucTemplate = () =>
 export const fetchOpeningBalance = () =>
   apiRequest<OpeningBalanceDto | { journalEntryId: null }>('accounting/opening-balances');
 
-export const createOpeningBalance = (payload: CreateOpeningBalancePayload, idempotencyKey: string) =>
+export const createOpeningBalance = (
+  payload: CreateOpeningBalancePayload,
+  idempotencyKey: string,
+) =>
   apiRequest<OpeningBalanceDto>('accounting/opening-balances', {
     method: 'POST',
     headers: { 'Idempotency-Key': idempotencyKey },

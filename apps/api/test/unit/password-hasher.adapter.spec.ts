@@ -45,8 +45,6 @@ describe('Argon2PasswordHasherAdapter (Unit)', () => {
   it('debe retornar false de forma segura ante contraseñas vacías o hashes corruptos', async () => {
     expect(await hasher.verify('', 'hash_ficticio')).toBe(false);
     expect(await hasher.verify('cualquier_cosa', '')).toBe(false);
-    expect(await hasher.verify('cualquier_cosa', '$argon2id$v=19$corrupto')).toBe(
-      false
-    );
+    expect(await hasher.verify('cualquier_cosa', '$argon2id$v=19$corrupto')).toBe(false);
   });
 });

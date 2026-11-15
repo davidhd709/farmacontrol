@@ -27,7 +27,10 @@ interface SaleActionHistoryDialogProps {
 
 const EVENT_TYPE_CONFIG: Record<
   SaleActionType,
-  { label: string; color: 'primary' | 'secondary' | 'success' | 'error' | 'warning' | 'info' | 'default' }
+  {
+    label: string;
+    color: 'primary' | 'secondary' | 'success' | 'error' | 'warning' | 'info' | 'default';
+  }
 > = {
   VENTA_CREADA: { label: 'Venta creada', color: 'primary' },
   CARTERA_REGISTRADA: { label: 'Registro en cartera', color: 'info' },
@@ -275,4 +278,3 @@ export const SaleActionHistoryDialog: React.FC<SaleActionHistoryDialogProps> = (
     </Dialog>
   );
 };
-

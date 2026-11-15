@@ -37,12 +37,12 @@ describe('CategoryService (Unit)', () => {
 
   it('debe lanzar CategoryAlreadyExistsException si ya existe una categoría con el mismo nombre', async () => {
     vi.mocked(repository.findByName).mockResolvedValueOnce(
-      Category.create({ name: 'Cardiología' })
+      Category.create({ name: 'Cardiología' }),
     );
 
-    await expect(
-      service.createCategory({ name: 'Cardiología' })
-    ).rejects.toThrow(CategoryAlreadyExistsException);
+    await expect(service.createCategory({ name: 'Cardiología' })).rejects.toThrow(
+      CategoryAlreadyExistsException,
+    );
   });
 
   it('debe actualizar una categoría existente', async () => {
@@ -58,9 +58,9 @@ describe('CategoryService (Unit)', () => {
   });
 
   it('debe lanzar CategoryNotFoundException al intentar actualizar una categoría inexistente', async () => {
-    await expect(
-      service.updateCategory('non-existent-id', { name: 'Otro' })
-    ).rejects.toThrow(CategoryNotFoundException);
+    await expect(service.updateCategory('non-existent-id', { name: 'Otro' })).rejects.toThrow(
+      CategoryNotFoundException,
+    );
   });
 
   it('debe impedir inactivar una categoría que posea productos activos asociados', async () => {
@@ -68,9 +68,9 @@ describe('CategoryService (Unit)', () => {
     vi.mocked(repository.findById).mockResolvedValueOnce(existing);
     vi.mocked(repository.hasActiveProducts).mockResolvedValueOnce(true);
 
-    await expect(
-      service.deactivateCategory(existing.id)
-    ).rejects.toThrow(CategoryHasActiveProductsException);
+    await expect(service.deactivateCategory(existing.id)).rejects.toThrow(
+      CategoryHasActiveProductsException,
+    );
   });
 
   it('debe inactivar la categoría si no posee productos activos', async () => {

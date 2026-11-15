@@ -101,8 +101,27 @@ describe('ReceivablesPage (Frontend Cuentas por Cobrar — UX-21)', () => {
       status: 'PENDIENTE',
       dueDate: '2026-10-31',
       movements: [
-        { date: '2026-09-01T10:00:00.000Z', type: 'CARGO', documentNumber: 'FAC-001', description: 'Venta a crédito', charge: '150000.00', credit: '0.00', balance: '150000.00' },
-        { date: '2026-09-10T10:00:00.000Z', type: 'ABONO', documentNumber: 'RC-000007', description: 'Abono', paymentMethod: 'EFECTIVO', paymentId: 'pay-1', isReversed: false, charge: '0.00', credit: '50000.00', balance: '100000.00' },
+        {
+          date: '2026-09-01T10:00:00.000Z',
+          type: 'CARGO',
+          documentNumber: 'FAC-001',
+          description: 'Venta a crédito',
+          charge: '150000.00',
+          credit: '0.00',
+          balance: '150000.00',
+        },
+        {
+          date: '2026-09-10T10:00:00.000Z',
+          type: 'ABONO',
+          documentNumber: 'RC-000007',
+          description: 'Abono',
+          paymentMethod: 'EFECTIVO',
+          paymentId: 'pay-1',
+          isReversed: false,
+          charge: '0.00',
+          credit: '50000.00',
+          balance: '100000.00',
+        },
       ],
     });
 
@@ -123,9 +142,7 @@ describe('ReceivablesPage (Frontend Cuentas por Cobrar — UX-21)', () => {
     ]);
     await waitFor(() => expect(screen.getByText('Carlos Gómez')).toBeInTheDocument());
     expect(screen.queryByRole('button', { name: /^Abonar$/i })).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: /Nuevo recibo de caja/i }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Nuevo recibo de caja/i })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole('button', { name: /Ver Abonos/i })[0]);
     expect(await screen.findByText('RC-000007')).toBeInTheDocument();

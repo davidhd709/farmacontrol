@@ -42,14 +42,14 @@ describe('AuditEvent Entity (Unit)', () => {
       AuditEvent.create({
         action: '',
         entity: 'User',
-      })
+      }),
     ).toThrow('La acción de auditoría no puede estar vacía.');
 
     expect(() =>
       AuditEvent.create({
         action: '   ',
         entity: 'User',
-      })
+      }),
     ).toThrow('La acción de auditoría no puede estar vacía.');
   });
 
@@ -58,14 +58,14 @@ describe('AuditEvent Entity (Unit)', () => {
       AuditEvent.create({
         action: 'auth:login',
         entity: '',
-      })
+      }),
     ).toThrow('La entidad auditada no puede estar vacía.');
 
     expect(() =>
       AuditEvent.create({
         action: 'auth:login',
         entity: '   ',
-      })
+      }),
     ).toThrow('La entidad auditada no puede estar vacía.');
   });
 
@@ -74,14 +74,14 @@ describe('AuditEvent Entity (Unit)', () => {
       AuditEvent.create({
         action: 'a'.repeat(101),
         entity: 'User',
-      })
+      }),
     ).toThrow('La acción de auditoría no puede exceder 100 caracteres.');
 
     expect(() =>
       AuditEvent.create({
         action: 'valid:action',
         entity: 'e'.repeat(101),
-      })
+      }),
     ).toThrow('El nombre de la entidad auditada no puede exceder 100 caracteres.');
 
     expect(() =>
@@ -89,7 +89,7 @@ describe('AuditEvent Entity (Unit)', () => {
         action: 'valid:action',
         entity: 'User',
         entityId: 'i'.repeat(256),
-      })
+      }),
     ).toThrow('El identificador de entidad no puede exceder 255 caracteres.');
 
     expect(() =>
@@ -97,7 +97,7 @@ describe('AuditEvent Entity (Unit)', () => {
         action: 'valid:action',
         entity: 'User',
         ipAddress: '1'.repeat(46),
-      })
+      }),
     ).toThrow('La dirección IP no puede exceder 45 caracteres.');
 
     expect(() =>
@@ -105,7 +105,7 @@ describe('AuditEvent Entity (Unit)', () => {
         action: 'valid:action',
         entity: 'User',
         correlationId: 'c'.repeat(101),
-      })
+      }),
     ).toThrow('El correlationId no puede exceder 100 caracteres.');
   });
 

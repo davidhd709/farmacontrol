@@ -1,6 +1,11 @@
 import { businessToday } from '../../../common/utils/business-date';
 import { IdempotencyService } from '../../../common/idempotency/idempotency.service';
-import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+} from '@nestjs/common';
 import { prisma, Prisma } from '@farmacia/database';
 import { CashService } from '../../cash/application/cash.service';
 import { recordSourceBankMovement } from '../../treasury/application/record-source-bank-movement';
@@ -17,7 +22,10 @@ import {
   ExpenseWithoutSupplierDto,
   PaginatedResponse,
 } from '@farmacia/contracts';
-import { buildDocumentMovements, RawDocumentMovement } from '../../../common/utils/document-movements';
+import {
+  buildDocumentMovements,
+  RawDocumentMovement,
+} from '../../../common/utils/document-movements';
 import {
   validateExpenseAmount,
   validateExpensePaymentMethod,
@@ -79,10 +87,15 @@ export class ExpensesService {
       id: p.id,
       expenseId: p.expenseId,
       amount: p.amount.toFixed(2),
-      paymentDate: p.paymentDate instanceof Date ? p.paymentDate.toISOString().slice(0, 10) : String(p.paymentDate).slice(0, 10),
+      paymentDate:
+        p.paymentDate instanceof Date
+          ? p.paymentDate.toISOString().slice(0, 10)
+          : String(p.paymentDate).slice(0, 10),
       paymentMethod: p.paymentMethod,
       bankAccountId: p.bankAccountId ?? null,
-      bankAccountName: p.bankAccount ? `${p.bankAccount.bankName} - ${p.bankAccount.accountNumber}` : null,
+      bankAccountName: p.bankAccount
+        ? `${p.bankAccount.bankName} - ${p.bankAccount.accountNumber}`
+        : null,
       notes: p.notes ?? null,
       createdById: p.createdById,
       createdByName: p.createdByUser?.username ?? null,
@@ -108,14 +121,23 @@ export class ExpensesService {
       amount: e.amount.toFixed(2),
       amountPaid: e.amountPaid.toFixed(2),
       balance: e.balance.toFixed(2),
-      expenseDate: e.expenseDate instanceof Date ? e.expenseDate.toISOString().slice(0, 10) : String(e.expenseDate).slice(0, 10),
-      dueDate: e.dueDate ? (e.dueDate instanceof Date ? e.dueDate.toISOString().slice(0, 10) : String(e.dueDate).slice(0, 10)) : null,
+      expenseDate:
+        e.expenseDate instanceof Date
+          ? e.expenseDate.toISOString().slice(0, 10)
+          : String(e.expenseDate).slice(0, 10),
+      dueDate: e.dueDate
+        ? e.dueDate instanceof Date
+          ? e.dueDate.toISOString().slice(0, 10)
+          : String(e.dueDate).slice(0, 10)
+        : null,
       paymentMethod: e.paymentMethod as any,
       status: e.status as any,
       supplierId: e.supplierId ?? null,
       supplierName: e.supplier?.name ?? null,
       bankAccountId: e.bankAccountId ?? null,
-      bankAccountName: e.bankAccount ? `${e.bankAccount.bankName} - ${e.bankAccount.accountNumber}` : null,
+      bankAccountName: e.bankAccount
+        ? `${e.bankAccount.bankName} - ${e.bankAccount.accountNumber}`
+        : null,
       notes: e.notes ?? null,
       supportDocUrl: e.supportDocUrl ?? null,
       createdById: e.createdById,
@@ -171,104 +193,110 @@ export class ExpensesService {
     const requestHash = this.idempotencyService.computeHash(endpoint, userId, payload);
     const key = idempotencyKey!;
 
-    const createIdempotently = () => this.idempotencyService.retryOnSerialization(() => prisma.$transaction(async (tx) => {
-      const cached = await this.idempotencyService.getRecord(key, requestHash, tx, 'http');
-      if (cached) return cached.responseBody as ExpenseDto;
+    const createIdempotently = () =>
+      this.idempotencyService.retryOnSerialization(() =>
+        prisma.$transaction(
+          async (tx) => {
+            const cached = await this.idempotencyService.getRecord(key, requestHash, tx, 'http');
+            if (cached) return cached.responseBody as ExpenseDto;
 
-      const category = await tx.expenseCategory.findUnique({
-        where: { id: payload.categoryId },
-        include: {
-          account: {
-            select: { id: true, code: true, name: true, type: true, isActive: true },
+            const category = await tx.expenseCategory.findUnique({
+              where: { id: payload.categoryId },
+              include: {
+                account: {
+                  select: { id: true, code: true, name: true, type: true, isActive: true },
+                },
+              },
+            });
+            if (!category) {
+              throw new NotFoundException('La categoría de gasto especificada no existe.');
+            }
+            if (!category.isActive) {
+              throw new BadRequestException('La categoría de gasto seleccionada está inactiva.');
+            }
+            const supplier = await tx.supplier.findUnique({
+              where: { id: payload.supplierId },
+              select: { name: true },
+            });
+            if (!supplier) {
+              throw new NotFoundException('El proveedor de la causación no existe.');
+            }
+            const beneficiary = supplier.name;
+
+            const expense = await tx.expense.create({
+              data: {
+                categoryId: payload.categoryId,
+                description,
+                beneficiary,
+                documentNumber: payload.documentNumber?.trim() || null,
+                amount: new Prisma.Decimal(amountStr),
+                amountPaid: new Prisma.Decimal('0.00'),
+                balance: new Prisma.Decimal(amountStr),
+                expenseDate,
+                dueDate,
+                paymentMethod: method,
+                status,
+                supplierId: payload.supplierId,
+                bankAccountId: null,
+                notes: payload.notes?.trim() || null,
+                supportDocUrl: payload.supportDocUrl?.trim() || null,
+                createdById: userId,
+              },
+            });
+
+            // Causación contable automática de partida doble
+            await this.accountingEngine.handleExpenseCreated(
+              {
+                id: expense.id,
+                categoryId: category.id,
+                categoryAccountId: category.accountId,
+                description,
+                beneficiary,
+                documentNumber: payload.documentNumber,
+                amount: amountStr,
+                paymentMethod: method,
+                bankAccountId: null,
+                status,
+                expenseDate,
+                createdById: userId,
+              },
+              tx,
+            );
+
+            await tx.auditEvent.create({
+              data: {
+                userId,
+                action: 'expenses:expense_created',
+                entity: 'Expense',
+                entityId: expense.id,
+                details: {
+                  amount: amountStr,
+                  paymentMethod: method,
+                  categoryId: category.id,
+                  beneficiary,
+                  supplierId: payload.supplierId ?? null,
+                },
+              },
+            });
+
+            const record = await tx.expense.findUnique({
+              where: { id: expense.id },
+              include: fullExpenseInclude,
+            });
+            if (!record) throw new Error('No fue posible recuperar el gasto recién registrado.');
+            const response = this.toDto(record);
+
+            await this.idempotencyService.saveRecord(
+              { key, endpoint, requestHash, userId, responseStatus: 201, responseBody: response },
+              tx,
+            );
+            return response;
           },
-        },
-      });
-      if (!category) {
-        throw new NotFoundException('La categoría de gasto especificada no existe.');
-      }
-      if (!category.isActive) {
-        throw new BadRequestException('La categoría de gasto seleccionada está inactiva.');
-      }
-      const supplier = await tx.supplier.findUnique({
-        where: { id: payload.supplierId },
-        select: { name: true },
-      });
-      if (!supplier) {
-        throw new NotFoundException('El proveedor de la causación no existe.');
-      }
-      const beneficiary = supplier.name;
-
-      const expense = await tx.expense.create({
-        data: {
-          categoryId: payload.categoryId,
-          description,
-          beneficiary,
-          documentNumber: payload.documentNumber?.trim() || null,
-          amount: new Prisma.Decimal(amountStr),
-          amountPaid: new Prisma.Decimal('0.00'),
-          balance: new Prisma.Decimal(amountStr),
-          expenseDate,
-          dueDate,
-          paymentMethod: method,
-          status,
-          supplierId: payload.supplierId,
-          bankAccountId: null,
-          notes: payload.notes?.trim() || null,
-          supportDocUrl: payload.supportDocUrl?.trim() || null,
-          createdById: userId,
-        },
-      });
-
-      // Causación contable automática de partida doble
-      await this.accountingEngine.handleExpenseCreated(
-        {
-          id: expense.id,
-          categoryId: category.id,
-          categoryAccountId: category.accountId,
-          description,
-          beneficiary,
-          documentNumber: payload.documentNumber,
-          amount: amountStr,
-          paymentMethod: method,
-          bankAccountId: null,
-          status,
-          expenseDate,
-          createdById: userId,
-        },
-        tx,
-      );
-
-      await tx.auditEvent.create({
-        data: {
-          userId,
-          action: 'expenses:expense_created',
-          entity: 'Expense',
-          entityId: expense.id,
-          details: {
-            amount: amountStr,
-            paymentMethod: method,
-            categoryId: category.id,
-            beneficiary,
-            supplierId: payload.supplierId ?? null,
+          {
+            isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
           },
-        },
-      });
-
-      const record = await tx.expense.findUnique({
-        where: { id: expense.id },
-        include: fullExpenseInclude,
-      });
-      if (!record) throw new Error('No fue posible recuperar el gasto recién registrado.');
-      const response = this.toDto(record);
-
-      await this.idempotencyService.saveRecord(
-        { key, endpoint, requestHash, userId, responseStatus: 201, responseBody: response },
-        tx,
+        ),
       );
-      return response;
-    }, {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-    }));
 
     // Under SERIALIZABLE, a transaction waiting on the advisory lock may retain
     // a snapshot that predates the winning request. Its final idempotency insert
@@ -289,7 +317,6 @@ export class ExpensesService {
         if (!isIdempotencyKeyCollision || attempt >= 2) throw error;
       }
     }
-
   }
 
   /**
@@ -312,9 +339,24 @@ export class ExpensesService {
       /** Proveedor del egreso: la causación debe ser suya */
       expectedSupplierId?: string;
     },
-  ): Promise<{ paymentId: string; description: string; beneficiary: string; documentNumber: string | null }> {
+  ): Promise<{
+    paymentId: string;
+    description: string;
+    beneficiary: string;
+    documentNumber: string | null;
+  }> {
     const payStr = centsToMoneyString(input.amountCents);
-    const rows = await tx.$queryRaw<Array<{ balance: Prisma.Decimal; amount_paid: Prisma.Decimal; status: string; description: string; beneficiary: string; document_number: string | null; supplier_id: string | null }>>`
+    const rows = await tx.$queryRaw<
+      Array<{
+        balance: Prisma.Decimal;
+        amount_paid: Prisma.Decimal;
+        status: string;
+        description: string;
+        beneficiary: string;
+        document_number: string | null;
+        supplier_id: string | null;
+      }>
+    >`
       SELECT balance, amount_paid, status, description, beneficiary, document_number, supplier_id
       FROM expenses
       WHERE id = ${input.expenseId}::uuid
@@ -325,7 +367,9 @@ export class ExpensesService {
     }
     const exp = rows[0];
     if (input.expectedSupplierId && exp.supplier_id !== input.expectedSupplierId) {
-      throw new BadRequestException('La causación seleccionada no pertenece al proveedor del egreso.');
+      throw new BadRequestException(
+        'La causación seleccionada no pertenece al proveedor del egreso.',
+      );
     }
     if (exp.status === 'ANULADO') {
       throw new BadRequestException('No se pueden registrar pagos a un gasto anulado.');
@@ -340,7 +384,8 @@ export class ExpensesService {
       );
     }
     const newBalanceCents = balanceCents - input.amountCents;
-    const newAmountPaidCents = parseMoneyToCents(exp.amount_paid.toString(), 'Monto pagado') + input.amountCents;
+    const newAmountPaidCents =
+      parseMoneyToCents(exp.amount_paid.toString(), 'Monto pagado') + input.amountCents;
     const newStatus = newBalanceCents === 0n ? 'PAGADO' : 'PENDIENTE';
 
     const payment = await tx.expensePayment.create({
@@ -403,86 +448,111 @@ export class ExpensesService {
     };
   }
 
-  async cancelExpense(expenseId: string, payload: CancelExpensePayload, userId: string): Promise<ExpenseDto> {
+  async cancelExpense(
+    expenseId: string,
+    payload: CancelExpensePayload,
+    userId: string,
+  ): Promise<ExpenseDto> {
     validateUuid(expenseId, 'ID de gasto');
     const reason = validateReversalReason(payload.cancellationReason);
 
-    await prisma.$transaction(async (tx) => {
-      const rows = await tx.$queryRaw<Array<{ id: string; status: string; payment_method: string; amount: Prisma.Decimal; bank_account_id: string | null; description: string; beneficiary: string }>>`
+    await prisma.$transaction(
+      async (tx) => {
+        const rows = await tx.$queryRaw<
+          Array<{
+            id: string;
+            status: string;
+            payment_method: string;
+            amount: Prisma.Decimal;
+            bank_account_id: string | null;
+            description: string;
+            beneficiary: string;
+          }>
+        >`
         SELECT id, status, payment_method, amount, bank_account_id, description, beneficiary
         FROM expenses
         WHERE id = ${expenseId}::uuid
         FOR UPDATE
       `;
-      if (!rows.length) throw new NotFoundException(`Gasto con ID "${expenseId}" no encontrado.`);
-      const exp = rows[0];
+        if (!rows.length) throw new NotFoundException(`Gasto con ID "${expenseId}" no encontrado.`);
+        const exp = rows[0];
 
-      if (exp.status === 'ANULADO') {
-        throw new BadRequestException('El gasto ya se encuentra anulado.');
-      }
+        if (exp.status === 'ANULADO') {
+          throw new BadRequestException('El gasto ya se encuentra anulado.');
+        }
 
-      // Si tiene pagos registrados, exigir revertir los pagos primero
-      const activePayments = await tx.expensePayment.count({
-        where: { expenseId, isReversed: false },
-      });
-      if (activePayments > 0) {
-        throw new BadRequestException(
-          'No se puede anular un gasto con pagos activos. Debe revertir los pagos individuales primero.',
-        );
-      }
-
-      await tx.expense.update({
-        where: { id: expenseId },
-        data: {
-          status: 'ANULADO',
-          cancelledAt: new Date(),
-          cancellationReason: reason,
-          cancelledById: userId,
-        },
-      });
-
-      // Si fue pagado de contado al inicio, devolver los fondos a tesorería
-      if (exp.payment_method === 'EFECTIVO' && exp.status === 'PAGADO') {
-        await this.cashService.recordMovementInTransaction(tx, {
-          movementType: 'INGRESO_MANUAL',
-          amount: exp.amount.toFixed(2),
-          paymentMethod: 'EFECTIVO',
-          reason: `Reversión por anulación de gasto: ${exp.description} - Motivo: ${reason}`,
-          referenceDocumentType: 'EXPENSE_CANCEL',
-          referenceDocumentId: expenseId,
-          createdByUserId: userId,
+        // Si tiene pagos registrados, exigir revertir los pagos primero
+        const activePayments = await tx.expensePayment.count({
+          where: { expenseId, isReversed: false },
         });
-      } else if (exp.payment_method === 'TRANSFERENCIA' && exp.status === 'PAGADO' && exp.bank_account_id) {
-        await recordSourceBankMovement(tx, {
-          bankAccountId: exp.bank_account_id,
-          movementType: 'DEPOSIT',
-          amount: exp.amount.toFixed(2),
-          concept: `Reversión por anulación de gasto: ${exp.description} - Motivo: ${reason}`,
-          referenceDocumentType: 'EXPENSE_CANCEL',
-          referenceDocumentId: expenseId,
-          createdById: userId,
-        });
-      }
+        if (activePayments > 0) {
+          throw new BadRequestException(
+            'No se puede anular un gasto con pagos activos. Debe revertir los pagos individuales primero.',
+          );
+        }
 
-      // Reversar asiento contable
-      await this.accountingEngine.handleExpenseCancelled(expenseId, reason, userId, tx);
-      await tx.auditEvent.create({
-        data: {
-          userId,
-          action: 'expenses:expense_cancelled',
-          entity: 'Expense',
-          entityId: expenseId,
-          details: { reason, amount: exp.amount.toFixed(2) },
-        },
-      });
-    }, {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-    });
+        await tx.expense.update({
+          where: { id: expenseId },
+          data: {
+            status: 'ANULADO',
+            cancelledAt: new Date(),
+            cancellationReason: reason,
+            cancelledById: userId,
+          },
+        });
+
+        // Si fue pagado de contado al inicio, devolver los fondos a tesorería
+        if (exp.payment_method === 'EFECTIVO' && exp.status === 'PAGADO') {
+          await this.cashService.recordMovementInTransaction(tx, {
+            movementType: 'INGRESO_MANUAL',
+            amount: exp.amount.toFixed(2),
+            paymentMethod: 'EFECTIVO',
+            reason: `Reversión por anulación de gasto: ${exp.description} - Motivo: ${reason}`,
+            referenceDocumentType: 'EXPENSE_CANCEL',
+            referenceDocumentId: expenseId,
+            createdByUserId: userId,
+          });
+        } else if (
+          exp.payment_method === 'TRANSFERENCIA' &&
+          exp.status === 'PAGADO' &&
+          exp.bank_account_id
+        ) {
+          await recordSourceBankMovement(tx, {
+            bankAccountId: exp.bank_account_id,
+            movementType: 'DEPOSIT',
+            amount: exp.amount.toFixed(2),
+            concept: `Reversión por anulación de gasto: ${exp.description} - Motivo: ${reason}`,
+            referenceDocumentType: 'EXPENSE_CANCEL',
+            referenceDocumentId: expenseId,
+            createdById: userId,
+          });
+        }
+
+        // Reversar asiento contable
+        await this.accountingEngine.handleExpenseCancelled(expenseId, reason, userId, tx);
+        await tx.auditEvent.create({
+          data: {
+            userId,
+            action: 'expenses:expense_cancelled',
+            entity: 'Expense',
+            entityId: expenseId,
+            details: { reason, amount: exp.amount.toFixed(2) },
+          },
+        });
+      },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      },
+    );
 
     return this.findById(expenseId);
   }
 
-  async reversePayment(paymentId: string, payload: ReverseExpensePaymentPayload, userId: string): Promise<ExpenseDto> {
+  async reversePayment(
+    paymentId: string,
+    payload: ReverseExpensePaymentPayload,
+    userId: string,
+  ): Promise<ExpenseDto> {
     validateUuid(paymentId, 'ID de pago de gasto');
     const reason = validateReversalReason(payload.reversalReason);
 
@@ -504,7 +574,10 @@ export class ExpensesService {
     input: { paymentId: string; reason: string; userId: string; moveMoney: boolean },
   ): Promise<string> {
     const { paymentId, reason, userId, moveMoney } = input;
-    const found = await tx.expensePayment.findUnique({ where: { id: paymentId }, select: { expenseId: true } });
+    const found = await tx.expensePayment.findUnique({
+      where: { id: paymentId },
+      select: { expenseId: true },
+    });
     if (!found) throw new NotFoundException(`Pago de gasto con ID "${paymentId}" no encontrado.`);
     // Bloquea la causación: serializa con otros pagos y reversiones sobre su saldo
     await tx.$queryRaw`SELECT id FROM expenses WHERE id = ${found.expenseId}::uuid FOR UPDATE`;
@@ -512,7 +585,8 @@ export class ExpensesService {
       where: { id: paymentId },
       include: { expense: true },
     });
-    if (payment.isReversed) throw new BadRequestException('Este pago ya fue revertido previamente.');
+    if (payment.isReversed)
+      throw new BadRequestException('Este pago ya fue revertido previamente.');
 
     const expenseId = payment.expenseId;
 
@@ -528,8 +602,14 @@ export class ExpensesService {
 
     // Restituir saldo en el gasto
     const payCents = parseMoneyToCents(payment.amount.toString(), 'Monto a revertir');
-    const currentBalanceCents = parseMoneyToCents(payment.expense.balance.toString(), 'Saldo actual');
-    const currentPaidCents = parseMoneyToCents(payment.expense.amountPaid.toString(), 'Monto pagado actual');
+    const currentBalanceCents = parseMoneyToCents(
+      payment.expense.balance.toString(),
+      'Saldo actual',
+    );
+    const currentPaidCents = parseMoneyToCents(
+      payment.expense.amountPaid.toString(),
+      'Monto pagado actual',
+    );
 
     const newBalanceCents = currentBalanceCents + payCents;
     const newPaidCents = currentPaidCents - payCents;
@@ -591,7 +671,10 @@ export class ExpensesService {
    * Causaciones sin proveedor (anteriores a que fuera obligatorio): no aparecen en ningún estado
    * de cuenta ni se pueden pagar con un comprobante de egreso hasta asignarles uno.
    */
-  async listWithoutSupplier(filters: { fromDate?: string; toDate?: string }): Promise<ExpenseWithoutSupplierDto[]> {
+  async listWithoutSupplier(filters: {
+    fromDate?: string;
+    toDate?: string;
+  }): Promise<ExpenseWithoutSupplierDto[]> {
     if (filters.fromDate && filters.toDate && filters.fromDate > filters.toDate) {
       throw new BadRequestException('La fecha desde no puede ser posterior a la fecha hasta.');
     }
@@ -629,13 +712,20 @@ export class ExpensesService {
    * con proveedor responde 409. Queda en auditoría quién lo asignó, cuándo y el beneficiario que
    * tenía registrado.
    */
-  async assignSupplier(expenseId: string, supplierId: unknown, userId: string): Promise<ExpenseDto> {
+  async assignSupplier(
+    expenseId: string,
+    supplierId: unknown,
+    userId: string,
+  ): Promise<ExpenseDto> {
     validateUuid(expenseId, 'ID de gasto');
-    if (typeof supplierId !== 'string') throw new BadRequestException('El proveedor es obligatorio.');
+    if (typeof supplierId !== 'string')
+      throw new BadRequestException('El proveedor es obligatorio.');
     validateUuid(supplierId, 'ID de proveedor');
     await prisma.$transaction(
       async (tx) => {
-        const rows = await tx.$queryRaw<Array<{ supplier_id: string | null; status: string; beneficiary: string }>>`
+        const rows = await tx.$queryRaw<
+          Array<{ supplier_id: string | null; status: string; beneficiary: string }>
+        >`
           SELECT supplier_id, status, beneficiary FROM expenses WHERE id = ${expenseId}::uuid FOR UPDATE
         `;
         if (!rows.length) throw new NotFoundException(`Gasto con ID "${expenseId}" no encontrado.`);
@@ -645,7 +735,10 @@ export class ExpensesService {
         if (rows[0].supplier_id) {
           throw new ConflictException('La causación ya tiene proveedor; no se reasigna.');
         }
-        const supplier = await tx.supplier.findUnique({ where: { id: supplierId }, select: { name: true } });
+        const supplier = await tx.supplier.findUnique({
+          where: { id: supplierId },
+          select: { name: true },
+        });
         if (!supplier) throw new NotFoundException('El proveedor no existe.');
         await tx.expense.update({ where: { id: expenseId }, data: { supplierId } });
         await tx.auditEvent.create({
@@ -828,7 +921,10 @@ export class ExpensesService {
     let totalPaidCents = 0n;
     let totalPendingCents = 0n;
 
-    const catMap = new Map<string, { categoryId: string; categoryName: string; amountCents: bigint; count: number }>();
+    const catMap = new Map<
+      string,
+      { categoryId: string; categoryName: string; amountCents: bigint; count: number }
+    >();
 
     for (const e of expenses) {
       if (e.status === 'ANULADO') continue;

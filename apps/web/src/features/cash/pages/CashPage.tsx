@@ -92,7 +92,6 @@ export const CashPage: React.FC = () => {
     return `$${val.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
   };
 
-
   const getMovementTypeChip = (type: CashMovementType) => {
     switch (type) {
       case 'SALDO_APERTURA':
@@ -169,7 +168,11 @@ export const CashPage: React.FC = () => {
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'minmax(0, 1fr) minmax(0, 1fr)', md: 'repeat(4, minmax(0, 1fr))' },
+          gridTemplateColumns: {
+            xs: 'minmax(0, 1fr)',
+            sm: 'minmax(0, 1fr) minmax(0, 1fr)',
+            md: 'repeat(4, minmax(0, 1fr))',
+          },
           gap: 2.5,
           mb: 4,
         }}
@@ -339,7 +342,6 @@ export const CashPage: React.FC = () => {
             setPage(0);
           }}
         />
-
       </FilterBar>
 
       {/* Tabla de Movimientos */}

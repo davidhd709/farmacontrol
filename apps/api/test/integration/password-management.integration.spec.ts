@@ -223,9 +223,8 @@ describe('Contraseñas de usuarios', () => {
     const relogin = await login('cashier_password_test', newPassword);
     expect(relogin.body.user.mustChangePassword).toBe(true);
     const users = await api().get('/api/v1/users').set('Cookie', adminCookie).expect(200);
-    expect(
-      users.body.find((u: { id: string }) => u.id === cashierId).mustChangePassword,
-    ).toBe(true);
+    expect(users.body.find((u: { id: string }) => u.id === cashierId).mustChangePassword).toBe(
+      true,
+    );
   });
 });
-

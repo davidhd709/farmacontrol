@@ -211,7 +211,7 @@ describe('Sales & Idempotency — Integridad de Persistencia en PostgreSQL (Inte
           total: new Prisma.Decimal('5000.00'),
           createdById: userId,
         },
-      })
+      }),
     ).rejects.toThrow();
   });
 
@@ -226,7 +226,7 @@ describe('Sales & Idempotency — Integridad de Persistencia en PostgreSQL (Inte
           total: new Prisma.Decimal('-100.00'),
           createdById: userId,
         },
-      })
+      }),
     ).rejects.toThrow();
   });
 
@@ -259,7 +259,9 @@ describe('Sales & Idempotency — Integridad de Persistencia en PostgreSQL (Inte
       where: { key },
     });
     expect(found).not.toBeNull();
-    expect(found?.requestHash).toBe('e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855');
+    expect(found?.requestHash).toBe(
+      'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+    );
 
     // Clave duplicada debe ser rechazada
     await expect(
@@ -273,7 +275,7 @@ describe('Sales & Idempotency — Integridad de Persistencia en PostgreSQL (Inte
           responseBody: {},
           expiresAt,
         },
-      })
+      }),
     ).rejects.toThrow();
   });
 });

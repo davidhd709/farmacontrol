@@ -128,9 +128,10 @@ export function ProductImportDialog({ open, onClose, onSuccess }: ProductImportD
         <DialogContent dividers>
           <Stack spacing={2.5}>
             <Typography variant="body2" color="text.secondary">
-              Carga masiva de productos farmacéuticos y comerciales. Valida la estructura, categorías
-              y unicidad antes de confirmar. La importación crea los productos en el catálogo con saldo
-              inicial cero y no genera movimientos de inventario ni asientos contables.
+              Carga masiva de productos farmacéuticos y comerciales. Valida la estructura,
+              categorías y unicidad antes de confirmar. La importación crea los productos en el
+              catálogo con saldo inicial cero y no genera movimientos de inventario ni asientos
+              contables.
             </Typography>
 
             <Box
@@ -238,7 +239,11 @@ export function ProductImportDialog({ open, onClose, onSuccess }: ProductImportD
                 </Stack>
 
                 <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 380 }}>
-                  <Table size="small" stickyHeader aria-label="Vista previa de importación de productos">
+                  <Table
+                    size="small"
+                    stickyHeader
+                    aria-label="Vista previa de importación de productos"
+                  >
                     <TableHead>
                       <TableRow sx={{ bgcolor: 'grey.100' }}>
                         <TableCell sx={{ fontWeight: 700 }}>Fila</TableCell>
@@ -273,17 +278,29 @@ export function ProductImportDialog({ open, onClose, onSuccess }: ProductImportD
                           <TableCell>{row.name || '—'}</TableCell>
                           <TableCell>{row.categoryName || '—'}</TableCell>
                           <TableCell align="right">
-                            ${Number(row.basePrice).toLocaleString('es-CO', { minimumFractionDigits: 2 })}
+                            $
+                            {Number(row.basePrice).toLocaleString('es-CO', {
+                              minimumFractionDigits: 2,
+                            })}
                           </TableCell>
                           <TableCell>{row.inventoryControlMode}</TableCell>
                           <TableCell>{row.prescriptionRequired ? 'SI' : 'NO'}</TableCell>
                           <TableCell>
                             {row.errors.length > 0 ? (
-                              <Typography variant="caption" color="error.main" sx={{ fontWeight: 600 }}>
+                              <Typography
+                                variant="caption"
+                                color="error.main"
+                                sx={{ fontWeight: 600 }}
+                              >
                                 {row.errors.join(' | ')}
                               </Typography>
                             ) : (
-                              <Chip size="small" label="Válido" color="success" variant="outlined" />
+                              <Chip
+                                size="small"
+                                label="Válido"
+                                color="success"
+                                variant="outlined"
+                              />
                             )}
                           </TableCell>
                         </TableRow>
@@ -323,9 +340,9 @@ export function ProductImportDialog({ open, onClose, onSuccess }: ProductImportD
         </DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary">
-            Se registrarán <strong>{preview?.validCount ?? 0}</strong> productos nuevos en el catálogo
-            con existencia inicial en cero. Esta acción es segura y no genera movimientos de inventario ni
-            asientos contables.
+            Se registrarán <strong>{preview?.validCount ?? 0}</strong> productos nuevos en el
+            catálogo con existencia inicial en cero. Esta acción es segura y no genera movimientos
+            de inventario ni asientos contables.
           </Typography>
         </DialogContent>
         <DialogActions>

@@ -148,7 +148,9 @@ describe('BackupManagementPage (UX-31 — Copias de Seguridad y Resiliencia)', (
 
     await waitFor(() => {
       expect(backupsApi.triggerCreateBackup).toHaveBeenCalled();
-      expect(screen.getByText('Copia de seguridad generada y verificada exitosamente.')).toBeInTheDocument();
+      expect(
+        screen.getByText('Copia de seguridad generada y verificada exitosamente.'),
+      ).toBeInTheDocument();
     });
   });
 
@@ -163,7 +165,9 @@ describe('BackupManagementPage (UX-31 — Copias de Seguridad y Resiliencia)', (
     fireEvent.click(verifyBtn);
 
     await waitFor(() => {
-      expect(backupsApi.triggerVerifyBackup).toHaveBeenCalledWith('farmacia_db_20260926_223000.dump');
+      expect(backupsApi.triggerVerifyBackup).toHaveBeenCalledWith(
+        'farmacia_db_20260926_223000.dump',
+      );
       expect(screen.getByText(/validado e íntegro/i)).toBeInTheDocument();
     });
   });

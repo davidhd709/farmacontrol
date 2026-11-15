@@ -51,10 +51,7 @@ describe('UserProvisioningService (Unit)', () => {
       validatePasswordStrength: vi.fn(),
     } as unknown as PasswordService;
 
-    provisioningService = new UserProvisioningService(
-      mockUserRepository,
-      mockPasswordService
-    );
+    provisioningService = new UserProvisioningService(mockUserRepository, mockPasswordService);
   });
 
   describe('createUser', () => {
@@ -68,9 +65,7 @@ describe('UserProvisioningService (Unit)', () => {
       expect(user.username.value).toBe('cajero_principal');
       expect(user.passwordHash).toBe('$argon2id$mockhash_PasswordSegura#1');
       expect(user.isActive).toBe(true);
-      expect(mockPasswordService.hashPassword).toHaveBeenCalledWith(
-        'PasswordSegura#1'
-      );
+      expect(mockPasswordService.hashPassword).toHaveBeenCalledWith('PasswordSegura#1');
     });
 
     it('debe rechazar la creación si el usuario ya existe', async () => {
@@ -83,7 +78,7 @@ describe('UserProvisioningService (Unit)', () => {
         provisioningService.createUser({
           username: 'CAJERO_EXISTENTE',
           password: 'OtraPassword#2',
-        })
+        }),
       ).rejects.toThrow(UserAlreadyExistsException);
     });
   });
@@ -112,10 +107,8 @@ describe('UserProvisioningService (Unit)', () => {
         provisioningService.provisionInitialUser({
           username: 'segundo_admin',
           password: 'AdminPassword#2026',
-        })
-      ).rejects.toThrow(
-        /ya existen usuarios registrados en la base de datos/
-      );
+        }),
+      ).rejects.toThrow(/ya existen usuarios registrados en la base de datos/);
     });
   });
 });

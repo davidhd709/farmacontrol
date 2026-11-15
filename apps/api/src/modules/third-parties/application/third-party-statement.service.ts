@@ -2,7 +2,12 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { prisma, Prisma } from '@farmacia/database';
 import type { ReceivableStatementItemDto, ThirdPartyStatementDto } from '@farmacia/contracts';
 import { businessDateOf, businessToday, calendarDate } from '../../../common/utils/business-date';
-import { agingBreakdown, agingBucketOf, agingStartDate, daysOverdue } from '../../../common/utils/aging';
+import {
+  agingBreakdown,
+  agingBucketOf,
+  agingStartDate,
+  daysOverdue,
+} from '../../../common/utils/aging';
 import { accountingPolicyAt } from '../../company/application/accounting-policy.reader';
 
 import { PayablesStatementService } from '../../payables/application/payables-statement.service';
@@ -33,7 +38,10 @@ export class ThirdPartyStatementService {
       });
       const items: ReceivableStatementItemDto[] = rows.map((r) => {
         const days = daysOverdue(
-          agingStartDate(agingBaseDate, { dueDate: r.dueDate, issuedAt: r.sale?.createdAt ?? r.createdAt }),
+          agingStartDate(agingBaseDate, {
+            dueDate: r.dueDate,
+            issuedAt: r.sale?.createdAt ?? r.createdAt,
+          }),
           today,
         );
         return {
@@ -61,8 +69,12 @@ export class ThirdPartyStatementService {
       ? await this.payablesStatement.getStatement({ supplierId: party.supplierId })
       : null;
 
-    const owedToUs = receivables ? parseMoneyToCents(receivables.aging.totalPending, 'Cartera') : 0n;
-    const weOwe = payables ? parseMoneyToCents(payables.aging.totalPending, 'Cuentas por pagar') : 0n;
+    const owedToUs = receivables
+      ? parseMoneyToCents(receivables.aging.totalPending, 'Cartera')
+      : 0n;
+    const weOwe = payables
+      ? parseMoneyToCents(payables.aging.totalPending, 'Cuentas por pagar')
+      : 0n;
     const net = owedToUs - weOwe;
     return {
       thirdPartyId: party.id,

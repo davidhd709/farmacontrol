@@ -80,7 +80,8 @@ const renderIcon = (type: SweetModalType) => {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: type === 'warning' ? 'rgba(248, 187, 134, 0.08)' : 'rgba(135, 173, 189, 0.08)',
+            backgroundColor:
+              type === 'warning' ? 'rgba(248, 187, 134, 0.08)' : 'rgba(135, 173, 189, 0.08)',
             animation: 'sweetBounce 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
           }}
         >
@@ -198,7 +199,11 @@ export const SweetModal: React.FC<SweetModalProps> = ({
       } else if (e.key === 'Enter' && !isLoading) {
         // Si el foco no está en el botón de cancelar
         const target = e.target as HTMLElement | null;
-        if (target && target.tagName === 'BUTTON' && target.getAttribute('data-action') === 'cancel') {
+        if (
+          target &&
+          target.tagName === 'BUTTON' &&
+          target.getAttribute('data-action') === 'cancel'
+        ) {
           return;
         }
         e.preventDefault();

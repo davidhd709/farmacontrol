@@ -37,7 +37,9 @@ export class CreateCustomerValidationPipe implements PipeTransform {
     }
 
     if (typeof record.name !== 'string') {
-      throw new BadRequestException('El campo "name" (nombre del cliente) es obligatorio y debe ser texto.');
+      throw new BadRequestException(
+        'El campo "name" (nombre del cliente) es obligatorio y debe ser texto.',
+      );
     }
     const trimmedName = record.name.trim();
     if (trimmedName.length < 2 || trimmedName.length > 150) {

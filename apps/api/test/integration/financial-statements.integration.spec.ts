@@ -2,7 +2,12 @@ import { beforeAll, beforeEach, afterAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { Test } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
-import { prisma, cleanTestDatabase, seedRbac, AccountingPurpose as DbPurpose } from '@farmacia/database';
+import {
+  prisma,
+  cleanTestDatabase,
+  seedRbac,
+  AccountingPurpose as DbPurpose,
+} from '@farmacia/database';
 import { AppModule } from '../../src/app.module';
 import { UserProvisioningService } from '../../src/modules/identity/application/services/user-provisioning.service';
 import { AuthService } from '../../src/modules/identity/application/services/auth.service';
@@ -73,7 +78,12 @@ describe('Financial Statements Integration (PostgreSQL): Income Statement & Bala
       { code: '310505', name: 'Capital Suscrito y Pagado', type: 'EQUITY', purpose: 'CAPITAL' },
       { code: '413501', name: 'Ventas Gravadas 19%', type: 'INCOME', purpose: 'SALES_TAXED' },
       { code: '413502', name: 'Ventas Excluidas', type: 'INCOME', purpose: 'SALES_EXCLUDED' },
-      { code: '613501', name: 'Costo de Ventas Medicamentos', type: 'COST', purpose: 'COST_OF_SALES' },
+      {
+        code: '613501',
+        name: 'Costo de Ventas Medicamentos',
+        type: 'COST',
+        purpose: 'COST_OF_SALES',
+      },
       { code: '513505', name: 'Servicios de Energía Eléctrica', type: 'EXPENSE' },
       { code: '512005', name: 'Arrendamientos Operativos', type: 'EXPENSE' },
     ];
@@ -411,14 +421,20 @@ describe('Financial Statements Integration (PostgreSQL): Income Statement & Bala
 
     it('exporta el Estado de Resultados a Excel en formato .xlsx', async () => {
       const res = await request(app.getHttpServer())
-        .get('/api/v1/accounting/reports/income-statement/export?fromDate=2026-01-01&toDate=2026-01-31')
+        .get(
+          '/api/v1/accounting/reports/income-statement/export?fromDate=2026-01-01&toDate=2026-01-31',
+        )
         .set('Cookie', cookie)
         .buffer()
         .parse(binaryParser);
 
       expect(res.status).toBe(200);
-      expect(res.headers['content-type']).toContain('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      expect(res.headers['content-disposition']).toContain('estado_resultados_2026-01-01_2026-01-31.xlsx');
+      expect(res.headers['content-type']).toContain(
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+      expect(res.headers['content-disposition']).toContain(
+        'estado_resultados_2026-01-01_2026-01-31.xlsx',
+      );
       expect(res.body.length).toBeGreaterThan(100);
     });
 
@@ -430,21 +446,29 @@ describe('Financial Statements Integration (PostgreSQL): Income Statement & Bala
         .parse(binaryParser);
 
       expect(res.status).toBe(200);
-      expect(res.headers['content-type']).toContain('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      expect(res.headers['content-type']).toContain(
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
       expect(res.headers['content-disposition']).toContain('balance_general_2026-01-31.xlsx');
       expect(res.body.length).toBeGreaterThan(100);
     });
 
     it('exporta el Balance de Comprobación a Excel en formato .xlsx', async () => {
       const res = await request(app.getHttpServer())
-        .get('/api/v1/accounting/reports/trial-balance/export?fromDate=2026-01-01&toDate=2026-01-31')
+        .get(
+          '/api/v1/accounting/reports/trial-balance/export?fromDate=2026-01-01&toDate=2026-01-31',
+        )
         .set('Cookie', cookie)
         .buffer()
         .parse(binaryParser);
 
       expect(res.status).toBe(200);
-      expect(res.headers['content-type']).toContain('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      expect(res.headers['content-disposition']).toContain('balance_comprobacion_2026-01-01_2026-01-31.xlsx');
+      expect(res.headers['content-type']).toContain(
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+      expect(res.headers['content-disposition']).toContain(
+        'balance_comprobacion_2026-01-01_2026-01-31.xlsx',
+      );
       expect(res.body.length).toBeGreaterThan(100);
     });
   });

@@ -156,7 +156,9 @@ export class AccountingBooksService {
 
     const items: ReconciliationItemDto[] = [];
     const cashAccount = accountOf('CASH');
-    const lastCash = await prisma.cashMovement.findFirst({ orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
+    const lastCash = await prisma.cashMovement.findFirst({
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    });
     items.push(
       item(
         'CASH',

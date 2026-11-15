@@ -11,9 +11,7 @@ export interface ConvertUnitsResult {
   conversionFactor: number;
   direction: 'toBase' | 'fromBase';
   inputQuantity: number;
-  result:
-    | { baseUnits: number }
-    | { wholePresentations: number; remainderBaseUnits: number };
+  result: { baseUnits: number } | { wholePresentations: number; remainderBaseUnits: number };
 }
 
 /**
@@ -60,13 +58,10 @@ export async function createProductPresentation(
   productId: string,
   payload: CreateProductPresentationPayload,
 ): Promise<ProductPresentationDto> {
-  return apiRequest<ProductPresentationDto>(
-    `products/${productId}/presentations`,
-    {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    },
-  );
+  return apiRequest<ProductPresentationDto>(`products/${productId}/presentations`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 }
 
 /**

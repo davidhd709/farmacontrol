@@ -49,11 +49,9 @@ test('una venta a crédito se abona con un recibo de caja y el saldo baja', asyn
   await page.getByRole('button', { name: 'Confirmar' }).click();
   await expect(page.getByText(/Recibo de caja RC-\d+ registrado/)).toBeVisible();
 
-  const receivables = await call<{ items: { id: string; saleId: string; balance: string | number }[] }>(
-    admin,
-    'get',
-    `receivables?customerId=${fixtures.customer.id}`,
-  );
+  const receivables = await call<{
+    items: { id: string; saleId: string; balance: string | number }[];
+  }>(admin, 'get', `receivables?customerId=${fixtures.customer.id}`);
   const receivable = receivables.items.find((item) => item.saleId === sale.id);
   expect(Number(receivable?.balance)).toBe(5000);
 

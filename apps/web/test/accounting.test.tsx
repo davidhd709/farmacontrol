@@ -95,9 +95,7 @@ describe('Configuración contable', () => {
     renderPage(<PurposesPage />);
     expect(await screen.findByText('Resultado del ejercicio actual')).toBeInTheDocument();
     expect(
-      screen.getByText(
-        'Utilidad o pérdida neta determinada al cierre de cada período contable.',
-      ),
+      screen.getByText('Utilidad o pérdida neta determinada al cierre de cada período contable.'),
     ).toBeInTheDocument();
     const select = await screen.findByRole('combobox', { name: 'Cuenta para Caja general' });
     fireEvent.mouseDown(select);

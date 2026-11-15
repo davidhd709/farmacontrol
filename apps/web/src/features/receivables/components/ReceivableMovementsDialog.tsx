@@ -42,7 +42,8 @@ export function ReceivableMovementsDialog({
       footer={
         data?.status === 'PENDIENTE' && (
           <Alert severity="info" variant="outlined">
-            Módulo de solo consulta. Para registrar o gestionar abonos, utiliza Tesorería → Recibos de Caja.
+            Módulo de solo consulta. Para registrar o gestionar abonos, utiliza Tesorería → Recibos
+            de Caja.
           </Alert>
         )
       }

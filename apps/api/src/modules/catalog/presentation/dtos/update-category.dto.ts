@@ -23,7 +23,7 @@ export class UpdateCategoryValidationPipe implements PipeTransform {
       const trimmedName = record.name.trim();
       if (trimmedName.length < 2 || trimmedName.length > 100) {
         throw new BadRequestException(
-          'El nombre de la categoría debe tener entre 2 y 100 caracteres.'
+          'El nombre de la categoría debe tener entre 2 y 100 caracteres.',
         );
       }
       result.name = trimmedName;
@@ -39,7 +39,7 @@ export class UpdateCategoryValidationPipe implements PipeTransform {
         const trimmedDesc = record.description.trim();
         if (trimmedDesc.length > 255) {
           throw new BadRequestException(
-            'La descripción de la categoría no puede exceder 255 caracteres.'
+            'La descripción de la categoría no puede exceder 255 caracteres.',
           );
         }
         result.description = trimmedDesc || null;

@@ -37,7 +37,13 @@ export function DocumentMovementsDialog({
   onClose: () => void;
 }) {
   return (
-    <Dialog open onClose={onClose} maxWidth="md" fullWidth aria-labelledby="document-movements-title">
+    <Dialog
+      open
+      onClose={onClose}
+      maxWidth="md"
+      fullWidth
+      aria-labelledby="document-movements-title"
+    >
       <DialogTitle id="document-movements-title" sx={{ fontWeight: 700 }}>
         {title}
       </DialogTitle>
@@ -50,7 +56,12 @@ export function DocumentMovementsDialog({
         {error && <Alert severity="error">{error.message}</Alert>}
         {movements && (
           <Stack spacing={2}>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={3} useFlexGap sx={{ flexWrap: 'wrap' }}>
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={3}
+              useFlexGap
+              sx={{ flexWrap: 'wrap' }}
+            >
               {summary.map((item) => (
                 <Box key={item.label}>
                   <Typography variant="caption" color="text.secondary">
@@ -60,7 +71,11 @@ export function DocumentMovementsDialog({
                 </Box>
               ))}
             </Stack>
-            <DocumentMovementsTable movements={movements} creditLabel={creditLabel} onReverse={onReverse} />
+            <DocumentMovementsTable
+              movements={movements}
+              creditLabel={creditLabel}
+              onReverse={onReverse}
+            />
             {footer}
           </Stack>
         )}

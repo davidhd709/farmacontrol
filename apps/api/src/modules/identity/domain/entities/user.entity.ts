@@ -36,7 +36,7 @@ export class User {
     passwordHash: string,
     isActive: boolean,
     createdAt?: Date,
-    updatedAt?: Date
+    updatedAt?: Date,
   ) {
     this._id = id;
     this._username = username;
@@ -51,20 +51,13 @@ export class User {
    */
   public static create(props: CreateUserProps): User {
     const usernameVo =
-      props.username instanceof Username
-        ? props.username
-        : Username.create(props.username);
+      props.username instanceof Username ? props.username : Username.create(props.username);
 
     if (!props.passwordHash || props.passwordHash.trim().length === 0) {
       throw new Error('El hash de contraseña es obligatorio.');
     }
 
-    return new User(
-      props.id,
-      usernameVo,
-      props.passwordHash,
-      props.isActive ?? true
-    );
+    return new User(props.id, usernameVo, props.passwordHash, props.isActive ?? true);
   }
 
   /**
@@ -78,7 +71,7 @@ export class User {
       props.passwordHash,
       props.isActive,
       props.createdAt,
-      props.updatedAt
+      props.updatedAt,
     );
     user._mustChangePassword = props.mustChangePassword ?? false;
     return user;

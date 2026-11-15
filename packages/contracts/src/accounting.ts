@@ -98,21 +98,27 @@ export const ACCOUNTING_PURPOSE_DESCRIPTIONS: Record<AccountingPurpose, string> 
   COST_OF_SALES: 'Costo de ventas descargado del inventario al confirmar facturas.',
   VAT_OUTPUT: 'Impuesto sobre las ventas (IVA) recaudado en facturas de venta.',
   VAT_INPUT: 'IVA pagado en compras de mercancías descontable en la declaración.',
-  VAT_INPUT_COMMON: 'IVA descontable sujeto a prorrateo entre operaciones gravadas, exentas y excluidas.',
-  VAT_NON_DEDUCTIBLE: 'Impuesto sobre las ventas asumido como mayor valor del gasto o costo no descontable.',
-  SIMPLE_TAX_ADVANCE: 'Anticipos de impuestos, retenciones a favor o anticipos del Régimen Simple (RST).',
+  VAT_INPUT_COMMON:
+    'IVA descontable sujeto a prorrateo entre operaciones gravadas, exentas y excluidas.',
+  VAT_NON_DEDUCTIBLE:
+    'Impuesto sobre las ventas asumido como mayor valor del gasto o costo no descontable.',
+  SIMPLE_TAX_ADVANCE:
+    'Anticipos de impuestos, retenciones a favor o anticipos del Régimen Simple (RST).',
   SALES_RETURNS: 'Disminución de ingresos por notas crédito y devoluciones de clientes.',
   SALES_DISCOUNTS: 'Descuentos otorgados en facturas de venta.',
   CAPITAL: 'Aportes sociales y contrapartida patrimonial en saldos iniciales de apertura.',
   CURRENT_YEAR_RESULT: 'Utilidad o pérdida neta determinada al cierre de cada período contable.',
   RETAINED_EARNINGS: 'Utilidades de ejercicios anteriores trasladadas en el cierre anual.',
   ACCUMULATED_LOSSES: 'Pérdidas de ejercicios anteriores trasladadas en el cierre anual.',
-  INVENTORY_COST_VARIANCE: 'Ajuste por diferencia entre el costo de compra devuelto a proveedor y el costo promedio.',
+  INVENTORY_COST_VARIANCE:
+    'Ajuste por diferencia entre el costo de compra devuelto a proveedor y el costo promedio.',
   INC_PAYABLE: 'Impuesto Nacional al Consumo (INC) causado en ventas.',
-  WITHHOLDING_INCOME_PAYABLE: 'Retención en la fuente a título de renta practicada en compras y gastos.',
+  WITHHOLDING_INCOME_PAYABLE:
+    'Retención en la fuente a título de renta practicada en compras y gastos.',
   WITHHOLDING_VAT_PAYABLE: 'Retención de impuesto sobre las ventas practicada a proveedores.',
   WITHHOLDING_ICA_PAYABLE: 'Retención de industria y comercio practicada en compras y servicios.',
-  INVENTORY_SHRINKAGE: 'Gasto no operacional por mermas, vencimientos, bajas o ajustes negativos de stock.',
+  INVENTORY_SHRINKAGE:
+    'Gasto no operacional por mermas, vencimientos, bajas o ajustes negativos de stock.',
   INVENTORY_SURPLUS: 'Ingreso o recuperación por ajustes positivos de stock y sobrantes físicos.',
 };
 
@@ -591,7 +597,13 @@ export interface OpeningBalanceDto {
   entryDate: string;
   totalDebit: string;
   totalCredit: string;
-  lines: Array<{ accountId: string; accountCode: string; accountName: string; debit: string; credit: string }>;
+  lines: Array<{
+    accountId: string;
+    accountCode: string;
+    accountName: string;
+    debit: string;
+    credit: string;
+  }>;
 }
 
 /** Incorporación explícita de efectivo ya contabilizado; no publica otro asiento. */

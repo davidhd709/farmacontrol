@@ -442,7 +442,8 @@ export const FiscalPeriodsPage = () => {
             <Alert severity="warning">
               <b>Bloqueo histórico de seguridad:</b> Al cerrar este período, no se permitirá crear,
               editar ni reversar ningún asiento contable cuya fecha pertenezca al intervalo{' '}
-              <b>{formatDate(closingPeriod?.startDate)}</b> al <b>{formatDate(closingPeriod?.endDate)}</b>.
+              <b>{formatDate(closingPeriod?.startDate)}</b> al{' '}
+              <b>{formatDate(closingPeriod?.endDate)}</b>.
             </Alert>
 
             <FormControlLabel

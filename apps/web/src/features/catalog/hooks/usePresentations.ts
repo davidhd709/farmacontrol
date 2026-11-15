@@ -17,10 +17,7 @@ export const PRESENTATIONS_QUERY_KEY = (productId: string) => [
   'presentations',
 ];
 
-export function useProductPresentations(
-  productId: string | null | undefined,
-  isActive?: boolean,
-) {
+export function useProductPresentations(productId: string | null | undefined, isActive?: boolean) {
   return useQuery({
     queryKey: productId
       ? [...PRESENTATIONS_QUERY_KEY(productId), { isActive }]

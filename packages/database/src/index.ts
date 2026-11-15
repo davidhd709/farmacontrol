@@ -18,4 +18,3 @@ export {
   type SeedRbacResult,
 } from './seed/rbac.seed';
 export * from '@prisma/client';
-

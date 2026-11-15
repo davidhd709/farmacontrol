@@ -1,8 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type {
-  CreateBankAccountDto,
-  UpdateBankAccountDto,
-} from '@farmacia/contracts';
+import type { CreateBankAccountDto, UpdateBankAccountDto } from '@farmacia/contracts';
 import {
   createBankAccount,
   getBankAccount,
@@ -83,4 +80,3 @@ export function useUpdateBankAccount() {
     },
   });
 }
-

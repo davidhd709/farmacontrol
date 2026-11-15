@@ -109,10 +109,21 @@ export class ReceivablesLedger {
    */
   async revertCreditNote(
     tx: Tx,
-    params: { saleId: string; invoiceNumber: string; creditNoteNumber: string; amountCents: bigint },
+    params: {
+      saleId: string;
+      invoiceNumber: string;
+      creditNoteNumber: string;
+      amountCents: bigint;
+    },
   ): Promise<void> {
     const rows = await tx.$queryRaw<
-      Array<{ id: string; total_amount: Prisma.Decimal; balance: Prisma.Decimal; status: string; notes: string | null }>
+      Array<{
+        id: string;
+        total_amount: Prisma.Decimal;
+        balance: Prisma.Decimal;
+        status: string;
+        notes: string | null;
+      }>
     >`
       SELECT id, total_amount, balance, status, notes
       FROM receivables

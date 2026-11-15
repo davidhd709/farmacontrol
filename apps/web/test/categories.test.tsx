@@ -57,10 +57,12 @@ function createMockAuthContext(permissions: string[] = []): AuthContextValue {
   };
 }
 
-function renderCategoriesPage(authContext = createMockAuthContext([
-  SYSTEM_PERMISSIONS.CATEGORIES_READ,
-  SYSTEM_PERMISSIONS.CATEGORIES_MANAGE,
-])) {
+function renderCategoriesPage(
+  authContext = createMockAuthContext([
+    SYSTEM_PERMISSIONS.CATEGORIES_READ,
+    SYSTEM_PERMISSIONS.CATEGORIES_MANAGE,
+  ]),
+) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
@@ -188,9 +190,7 @@ describe('Pantalla de Categorías (UX-08)', () => {
     const submitBtn = await screen.findByRole('button', { name: 'Crear categoría' });
     fireEvent.click(submitBtn);
 
-    expect(
-      await screen.findByText('El nombre de la categoría es requerido'),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('El nombre de la categoría es requerido')).toBeInTheDocument();
   });
 
   it('muestra error específico cuando el backend responde conflicto 409 (nombre duplicado)', async () => {
@@ -215,9 +215,7 @@ describe('Pantalla de Categorías (UX-08)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Crear categoría' }));
 
-    expect(
-      await screen.findByText('Ya existe una categoría con este nombre.'),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Ya existe una categoría con este nombre.')).toBeInTheDocument();
   });
 
   it('permite abrir el diálogo de edición con datos precargados y enviar actualización', async () => {
@@ -279,9 +277,7 @@ describe('Pantalla de Categorías (UX-08)', () => {
     });
     fireEvent.click(inactivateBtn);
 
-    expect(
-      await screen.findByRole('heading', { name: 'Inactivar Categoría' }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Inactivar Categoría' })).toBeInTheDocument();
     expect(
       screen.getByText(/¿Estás seguro de que deseas inactivar la categoría/),
     ).toBeInTheDocument();

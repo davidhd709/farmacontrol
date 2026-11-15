@@ -32,7 +32,9 @@ export function agingBucketOf(days: number): AgingBucket {
 const toMoney = (cents: bigint) => `${cents / 100n}.${String(cents % 100n).padStart(2, '0')}`;
 
 /** Suma saldos (en centavos, no negativos) por rango de edad. */
-export function agingBreakdown(items: Array<{ balanceCents: bigint; bucket: AgingBucket }>): AgingBreakdownDto {
+export function agingBreakdown(
+  items: Array<{ balanceCents: bigint; bucket: AgingBucket }>,
+): AgingBreakdownDto {
   const sums: Record<AgingBucket, { cents: bigint; count: number }> = {
     CORRIENTE: { cents: 0n, count: 0 },
     DIAS_31_60: { cents: 0n, count: 0 },
@@ -48,7 +50,10 @@ export function agingBreakdown(items: Array<{ balanceCents: bigint; bucket: Agin
     total += item.balanceCents;
     count++;
   }
-  const bucket = (key: AgingBucket) => ({ amount: toMoney(sums[key].cents), count: sums[key].count });
+  const bucket = (key: AgingBucket) => ({
+    amount: toMoney(sums[key].cents),
+    count: sums[key].count,
+  });
   return {
     current: bucket('CORRIENTE'),
     days31To60: bucket('DIAS_31_60'),

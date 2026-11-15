@@ -934,7 +934,13 @@ export class AccountingEngineService {
     },
     tx: Tx,
   ) {
-    const reversed = await this.reverseSourceEntry('CREDIT_NOTE', note.id, note.reason, note.userId, tx);
+    const reversed = await this.reverseSourceEntry(
+      'CREDIT_NOTE',
+      note.id,
+      note.reason,
+      note.userId,
+      tx,
+    );
     if (!reversed) {
       throw new AccountingValidationError(
         `La nota crédito ${note.creditNoteNumber} no tiene un asiento publicado para reversar; la anulación fue detenida.`,
@@ -947,12 +953,32 @@ export class AccountingEngineService {
     const lines: JournalLineInput[] =
       deltaCents > 0n
         ? [
-            { purpose: 'COST_OF_SALES', debit: amount, credit: '0.00', description: `Diferencia de costo al anular NC ${note.creditNoteNumber}` },
-            { purpose: 'INVENTORY', debit: '0.00', credit: amount, description: `Salida de inventario por anulación NC ${note.creditNoteNumber}` },
+            {
+              purpose: 'COST_OF_SALES',
+              debit: amount,
+              credit: '0.00',
+              description: `Diferencia de costo al anular NC ${note.creditNoteNumber}`,
+            },
+            {
+              purpose: 'INVENTORY',
+              debit: '0.00',
+              credit: amount,
+              description: `Salida de inventario por anulación NC ${note.creditNoteNumber}`,
+            },
           ]
         : [
-            { purpose: 'INVENTORY', debit: amount, credit: '0.00', description: `Diferencia de costo al anular NC ${note.creditNoteNumber}` },
-            { purpose: 'COST_OF_SALES', debit: '0.00', credit: amount, description: `Diferencia de costo al anular NC ${note.creditNoteNumber}` },
+            {
+              purpose: 'INVENTORY',
+              debit: amount,
+              credit: '0.00',
+              description: `Diferencia de costo al anular NC ${note.creditNoteNumber}`,
+            },
+            {
+              purpose: 'COST_OF_SALES',
+              debit: '0.00',
+              credit: amount,
+              description: `Diferencia de costo al anular NC ${note.creditNoteNumber}`,
+            },
           ];
     await this.journalService.post(
       {

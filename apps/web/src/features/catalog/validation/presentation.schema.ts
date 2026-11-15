@@ -3,11 +3,7 @@ import { z } from 'zod';
 export const presentationSchema = z.object({
   unitOfMeasureId: z.string().optional().nullable(),
   containedPresentationId: z.string().optional().nullable(),
-  name: z
-    .string()
-    .trim()
-    .max(100, 'El nombre no puede exceder 100 caracteres')
-    .optional(),
+  name: z.string().trim().max(100, 'El nombre no puede exceder 100 caracteres').optional(),
   barcode: z
     .string()
     .trim()

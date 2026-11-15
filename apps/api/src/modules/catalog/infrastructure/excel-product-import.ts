@@ -1,9 +1,6 @@
 import { createHash } from 'node:crypto';
 import ExcelJS from 'exceljs';
-import {
-  BadRequestException,
-  ConflictException,
-} from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import {
   INVENTORY_CONTROL_MODES,
   type InventoryControlMode,
@@ -110,9 +107,13 @@ function parseBooleanValue(value: string, defaultValue: boolean): boolean | null
   return null;
 }
 
-function parseNumericValue(value: string | number, label: string): { value: number; error?: string } {
+function parseNumericValue(
+  value: string | number,
+  label: string,
+): { value: number; error?: string } {
   if (typeof value === 'number') {
-    if (isNaN(value) || value < 0) return { value: 0, error: `${label} no puede ser negativo o inválido.` };
+    if (isNaN(value) || value < 0)
+      return { value: 0, error: `${label} no puede ser negativo o inválido.` };
     return { value };
   }
   const clean = String(value)
@@ -130,10 +131,25 @@ function parseNumericValue(value: string | number, label: string): { value: numb
 /**
  * Normaliza y mapea el modo de control de inventario indicado en el archivo.
  */
-function parseControlMode(raw: string, defaultMode: InventoryControlMode): { mode: InventoryControlMode; error?: string } {
+function parseControlMode(
+  raw: string,
+  defaultMode: InventoryControlMode,
+): { mode: InventoryControlMode; error?: string } {
   if (!raw.trim()) return { mode: defaultMode };
-  const upper = raw.trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  if (['FEFO', 'LOTE_VENCIMIENTO', 'LOT_EXPIRY', 'LOTE Y VENCIMIENTO', 'LOTE Y VENCIMIENTO (FEFO)'].includes(upper)) {
+  const upper = raw
+    .trim()
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  if (
+    [
+      'FEFO',
+      'LOTE_VENCIMIENTO',
+      'LOT_EXPIRY',
+      'LOTE Y VENCIMIENTO',
+      'LOTE Y VENCIMIENTO (FEFO)',
+    ].includes(upper)
+  ) {
     return { mode: 'LOT_EXPIRY' };
   }
   if (['SIMPLE', 'INVENTARIO SIMPLE', 'GENERAL'].includes(upper)) {
@@ -179,7 +195,9 @@ interface ParsedRawRow {
 /**
  * Lee y extrae filas del primer worksheet de un libro Excel.
  */
-async function extractRowsFromWorkbook(buffer: Buffer): Promise<{ rows: ParsedRawRow[]; error?: string }> {
+async function extractRowsFromWorkbook(
+  buffer: Buffer,
+): Promise<{ rows: ParsedRawRow[]; error?: string }> {
   preflightZip(buffer);
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer as any);
@@ -432,7 +450,10 @@ export async function parseAndValidateProductWorkbook(
     }
 
     // Validación Control de Inventario
-    const { mode: controlMode, error: controlError } = parseControlMode(r.controlModeRaw, defaultMode);
+    const { mode: controlMode, error: controlError } = parseControlMode(
+      r.controlModeRaw,
+      defaultMode,
+    );
     if (controlError) {
       errors.push(controlError);
     }
@@ -446,7 +467,9 @@ export async function parseAndValidateProductWorkbook(
 
     // Regla sectorial farmacia: bajo fórmula médica exige LOT_EXPIRY
     if (prescriptionRequired && controlMode !== 'LOT_EXPIRY') {
-      errors.push('Un producto que requiere fórmula médica debe tener control de inventario "LOT_EXPIRY" (Lote y Vencimiento).');
+      errors.push(
+        'Un producto que requiere fórmula médica debe tener control de inventario "LOT_EXPIRY" (Lote y Vencimiento).',
+      );
     }
 
     // Validación Estado
@@ -519,7 +542,9 @@ export async function confirmProductImport(
 ): Promise<{ importedCount: number }> {
   const currentHash = createHash('sha256').update(buffer).digest('hex');
   if (currentHash !== previewHash) {
-    throw new BadRequestException('El archivo enviado ha cambiado respecto a la vista previa. Por favor valida de nuevo.');
+    throw new BadRequestException(
+      'El archivo enviado ha cambiado respecto a la vista previa. Por favor valida de nuevo.',
+    );
   }
 
   const preview = await parseAndValidateProductWorkbook(buffer, client);
@@ -556,7 +581,9 @@ export async function confirmProductImport(
         where: {
           OR: [
             { code: { equals: row.code, mode: 'insensitive' as const } },
-            ...(row.barcode ? [{ barcode: { equals: row.barcode, mode: 'insensitive' as const } }] : []),
+            ...(row.barcode
+              ? [{ barcode: { equals: row.barcode, mode: 'insensitive' as const } }]
+              : []),
           ],
         },
       });

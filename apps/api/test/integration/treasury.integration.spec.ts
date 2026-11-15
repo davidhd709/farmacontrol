@@ -90,9 +90,18 @@ describe('Treasury & Bank Accounts (Slice 11.4 Integration with PostgreSQL)', ()
   // (correcciones del cliente, 2026-11-02): devuelve el movimiento que respalda al documento
   const bankMove = async (
     bankAccountId: string,
-    body: { movementType: string; amount: string; concept: string; counterpartAccountId: string; externalReference?: string },
+    body: {
+      movementType: string;
+      amount: string;
+      concept: string;
+      counterpartAccountId: string;
+      externalReference?: string;
+    },
   ) => {
-    const inflow = body.movementType !== 'WITHDRAWAL' && body.movementType !== 'FEE' && body.movementType !== 'TRANSFER_OUT';
+    const inflow =
+      body.movementType !== 'WITHDRAWAL' &&
+      body.movementType !== 'FEE' &&
+      body.movementType !== 'TRANSFER_OUT';
     const res = await request(app.getHttpServer())
       .post(`/api/v1/treasury/${inflow ? 'cash-receipts' : 'disbursements'}`)
       .set('Cookie', adminCookie)
@@ -269,34 +278,34 @@ describe('Treasury & Bank Accounts (Slice 11.4 Integration with PostgreSQL)', ()
 
     // 2. Registrar depósito por transferencia de cliente (+50.000)
     const dep = await bankMove(accountId, {
-        movementType: 'TRANSFER_IN',
-        counterpartAccountId,
-        amount: '50000.00',
-        concept: 'Transferencia cliente factura F-001',
-        externalReference: 'TRX-998877',
-      });
+      movementType: 'TRANSFER_IN',
+      counterpartAccountId,
+      amount: '50000.00',
+      concept: 'Transferencia cliente factura F-001',
+      externalReference: 'TRX-998877',
+    });
     expect(dep.status).toBe(201);
     expect(dep.body.balanceBefore).toBe('100000.00');
     expect(dep.body.balanceAfter).toBe('150000.00');
 
     // 3. Registrar retiro autorizado (-30.000)
     const withdr = await bankMove(accountId, {
-        movementType: 'WITHDRAWAL',
-        counterpartAccountId,
-        amount: '30000.00',
-        concept: 'Retiro cajero para fondo de caja menor',
-      });
+      movementType: 'WITHDRAWAL',
+      counterpartAccountId,
+      amount: '30000.00',
+      concept: 'Retiro cajero para fondo de caja menor',
+    });
     expect(withdr.status).toBe(201);
     expect(withdr.body.balanceBefore).toBe('150000.00');
     expect(withdr.body.balanceAfter).toBe('120000.00');
 
     // 4. Intentar retiro que supere el saldo disponible (150.000 > 120.000)
     const overdraft = await bankMove(accountId, {
-        movementType: 'WITHDRAWAL',
-        counterpartAccountId,
-        amount: '150000.00',
-        concept: 'Retiro excesivo',
-      });
+      movementType: 'WITHDRAWAL',
+      counterpartAccountId,
+      amount: '150000.00',
+      concept: 'Retiro excesivo',
+    });
     expect(overdraft.status).toBe(409);
     expect(overdraft.body.message).toMatch(/Fondos insuficientes/);
 
@@ -350,11 +359,11 @@ describe('Treasury & Bank Accounts (Slice 11.4 Integration with PostgreSQL)', ()
     // Disparamos 5 depósitos simultáneos de 10.000 cada uno
     const promises = Array.from({ length: 5 }).map((_, i) =>
       bankMove(accountId, {
-          movementType: 'DEPOSIT',
-          counterpartAccountId,
-          amount: '10000.00',
-          concept: `Depósito concurrente #${i + 1}`,
-        }),
+        movementType: 'DEPOSIT',
+        counterpartAccountId,
+        amount: '10000.00',
+        concept: `Depósito concurrente #${i + 1}`,
+      }),
     );
 
     const results = await Promise.all(promises);
@@ -385,11 +394,11 @@ describe('Treasury & Bank Accounts (Slice 11.4 Integration with PostgreSQL)', ()
     expect(account.status).toBe(201);
 
     const movement = await bankMove(account.body.id, {
-        movementType: 'DEPOSIT',
-        counterpartAccountId,
-        amount: '0.01',
-        concept: 'Verificación de centavos',
-      });
+      movementType: 'DEPOSIT',
+      counterpartAccountId,
+      amount: '0.01',
+      concept: 'Verificación de centavos',
+    });
     expect(movement.status).toBe(201);
     expect(movement.body.balanceBefore).toBe('999999999999.98');
     expect(movement.body.balanceAfter).toBe('999999999999.99');

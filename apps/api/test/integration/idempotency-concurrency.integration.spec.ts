@@ -195,10 +195,15 @@ describe('Idempotencia concurrente de pagos (Integration)', () => {
       const updated = await prisma.payable.findUniqueOrThrow({ where: { id: payable.id } });
       expect(updated.balance.toString()).toBe('150000');
       // Un solo comprobante de egreso y un solo movimiento de caja
-      const payment = await prisma.payablePayment.findFirstOrThrow({ where: { payableId: payable.id } });
+      const payment = await prisma.payablePayment.findFirstOrThrow({
+        where: { payableId: payable.id },
+      });
       expect(
         await prisma.cashMovement.count({
-          where: { referenceDocumentType: 'TREASURY_DOCUMENT', referenceDocumentId: payment.treasuryDocumentId! },
+          where: {
+            referenceDocumentType: 'TREASURY_DOCUMENT',
+            referenceDocumentId: payment.treasuryDocumentId!,
+          },
         }),
       ).toBe(1);
     },

@@ -27,7 +27,9 @@ describe('Ventas a crédito, devoluciones y cambio de producto', () => {
   let lotId: string;
 
   beforeAll(async () => {
-    const module: TestingModule = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    const module: TestingModule = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
     app = module.createNestApplication();
     app.setGlobalPrefix('api/v1');
     await app.init();
@@ -41,7 +43,12 @@ describe('Ventas a crédito, devoluciones y cambio de producto', () => {
     await seedPurposeMappings();
 
     await prisma.customer.create({
-      data: { documentType: 'CC', documentNumber: '222222222222', name: 'Consumidor Final', isDefault: true },
+      data: {
+        documentType: 'CC',
+        documentNumber: '222222222222',
+        name: 'Consumidor Final',
+        isDefault: true,
+      },
     });
     customerId = (
       await prisma.customer.create({
@@ -113,19 +120,33 @@ describe('Ventas a crédito, devoluciones y cambio de producto', () => {
       .set('Cookie', adminCookie);
 
   it('la venta de contado es su propio documento: un movimiento, sin recibo de caja y un solo asiento', async () => {
-    const adminId = (await prisma.user.findUniqueOrThrow({ where: { username: 'cartera_admin' } })).id;
+    const adminId = (await prisma.user.findUniqueOrThrow({ where: { username: 'cartera_admin' } }))
+      .id;
     const bank = await prisma.bankAccount.create({
-      data: { bankName: 'Bancolombia', accountType: 'AHORROS', accountNumber: '1001', name: 'Recaudos', createdById: adminId },
+      data: {
+        bankName: 'Bancolombia',
+        accountType: 'AHORROS',
+        accountNumber: '1001',
+        name: 'Recaudos',
+        createdById: adminId,
+      },
     });
     const cash = await sell({ paymentMethod: 'EFECTIVO', amountPaid: 10000, customerId });
     expect(cash.status, JSON.stringify(cash.body)).toBe(201);
-    const transfer = await sell({ paymentMethod: 'TRANSFERENCIA', bankAccountId: bank.id, customerId });
+    const transfer = await sell({
+      paymentMethod: 'TRANSFERENCIA',
+      bankAccountId: bank.id,
+      customerId,
+    });
     expect(transfer.status, JSON.stringify(transfer.body)).toBe(201);
 
     // Un solo movimiento por venta, en caja o en el banco, y ningún RC/CE adicional
     const cashMovements = await prisma.cashMovement.findMany();
     expect(cashMovements).toHaveLength(1);
-    expect(cashMovements[0]).toMatchObject({ referenceDocumentType: 'SALE', referenceDocumentId: cash.body.invoiceNumber });
+    expect(cashMovements[0]).toMatchObject({
+      referenceDocumentType: 'SALE',
+      referenceDocumentId: cash.body.invoiceNumber,
+    });
     expect(cashMovements[0].amount.toFixed(2)).toBe('10000.00');
     const bankMovements = await prisma.bankMovement.findMany();
     expect(bankMovements).toHaveLength(1);
@@ -134,7 +155,10 @@ describe('Ventas a crédito, devoluciones y cambio de producto', () => {
 
     // Un solo asiento por venta, cuadrado, con el dinero en caja o bancos por el total
     for (const sale of [cash.body, transfer.body]) {
-      const entries = await prisma.journalEntry.findMany({ where: { sourceId: sale.id }, include: { lines: true } });
+      const entries = await prisma.journalEntry.findMany({
+        where: { sourceId: sale.id },
+        include: { lines: true },
+      });
       expect(entries).toHaveLength(1);
       expect(entries[0].sourceType).toBe('SALE');
       const debit = entries[0].lines.reduce((acc, l) => acc.plus(l.debit), new Prisma.Decimal(0));
@@ -153,16 +177,31 @@ describe('Ventas a crédito, devoluciones y cambio de producto', () => {
     expect(sale.status, JSON.stringify(sale.body)).toBe(201);
     // Emitida hace 45 días y vence dentro de 20: no vencida, pero con 45 días desde la emisión
     const issuedAt = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000);
-    const dueDate = new Date(`${new Date(Date.now() + 20 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)}T00:00:00Z`);
-    await prisma.receivable.update({ where: { saleId: sale.body.id }, data: { createdAt: issuedAt, dueDate } });
+    const dueDate = new Date(
+      `${new Date(Date.now() + 20 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)}T00:00:00Z`,
+    );
+    await prisma.receivable.update({
+      where: { saleId: sale.body.id },
+      data: { createdAt: issuedAt, dueDate },
+    });
     const aging = async () =>
-      (await request(app.getHttpServer()).get('/api/v1/receivables/aging-summary').set('Cookie', adminCookie).expect(200)).body.data;
+      (
+        await request(app.getHttpServer())
+          .get('/api/v1/receivables/aging-summary')
+          .set('Cookie', adminCookie)
+          .expect(200)
+      ).body.data;
 
     // Sin política registrada rige vencimiento con respaldo en emisión
     expect((await aging()).current.count).toBe(1);
 
     const company = await prisma.company.create({
-      data: { legalName: 'Droguería Prueba', taxId: '900123987', taxIdCheckDigit: '1', sectorProfile: 'PHARMACY' },
+      data: {
+        legalName: 'Droguería Prueba',
+        taxId: '900123987',
+        taxIdCheckDigit: '1',
+        sectorProfile: 'PHARMACY',
+      },
     });
     await prisma.companyAccountingPolicy.create({
       data: {
@@ -230,7 +269,9 @@ describe('Ventas a crédito, devoluciones y cambio de producto', () => {
     expect(sale.status, JSON.stringify(sale.body)).toBe(201);
     expect(await prisma.cashMovement.count()).toBe(0);
     expect(await prisma.bankMovement.count()).toBe(0);
-    const receivable = await prisma.receivable.findUniqueOrThrow({ where: { saleId: sale.body.id } });
+    const receivable = await prisma.receivable.findUniqueOrThrow({
+      where: { saleId: sale.body.id },
+    });
     expect(receivable.balance.toFixed(2)).toBe('10000.00');
 
     await voucherPayment(app.getHttpServer(), 'RECEIVABLE', receivable.id)
@@ -252,17 +293,21 @@ describe('Ventas a crédito, devoluciones y cambio de producto', () => {
         items: [{ saleLineId: sale.body.lines[0].id, quantityCommercial: 2 }],
       });
     expect(note.status, JSON.stringify(note.body)).toBe(201);
-    expect((await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lotId } })).currentQuantity).toBe(92);
+    expect(
+      (await prisma.inventoryLot.findUniqueOrThrow({ where: { id: lotId } })).currentQuantity,
+    ).toBe(92);
 
     const res = await movements(receivable.id).expect(200);
     expect(res.body.data.balance).toBe('4000.00');
     expect(
-      res.body.data.movements.map((m: { type: string; charge: string; credit: string; balance: string }) => [
-        m.type,
-        m.charge,
-        m.credit,
-        m.balance,
-      ]),
+      res.body.data.movements.map(
+        (m: { type: string; charge: string; credit: string; balance: string }) => [
+          m.type,
+          m.charge,
+          m.credit,
+          m.balance,
+        ],
+      ),
     ).toEqual([
       ['CARGO', '10000.00', '0.00', '10000.00'],
       ['ABONO', '0.00', '4000.00', '6000.00'],

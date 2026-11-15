@@ -19,7 +19,6 @@ import {
 import { parseJournalDate, normalizeJournalAmount } from '../domain/journal-rules';
 import ExcelJS from 'exceljs';
 
-
 function centsToString(cents: bigint): string {
   const isNegative = cents < 0n;
   const abs = isNegative ? -cents : cents;
@@ -65,9 +64,7 @@ export class AccountingReportsService {
 
     const initialMap = new Map<string, { debitCents: bigint; creditCents: bigint }>();
     for (const agg of initialAggs) {
-      const dCents = agg._sum.debit
-        ? normalizeJournalAmount(agg._sum.debit.toFixed(2)).cents
-        : 0n;
+      const dCents = agg._sum.debit ? normalizeJournalAmount(agg._sum.debit.toFixed(2)).cents : 0n;
       const cCents = agg._sum.credit
         ? normalizeJournalAmount(agg._sum.credit.toFixed(2)).cents
         : 0n;
@@ -91,9 +88,7 @@ export class AccountingReportsService {
 
     const periodMap = new Map<string, { debitCents: bigint; creditCents: bigint }>();
     for (const agg of periodAggs) {
-      const dCents = agg._sum.debit
-        ? normalizeJournalAmount(agg._sum.debit.toFixed(2)).cents
-        : 0n;
+      const dCents = agg._sum.debit ? normalizeJournalAmount(agg._sum.debit.toFixed(2)).cents : 0n;
       const cCents = agg._sum.credit
         ? normalizeJournalAmount(agg._sum.credit.toFixed(2)).cents
         : 0n;
@@ -446,7 +441,9 @@ export class AccountingReportsService {
     const currentPeriodResultCents = incomeCents - costCents - expenseCents;
 
     // Categorización de cuentas
-    const makeGroup = (title: string): { title: string; totalCents: bigint; accounts: BalanceSheetAccountItemDto[] } => ({
+    const makeGroup = (
+      title: string,
+    ): { title: string; totalCents: bigint; accounts: BalanceSheetAccountItemDto[] } => ({
       title,
       totalCents: 0n,
       accounts: [],
@@ -543,14 +540,21 @@ export class AccountingReportsService {
       retainedEarnings,
     ].forEach(sortAccs);
 
-    const formatGroup = (g: { title: string; totalCents: bigint; accounts: BalanceSheetAccountItemDto[] }): BalanceSheetCategoryGroupDto => ({
+    const formatGroup = (g: {
+      title: string;
+      totalCents: bigint;
+      accounts: BalanceSheetAccountItemDto[];
+    }): BalanceSheetCategoryGroupDto => ({
       title: g.title,
       total: centsToString(g.totalCents),
       accounts: g.accounts,
     });
 
     const totalCurrentAssetsCents =
-      cashAndBanks.totalCents + receivables.totalCents + inventory.totalCents + otherCurrentAssets.totalCents;
+      cashAndBanks.totalCents +
+      receivables.totalCents +
+      inventory.totalCents +
+      otherCurrentAssets.totalCents;
     const totalNonCurrentAssetsCents =
       propertyPlantEquipment.totalCents + otherNonCurrentAssets.totalCents;
     const totalAssetsCents = totalCurrentAssetsCents + totalNonCurrentAssetsCents;
@@ -560,7 +564,8 @@ export class AccountingReportsService {
     const totalNonCurrentLiabilitiesCents = longTermPayables.totalCents;
     const totalLiabilitiesCents = totalCurrentLiabilitiesCents + totalNonCurrentLiabilitiesCents;
 
-    const totalEquityCents = capital.totalCents + retainedEarnings.totalCents + currentPeriodResultCents;
+    const totalEquityCents =
+      capital.totalCents + retainedEarnings.totalCents + currentPeriodResultCents;
     const totalLiabilitiesAndEquityCents = totalLiabilitiesCents + totalEquityCents;
 
     const diffCents = totalAssetsCents - totalLiabilitiesAndEquityCents;
@@ -629,7 +634,9 @@ export class AccountingReportsService {
 
     sheet.addRow(['SISTEMA DE GESTIÓN DE FARMACIA - FARMACONTROL']);
     sheet.addRow(['BALANCE DE COMPROBACIÓN']);
-    sheet.addRow([`Período: ${fromDate} al ${toDate} | Generado: ${new Date().toLocaleString('es-CO')}`]);
+    sheet.addRow([
+      `Período: ${fromDate} al ${toDate} | Generado: ${new Date().toLocaleString('es-CO')}`,
+    ]);
     sheet.addRow([]);
 
     const headerRow = sheet.addRow([
@@ -686,7 +693,9 @@ export class AccountingReportsService {
 
     sheet.addRow(['SISTEMA DE GESTIÓN DE FARMACIA - FARMACONTROL']);
     sheet.addRow(['ESTADO DE RESULTADOS (PÉRDIDAS Y GANANCIAS)']);
-    sheet.addRow([`Período: ${fromDate} al ${toDate} | Generado: ${new Date().toLocaleString('es-CO')}`]);
+    sheet.addRow([
+      `Período: ${fromDate} al ${toDate} | Generado: ${new Date().toLocaleString('es-CO')}`,
+    ]);
     sheet.addRow([]);
 
     sheet.addRow(['1. INGRESOS OPERACIONALES', '', '']).font = { bold: true };
@@ -698,7 +707,9 @@ export class AccountingReportsService {
     sheet.addRow([]);
     sheet.addRow(['2. COSTO DE VENTAS', '', '']).font = { bold: true };
     sheet.addRow(['   Costo de Mercancía Vendida (FEFO)', parseFloat(report.costOfGoodsSold), '']);
-    sheet.addRow(['TOTAL COSTO DE VENTAS', parseFloat(report.costOfGoodsSold), '']).font = { bold: true };
+    sheet.addRow(['TOTAL COSTO DE VENTAS', parseFloat(report.costOfGoodsSold), '']).font = {
+      bold: true,
+    };
 
     sheet.addRow([]);
     sheet.addRow([
@@ -749,7 +760,9 @@ export class AccountingReportsService {
     sheet.addRow([]);
 
     sheet.addRow(['ACTIVOS', '']).font = { bold: true };
-    sheet.addRow(['Activo Corriente', parseFloat(report.assets.current.total)]).font = { bold: true };
+    sheet.addRow(['Activo Corriente', parseFloat(report.assets.current.total)]).font = {
+      bold: true,
+    };
     for (const g of [
       report.assets.current.cashAndBanks,
       report.assets.current.receivables,
@@ -765,13 +778,17 @@ export class AccountingReportsService {
     }
 
     if (parseFloat(report.assets.nonCurrent.total) !== 0) {
-      sheet.addRow(['Activo No Corriente', parseFloat(report.assets.nonCurrent.total)]).font = { bold: true };
+      sheet.addRow(['Activo No Corriente', parseFloat(report.assets.nonCurrent.total)]).font = {
+        bold: true,
+      };
     }
     sheet.addRow(['TOTAL ACTIVOS', parseFloat(report.assets.totalAssets)]).font = { bold: true };
 
     sheet.addRow([]);
     sheet.addRow(['PASIVOS', '']).font = { bold: true };
-    sheet.addRow(['Pasivo Corriente', parseFloat(report.liabilities.current.total)]).font = { bold: true };
+    sheet.addRow(['Pasivo Corriente', parseFloat(report.liabilities.current.total)]).font = {
+      bold: true,
+    };
     for (const g of [
       report.liabilities.current.suppliers,
       report.liabilities.current.taxes,
@@ -784,17 +801,23 @@ export class AccountingReportsService {
         }
       }
     }
-    sheet.addRow(['TOTAL PASIVOS', parseFloat(report.liabilities.totalLiabilities)]).font = { bold: true };
+    sheet.addRow(['TOTAL PASIVOS', parseFloat(report.liabilities.totalLiabilities)]).font = {
+      bold: true,
+    };
 
     sheet.addRow([]);
     sheet.addRow(['PATRIMONIO', '']).font = { bold: true };
     sheet.addRow(['  Capital Social', parseFloat(report.equity.capital.total)]);
     sheet.addRow(['  Resultados Acumulados', parseFloat(report.equity.retainedEarnings.total)]);
-    sheet.addRow(['  Resultado del Ejercicio Corriente', parseFloat(report.equity.currentPeriodResult)]).font = { bold: true };
+    sheet.addRow([
+      '  Resultado del Ejercicio Corriente',
+      parseFloat(report.equity.currentPeriodResult),
+    ]).font = { bold: true };
     sheet.addRow(['TOTAL PATRIMONIO', parseFloat(report.equity.totalEquity)]).font = { bold: true };
 
     sheet.addRow([]);
-    sheet.addRow(['TOTAL PASIVO Y PATRIMONIO', parseFloat(report.totalLiabilitiesAndEquity)]).font = { bold: true };
+    sheet.addRow(['TOTAL PASIVO Y PATRIMONIO', parseFloat(report.totalLiabilitiesAndEquity)]).font =
+      { bold: true };
 
     return Buffer.from(await workbook.xlsx.writeBuffer());
   }
@@ -1027,12 +1050,15 @@ export class AccountingReportsService {
       }
     }
 
-    const docNumbers = Array.from(new Set(Array.from(thirdPartiesMap.values()).map((i) => i.documentNumber)));
-    const dbThirdParties = docNumbers.length > 0
-      ? await prisma.thirdParty.findMany({
-          where: { documentNumber: { in: docNumbers } },
-        })
-      : [];
+    const docNumbers = Array.from(
+      new Set(Array.from(thirdPartiesMap.values()).map((i) => i.documentNumber)),
+    );
+    const dbThirdParties =
+      docNumbers.length > 0
+        ? await prisma.thirdParty.findMany({
+            where: { documentNumber: { in: docNumbers } },
+          })
+        : [];
     const dbThirdPartyMap = new Map<string, (typeof dbThirdParties)[0]>();
     for (const tp of dbThirdParties) {
       dbThirdPartyMap.set(tp.documentNumber, tp);
@@ -1169,4 +1195,3 @@ export class AccountingReportsService {
     return Buffer.from(await workbook.xlsx.writeBuffer());
   }
 }
-

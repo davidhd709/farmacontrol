@@ -13,7 +13,10 @@ async function main(): Promise<void> {
       exitCode = 1;
     }
   } catch (error) {
-    console.error('[db:check] ❌ Error inesperado:', error instanceof Error ? error.message : String(error));
+    console.error(
+      '[db:check] ❌ Error inesperado:',
+      error instanceof Error ? error.message : String(error),
+    );
     exitCode = 1;
   } finally {
     await prisma.$disconnect();
@@ -22,4 +25,3 @@ async function main(): Promise<void> {
 }
 
 void main();
-

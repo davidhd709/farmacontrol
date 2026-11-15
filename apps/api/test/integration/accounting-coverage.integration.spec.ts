@@ -320,13 +320,35 @@ describe('Cobertura contable completa y reportes', () => {
     });
     // El recibo o egreso manual nace como documento y su movimiento referencia al documento
     const voucher = (path: 'cash-receipts' | 'disbursements', body: Record<string, unknown>) =>
-      api().post(`/api/v1/treasury/${path}`).set('Cookie', cookie).set('Idempotency-Key', randomUUID()).send({ kind: 'MANUAL', ...body });
+      api()
+        .post(`/api/v1/treasury/${path}`)
+        .set('Cookie', cookie)
+        .set('Idempotency-Key', randomUUID())
+        .send({ kind: 'MANUAL', ...body });
     const movementOf = async (documentId: string, source: 'cash' | 'bank') =>
       source === 'cash'
-        ? (await prisma.cashMovement.findFirstOrThrow({ where: { referenceDocumentType: 'TREASURY_DOCUMENT', referenceDocumentId: documentId } })).id
-        : (await prisma.bankMovement.findFirstOrThrow({ where: { referenceDocumentType: 'TREASURY_DOCUMENT', referenceDocumentId: documentId } })).id;
+        ? (
+            await prisma.cashMovement.findFirstOrThrow({
+              where: {
+                referenceDocumentType: 'TREASURY_DOCUMENT',
+                referenceDocumentId: documentId,
+              },
+            })
+          ).id
+        : (
+            await prisma.bankMovement.findFirstOrThrow({
+              where: {
+                referenceDocumentType: 'TREASURY_DOCUMENT',
+                referenceDocumentId: documentId,
+              },
+            })
+          ).id;
 
-    const noCounterpart = await voucher('cash-receipts', { paymentMethod: 'EFECTIVO', amount: '50000.00', concept: 'Base de caja' });
+    const noCounterpart = await voucher('cash-receipts', {
+      paymentMethod: 'EFECTIVO',
+      amount: '50000.00',
+      concept: 'Base de caja',
+    });
     expect(noCounterpart.status).toBe(400);
 
     const capital = (
@@ -376,7 +398,9 @@ describe('Cobertura contable completa y reportes', () => {
       counterpartAccountId: expense.id,
     });
     expect(fee.status, JSON.stringify(fee.body)).toBe(201);
-    expect(await journal('BANK_MOVEMENT', await movementOf(fee.body.id, 'bank'))).toMatchObject({ BANK: '-3000.00' });
+    expect(await journal('BANK_MOVEMENT', await movementOf(fee.body.id, 'bank'))).toMatchObject({
+      BANK: '-3000.00',
+    });
 
     // La comisión cobrada por error se corrige con el recibo contrario, no revirtiendo el movimiento
     const correction = await voucher('cash-receipts', {

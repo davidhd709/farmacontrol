@@ -52,7 +52,9 @@ describe('Nota contable manual', () => {
     const submit = screen.getByRole('button', { name: 'Registrar nota' });
 
     setDateField(/Fecha contable/, '2026-07-15');
-    fireEvent.change(screen.getByLabelText(/Descripción/), { target: { value: 'Energía de julio' } });
+    fireEvent.change(screen.getByLabelText(/Descripción/), {
+      target: { value: 'Energía de julio' },
+    });
     await pickAccount(1, '513525 — Energía');
     await pickAccount(2, '110505 — Caja');
     fireEvent.change(screen.getByLabelText('Débito línea 1'), { target: { value: '185000' } });
@@ -87,7 +89,9 @@ describe('Nota contable manual', () => {
       .mockResolvedValueOnce({ journalEntryId: 'je-1', noteNumber: 'NTC-000001' });
     renderDialog();
     setDateField(/Fecha contable/, '2026-07-15');
-    fireEvent.change(screen.getByLabelText(/Descripción/), { target: { value: 'Energía de julio' } });
+    fireEvent.change(screen.getByLabelText(/Descripción/), {
+      target: { value: 'Energía de julio' },
+    });
     await pickAccount(1, '513525 — Energía');
     await pickAccount(2, '110505 — Caja');
     fireEvent.change(screen.getByLabelText('Débito línea 1'), { target: { value: '100' } });

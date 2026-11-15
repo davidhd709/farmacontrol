@@ -40,11 +40,7 @@ function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
-export const SelectSaleForCreditNoteDialog: React.FC<Props> = ({
-  open,
-  onClose,
-  onSelectSale,
-}) => {
+export const SelectSaleForCreditNoteDialog: React.FC<Props> = ({ open, onClose, onSelectSale }) => {
   const [sales, setSales] = useState<SaleDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -141,7 +137,9 @@ export const SelectSaleForCreditNoteDialog: React.FC<Props> = ({
       return;
     }
     if (sale.status !== 'COMPLETED') {
-      setErrorMessage(`La factura ${sale.invoiceNumber} debe estar completada para emitir notas crédito.`);
+      setErrorMessage(
+        `La factura ${sale.invoiceNumber} debe estar completada para emitir notas crédito.`,
+      );
       return;
     }
     if (!sale.lines || sale.lines.length === 0) {
@@ -159,9 +157,7 @@ export const SelectSaleForCreditNoteDialog: React.FC<Props> = ({
       fullWidth
       data-testid="select-sale-for-credit-note-dialog"
     >
-      <DialogTitle sx={{ fontWeight: 'bold' }}>
-        Seleccionar Factura para Nota Crédito
-      </DialogTitle>
+      <DialogTitle sx={{ fontWeight: 'bold' }}>Seleccionar Factura para Nota Crédito</DialogTitle>
       <DialogContent dividers>
         <Box sx={{ mb: 2 }}>
           <Alert severity="info" sx={{ mb: 2 }}>
@@ -193,11 +189,7 @@ export const SelectSaleForCreditNoteDialog: React.FC<Props> = ({
                 },
               }}
             />
-            <Button
-              variant="contained"
-              type="submit"
-              data-testid="search-sale-submit-btn"
-            >
+            <Button variant="contained" type="submit" data-testid="search-sale-submit-btn">
               Buscar
             </Button>
             {activeSearch && (

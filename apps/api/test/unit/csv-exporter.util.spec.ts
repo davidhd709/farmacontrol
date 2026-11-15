@@ -22,9 +22,10 @@ describe('Exportación CSV', () => {
   });
 
   it('aplica la protección a cada celda del archivo', () => {
-    const csv = generateCsv([{ header: 'Cliente', accessor: (r: { name: string }) => r.name }], [
-      { name: '=cmd|"/C calc"!A0' },
-    ]);
+    const csv = generateCsv(
+      [{ header: 'Cliente', accessor: (r: { name: string }) => r.name }],
+      [{ name: '=cmd|"/C calc"!A0' }],
+    );
     expect(csv.split('\r\n')[1]).toBe(`"'=cmd|""/C calc""!A0"`);
   });
 });

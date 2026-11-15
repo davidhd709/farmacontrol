@@ -69,10 +69,12 @@ describe('Cash Rules & Cents Precision (Domain Unit Tests)', () => {
         balanceBefore: 0n,
         balanceAfter: 200000000n,
       });
-      expect(calculateNewCashBalanceCents(200000000n, 'INGRESO_VENTA', 1n).balanceAfter)
-        .toBe(200000001n);
-      expect(calculateNewCashBalanceCents(200000001n, 'EGRESO_MANUAL', 1n).balanceAfter)
-        .toBe(200000000n);
+      expect(calculateNewCashBalanceCents(200000000n, 'INGRESO_VENTA', 1n).balanceAfter).toBe(
+        200000001n,
+      );
+      expect(calculateNewCashBalanceCents(200000001n, 'EGRESO_MANUAL', 1n).balanceAfter).toBe(
+        200000000n,
+      );
     });
     it('suma correctamente en ingresos de caja', () => {
       const res = calculateNewCashBalanceCents(5000000n, 'INGRESO_VENTA', 2500000n);
@@ -87,15 +89,15 @@ describe('Cash Rules & Cents Precision (Domain Unit Tests)', () => {
     });
 
     it('lanza InsufficientCashBalanceException si el egreso supera el saldo en caja', () => {
-      expect(() =>
-        calculateNewCashBalanceCents(1000000n, 'EGRESO_MANUAL', 2000000n),
-      ).toThrow(InsufficientCashBalanceException);
+      expect(() => calculateNewCashBalanceCents(1000000n, 'EGRESO_MANUAL', 2000000n)).toThrow(
+        InsufficientCashBalanceException,
+      );
     });
 
     it('rechaza montos menores o iguales a cero', () => {
-      expect(() =>
-        calculateNewCashBalanceCents(5000000n, 'INGRESO_MANUAL', 0n),
-      ).toThrow(InvalidCashAmountException);
+      expect(() => calculateNewCashBalanceCents(5000000n, 'INGRESO_MANUAL', 0n)).toThrow(
+        InvalidCashAmountException,
+      );
     });
   });
 });

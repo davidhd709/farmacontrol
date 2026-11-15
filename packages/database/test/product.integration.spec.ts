@@ -43,9 +43,7 @@ describe('Product — Integridad de Persistencia en PostgreSQL (Integration)', (
     });
 
     expect(product.id).toBeDefined();
-    expect(product.id).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
-    );
+    expect(product.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
     expect(product.code).toBe('MED-001');
     expect(product.barcode).toBe('7701234567890');
     expect(product.name).toBe('Acetaminofén 500mg');

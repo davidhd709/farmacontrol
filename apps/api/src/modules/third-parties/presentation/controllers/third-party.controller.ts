@@ -117,7 +117,10 @@ export class ThirdPartyController {
     filters: ThirdPartyQueryFilters,
     @CurrentUser() user: AuthenticatedUserContext,
   ): Promise<PaginatedResponse<ThirdPartyDto>> {
-    return this.thirdPartyService.findPaginated(filters, thirdPartyAccess(user.permissions, 'read'));
+    return this.thirdPartyService.findPaginated(
+      filters,
+      thirdPartyAccess(user.permissions, 'read'),
+    );
   }
 
   @Get(':id')

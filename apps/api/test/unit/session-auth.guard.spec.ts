@@ -33,11 +33,7 @@ describe('SessionAuthGuard (Unit)', () => {
       }),
     } as unknown as RbacRepositoryPort;
 
-    guard = new SessionAuthGuard(
-      mockSessionService,
-      mockUserRepository,
-      mockRbacRepository
-    );
+    guard = new SessionAuthGuard(mockSessionService, mockUserRepository, mockRbacRepository);
   });
 
   function createMockExecutionContext(cookieHeader?: string): {
@@ -62,26 +58,20 @@ describe('SessionAuthGuard (Unit)', () => {
   it('debe rechazar la petición con 401 si la cabecera cookie está ausente', async () => {
     const { context } = createMockExecutionContext(undefined);
 
-    await expect(guard.canActivate(context)).rejects.toThrow(
-      UnauthorizedException
-    );
+    await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
   });
 
   it('debe rechazar la petición con 401 si la cookie no contiene sid', async () => {
     const { context } = createMockExecutionContext('otra_cookie=valor; theme=dark');
 
-    await expect(guard.canActivate(context)).rejects.toThrow(
-      UnauthorizedException
-    );
+    await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
   });
 
   it('debe rechazar la petición con 401 si la sesión es inválida, expirada o revocada', async () => {
     const { context } = createMockExecutionContext(`sid=${validRawToken}`);
     vi.mocked(mockSessionService.validateSession).mockResolvedValue(null);
 
-    await expect(guard.canActivate(context)).rejects.toThrow(
-      UnauthorizedException
-    );
+    await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
   });
 
   it('debe rechazar la petición con 401 si el usuario asociado a la sesión no existe', async () => {
@@ -99,9 +89,7 @@ describe('SessionAuthGuard (Unit)', () => {
     vi.mocked(mockSessionService.validateSession).mockResolvedValue(validSession);
     vi.mocked(mockUserRepository.findById).mockResolvedValue(null); // Usuario eliminado
 
-    await expect(guard.canActivate(context)).rejects.toThrow(
-      UnauthorizedException
-    );
+    await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
   });
 
   it('debe rechazar la petición con 401 si el usuario está desactivado', async () => {
@@ -128,9 +116,7 @@ describe('SessionAuthGuard (Unit)', () => {
     vi.mocked(mockSessionService.validateSession).mockResolvedValue(validSession);
     vi.mocked(mockUserRepository.findById).mockResolvedValue(inactiveUser);
 
-    await expect(guard.canActivate(context)).rejects.toThrow(
-      UnauthorizedException
-    );
+    await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
   });
 
   it('debe autenticar exitosamente, adjuntar request.user y retornar true ante sesión y usuario activos', async () => {

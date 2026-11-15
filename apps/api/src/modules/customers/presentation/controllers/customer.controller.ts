@@ -127,7 +127,9 @@ export class CustomerController {
         !user.permissions.includes(SYSTEM_PERMISSIONS.THIRD_PARTIES_DEACTIVATE) &&
         (await this.customerService.getCustomerById(id)).isActive !== dto.isActive
       ) {
-        throw new ForbiddenException('Solo un administrador puede desactivar o reactivar clientes.');
+        throw new ForbiddenException(
+          'Solo un administrador puede desactivar o reactivar clientes.',
+        );
       }
       const customer = await this.customerService.updateCustomer(id, dto, {
         userId: user.id,

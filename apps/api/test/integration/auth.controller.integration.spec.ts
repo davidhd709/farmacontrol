@@ -49,7 +49,7 @@ describe('AuthController — Autenticación HTTP (Integration with PostgreSQL)',
   async function seedTestUser(
     username = testUsername,
     password = testPassword,
-    isActive = true
+    isActive = true,
   ): Promise<User> {
     const passwordHash = await hasher.hash(password);
     const user = User.create({
@@ -191,12 +191,10 @@ describe('AuthController — Autenticación HTTP (Integration with PostgreSQL)',
       const user = await seedTestUser();
 
       // 1. Iniciar sesión para obtener la cookie
-      const loginRes = await request(app.getHttpServer())
-        .post('/api/v1/auth/login')
-        .send({
-          username: testUsername,
-          password: testPassword,
-        });
+      const loginRes = await request(app.getHttpServer()).post('/api/v1/auth/login').send({
+        username: testUsername,
+        password: testPassword,
+      });
 
       const cookie = loginRes.headers['set-cookie'];
 
@@ -218,9 +216,7 @@ describe('AuthController — Autenticación HTTP (Integration with PostgreSQL)',
     });
 
     it('debe rechazar con 401 si no se envía la cookie de sesión', async () => {
-      const res = await request(app.getHttpServer())
-        .get('/api/v1/auth/me')
-        .expect(401);
+      const res = await request(app.getHttpServer()).get('/api/v1/auth/me').expect(401);
 
       expect(res.body.statusCode).toBe(401);
     });
@@ -251,12 +247,10 @@ describe('AuthController — Autenticación HTTP (Integration with PostgreSQL)',
       await seedTestUser();
 
       // 1. Login
-      const loginRes = await request(app.getHttpServer())
-        .post('/api/v1/auth/login')
-        .send({
-          username: testUsername,
-          password: testPassword,
-        });
+      const loginRes = await request(app.getHttpServer()).post('/api/v1/auth/login').send({
+        username: testUsername,
+        password: testPassword,
+      });
 
       const cookie = loginRes.headers['set-cookie'];
 
@@ -280,16 +274,11 @@ describe('AuthController — Autenticación HTTP (Integration with PostgreSQL)',
       expect(sessions[0].revokedAt).not.toBeNull();
 
       // 4. Intento posterior de acceder a /me debe fallar con 401
-      await request(app.getHttpServer())
-        .get('/api/v1/auth/me')
-        .set('Cookie', cookie)
-        .expect(401);
+      await request(app.getHttpServer()).get('/api/v1/auth/me').set('Cookie', cookie).expect(401);
     });
 
     it('debe responder exitosamente con 200 de forma idempotente aun sin cookie previa', async () => {
-      const res = await request(app.getHttpServer())
-        .post('/api/v1/auth/logout')
-        .expect(200);
+      const res = await request(app.getHttpServer()).post('/api/v1/auth/logout').expect(200);
 
       expect(res.body.message).toBe('Sesión cerrada correctamente.');
     });

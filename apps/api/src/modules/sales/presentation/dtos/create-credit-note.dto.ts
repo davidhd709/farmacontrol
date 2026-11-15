@@ -18,9 +18,7 @@ export class CreateCreditNoteValidationPipe implements PipeTransform {
     }
     const reason = record.reason.trim();
     if (reason.length > MAX_REASON_LENGTH) {
-      throw new BadRequestException(
-        `El motivo no puede superar ${MAX_REASON_LENGTH} caracteres.`,
-      );
+      throw new BadRequestException(`El motivo no puede superar ${MAX_REASON_LENGTH} caracteres.`);
     }
 
     let refundMethod: CreateCreditNotePayload['refundMethod'];

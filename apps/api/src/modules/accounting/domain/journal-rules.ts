@@ -80,7 +80,9 @@ export function validateJournalPost(input: JournalPostInput): ValidatedJournalPo
       throw new AccountingValidationError('Línea contable inválida.');
     }
     if (!line.purpose && !line.accountId) {
-      throw new AccountingValidationError('Cada línea debe especificar un propósito o una cuenta contable.');
+      throw new AccountingValidationError(
+        'Cada línea debe especificar un propósito o una cuenta contable.',
+      );
     }
     if (line.purpose && !ACCOUNTING_PURPOSES.includes(line.purpose)) {
       throw new AccountingValidationError('Propósito contable inválido.');

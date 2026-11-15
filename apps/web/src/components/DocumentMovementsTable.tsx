@@ -70,9 +70,7 @@ export function DocumentMovementsTable({
         <TableBody>
           {movements.map((movement, index) => (
             <TableRow key={`${movement.type}-${movement.date}-${index}`}>
-              <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                {formatDate(movement.date)}
-              </TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatDate(movement.date)}</TableCell>
               <TableCell>
                 <Chip size="small" variant="outlined" label={TYPE_LABELS[movement.type]} />
               </TableCell>

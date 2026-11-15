@@ -21,7 +21,7 @@ describe('CorrelationIdMiddleware (Unit)', () => {
 
     expect(req.correlationId).toBeDefined();
     expect(req.correlationId).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
     );
     expect(setHeaderMock).toHaveBeenCalledWith('X-Correlation-Id', req.correlationId);
     expect(next).toHaveBeenCalledTimes(1);
@@ -44,10 +44,7 @@ describe('CorrelationIdMiddleware (Unit)', () => {
     middleware.use(req, res, next);
 
     expect(req.correlationId).toBe('client-custom-corr-12345');
-    expect(setHeaderMock).toHaveBeenCalledWith(
-      'X-Correlation-Id',
-      'client-custom-corr-12345'
-    );
+    expect(setHeaderMock).toHaveBeenCalledWith('X-Correlation-Id', 'client-custom-corr-12345');
     expect(next).toHaveBeenCalledTimes(1);
   });
 
@@ -69,7 +66,7 @@ describe('CorrelationIdMiddleware (Unit)', () => {
 
     expect(req.correlationId).not.toContain('<script>');
     expect(req.correlationId).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
     );
     expect(setHeaderMock).toHaveBeenCalledWith('X-Correlation-Id', req.correlationId);
     expect(next).toHaveBeenCalledTimes(1);

@@ -16,9 +16,7 @@ import {
   CASH_MOVEMENT_REPOSITORY,
 } from '../domain/cash-movement.repository';
 import { CashMovement } from '../domain/cash-movement.entity';
-import {
-  InvalidCashPaymentMethodException,
-} from '../domain/cash.exceptions';
+import { InvalidCashPaymentMethodException } from '../domain/cash.exceptions';
 import { AuditService } from '../../audit/application/services/audit.service';
 import { AccountingEngineService } from '../../accounting/application/accounting-engine.service';
 

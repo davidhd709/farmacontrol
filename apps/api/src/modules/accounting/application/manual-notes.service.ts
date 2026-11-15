@@ -36,7 +36,9 @@ export class ManualNotesService {
   ): Promise<ManualNoteCreatedDto> {
     const key = idempotencyKey?.trim();
     if (!key || key.length > 100) {
-      throw new AccountingValidationError('Idempotency-Key es obligatorio (máximo 100 caracteres).');
+      throw new AccountingValidationError(
+        'Idempotency-Key es obligatorio (máximo 100 caracteres).',
+      );
     }
     const input = this.validate(payload);
     const requestHash = this.idempotencyService.computeHash(ENDPOINT, userId, input);
@@ -50,7 +52,9 @@ export class ManualNotesService {
 
             // Consecutivo sin saltos: count + 1 en transacción serializable; la UNIQUE
             // (source_type, source_id) rechaza la colisión y se reintenta.
-            const count = await tx.journalEntry.count({ where: { sourceType: MANUAL_NOTE_SOURCE } });
+            const count = await tx.journalEntry.count({
+              where: { sourceType: MANUAL_NOTE_SOURCE },
+            });
             const noteNumber = `NTC-${String(count + 1).padStart(6, '0')}`;
 
             const entry = await this.journalService.post(
@@ -66,7 +70,14 @@ export class ManualNotesService {
             );
             const result: ManualNoteCreatedDto = { journalEntryId: entry.id, noteNumber };
             await this.idempotencyService.saveRecord(
-              { key, userId, endpoint: ENDPOINT, requestHash, responseStatus: 201, responseBody: result },
+              {
+                key,
+                userId,
+                endpoint: ENDPOINT,
+                requestHash,
+                responseStatus: 201,
+                responseBody: result,
+              },
               tx,
             );
             await tx.auditEvent.create({
@@ -104,7 +115,12 @@ export class ManualNotesService {
       throw new AccountingValidationError('La nota requiere entre 2 y 200 líneas.');
     }
     const lines = payload.lines.map((line, index) => {
-      if (!line || typeof line !== 'object' || typeof line.accountId !== 'string' || !UUID_RE.test(line.accountId)) {
+      if (
+        !line ||
+        typeof line !== 'object' ||
+        typeof line.accountId !== 'string' ||
+        !UUID_RE.test(line.accountId)
+      ) {
         throw new AccountingValidationError(`La línea ${index + 1} requiere una cuenta válida.`);
       }
       if (typeof line.debit !== 'string' || typeof line.credit !== 'string') {

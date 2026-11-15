@@ -1,13 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  Autocomplete,
-  TextField,
-  Box,
-  Typography,
-  Chip,
-  IconButton,
-  Tooltip,
-} from '@mui/material';
+import { Autocomplete, TextField, Box, Typography, Chip, IconButton, Tooltip } from '@mui/material';
 import PersonAddAltIcon from '@mui/icons-material/PersonAddAlt';
 import type { ThirdPartyDto } from '@farmacia/contracts';
 import { fetchThirdParties } from '../api/third-parties.api';
@@ -66,7 +58,7 @@ export const ThirdPartyAutocomplete: React.FC<ThirdPartyAutocompleteProps> = ({
         setLoading(false);
       }
     },
-    [role]
+    [role],
   );
 
   // Debounced search on input change
@@ -158,7 +150,8 @@ export const ThirdPartyAutocomplete: React.FC<ThirdPartyAutocompleteProps> = ({
             >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
                 <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                  {option.documentType} {option.documentNumber}{dv}
+                  {option.documentType} {option.documentNumber}
+                  {dv}
                 </Typography>
                 <Typography variant="body2" sx={{ color: 'text.primary', flexGrow: 1 }} noWrap>
                   {option.name}
@@ -167,16 +160,36 @@ export const ThirdPartyAutocomplete: React.FC<ThirdPartyAutocompleteProps> = ({
 
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
                 {option.isCustomer && (
-                  <Chip label="Cliente" size="small" color="success" sx={{ fontSize: 10, height: 18 }} />
+                  <Chip
+                    label="Cliente"
+                    size="small"
+                    color="success"
+                    sx={{ fontSize: 10, height: 18 }}
+                  />
                 )}
                 {option.isSupplier && (
-                  <Chip label="Proveedor" size="small" color="info" sx={{ fontSize: 10, height: 18 }} />
+                  <Chip
+                    label="Proveedor"
+                    size="small"
+                    color="info"
+                    sx={{ fontSize: 10, height: 18 }}
+                  />
                 )}
                 {option.isEmployee && (
-                  <Chip label="Empleado" size="small" color="secondary" sx={{ fontSize: 10, height: 18 }} />
+                  <Chip
+                    label="Empleado"
+                    size="small"
+                    color="secondary"
+                    sx={{ fontSize: 10, height: 18 }}
+                  />
                 )}
                 {option.isOther && (
-                  <Chip label="Otro" size="small" variant="outlined" sx={{ fontSize: 10, height: 18 }} />
+                  <Chip
+                    label="Otro"
+                    size="small"
+                    variant="outlined"
+                    sx={{ fontSize: 10, height: 18 }}
+                  />
                 )}
                 {option.city && (
                   <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>

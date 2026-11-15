@@ -66,7 +66,7 @@ describe('Customers — Integridad de Persistencia en PostgreSQL (Integration)',
           documentNumber: '99887766',
           name: 'Cliente Duplicado',
         },
-      })
+      }),
     ).rejects.toThrow();
   });
 

@@ -181,7 +181,10 @@ export class TreasuryController {
 
   /** Retirada: los movimientos bancarios nacen de recibos de caja y comprobantes de egreso. */
   @Post('bank-accounts/:id/movements')
-  @ApiResponse({ status: 410, description: 'Ruta retirada: use recibos de caja o comprobantes de egreso.' })
+  @ApiResponse({
+    status: 410,
+    description: 'Ruta retirada: use recibos de caja o comprobantes de egreso.',
+  })
   @RequirePermissions(SYSTEM_PERMISSIONS.TREASURY_MANAGE)
   createMovement(): never {
     return retiredRoute('POST /api/v1/treasury/bank-accounts/:id/movements', VOUCHER_REPLACEMENT);
@@ -189,7 +192,10 @@ export class TreasuryController {
 
   /** Retirada: una corrección se registra con el recibo o egreso contrario. */
   @Post('bank-accounts/:id/movements/:movementId/reverse')
-  @ApiResponse({ status: 410, description: 'Ruta retirada: use recibos de caja o comprobantes de egreso.' })
+  @ApiResponse({
+    status: 410,
+    description: 'Ruta retirada: use recibos de caja o comprobantes de egreso.',
+  })
   @RequirePermissions(SYSTEM_PERMISSIONS.TREASURY_MANAGE)
   revertMovement(): never {
     return retiredRoute(

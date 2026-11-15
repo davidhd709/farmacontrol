@@ -149,13 +149,17 @@ function checkRunDirectory(
     throw new TestIsolationError(`${TEST_RUN_DIR_ENV} no corresponde a esta ejecución.`);
   }
   if (typeof process.getuid === 'function' && runDirStat.uid !== process.getuid()) {
-    throw new TestIsolationError(`${TEST_RUN_DIR_ENV} no pertenece al usuario que ejecuta las pruebas.`);
+    throw new TestIsolationError(
+      `${TEST_RUN_DIR_ENV} no pertenece al usuario que ejecuta las pruebas.`,
+    );
   }
   if ((runDirStat.mode & 0o022) !== 0) {
     throw new TestIsolationError(`${TEST_RUN_DIR_ENV} admite escritura de otros usuarios.`);
   }
   if (!repositoryRoot) {
-    throw new TestIsolationError('no se pudo determinar la raíz del repositorio para validar los directorios.');
+    throw new TestIsolationError(
+      'no se pudo determinar la raíz del repositorio para validar los directorios.',
+    );
   }
   if (isInside(runDir, realPathOrResolved(repositoryRoot))) {
     throw new TestIsolationError(`${TEST_RUN_DIR_ENV} no puede estar dentro del repositorio.`);
@@ -171,7 +175,9 @@ function checkRunDirectory(
     throw new TestIsolationError(`${TEST_RUN_DIR_ENV} no tiene la marca de la ejecución.`);
   }
   if (stamp !== runId) {
-    throw new TestIsolationError(`la marca de ${TEST_RUN_DIR_ENV} no corresponde a esta ejecución.`);
+    throw new TestIsolationError(
+      `la marca de ${TEST_RUN_DIR_ENV} no corresponde a esta ejecución.`,
+    );
   }
 
   const rawBackupDir = env.BACKUP_DIR;
@@ -231,7 +237,8 @@ export function checkTestEnvironment(
 
   // backup.sh usa libpq: con PG* ausentes caería en sus valores por defecto (otro servidor)
   const unexpected = Object.keys(env).filter(
-    (name) => name.startsWith('PG') && env[name] !== undefined && !ALLOWED_LIBPQ_VARIABLES.has(name),
+    (name) =>
+      name.startsWith('PG') && env[name] !== undefined && !ALLOWED_LIBPQ_VARIABLES.has(name),
   );
   if (unexpected.length > 0) {
     throw new TestIsolationError(

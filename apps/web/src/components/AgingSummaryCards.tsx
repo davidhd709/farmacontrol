@@ -25,7 +25,10 @@ export function AgingSummaryCards({ aging }: { aging: AgingBreakdownDto }) {
     <Box
       sx={{
         display: 'grid',
-        gridTemplateColumns: { xs: 'minmax(0, 1fr) minmax(0, 1fr)', md: 'repeat(5, minmax(0, 1fr))' },
+        gridTemplateColumns: {
+          xs: 'minmax(0, 1fr) minmax(0, 1fr)',
+          md: 'repeat(5, minmax(0, 1fr))',
+        },
         gap: 1.5,
       }}
     >
@@ -45,4 +48,3 @@ export function AgingSummaryCards({ aging }: { aging: AgingBreakdownDto }) {
     </Box>
   );
 }
-

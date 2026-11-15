@@ -21,19 +21,19 @@ export class Username {
 
     if (normalized.length < Username.MIN_LENGTH) {
       throw new InvalidUsernameException(
-        `El nombre de usuario debe tener al menos ${Username.MIN_LENGTH} caracteres.`
+        `El nombre de usuario debe tener al menos ${Username.MIN_LENGTH} caracteres.`,
       );
     }
 
     if (normalized.length > Username.MAX_LENGTH) {
       throw new InvalidUsernameException(
-        `El nombre de usuario no puede superar los ${Username.MAX_LENGTH} caracteres.`
+        `El nombre de usuario no puede superar los ${Username.MAX_LENGTH} caracteres.`,
       );
     }
 
     if (!Username.USERNAME_REGEX.test(normalized)) {
       throw new InvalidUsernameException(
-        'El nombre de usuario solo puede contener letras minúsculas, números, puntos (.), guiones bajos (_) y guiones (-).'
+        'El nombre de usuario solo puede contener letras minúsculas, números, puntos (.), guiones bajos (_) y guiones (-).',
       );
     }
 

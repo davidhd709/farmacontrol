@@ -71,4 +71,3 @@ import { AccountingAuditController } from './presentation/accounting-audit.contr
   ],
 })
 export class AccountingModule {}
-

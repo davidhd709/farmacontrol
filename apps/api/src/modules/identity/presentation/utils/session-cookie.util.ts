@@ -19,7 +19,7 @@ export interface SessionCookieOptions {
  * @param isProduction Indica si el entorno es producción (fuerza Secure: true).
  */
 export function getSessionCookieOptions(
-  isProduction = process.env.NODE_ENV === 'production'
+  isProduction = process.env.NODE_ENV === 'production',
 ): SessionCookieOptions {
   return {
     httpOnly: true,
@@ -34,7 +34,7 @@ export function getSessionCookieOptions(
  * Obtiene las opciones para borrar/invalidar la cookie en el cliente al cerrar sesión.
  */
 export function getClearSessionCookieOptions(
-  isProduction = process.env.NODE_ENV === 'production'
+  isProduction = process.env.NODE_ENV === 'production',
 ): SessionCookieOptions {
   return {
     httpOnly: true,
@@ -51,9 +51,7 @@ export function getClearSessionCookieOptions(
  * @param cookieHeader Contenido crudo de `request.headers.cookie`.
  * @returns El token en texto claro o null si no se encuentra.
  */
-export function extractTokenFromCookieHeader(
-  cookieHeader?: string
-): string | null {
+export function extractTokenFromCookieHeader(cookieHeader?: string): string | null {
   if (!cookieHeader || typeof cookieHeader !== 'string') {
     return null;
   }

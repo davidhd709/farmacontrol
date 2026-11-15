@@ -274,7 +274,10 @@ export function ProductFormDialog({
               <Box
                 sx={{
                   display: 'grid',
-                  gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'minmax(0, 1fr) minmax(0, 1fr)' },
+                  gridTemplateColumns: {
+                    xs: 'minmax(0, 1fr)',
+                    sm: 'minmax(0, 1fr) minmax(0, 1fr)',
+                  },
                   gap: 2,
                 }}
               >
@@ -376,7 +379,10 @@ export function ProductFormDialog({
               <Box
                 sx={{
                   display: 'grid',
-                  gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'minmax(0, 1fr) minmax(0, 1fr)' },
+                  gridTemplateColumns: {
+                    xs: 'minmax(0, 1fr)',
+                    sm: 'minmax(0, 1fr) minmax(0, 1fr)',
+                  },
                   gap: 2,
                 }}
               >
@@ -468,7 +474,10 @@ export function ProductFormDialog({
               <Box
                 sx={{
                   display: 'grid',
-                  gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)' },
+                  gridTemplateColumns: {
+                    xs: 'minmax(0, 1fr)',
+                    sm: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)',
+                  },
                   gap: 2,
                 }}
               >

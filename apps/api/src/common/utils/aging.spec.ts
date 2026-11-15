@@ -37,12 +37,16 @@ describe('edades de cartera y cuentas por pagar', () => {
     const issuedAt = new Date('2026-10-01T22:30:00Z'); // 17:30 en Bogotá: día 1
     const dueDate = new Date('2026-10-31T00:00:00Z');
     expect(agingStartDate('DUE_DATE_OR_ISSUE', { dueDate, issuedAt })).toEqual(dueDate);
-    expect(agingStartDate('DUE_DATE_OR_ISSUE', { dueDate: null, issuedAt })).toEqual(new Date('2026-10-01T00:00:00Z'));
-    expect(agingStartDate('ISSUE_DATE', { dueDate, issuedAt })).toEqual(new Date('2026-10-01T00:00:00Z'));
-    // A las 21:00 de Bogotá ya es el día siguiente en UTC, pero se emitió ese día
-    expect(agingStartDate('ISSUE_DATE', { dueDate, issuedAt: new Date('2026-10-02T02:00:00Z') })).toEqual(
+    expect(agingStartDate('DUE_DATE_OR_ISSUE', { dueDate: null, issuedAt })).toEqual(
       new Date('2026-10-01T00:00:00Z'),
     );
+    expect(agingStartDate('ISSUE_DATE', { dueDate, issuedAt })).toEqual(
+      new Date('2026-10-01T00:00:00Z'),
+    );
+    // A las 21:00 de Bogotá ya es el día siguiente en UTC, pero se emitió ese día
+    expect(
+      agingStartDate('ISSUE_DATE', { dueDate, issuedAt: new Date('2026-10-02T02:00:00Z') }),
+    ).toEqual(new Date('2026-10-01T00:00:00Z'));
   });
 
   it('cerca de medianoche cuenta desde el día de emisión en Bogotá, no el UTC', () => {
@@ -53,13 +57,16 @@ describe('edades de cartera y cuentas por pagar', () => {
     );
     // 1 de noviembre a las 00:10 en Bogotá ya es el día siguiente
     const earlyIssue = new Date('2026-11-01T00:10:00-05:00');
-    expect(agingStartDate('DUE_DATE_OR_ISSUE', { dueDate: null, issuedAt: earlyIssue }).toISOString()).toBe(
-      '2026-11-01T00:00:00.000Z',
-    );
+    expect(
+      agingStartDate('DUE_DATE_OR_ISSUE', { dueDate: null, issuedAt: earlyIssue }).toISOString(),
+    ).toBe('2026-11-01T00:00:00.000Z');
     // Corte del 30 de noviembre: 30 días (Corriente) y 31 días (31–60) según el lado de la medianoche
     const cutoff = new Date('2026-12-01T00:00:00Z');
-    expect(daysOverdue(agingStartDate('ISSUE_DATE', { dueDate: null, issuedAt: earlyIssue }), cutoff)).toBe(30);
-    expect(daysOverdue(agingStartDate('ISSUE_DATE', { dueDate: null, issuedAt: lateIssue }), cutoff)).toBe(31);
+    expect(
+      daysOverdue(agingStartDate('ISSUE_DATE', { dueDate: null, issuedAt: earlyIssue }), cutoff),
+    ).toBe(30);
+    expect(
+      daysOverdue(agingStartDate('ISSUE_DATE', { dueDate: null, issuedAt: lateIssue }), cutoff),
+    ).toBe(31);
   });
 });
-

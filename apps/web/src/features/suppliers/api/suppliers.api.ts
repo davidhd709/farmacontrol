@@ -8,7 +8,7 @@ import type {
 import { apiRequest } from '../../../api/http-client';
 
 export async function fetchSuppliers(
-  filters: SupplierQueryFilters = {}
+  filters: SupplierQueryFilters = {},
 ): Promise<PaginatedResponse<SupplierDto>> {
   const query = new URLSearchParams();
 
@@ -18,10 +18,9 @@ export async function fetchSuppliers(
   if (filters.pageSize) query.set('pageSize', String(filters.pageSize));
 
   const qs = query.toString();
-  return apiRequest<PaginatedResponse<SupplierDto>>(
-    qs ? `suppliers?${qs}` : 'suppliers',
-    { method: 'GET' }
-  );
+  return apiRequest<PaginatedResponse<SupplierDto>>(qs ? `suppliers?${qs}` : 'suppliers', {
+    method: 'GET',
+  });
 }
 
 export async function fetchSupplierById(id: string): Promise<SupplierDto> {
@@ -30,9 +29,7 @@ export async function fetchSupplierById(id: string): Promise<SupplierDto> {
   });
 }
 
-export async function createSupplier(
-  payload: CreateSupplierPayload
-): Promise<SupplierDto> {
+export async function createSupplier(payload: CreateSupplierPayload): Promise<SupplierDto> {
   return apiRequest<SupplierDto>('suppliers', {
     method: 'POST',
     body: JSON.stringify(payload),
@@ -41,7 +38,7 @@ export async function createSupplier(
 
 export async function updateSupplier(
   id: string,
-  payload: UpdateSupplierPayload
+  payload: UpdateSupplierPayload,
 ): Promise<SupplierDto> {
   return apiRequest<SupplierDto>(`suppliers/${id}`, {
     method: 'PUT',

@@ -45,7 +45,9 @@ export class AccountingAuditService {
     ).map((r) => r.source_type);
 
     const rows =
-      filters.view === 'DESCUADRADOS' ? await this.unbalanced(filters) : await this.cancelled(filters);
+      filters.view === 'DESCUADRADOS'
+        ? await this.unbalanced(filters)
+        : await this.cancelled(filters);
     // Cada consulta trae una fila de más para saber si hay más de las que se muestran
     return {
       view: filters.view,

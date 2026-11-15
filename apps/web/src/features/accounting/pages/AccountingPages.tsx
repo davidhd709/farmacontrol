@@ -495,7 +495,11 @@ export function PurposesPage() {
                               {purposeLabel}
                             </Typography>
                             {purposeDescription && (
-                              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                                sx={{ display: 'block' }}
+                              >
                                 {purposeDescription}
                               </Typography>
                             )}

@@ -24,89 +24,218 @@ export const BASE_PERMISSIONS: PermissionDefinition[] = [
 
   // Catálogo
   { name: SYSTEM_PERMISSIONS.CATEGORIES_READ, description: 'Consultar categorías de productos' },
-  { name: SYSTEM_PERMISSIONS.CATEGORIES_MANAGE, description: 'Crear, editar e inactivar categorías' },
-  { name: SYSTEM_PERMISSIONS.PRODUCTS_READ, description: 'Consultar catálogo de productos y presentaciones' },
-  { name: SYSTEM_PERMISSIONS.PRODUCTS_MANAGE, description: 'Crear y editar productos y presentaciones' },
+  {
+    name: SYSTEM_PERMISSIONS.CATEGORIES_MANAGE,
+    description: 'Crear, editar e inactivar categorías',
+  },
+  {
+    name: SYSTEM_PERMISSIONS.PRODUCTS_READ,
+    description: 'Consultar catálogo de productos y presentaciones',
+  },
+  {
+    name: SYSTEM_PERMISSIONS.PRODUCTS_MANAGE,
+    description: 'Crear y editar productos y presentaciones',
+  },
 
   // Inventario y lotes
   { name: SYSTEM_PERMISSIONS.INVENTORY_READ, description: 'Consultar existencias de inventario' },
-  { name: SYSTEM_PERMISSIONS.INVENTORY_ADJUST, description: 'Registrar ajustes de inventario autorizados' },
-  { name: SYSTEM_PERMISSIONS.INVENTORY_MOVEMENTS_READ, description: 'Consultar trazabilidad de movimientos de inventario' },
-  { name: SYSTEM_PERMISSIONS.INVENTORY_LOTS_MANAGE, description: 'Gestionar lotes, estados y fechas de vencimiento' },
+  {
+    name: SYSTEM_PERMISSIONS.INVENTORY_ADJUST,
+    description: 'Registrar ajustes de inventario autorizados',
+  },
+  {
+    name: SYSTEM_PERMISSIONS.INVENTORY_MOVEMENTS_READ,
+    description: 'Consultar trazabilidad de movimientos de inventario',
+  },
+  {
+    name: SYSTEM_PERMISSIONS.INVENTORY_LOTS_MANAGE,
+    description: 'Gestionar lotes, estados y fechas de vencimiento',
+  },
 
   // Ventas y POS
   { name: SYSTEM_PERMISSIONS.SALES_READ, description: 'Consultar historial y detalle de ventas' },
-  { name: SYSTEM_PERMISSIONS.SALES_CREATE, description: 'Registrar ventas en punto de venta con asignación FEFO' },
-  { name: SYSTEM_PERMISSIONS.SALES_CANCEL, description: 'Anular ventas y revertir lotes asignados' },
-  { name: SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE, description: 'Emitir notas crédito por devoluciones de ventas' },
-  { name: SYSTEM_PERMISSIONS.SALES_PRICE_OVERRIDE, description: 'Cambiar el precio unitario de lista en una venta' },
+  {
+    name: SYSTEM_PERMISSIONS.SALES_CREATE,
+    description: 'Registrar ventas en punto de venta con asignación FEFO',
+  },
+  {
+    name: SYSTEM_PERMISSIONS.SALES_CANCEL,
+    description: 'Anular ventas y revertir lotes asignados',
+  },
+  {
+    name: SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE,
+    description: 'Emitir notas crédito por devoluciones de ventas',
+  },
+  {
+    name: SYSTEM_PERMISSIONS.SALES_PRICE_OVERRIDE,
+    description: 'Cambiar el precio unitario de lista en una venta',
+  },
   { name: SYSTEM_PERMISSIONS.SALES_DISCOUNT, description: 'Aplicar descuento manual en una venta' },
 
   // Caja
   { name: SYSTEM_PERMISSIONS.CASH_READ, description: 'Consultar estado y saldo de caja' },
   { name: SYSTEM_PERMISSIONS.CASH_OPEN, description: 'Realizar apertura de caja' },
   { name: SYSTEM_PERMISSIONS.CASH_CLOSE, description: 'Realizar cierre y arqueo de caja' },
-  { name: SYSTEM_PERMISSIONS.CASH_MOVEMENTS, description: 'Registrar entradas y salidas de efectivo' },
+  {
+    name: SYSTEM_PERMISSIONS.CASH_MOVEMENTS,
+    description: 'Registrar entradas y salidas de efectivo',
+  },
 
   // Compras
   { name: SYSTEM_PERMISSIONS.PURCHASES_READ, description: 'Consultar historial de compras' },
-  { name: SYSTEM_PERMISSIONS.PURCHASES_CREATE, description: 'Crear órdenes y compras a proveedores' },
-  { name: SYSTEM_PERMISSIONS.PURCHASES_RECEIVE, description: 'Recepcionar compras y registrar lotes' },
-  { name: SYSTEM_PERMISSIONS.PURCHASES_DEBIT_NOTE, description: 'Emitir notas débito por devoluciones a proveedores' },
+  {
+    name: SYSTEM_PERMISSIONS.PURCHASES_CREATE,
+    description: 'Crear órdenes y compras a proveedores',
+  },
+  {
+    name: SYSTEM_PERMISSIONS.PURCHASES_RECEIVE,
+    description: 'Recepcionar compras y registrar lotes',
+  },
+  {
+    name: SYSTEM_PERMISSIONS.PURCHASES_DEBIT_NOTE,
+    description: 'Emitir notas débito por devoluciones a proveedores',
+  },
 
   // Clientes y proveedores
   { name: SYSTEM_PERMISSIONS.CUSTOMERS_READ, description: 'Consultar directorio de clientes' },
-  { name: SYSTEM_PERMISSIONS.CUSTOMERS_MANAGE, description: 'Registrar y editar clientes (directorio de terceros filtrado a clientes)' },
-  { name: SYSTEM_PERMISSIONS.CUSTOMERS_CREATE, description: 'Registrar clientes desde el punto de venta, sin editarlos' },
+  {
+    name: SYSTEM_PERMISSIONS.CUSTOMERS_MANAGE,
+    description: 'Registrar y editar clientes (directorio de terceros filtrado a clientes)',
+  },
+  {
+    name: SYSTEM_PERMISSIONS.CUSTOMERS_CREATE,
+    description: 'Registrar clientes desde el punto de venta, sin editarlos',
+  },
   { name: SYSTEM_PERMISSIONS.SUPPLIERS_READ, description: 'Consultar directorio de proveedores' },
-  { name: SYSTEM_PERMISSIONS.SUPPLIERS_MANAGE, description: 'Registrar y editar proveedores (directorio de terceros filtrado a proveedores)' },
+  {
+    name: SYSTEM_PERMISSIONS.SUPPLIERS_MANAGE,
+    description: 'Registrar y editar proveedores (directorio de terceros filtrado a proveedores)',
+  },
 
   // Terceros unificados
-  { name: SYSTEM_PERMISSIONS.THIRD_PARTIES_READ, description: 'Consultar directorio unificado de terceros (clientes, proveedores, empleados)' },
-  { name: SYSTEM_PERMISSIONS.THIRD_PARTIES_MANAGE, description: 'Crear y editar terceros unificados de cualquier tipo' },
-  { name: SYSTEM_PERMISSIONS.THIRD_PARTIES_DEACTIVATE, description: 'Desactivar y reactivar terceros, clientes y proveedores' },
+  {
+    name: SYSTEM_PERMISSIONS.THIRD_PARTIES_READ,
+    description: 'Consultar directorio unificado de terceros (clientes, proveedores, empleados)',
+  },
+  {
+    name: SYSTEM_PERMISSIONS.THIRD_PARTIES_MANAGE,
+    description: 'Crear y editar terceros unificados de cualquier tipo',
+  },
+  {
+    name: SYSTEM_PERMISSIONS.THIRD_PARTIES_DEACTIVATE,
+    description: 'Desactivar y reactivar terceros, clientes y proveedores',
+  },
 
   // Cartera
   { name: SYSTEM_PERMISSIONS.RECEIVABLES_READ, description: 'Consultar cuentas por cobrar' },
-  { name: SYSTEM_PERMISSIONS.RECEIVABLES_MANAGE, description: 'Registrar abonos y gestionar cartera de clientes' },
-  { name: SYSTEM_PERMISSIONS.PAYABLES_READ, description: 'Consultar cuentas por pagar a proveedores' },
-  { name: SYSTEM_PERMISSIONS.PAYABLES_MANAGE, description: 'Registrar pagos y gestionar cuentas por pagar' },
+  {
+    name: SYSTEM_PERMISSIONS.RECEIVABLES_MANAGE,
+    description: 'Registrar abonos y gestionar cartera de clientes',
+  },
+  {
+    name: SYSTEM_PERMISSIONS.PAYABLES_READ,
+    description: 'Consultar cuentas por pagar a proveedores',
+  },
+  {
+    name: SYSTEM_PERMISSIONS.PAYABLES_MANAGE,
+    description: 'Registrar pagos y gestionar cuentas por pagar',
+  },
 
   // Reportes y auditoría
-  { name: SYSTEM_PERMISSIONS.REPORTS_READ, description: 'Generar reportes operativos y financieros' },
+  {
+    name: SYSTEM_PERMISSIONS.REPORTS_READ,
+    description: 'Generar reportes operativos y financieros',
+  },
   { name: SYSTEM_PERMISSIONS.AUDIT_READ, description: 'Consultar logs inmutables de auditoría' },
 
   // Alertas y procesos en segundo plano
-  { name: SYSTEM_PERMISSIONS.ALERTS_READ, description: 'Consultar alertas operativas y de vencimiento' },
-  { name: SYSTEM_PERMISSIONS.ALERTS_MANAGE, description: 'Gestionar y disparar procesos de evaluación de alertas' },
+  {
+    name: SYSTEM_PERMISSIONS.ALERTS_READ,
+    description: 'Consultar alertas operativas y de vencimiento',
+  },
+  {
+    name: SYSTEM_PERMISSIONS.ALERTS_MANAGE,
+    description: 'Gestionar y disparar procesos de evaluación de alertas',
+  },
 
   // Resiliencia y administración
-  { name: SYSTEM_PERMISSIONS.BACKUPS_MANAGE, description: 'Gestionar y ejecutar copias de seguridad' },
-  { name: SYSTEM_PERMISSIONS.ACCOUNTING_READ, description: 'Consultar plan de cuentas y propósitos contables' },
-  { name: SYSTEM_PERMISSIONS.ACCOUNTING_MANAGE, description: 'Administrar cuentas, mapeos e importaciones contables' },
-  { name: SYSTEM_PERMISSIONS.COMPANY_READ, description: 'Consultar los datos de la empresa y sus políticas contables' },
-  { name: SYSTEM_PERMISSIONS.COMPANY_MANAGE, description: 'Configurar la empresa, sus sucursales y sus políticas contables' },
+  {
+    name: SYSTEM_PERMISSIONS.BACKUPS_MANAGE,
+    description: 'Gestionar y ejecutar copias de seguridad',
+  },
+  {
+    name: SYSTEM_PERMISSIONS.ACCOUNTING_READ,
+    description: 'Consultar plan de cuentas y propósitos contables',
+  },
+  {
+    name: SYSTEM_PERMISSIONS.ACCOUNTING_MANAGE,
+    description: 'Administrar cuentas, mapeos e importaciones contables',
+  },
+  {
+    name: SYSTEM_PERMISSIONS.COMPANY_READ,
+    description: 'Consultar los datos de la empresa y sus políticas contables',
+  },
+  {
+    name: SYSTEM_PERMISSIONS.COMPANY_MANAGE,
+    description: 'Configurar la empresa, sus sucursales y sus políticas contables',
+  },
 
   // Tesorería y bancos
-  { name: SYSTEM_PERMISSIONS.TREASURY_ACCOUNTS_SELECT, description: 'Seleccionar cuenta activa en cobros y pagos sin consultar saldos' },
-  { name: SYSTEM_PERMISSIONS.TREASURY_READ, description: 'Consultar cuentas bancarias y movimientos de tesorería' },
-  { name: SYSTEM_PERMISSIONS.TREASURY_MANAGE, description: 'Gestionar cuentas bancarias y registrar movimientos de tesorería' },
-  { name: SYSTEM_PERMISSIONS.CASH_RECEIPTS_COLLECT, description: 'Registrar recibos de caja de abono a cartera (el asiento automático no exige permiso contable)' },
-  { name: SYSTEM_PERMISSIONS.DISBURSEMENTS_CREATE, description: 'Registrar comprobantes de egreso: pago a proveedores y causaciones (el manual exige además el permiso contable)' },
-  { name: SYSTEM_PERMISSIONS.CASH_RECEIPTS_MANUAL, description: 'Registrar recibos de caja manuales (otros ingresos) contra una cuenta de contrapartida' },
-  { name: SYSTEM_PERMISSIONS.CASH_RECEIPTS_ANNUL, description: 'Anular recibos de caja (el manual exige además el permiso contable)' },
-  { name: SYSTEM_PERMISSIONS.DISBURSEMENTS_ANNUL, description: 'Anular comprobantes de egreso (el manual exige además el permiso contable)' },
+  {
+    name: SYSTEM_PERMISSIONS.TREASURY_ACCOUNTS_SELECT,
+    description: 'Seleccionar cuenta activa en cobros y pagos sin consultar saldos',
+  },
+  {
+    name: SYSTEM_PERMISSIONS.TREASURY_READ,
+    description: 'Consultar cuentas bancarias y movimientos de tesorería',
+  },
+  {
+    name: SYSTEM_PERMISSIONS.TREASURY_MANAGE,
+    description: 'Gestionar cuentas bancarias y registrar movimientos de tesorería',
+  },
+  {
+    name: SYSTEM_PERMISSIONS.CASH_RECEIPTS_COLLECT,
+    description:
+      'Registrar recibos de caja de abono a cartera (el asiento automático no exige permiso contable)',
+  },
+  {
+    name: SYSTEM_PERMISSIONS.DISBURSEMENTS_CREATE,
+    description:
+      'Registrar comprobantes de egreso: pago a proveedores y causaciones (el manual exige además el permiso contable)',
+  },
+  {
+    name: SYSTEM_PERMISSIONS.CASH_RECEIPTS_MANUAL,
+    description:
+      'Registrar recibos de caja manuales (otros ingresos) contra una cuenta de contrapartida',
+  },
+  {
+    name: SYSTEM_PERMISSIONS.CASH_RECEIPTS_ANNUL,
+    description: 'Anular recibos de caja (el manual exige además el permiso contable)',
+  },
+  {
+    name: SYSTEM_PERMISSIONS.DISBURSEMENTS_ANNUL,
+    description: 'Anular comprobantes de egreso (el manual exige además el permiso contable)',
+  },
 
   // Gastos
-  { name: SYSTEM_PERMISSIONS.EXPENSES_READ, description: 'Consultar categorías y registros de gastos operativos' },
-  { name: SYSTEM_PERMISSIONS.EXPENSES_MANAGE, description: 'Registrar, pagar y anular gastos y categorías de gasto' },
+  {
+    name: SYSTEM_PERMISSIONS.EXPENSES_READ,
+    description: 'Consultar categorías y registros de gastos operativos',
+  },
+  {
+    name: SYSTEM_PERMISSIONS.EXPENSES_MANAGE,
+    description: 'Registrar, pagar y anular gastos y categorías de gasto',
+  },
 ];
 
 /**
  * La anulación de recibos y egresos se asigna, por ahora, solo a quien tiene el permiso
  * contable (correcciones del cliente, 2026-11-02); cartera conserva la creación de abonos.
  */
-const ANNUL_PERMISSIONS = [SYSTEM_PERMISSIONS.CASH_RECEIPTS_ANNUL, SYSTEM_PERMISSIONS.DISBURSEMENTS_ANNUL];
+const ANNUL_PERMISSIONS = [
+  SYSTEM_PERMISSIONS.CASH_RECEIPTS_ANNUL,
+  SYSTEM_PERMISSIONS.DISBURSEMENTS_ANNUL,
+];
 // El recibo manual era del permiso contable: quien lo tenga conserva poder registrarlo
 const ACCOUNTING_DOCUMENTS = [...ANNUL_PERMISSIONS, SYSTEM_PERMISSIONS.CASH_RECEIPTS_MANUAL];
 
@@ -115,147 +244,155 @@ const withAccountingAnnulments = (role: RoleDefinition): RoleDefinition =>
     ? { ...role, permissions: [...new Set([...role.permissions, ...ACCOUNTING_DOCUMENTS])] }
     : role;
 
-export const BASE_ROLES: RoleDefinition[] = ([
-  {
-    name: SYSTEM_ROLES.ADMIN,
-    description: 'Administrador general del sistema con acceso completo a todos los módulos y operaciones.',
-    permissions: BASE_PERMISSIONS.map((p) => p.name),
-  },
-  {
-    name: SYSTEM_ROLES.SUPERVISOR,
-    description: 'Supervisor operativo de farmacia con supervisión de ventas, caja, compras, inventario y reportes.',
-    permissions: [
-      SYSTEM_PERMISSIONS.USERS_READ,
-      SYSTEM_PERMISSIONS.ROLES_READ,
-      SYSTEM_PERMISSIONS.COMPANY_READ,
-      SYSTEM_PERMISSIONS.CATEGORIES_READ,
-      SYSTEM_PERMISSIONS.CATEGORIES_MANAGE,
-      SYSTEM_PERMISSIONS.PRODUCTS_READ,
-      SYSTEM_PERMISSIONS.PRODUCTS_MANAGE,
-      SYSTEM_PERMISSIONS.INVENTORY_READ,
-      SYSTEM_PERMISSIONS.INVENTORY_ADJUST,
-      SYSTEM_PERMISSIONS.INVENTORY_MOVEMENTS_READ,
-      SYSTEM_PERMISSIONS.INVENTORY_LOTS_MANAGE,
-      SYSTEM_PERMISSIONS.SALES_READ,
-      SYSTEM_PERMISSIONS.SALES_CREATE,
-      SYSTEM_PERMISSIONS.SALES_CANCEL,
-      SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE,
-      SYSTEM_PERMISSIONS.SALES_PRICE_OVERRIDE,
-      SYSTEM_PERMISSIONS.SALES_DISCOUNT,
-      SYSTEM_PERMISSIONS.CASH_READ,
-      SYSTEM_PERMISSIONS.CASH_OPEN,
-      SYSTEM_PERMISSIONS.CASH_CLOSE,
-      SYSTEM_PERMISSIONS.CASH_MOVEMENTS,
-      SYSTEM_PERMISSIONS.PURCHASES_READ,
-      SYSTEM_PERMISSIONS.PURCHASES_CREATE,
-      SYSTEM_PERMISSIONS.PURCHASES_RECEIVE,
-      SYSTEM_PERMISSIONS.PURCHASES_DEBIT_NOTE,
-      SYSTEM_PERMISSIONS.CUSTOMERS_READ,
-      SYSTEM_PERMISSIONS.CUSTOMERS_MANAGE,
-      SYSTEM_PERMISSIONS.CUSTOMERS_CREATE,
-      SYSTEM_PERMISSIONS.SUPPLIERS_READ,
-      SYSTEM_PERMISSIONS.SUPPLIERS_MANAGE,
-      SYSTEM_PERMISSIONS.THIRD_PARTIES_READ,
-      SYSTEM_PERMISSIONS.THIRD_PARTIES_MANAGE,
-      SYSTEM_PERMISSIONS.RECEIVABLES_READ,
-      SYSTEM_PERMISSIONS.RECEIVABLES_MANAGE,
-      SYSTEM_PERMISSIONS.PAYABLES_READ,
-      SYSTEM_PERMISSIONS.PAYABLES_MANAGE,
-      SYSTEM_PERMISSIONS.ALERTS_READ,
-      SYSTEM_PERMISSIONS.ALERTS_MANAGE,
-      SYSTEM_PERMISSIONS.REPORTS_READ,
-      SYSTEM_PERMISSIONS.AUDIT_READ,
-      SYSTEM_PERMISSIONS.TREASURY_READ,
-      SYSTEM_PERMISSIONS.TREASURY_ACCOUNTS_SELECT,
-      SYSTEM_PERMISSIONS.EXPENSES_READ,
-      SYSTEM_PERMISSIONS.EXPENSES_MANAGE,
-    ],
-  },
-  {
-    name: SYSTEM_ROLES.CAJERO,
-    description: 'Operador de caja y punto de venta para dispensación, facturación y arqueo de caja.',
-    permissions: [
-      SYSTEM_PERMISSIONS.SALES_READ,
-      SYSTEM_PERMISSIONS.SALES_CREATE,
-      // Conserva el descuento manual que ya usaba en el POS hasta que se apruebe la política (T-19)
-      SYSTEM_PERMISSIONS.SALES_DISCOUNT,
-      SYSTEM_PERMISSIONS.PRODUCTS_READ,
-      SYSTEM_PERMISSIONS.CATEGORIES_READ,
-      SYSTEM_PERMISSIONS.INVENTORY_READ,
-      SYSTEM_PERMISSIONS.CASH_READ,
-      SYSTEM_PERMISSIONS.CASH_OPEN,
-      SYSTEM_PERMISSIONS.CASH_CLOSE,
-      SYSTEM_PERMISSIONS.CASH_MOVEMENTS,
-      SYSTEM_PERMISSIONS.CUSTOMERS_READ,
-      // Solo crea clientes desde el POS: editar y desactivar no están en su pantalla
-      SYSTEM_PERMISSIONS.CUSTOMERS_CREATE,
-      SYSTEM_PERMISSIONS.TREASURY_ACCOUNTS_SELECT,
-    ],
-  },
-  {
-    name: SYSTEM_ROLES.INVENTARIO,
-    description: 'Responsable de recepción de compras, control de stock, lotes, vencimientos y ajustes autorizados.',
-    permissions: [
-      SYSTEM_PERMISSIONS.PRODUCTS_READ,
-      SYSTEM_PERMISSIONS.CATEGORIES_READ,
-      SYSTEM_PERMISSIONS.INVENTORY_READ,
-      SYSTEM_PERMISSIONS.INVENTORY_ADJUST,
-      SYSTEM_PERMISSIONS.INVENTORY_MOVEMENTS_READ,
-      SYSTEM_PERMISSIONS.INVENTORY_LOTS_MANAGE,
-      SYSTEM_PERMISSIONS.ALERTS_READ,
-      SYSTEM_PERMISSIONS.ALERTS_MANAGE,
-      SYSTEM_PERMISSIONS.PURCHASES_READ,
-      SYSTEM_PERMISSIONS.PURCHASES_RECEIVE,
-      SYSTEM_PERMISSIONS.SUPPLIERS_READ,
-    ],
-  },
-  {
-    name: SYSTEM_ROLES.COMPRAS,
-    description: 'Responsable de relación con proveedores, órdenes de compra y control de cuentas por pagar.',
-    permissions: [
-      SYSTEM_PERMISSIONS.PURCHASES_READ,
-      SYSTEM_PERMISSIONS.PURCHASES_CREATE,
-      SYSTEM_PERMISSIONS.PURCHASES_RECEIVE,
-      SYSTEM_PERMISSIONS.SUPPLIERS_READ,
-      SYSTEM_PERMISSIONS.SUPPLIERS_MANAGE,
-      SYSTEM_PERMISSIONS.PAYABLES_READ,
-      SYSTEM_PERMISSIONS.PAYABLES_MANAGE,
-      SYSTEM_PERMISSIONS.TREASURY_ACCOUNTS_SELECT,
-      SYSTEM_PERMISSIONS.PRODUCTS_READ,
-      SYSTEM_PERMISSIONS.CATEGORIES_READ,
-      SYSTEM_PERMISSIONS.INVENTORY_READ,
-    ],
-  },
-  {
-    name: SYSTEM_ROLES.CARTERA,
-    description: 'Responsable de control de crédito a clientes, cuentas por cobrar y registro de abonos.',
-    permissions: [
-      SYSTEM_PERMISSIONS.CUSTOMERS_READ,
-      SYSTEM_PERMISSIONS.CUSTOMERS_MANAGE,
-      SYSTEM_PERMISSIONS.CUSTOMERS_CREATE,
-      SYSTEM_PERMISSIONS.RECEIVABLES_READ,
-      SYSTEM_PERMISSIONS.RECEIVABLES_MANAGE,
-      SYSTEM_PERMISSIONS.CASH_RECEIPTS_COLLECT,
-      SYSTEM_PERMISSIONS.TREASURY_ACCOUNTS_SELECT,
-      SYSTEM_PERMISSIONS.SALES_READ,
-    ],
-  },
-  {
-    name: SYSTEM_ROLES.TESORERIA,
-    description:
-      'Tesorería: paga proveedores con comprobantes de egreso y registra recibos de caja manuales; consulta caja, bancos y cartera. No causa, no compra, no anula ni accede a la contabilidad general.',
-    permissions: [
-      SYSTEM_PERMISSIONS.DISBURSEMENTS_CREATE,
-      SYSTEM_PERMISSIONS.CASH_RECEIPTS_MANUAL,
-      SYSTEM_PERMISSIONS.CASH_READ,
-      SYSTEM_PERMISSIONS.TREASURY_READ,
-      SYSTEM_PERMISSIONS.TREASURY_ACCOUNTS_SELECT,
-      // Estado de cuenta del proveedor, facturas de compra y causaciones a pagar (solo lectura)
-      SYSTEM_PERMISSIONS.PAYABLES_READ,
-      SYSTEM_PERMISSIONS.RECEIVABLES_READ,
-    ],
-  },
-] satisfies RoleDefinition[]).map(withAccountingAnnulments);
+export const BASE_ROLES: RoleDefinition[] = (
+  [
+    {
+      name: SYSTEM_ROLES.ADMIN,
+      description:
+        'Administrador general del sistema con acceso completo a todos los módulos y operaciones.',
+      permissions: BASE_PERMISSIONS.map((p) => p.name),
+    },
+    {
+      name: SYSTEM_ROLES.SUPERVISOR,
+      description:
+        'Supervisor operativo de farmacia con supervisión de ventas, caja, compras, inventario y reportes.',
+      permissions: [
+        SYSTEM_PERMISSIONS.USERS_READ,
+        SYSTEM_PERMISSIONS.ROLES_READ,
+        SYSTEM_PERMISSIONS.COMPANY_READ,
+        SYSTEM_PERMISSIONS.CATEGORIES_READ,
+        SYSTEM_PERMISSIONS.CATEGORIES_MANAGE,
+        SYSTEM_PERMISSIONS.PRODUCTS_READ,
+        SYSTEM_PERMISSIONS.PRODUCTS_MANAGE,
+        SYSTEM_PERMISSIONS.INVENTORY_READ,
+        SYSTEM_PERMISSIONS.INVENTORY_ADJUST,
+        SYSTEM_PERMISSIONS.INVENTORY_MOVEMENTS_READ,
+        SYSTEM_PERMISSIONS.INVENTORY_LOTS_MANAGE,
+        SYSTEM_PERMISSIONS.SALES_READ,
+        SYSTEM_PERMISSIONS.SALES_CREATE,
+        SYSTEM_PERMISSIONS.SALES_CANCEL,
+        SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE,
+        SYSTEM_PERMISSIONS.SALES_PRICE_OVERRIDE,
+        SYSTEM_PERMISSIONS.SALES_DISCOUNT,
+        SYSTEM_PERMISSIONS.CASH_READ,
+        SYSTEM_PERMISSIONS.CASH_OPEN,
+        SYSTEM_PERMISSIONS.CASH_CLOSE,
+        SYSTEM_PERMISSIONS.CASH_MOVEMENTS,
+        SYSTEM_PERMISSIONS.PURCHASES_READ,
+        SYSTEM_PERMISSIONS.PURCHASES_CREATE,
+        SYSTEM_PERMISSIONS.PURCHASES_RECEIVE,
+        SYSTEM_PERMISSIONS.PURCHASES_DEBIT_NOTE,
+        SYSTEM_PERMISSIONS.CUSTOMERS_READ,
+        SYSTEM_PERMISSIONS.CUSTOMERS_MANAGE,
+        SYSTEM_PERMISSIONS.CUSTOMERS_CREATE,
+        SYSTEM_PERMISSIONS.SUPPLIERS_READ,
+        SYSTEM_PERMISSIONS.SUPPLIERS_MANAGE,
+        SYSTEM_PERMISSIONS.THIRD_PARTIES_READ,
+        SYSTEM_PERMISSIONS.THIRD_PARTIES_MANAGE,
+        SYSTEM_PERMISSIONS.RECEIVABLES_READ,
+        SYSTEM_PERMISSIONS.RECEIVABLES_MANAGE,
+        SYSTEM_PERMISSIONS.PAYABLES_READ,
+        SYSTEM_PERMISSIONS.PAYABLES_MANAGE,
+        SYSTEM_PERMISSIONS.ALERTS_READ,
+        SYSTEM_PERMISSIONS.ALERTS_MANAGE,
+        SYSTEM_PERMISSIONS.REPORTS_READ,
+        SYSTEM_PERMISSIONS.AUDIT_READ,
+        SYSTEM_PERMISSIONS.TREASURY_READ,
+        SYSTEM_PERMISSIONS.TREASURY_ACCOUNTS_SELECT,
+        SYSTEM_PERMISSIONS.EXPENSES_READ,
+        SYSTEM_PERMISSIONS.EXPENSES_MANAGE,
+      ],
+    },
+    {
+      name: SYSTEM_ROLES.CAJERO,
+      description:
+        'Operador de caja y punto de venta para dispensación, facturación y arqueo de caja.',
+      permissions: [
+        SYSTEM_PERMISSIONS.SALES_READ,
+        SYSTEM_PERMISSIONS.SALES_CREATE,
+        // Conserva el descuento manual que ya usaba en el POS hasta que se apruebe la política (T-19)
+        SYSTEM_PERMISSIONS.SALES_DISCOUNT,
+        SYSTEM_PERMISSIONS.PRODUCTS_READ,
+        SYSTEM_PERMISSIONS.CATEGORIES_READ,
+        SYSTEM_PERMISSIONS.INVENTORY_READ,
+        SYSTEM_PERMISSIONS.CASH_READ,
+        SYSTEM_PERMISSIONS.CASH_OPEN,
+        SYSTEM_PERMISSIONS.CASH_CLOSE,
+        SYSTEM_PERMISSIONS.CASH_MOVEMENTS,
+        SYSTEM_PERMISSIONS.CUSTOMERS_READ,
+        // Solo crea clientes desde el POS: editar y desactivar no están en su pantalla
+        SYSTEM_PERMISSIONS.CUSTOMERS_CREATE,
+        SYSTEM_PERMISSIONS.TREASURY_ACCOUNTS_SELECT,
+      ],
+    },
+    {
+      name: SYSTEM_ROLES.INVENTARIO,
+      description:
+        'Responsable de recepción de compras, control de stock, lotes, vencimientos y ajustes autorizados.',
+      permissions: [
+        SYSTEM_PERMISSIONS.PRODUCTS_READ,
+        SYSTEM_PERMISSIONS.CATEGORIES_READ,
+        SYSTEM_PERMISSIONS.INVENTORY_READ,
+        SYSTEM_PERMISSIONS.INVENTORY_ADJUST,
+        SYSTEM_PERMISSIONS.INVENTORY_MOVEMENTS_READ,
+        SYSTEM_PERMISSIONS.INVENTORY_LOTS_MANAGE,
+        SYSTEM_PERMISSIONS.ALERTS_READ,
+        SYSTEM_PERMISSIONS.ALERTS_MANAGE,
+        SYSTEM_PERMISSIONS.PURCHASES_READ,
+        SYSTEM_PERMISSIONS.PURCHASES_RECEIVE,
+        SYSTEM_PERMISSIONS.SUPPLIERS_READ,
+      ],
+    },
+    {
+      name: SYSTEM_ROLES.COMPRAS,
+      description:
+        'Responsable de relación con proveedores, órdenes de compra y control de cuentas por pagar.',
+      permissions: [
+        SYSTEM_PERMISSIONS.PURCHASES_READ,
+        SYSTEM_PERMISSIONS.PURCHASES_CREATE,
+        SYSTEM_PERMISSIONS.PURCHASES_RECEIVE,
+        SYSTEM_PERMISSIONS.SUPPLIERS_READ,
+        SYSTEM_PERMISSIONS.SUPPLIERS_MANAGE,
+        SYSTEM_PERMISSIONS.PAYABLES_READ,
+        SYSTEM_PERMISSIONS.PAYABLES_MANAGE,
+        SYSTEM_PERMISSIONS.TREASURY_ACCOUNTS_SELECT,
+        SYSTEM_PERMISSIONS.PRODUCTS_READ,
+        SYSTEM_PERMISSIONS.CATEGORIES_READ,
+        SYSTEM_PERMISSIONS.INVENTORY_READ,
+      ],
+    },
+    {
+      name: SYSTEM_ROLES.CARTERA,
+      description:
+        'Responsable de control de crédito a clientes, cuentas por cobrar y registro de abonos.',
+      permissions: [
+        SYSTEM_PERMISSIONS.CUSTOMERS_READ,
+        SYSTEM_PERMISSIONS.CUSTOMERS_MANAGE,
+        SYSTEM_PERMISSIONS.CUSTOMERS_CREATE,
+        SYSTEM_PERMISSIONS.RECEIVABLES_READ,
+        SYSTEM_PERMISSIONS.RECEIVABLES_MANAGE,
+        SYSTEM_PERMISSIONS.CASH_RECEIPTS_COLLECT,
+        SYSTEM_PERMISSIONS.TREASURY_ACCOUNTS_SELECT,
+        SYSTEM_PERMISSIONS.SALES_READ,
+      ],
+    },
+    {
+      name: SYSTEM_ROLES.TESORERIA,
+      description:
+        'Tesorería: paga proveedores con comprobantes de egreso y registra recibos de caja manuales; consulta caja, bancos y cartera. No causa, no compra, no anula ni accede a la contabilidad general.',
+      permissions: [
+        SYSTEM_PERMISSIONS.DISBURSEMENTS_CREATE,
+        SYSTEM_PERMISSIONS.CASH_RECEIPTS_MANUAL,
+        SYSTEM_PERMISSIONS.CASH_READ,
+        SYSTEM_PERMISSIONS.TREASURY_READ,
+        SYSTEM_PERMISSIONS.TREASURY_ACCOUNTS_SELECT,
+        // Estado de cuenta del proveedor, facturas de compra y causaciones a pagar (solo lectura)
+        SYSTEM_PERMISSIONS.PAYABLES_READ,
+        SYSTEM_PERMISSIONS.RECEIVABLES_READ,
+      ],
+    },
+  ] satisfies RoleDefinition[]
+).map(withAccountingAnnulments);
 
 export interface SeedRbacResult {
   permissionsCount: number;

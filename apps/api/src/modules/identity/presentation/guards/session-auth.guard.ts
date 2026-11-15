@@ -61,7 +61,7 @@ export class SessionAuthGuard implements CanActivate {
     private readonly userRepository: UserRepositoryPort,
     @Inject(RBAC_REPOSITORY_PORT)
     private readonly rbacRepository: RbacRepositoryPort,
-    @Optional() private readonly reflector: Reflector = new Reflector()
+    @Optional() private readonly reflector: Reflector = new Reflector(),
   ) {}
 
   public async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -95,10 +95,10 @@ export class SessionAuthGuard implements CanActivate {
     };
 
     if (user.mustChangePassword) {
-      const allowed = this.reflector.getAllAndOverride<boolean>(
-        ALLOW_PENDING_PASSWORD_CHANGE_KEY,
-        [context.getHandler(), context.getClass()]
-      );
+      const allowed = this.reflector.getAllAndOverride<boolean>(ALLOW_PENDING_PASSWORD_CHANGE_KEY, [
+        context.getHandler(),
+        context.getClass(),
+      ]);
       if (!allowed) {
         throw new ForbiddenException({
           message: 'Debe cambiar la contraseña temporal antes de continuar.',

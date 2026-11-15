@@ -149,7 +149,11 @@ function isCode(error: unknown, code: string): boolean {
 }
 
 /** Asientos que se anulan desde el Libro Diario porque no tienen un documento de origen. */
-export const ANNULLABLE_JOURNAL_SOURCES: readonly string[] = ['MANUAL_NOTE', 'OPENING_BALANCE', 'ANNUAL_CLOSING'];
+export const ANNULLABLE_JOURNAL_SOURCES: readonly string[] = [
+  'MANUAL_NOTE',
+  'OPENING_BALANCE',
+  'ANNUAL_CLOSING',
+];
 
 @Injectable()
 export class JournalService {
@@ -437,11 +441,18 @@ export class JournalService {
     throw new AccountingConflictError('No se pudo reversar el asiento.');
   }
 
-  async canPostForPurposes(purposes: DbPurpose[], date = new Date(), tx?: Tx, dateIsCalendar = false): Promise<boolean> {
+  async canPostForPurposes(
+    purposes: DbPurpose[],
+    date = new Date(),
+    tx?: Tx,
+    dateIsCalendar = false,
+  ): Promise<boolean> {
     const client = tx ?? prisma;
     // El período cerrado se valida antes que los mapeos: una operación sin asiento
     // por falta de configuración tampoco puede registrarse en un período cerrado.
-    const day = parseJournalDate(dateIsCalendar ? date.toISOString().slice(0, 10) : businessDateOf(date));
+    const day = parseJournalDate(
+      dateIsCalendar ? date.toISOString().slice(0, 10) : businessDateOf(date),
+    );
     await this.assertDateWritable(day, 'registrar operaciones', client);
 
     for (const purpose of new Set(purposes)) {

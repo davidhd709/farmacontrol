@@ -76,7 +76,7 @@ export class PrismaCategoryRepository implements CategoryRepositoryPort {
   }
 
   public async findAll(
-    filters: CategoryQueryFilters
+    filters: CategoryQueryFilters,
   ): Promise<{ items: Category[]; total: number }> {
     const page = Math.max(1, filters.page ?? 1);
     const pageSize = Math.min(100, Math.max(1, filters.pageSize ?? 20));

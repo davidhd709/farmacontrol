@@ -268,7 +268,9 @@ export const ThirdPartyFormDialog: React.FC<ThirdPartyFormDialogProps> = ({
       return;
     }
     if (!isCustomer && !isSupplier && !isEmployee && !isOther) {
-      setErrorMsg('Debe seleccionar al menos un rol para el tercero (Cliente, Proveedor, Empleado u Otro).');
+      setErrorMsg(
+        'Debe seleccionar al menos un rol para el tercero (Cliente, Proveedor, Empleado u Otro).',
+      );
       return;
     }
 
@@ -498,22 +500,75 @@ export const ThirdPartyFormDialog: React.FC<ThirdPartyFormDialogProps> = ({
             2. Roles de Operación en el Sistema
           </Typography>
 
-          <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap', mb: 2.5, bgcolor: 'action.hover', p: 1.5, borderRadius: 1.5 }}>
+          <Box
+            sx={{
+              display: 'flex',
+              gap: 3,
+              flexWrap: 'wrap',
+              mb: 2.5,
+              bgcolor: 'action.hover',
+              p: 1.5,
+              borderRadius: 1.5,
+            }}
+          >
             <FormControlLabel
-              control={<Checkbox checked={isCustomer} disabled={lockCustomer} onChange={(e) => setIsCustomer(e.target.checked)} color="primary" />}
-              label={<Typography variant="body2" sx={{ fontWeight: 600 }}>Cliente (Facturación y Cartera)</Typography>}
+              control={
+                <Checkbox
+                  checked={isCustomer}
+                  disabled={lockCustomer}
+                  onChange={(e) => setIsCustomer(e.target.checked)}
+                  color="primary"
+                />
+              }
+              label={
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  Cliente (Facturación y Cartera)
+                </Typography>
+              }
             />
             <FormControlLabel
-              control={<Checkbox checked={isSupplier} disabled={lockSupplier} onChange={(e) => setIsSupplier(e.target.checked)} color="secondary" />}
-              label={<Typography variant="body2" sx={{ fontWeight: 600 }}>Proveedor (Compras y CxP)</Typography>}
+              control={
+                <Checkbox
+                  checked={isSupplier}
+                  disabled={lockSupplier}
+                  onChange={(e) => setIsSupplier(e.target.checked)}
+                  color="secondary"
+                />
+              }
+              label={
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  Proveedor (Compras y CxP)
+                </Typography>
+              }
             />
             <FormControlLabel
-              control={<Checkbox checked={isEmployee} disabled={scoped} onChange={(e) => setIsEmployee(e.target.checked)} color="info" />}
-              label={<Typography variant="body2" sx={{ fontWeight: 600 }}>Empleado / Colaborador</Typography>}
+              control={
+                <Checkbox
+                  checked={isEmployee}
+                  disabled={scoped}
+                  onChange={(e) => setIsEmployee(e.target.checked)}
+                  color="info"
+                />
+              }
+              label={
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  Empleado / Colaborador
+                </Typography>
+              }
             />
             <FormControlLabel
-              control={<Checkbox checked={isOther} disabled={scoped} onChange={(e) => setIsOther(e.target.checked)} />}
-              label={<Typography variant="body2" sx={{ fontWeight: 600 }}>Otro / Beneficiario</Typography>}
+              control={
+                <Checkbox
+                  checked={isOther}
+                  disabled={scoped}
+                  onChange={(e) => setIsOther(e.target.checked)}
+                />
+              }
+              label={
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  Otro / Beneficiario
+                </Typography>
+              }
             />
           </Box>
 

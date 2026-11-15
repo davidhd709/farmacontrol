@@ -1,5 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { CategoryQueryFilters, CreateCategoryPayload, UpdateCategoryPayload } from '@farmacia/contracts';
+import type {
+  CategoryQueryFilters,
+  CreateCategoryPayload,
+  UpdateCategoryPayload,
+} from '@farmacia/contracts';
 import {
   createCategory,
   deactivateCategory,

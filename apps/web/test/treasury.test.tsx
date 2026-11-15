@@ -87,10 +87,7 @@ const mockMovements = {
 };
 
 const renderWithProviders = (
-  permissions: string[] = [
-    SYSTEM_PERMISSIONS.TREASURY_READ,
-    SYSTEM_PERMISSIONS.TREASURY_MANAGE,
-  ],
+  permissions: string[] = [SYSTEM_PERMISSIONS.TREASURY_READ, SYSTEM_PERMISSIONS.TREASURY_MANAGE],
 ) => {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -164,9 +161,7 @@ describe('TreasuryBankAccountsPage (Slice 11.4 Frontend)', () => {
   it('muestra la sección de movimientos de la cuenta seleccionada', async () => {
     renderWithProviders();
 
-    expect(
-      await screen.findByText(/Movimientos: Cuenta Operativa Principal/i),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/Movimientos: Cuenta Operativa Principal/i)).toBeInTheDocument();
     expect(await screen.findByText('Consignación ventas POS')).toBeInTheDocument();
     expect(screen.getByText('TRX-1010')).toBeInTheDocument();
     // Débito positivo sin signo, en la columna Débito
@@ -195,7 +190,9 @@ describe('TreasuryBankAccountsPage (Slice 11.4 Frontend)', () => {
     const newBtn = await screen.findByTestId('new-bank-account-btn');
     fireEvent.click(newBtn);
 
-    expect(await screen.findByRole('heading', { name: 'Nueva Cuenta Bancaria' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Nueva Cuenta Bancaria' }),
+    ).toBeInTheDocument();
 
     const bankInput = screen.getByLabelText(/Banco o Entidad/i);
     fireEvent.change(bankInput, { target: { value: 'Davivienda' } });
@@ -238,7 +235,11 @@ describe('TreasuryBankAccountsPage (Slice 11.4 Frontend)', () => {
     expect(await screen.findByText('Consignación')).toBeInTheDocument();
 
     fireEvent.mouseDown(screen.getByLabelText('Tipo de Movimiento'));
-    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['Todos', 'Débito', 'Crédito']);
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual([
+      'Todos',
+      'Débito',
+      'Crédito',
+    ]);
     fireEvent.click(screen.getByRole('option', { name: 'Crédito' }));
     await waitFor(() =>
       expect(treasuryApi.getBankMovements).toHaveBeenLastCalledWith(

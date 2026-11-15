@@ -73,7 +73,10 @@ describe('PermissionsGuard & @RequirePermissions — RBAC (Integration with Post
     await cleanTestDatabase();
   }, 30000);
 
-  async function createTestUserWithRoles(username: string, roleNames: string[] = []): Promise<{
+  async function createTestUserWithRoles(
+    username: string,
+    roleNames: string[] = [],
+  ): Promise<{
     user: User;
     cookie: string[];
   }> {
@@ -83,7 +86,7 @@ describe('PermissionsGuard & @RequirePermissions — RBAC (Integration with Post
         username: Username.create(username),
         passwordHash,
         isActive: true,
-      })
+      }),
     );
 
     for (const roleName of roleNames) {
@@ -101,21 +104,17 @@ describe('PermissionsGuard & @RequirePermissions — RBAC (Integration with Post
     }
 
     // Login para obtener la cookie de sesión
-    const loginRes = await request(app.getHttpServer())
-      .post('/api/v1/auth/login')
-      .send({
-        username,
-        password: defaultPassword,
-      });
+    const loginRes = await request(app.getHttpServer()).post('/api/v1/auth/login').send({
+      username,
+      password: defaultPassword,
+    });
 
     const cookie = loginRes.headers['set-cookie'] as string[];
     return { user, cookie };
   }
 
   it('debe rechazar con 401 si no hay sesión autenticada', async () => {
-    const res = await request(app.getHttpServer())
-      .get('/api/v1/test-rbac/sales')
-      .expect(401);
+    const res = await request(app.getHttpServer()).get('/api/v1/test-rbac/sales').expect(401);
 
     expect(res.body.statusCode).toBe(401);
   });

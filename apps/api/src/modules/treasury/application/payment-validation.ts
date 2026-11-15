@@ -22,7 +22,10 @@ export function requirePaymentBankAccountId(id: unknown): string {
  * Un movimiento manual de dinero exige el permiso del auxiliar afectado: transferencia →
  * bancos (treasury:manage); efectivo (o sin medio) → caja (cash:movements).
  */
-export function requirePaymentMethodPermission(permissions: readonly string[], method: unknown): void {
+export function requirePaymentMethodPermission(
+  permissions: readonly string[],
+  method: unknown,
+): void {
   const normalized = typeof method === 'string' ? method.trim().toUpperCase() : 'EFECTIVO';
   if (normalized === 'TRANSFERENCIA') {
     if (!permissions.includes(SYSTEM_PERMISSIONS.TREASURY_MANAGE)) {

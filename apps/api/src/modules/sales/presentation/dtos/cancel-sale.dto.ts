@@ -18,7 +18,9 @@ export class CancelSaleValidationPipe implements PipeTransform {
     const record = value as Record<string, unknown>;
 
     if (typeof record.reason !== 'string' || !record.reason.trim()) {
-      throw new BadRequestException('El campo "reason" (motivo de anulación) es obligatorio y no puede ser vacío.');
+      throw new BadRequestException(
+        'El campo "reason" (motivo de anulación) es obligatorio y no puede ser vacío.',
+      );
     }
 
     const trimmed = record.reason.trim();

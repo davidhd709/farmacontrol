@@ -265,11 +265,9 @@ export const AlertModalProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     (options: ConfirmActionOptions) => {
       const op = options.operationType || 'custom';
       const resolvedTitle = options.title || DEFAULT_TITLES[op] || '¿Confirmar acción?';
-      const resolvedConfirmText =
-        options.confirmText || DEFAULT_CONFIRM_TEXTS[op] || 'Confirmar';
+      const resolvedConfirmText = options.confirmText || DEFAULT_CONFIRM_TEXTS[op] || 'Confirmar';
 
-      const isDanger =
-        options.isDanger || op === 'delete' || op === 'annul';
+      const isDanger = options.isDanger || op === 'delete' || op === 'annul';
       const isWarning = op === 'revert';
 
       showAlert({

@@ -25,16 +25,25 @@ const PHARMACY_DEFAULT_PURPOSES: Record<string, AccountingPurpose> = {
 function inferAccountType(code: string): AccountType {
   const first = code.trim().charAt(0);
   switch (first) {
-    case '1': return 'ASSET';
-    case '2': return 'LIABILITY';
-    case '3': return 'EQUITY';
-    case '4': return 'INCOME';
-    case '5': return 'EXPENSE';
+    case '1':
+      return 'ASSET';
+    case '2':
+      return 'LIABILITY';
+    case '3':
+      return 'EQUITY';
+    case '4':
+      return 'INCOME';
+    case '5':
+      return 'EXPENSE';
     case '6':
-    case '7': return 'COST';
-    case '8': return 'ORDER_DEBTOR';
-    case '9': return 'ORDER_CREDITOR';
-    default: return 'ASSET';
+    case '7':
+      return 'COST';
+    case '8':
+      return 'ORDER_DEBTOR';
+    case '9':
+      return 'ORDER_CREDITOR';
+    default:
+      return 'ASSET';
   }
 }
 
@@ -70,7 +79,11 @@ export async function seedPuc(filePath?: string) {
 
   const rawHeaders: string[] = [];
   sheet.getRow(1).eachCell((cell) => {
-    rawHeaders.push(String(cell.value ?? '').trim().toLowerCase());
+    rawHeaders.push(
+      String(cell.value ?? '')
+        .trim()
+        .toLowerCase(),
+    );
   });
 
   const getCell = (row: ExcelJS.Row, index: number): string => {
@@ -130,14 +143,18 @@ export async function seedPuc(filePath?: string) {
   const levelMap = new Map<string, number>();
 
   // Cargar cuentas ya existentes en base de datos si las hubiera
-  const existingAccounts = await prisma.account.findMany({ select: { id: true, code: true, level: true } });
+  const existingAccounts = await prisma.account.findMany({
+    select: { id: true, code: true, level: true },
+  });
   for (const ex of existingAccounts) {
     idMap.set(ex.code, ex.id);
     levelMap.set(ex.code, ex.level);
   }
 
   const pending = rawAccounts.filter((a) => !idMap.has(a.code));
-  console.log(`[Seed PUC] Cuentas a insertar: ${pending.length} (existentes: ${existingAccounts.length})`);
+  console.log(
+    `[Seed PUC] Cuentas a insertar: ${pending.length} (existentes: ${existingAccounts.length})`,
+  );
 
   if (pending.length > 0) {
     const remaining = new Map(pending.map((a) => [a.code, a]));
@@ -190,7 +207,9 @@ export async function seedPuc(filePath?: string) {
       for (const b of batch) {
         remaining.delete(b.code);
       }
-      console.log(`[Seed PUC] Insertado lote de nivel: ${batch.length} cuentas (total insertado: ${insertedTotal})`);
+      console.log(
+        `[Seed PUC] Insertado lote de nivel: ${batch.length} cuentas (total insertado: ${insertedTotal})`,
+      );
     }
   }
 

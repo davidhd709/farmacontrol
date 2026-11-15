@@ -30,9 +30,7 @@ describe('PrismaUserRepository (Integration with PostgreSQL)', () => {
 
     expect(created.id).toBeDefined();
     expect(typeof created.id).toBe('string');
-    expect(created.id).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    );
+    expect(created.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
     expect(created.username.value).toBe('farmaceutico_integration');
     expect(created.isActive).toBe(true);
     expect(created.createdAt).toBeInstanceOf(Date);
@@ -70,7 +68,7 @@ describe('PrismaUserRepository (Integration with PostgreSQL)', () => {
       User.create({
         username: 'user_uno',
         passwordHash: 'hash_uno',
-      })
+      }),
     );
     expect(await repository.count()).toBe(1);
 
@@ -78,7 +76,7 @@ describe('PrismaUserRepository (Integration with PostgreSQL)', () => {
       User.create({
         username: 'user_dos',
         passwordHash: 'hash_dos',
-      })
+      }),
     );
     expect(await repository.count()).toBe(2);
   });
@@ -88,7 +86,7 @@ describe('PrismaUserRepository (Integration with PostgreSQL)', () => {
       User.create({
         username: 'user_a_modificar',
         passwordHash: 'hash_inicial',
-      })
+      }),
     );
 
     created.deactivate();

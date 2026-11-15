@@ -15,29 +15,30 @@ const expense = {
   dueDate: '',
 };
 
-describe.each([
-  ['causación de gasto', expenseSchema, expense],
-])('Esquema de %s', (_name, schema, valid) => {
-  it('acepta el formulario válido sin transformar el importe', () => {
-    expect(schema.parse(valid)).toEqual(valid);
-  });
-  it.each([
-    '',
-    '0',
-    '-0.01',
-    '0.001',
-    '1.999',
-    '1e2',
-    'NaN',
-    'Infinity',
-    '1,20',
-    '90071992547409999',
-    '1000000000000',
-    '00.10',
-  ])('rechaza el importe %s', (amount) => {
-    expect(schema.safeParse({ ...valid, amount }).success).toBe(false);
-  });
-});
+describe.each([['causación de gasto', expenseSchema, expense]])(
+  'Esquema de %s',
+  (_name, schema, valid) => {
+    it('acepta el formulario válido sin transformar el importe', () => {
+      expect(schema.parse(valid)).toEqual(valid);
+    });
+    it.each([
+      '',
+      '0',
+      '-0.01',
+      '0.001',
+      '1.999',
+      '1e2',
+      'NaN',
+      'Infinity',
+      '1,20',
+      '90071992547409999',
+      '1000000000000',
+      '00.10',
+    ])('rechaza el importe %s', (amount) => {
+      expect(schema.safeParse({ ...valid, amount }).success).toBe(false);
+    });
+  },
+);
 
 it('la causación exige categoría, beneficiario, descripción y fecha, sin medio de pago ni estado', () => {
   for (const field of ['categoryId', 'beneficiary', 'description', 'expenseDate']) {

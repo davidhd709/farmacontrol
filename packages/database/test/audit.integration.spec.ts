@@ -42,7 +42,11 @@ describe('Auditoría — Integridad de Persistencia e Inmutabilidad de audit_eve
     expect(event.action).toBe('auth:login_success');
     expect(event.entity).toBe('User');
     expect(event.entityId).toBe(user.id);
-    expect(event.details).toEqual({ ip: '127.0.0.1', userAgent: 'Vitest/Test-Agent', reason: 'normal_login' });
+    expect(event.details).toEqual({
+      ip: '127.0.0.1',
+      userAgent: 'Vitest/Test-Agent',
+      reason: 'normal_login',
+    });
     expect(event.ipAddress).toBe('127.0.0.1');
     expect(event.correlationId).toBe('req-corr-12345');
     expect(event.createdAt).toBeInstanceOf(Date);
@@ -65,7 +69,10 @@ describe('Auditoría — Integridad de Persistencia e Inmutabilidad de audit_eve
     expect(event.userId).toBeNull();
     expect(event.action).toBe('auth:login_failure');
     expect(event.entity).toBe('Auth');
-    expect(event.details).toEqual({ attemptedUsername: 'unknown_user', reason: 'invalid_credentials' });
+    expect(event.details).toEqual({
+      attemptedUsername: 'unknown_user',
+      reason: 'invalid_credentials',
+    });
   });
 
   it('debe rechazar cualquier intento de UPDATE en audit_events mediante el trigger de base de datos', async () => {
@@ -80,7 +87,7 @@ describe('Auditoría — Integridad de Persistencia e Inmutabilidad de audit_eve
 
     // Intento de modificar el evento
     await expect(
-      prisma.$executeRaw`UPDATE "audit_events" SET "action" = 'tampered:action' WHERE "id" = ${event.id}::uuid`
+      prisma.$executeRaw`UPDATE "audit_events" SET "action" = 'tampered:action' WHERE "id" = ${event.id}::uuid`,
     ).rejects.toThrow(/audit_events is an immutable append-only table/i);
 
     // Verificar que el registro permanezca intacto
@@ -102,7 +109,7 @@ describe('Auditoría — Integridad de Persistencia e Inmutabilidad de audit_eve
 
     // Intento de eliminar el evento
     await expect(
-      prisma.$executeRaw`DELETE FROM "audit_events" WHERE "id" = ${event.id}::uuid`
+      prisma.$executeRaw`DELETE FROM "audit_events" WHERE "id" = ${event.id}::uuid`,
     ).rejects.toThrow(/audit_events is an immutable append-only table/i);
 
     // Verificar que el registro aún existe
@@ -134,7 +141,7 @@ describe('Auditoría — Integridad de Persistencia e Inmutabilidad de audit_eve
     await expect(
       prisma.user.delete({
         where: { id: user.id },
-      })
+      }),
     ).rejects.toThrow();
   });
 

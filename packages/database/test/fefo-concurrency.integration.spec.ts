@@ -51,9 +51,7 @@ describe('Motor FEFO con Bloqueo Concurrente en PostgreSQL Real (Integration & C
     // Función que simula la transacción FEFO con SELECT FOR UPDATE
     const simulateFefoSale = async (amount: number, saleIndex: number) => {
       return prisma.$transaction(async (tx) => {
-        const rows = await tx.$queryRaw<
-          Array<{ id: string; current_quantity: number }>
-        >`
+        const rows = await tx.$queryRaw<Array<{ id: string; current_quantity: number }>>`
           SELECT id, current_quantity
           FROM inventory_lots
           WHERE id = ${lot.id}::uuid

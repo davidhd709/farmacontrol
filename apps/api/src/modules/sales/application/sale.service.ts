@@ -639,7 +639,12 @@ export class SaleService {
           // 2.5.1. Cambio de producto: la venta nueva queda vinculada a la devolución
           if (payload.exchangeCreditNoteId) {
             const notes = await tx.$queryRaw<
-              Array<{ customer_id: string; exchange_sale_id: string | null; credit_note_number: string; status: string }>
+              Array<{
+                customer_id: string;
+                exchange_sale_id: string | null;
+                credit_note_number: string;
+                status: string;
+              }>
             >`
               SELECT customer_id, exchange_sale_id, credit_note_number, status
               FROM credit_notes
@@ -852,7 +857,9 @@ export class SaleService {
           }
           // Una nota crédito ya devolvió parte de la venta: anularla reintegraría dos veces
           // Las notas anuladas ya devolvieron su efecto: no impiden anular la venta
-          const creditNotesCount = await tx.creditNote.count({ where: { saleId: id, status: 'CONFIRMADA' } });
+          const creditNotesCount = await tx.creditNote.count({
+            where: { saleId: id, status: 'CONFIRMADA' },
+          });
           if (creditNotesCount > 0) {
             throw new SaleHasCreditNotesException(sale.invoiceNumber, creditNotesCount);
           }

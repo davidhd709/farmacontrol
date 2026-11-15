@@ -42,7 +42,7 @@ export function validateTestDatabaseUrl(url: string): void {
   const dbName = extractDatabaseName(url);
   if (!dbName || (!dbName.endsWith('_test') && dbName !== 'farmacia_test')) {
     throw new Error(
-      `[Seguridad] Operación de pruebas rechazada: la base de datos configurada "${dbName || 'desconocida'}" no es una base de datos de pruebas válida (debe llamarse 'farmacia_test' o terminar en '_test').`
+      `[Seguridad] Operación de pruebas rechazada: la base de datos configurada "${dbName || 'desconocida'}" no es una base de datos de pruebas válida (debe llamarse 'farmacia_test' o terminar en '_test').`,
     );
   }
 }
@@ -69,7 +69,7 @@ export function resolveDatabaseUrl(options?: ResolveDatabaseUrlOptions): string 
     const testUrl = process.env.DATABASE_TEST_URL;
     if (!testUrl) {
       throw new Error(
-        'DATABASE_TEST_URL no está configurada. En entorno de testing es obligatorio definir DATABASE_TEST_URL (no se permite fallback a DATABASE_URL).'
+        'DATABASE_TEST_URL no está configurada. En entorno de testing es obligatorio definir DATABASE_TEST_URL (no se permite fallback a DATABASE_URL).',
       );
     }
     validateTestDatabaseUrl(testUrl);
@@ -79,7 +79,7 @@ export function resolveDatabaseUrl(options?: ResolveDatabaseUrlOptions): string 
   const devUrl = process.env.DATABASE_URL;
   if (!devUrl) {
     throw new Error(
-      'DATABASE_URL no está configurada. Por favor defina la variable en el entorno o en un archivo .env basado en .env.example'
+      'DATABASE_URL no está configurada. Por favor defina la variable en el entorno o en un archivo .env basado en .env.example',
     );
   }
   return devUrl;
@@ -112,10 +112,14 @@ function sanitizeErrorMessage(message: string): string {
  * Comprueba de forma segura la conectividad real con PostgreSQL sin modificar datos.
  * Ejecuta una consulta canónica `SELECT 1` y comprueba la base de datos actual.
  */
-export async function checkDatabaseConnection(client: PrismaClient = prisma): Promise<DatabaseCheckResult> {
+export async function checkDatabaseConnection(
+  client: PrismaClient = prisma,
+): Promise<DatabaseCheckResult> {
   const start = Date.now();
   try {
-    const queryResult = await client.$queryRaw<Array<{ connection_status: number; current_db: string }>>`
+    const queryResult = await client.$queryRaw<
+      Array<{ connection_status: number; current_db: string }>
+    >`
       SELECT 1 as connection_status, current_database() as current_db
     `;
     const durationMs = Date.now() - start;
@@ -154,13 +158,13 @@ export async function cleanTestDatabase(client: PrismaClient = prisma): Promise<
 
   if (!currentDb || (!currentDb.endsWith('_test') && currentDb !== 'farmacia_test')) {
     throw new Error(
-      `[Seguridad] Limpieza abortada: la base de datos actual "${currentDb}" no está autorizada para operaciones destructivas de test.`
+      `[Seguridad] Limpieza abortada: la base de datos actual "${currentDb}" no está autorizada para operaciones destructivas de test.`,
     );
   }
   const runId = process.env[TEST_RUN_ID_ENV];
   if (!runId || rows[0]?.marker !== testRunMarker(runId)) {
     throw new Error(
-      `[Seguridad] Limpieza abortada: la base "${currentDb}" no es la base temporal de esta ejecución de pruebas.`
+      `[Seguridad] Limpieza abortada: la base "${currentDb}" no es la base temporal de esta ejecución de pruebas.`,
     );
   }
 
@@ -168,4 +172,3 @@ export async function cleanTestDatabase(client: PrismaClient = prisma): Promise<
   // Los consecutivos de recibos y egresos vuelven a empezar en cada prueba
   await client.$executeRaw`UPDATE "treasury_document_sequences" SET "last_value" = 0`;
 }
-

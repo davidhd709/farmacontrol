@@ -15,7 +15,14 @@ import { TreasuryVouchersController } from './presentation/treasury-vouchers.con
  * tesorería.
  */
 @Module({
-  imports: [IdentityModule, AccountingModule, CashModule, ReceivablesModule, PayablesModule, ExpensesModule],
+  imports: [
+    IdentityModule,
+    AccountingModule,
+    CashModule,
+    ReceivablesModule,
+    PayablesModule,
+    ExpensesModule,
+  ],
   controllers: [TreasuryVouchersController],
   providers: [TreasuryVouchersService, TreasuryDocumentsService],
 })

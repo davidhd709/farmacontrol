@@ -113,7 +113,6 @@ export function TreasuryBankAccountsPage() {
     setAccountDialogOpen(true);
   };
 
-
   const handleSaveAccount = async (data: CreateBankAccountDto | UpdateBankAccountDto) => {
     if (editingAccount) {
       await updateAccountMutation.mutateAsync({
@@ -126,7 +125,6 @@ export function TreasuryBankAccountsPage() {
       setToastMsg('Cuenta bancaria registrada exitosamente.');
     }
   };
-
 
   const totalBalanceNumber = parseFloat(summary?.totalBalance ?? '0');
 
@@ -418,9 +416,7 @@ export function TreasuryBankAccountsPage() {
 
                     return (
                       <TableRow key={mov.id} hover>
-                        <TableCell>
-                          {formatDateTime(mov.movementDate)}
-                        </TableCell>
+                        <TableCell>{formatDateTime(mov.movementDate)}</TableCell>
                         <TableCell>
                           <Chip
                             label={BANK_MOVEMENT_TYPE_LABELS[mov.movementType] ?? mov.movementType}

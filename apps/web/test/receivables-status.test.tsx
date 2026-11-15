@@ -78,8 +78,24 @@ function mockApi() {
       movements:
         r.status === 'ANULADA'
           ? [
-              { date: r.createdAt, type: 'CARGO', documentNumber: r.invoiceNumber ?? null, description: 'Venta a crédito', charge: String(r.totalAmount), credit: '0.00', balance: String(r.totalAmount) },
-              { date: r.updatedAt, type: 'ANULACION', documentNumber: r.invoiceNumber ?? null, description: 'Venta anulada', charge: '0.00', credit: String(r.totalAmount), balance: '0.00' },
+              {
+                date: r.createdAt,
+                type: 'CARGO',
+                documentNumber: r.invoiceNumber ?? null,
+                description: 'Venta a crédito',
+                charge: String(r.totalAmount),
+                credit: '0.00',
+                balance: String(r.totalAmount),
+              },
+              {
+                date: r.updatedAt,
+                type: 'ANULACION',
+                documentNumber: r.invoiceNumber ?? null,
+                description: 'Venta anulada',
+                charge: '0.00',
+                credit: String(r.totalAmount),
+                balance: '0.00',
+              },
             ]
           : [],
     };
@@ -100,9 +116,7 @@ const renderPage = () => {
   return render(
     <ThemeProvider theme={appTheme}>
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
-          {withAuth(<ReceivablesPage />)}
-        </MemoryRouter>
+        <MemoryRouter>{withAuth(<ReceivablesPage />)}</MemoryRouter>
       </QueryClientProvider>
     </ThemeProvider>,
   );

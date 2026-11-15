@@ -1,8 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import {
-  PASSWORD_HASHER_PORT,
-  PasswordHasherPort,
-} from '../ports/password-hasher.port';
+import { PASSWORD_HASHER_PORT, PasswordHasherPort } from '../ports/password-hasher.port';
 import { WeakPasswordException } from '../../domain/exceptions/identity.exceptions';
 
 @Injectable()
@@ -12,7 +9,7 @@ export class PasswordService {
 
   constructor(
     @Inject(PASSWORD_HASHER_PORT)
-    private readonly passwordHasher: PasswordHasherPort
+    private readonly passwordHasher: PasswordHasherPort,
   ) {}
 
   /**
@@ -32,38 +29,30 @@ export class PasswordService {
 
     if (plainPassword.length < PasswordService.MIN_PASSWORD_LENGTH) {
       throw new WeakPasswordException(
-        `La contraseña debe tener al menos ${PasswordService.MIN_PASSWORD_LENGTH} caracteres.`
+        `La contraseña debe tener al menos ${PasswordService.MIN_PASSWORD_LENGTH} caracteres.`,
       );
     }
 
     if (plainPassword.length > PasswordService.MAX_PASSWORD_LENGTH) {
       throw new WeakPasswordException(
-        `La contraseña no puede exceder los ${PasswordService.MAX_PASSWORD_LENGTH} caracteres.`
+        `La contraseña no puede exceder los ${PasswordService.MAX_PASSWORD_LENGTH} caracteres.`,
       );
     }
 
     if (!/[a-z]/.test(plainPassword)) {
-      throw new WeakPasswordException(
-        'La contraseña debe incluir al menos una letra minúscula.'
-      );
+      throw new WeakPasswordException('La contraseña debe incluir al menos una letra minúscula.');
     }
 
     if (!/[A-Z]/.test(plainPassword)) {
-      throw new WeakPasswordException(
-        'La contraseña debe incluir al menos una letra mayúscula.'
-      );
+      throw new WeakPasswordException('La contraseña debe incluir al menos una letra mayúscula.');
     }
 
     if (!/[0-9]/.test(plainPassword)) {
-      throw new WeakPasswordException(
-        'La contraseña debe incluir al menos un número.'
-      );
+      throw new WeakPasswordException('La contraseña debe incluir al menos un número.');
     }
 
     if (!/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?~`]/.test(plainPassword)) {
-      throw new WeakPasswordException(
-        'La contraseña debe incluir al menos un carácter especial.'
-      );
+      throw new WeakPasswordException('La contraseña debe incluir al menos un carácter especial.');
     }
   }
 
@@ -78,10 +67,7 @@ export class PasswordService {
   /**
    * Compara una contraseña candidata en texto plano contra un hash almacenado.
    */
-  public async verifyPassword(
-    plainPassword: string,
-    hash: string
-  ): Promise<boolean> {
+  public async verifyPassword(plainPassword: string, hash: string): Promise<boolean> {
     if (!plainPassword || !hash) {
       return false;
     }

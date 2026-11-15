@@ -135,7 +135,9 @@ export function ExpensesWithoutSupplierDialog({
                   <TableBody>
                     {list.data.map((e) => (
                       <TableRow key={e.id} selected={selected?.id === e.id}>
-                        <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatDate(e.expenseDate)}</TableCell>
+                        <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                          {formatDate(e.expenseDate)}
+                        </TableCell>
                         <TableCell>
                           {e.description}
                           <Typography

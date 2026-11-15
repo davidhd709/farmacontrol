@@ -26,11 +26,7 @@ import {
 } from '@mui/material';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { HomeBackButton } from '../../../components/HomeBackButton';
-import {
-  fetchBackupStatus,
-  triggerCreateBackup,
-  triggerVerifyBackup,
-} from '../api/backups.api';
+import { fetchBackupStatus, triggerCreateBackup, triggerVerifyBackup } from '../api/backups.api';
 import { formatDateTime } from '../../../utils/date-format';
 
 export function BackupManagementPage() {
@@ -41,7 +37,12 @@ export function BackupManagementPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [verifyingFile, setVerifyingFile] = useState<string | null>(null);
 
-  const { data: status, isLoading, isError, refetch } = useQuery({
+  const {
+    data: status,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery({
     queryKey: ['backup-status'],
     queryFn: fetchBackupStatus,
   });
@@ -111,7 +112,8 @@ export function BackupManagementPage() {
               Copias de Seguridad y Resiliencia
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Control de continuidad operativa, monitoreo de respaldos periódicos y verificación criptográfica de integridad.
+              Control de continuidad operativa, monitoreo de respaldos periódicos y verificación
+              criptográfica de integridad.
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
@@ -152,7 +154,10 @@ export function BackupManagementPage() {
             {status.isHealthyRpo ? (
               <>
                 🟢 <strong>RPO en Regla:</strong> La última copia de seguridad se generó hace{' '}
-                {status.hoursSinceLastBackup !== null ? `${status.hoursSinceLastBackup} horas` : 'instantes'}. Cumple con la política de continuidad de la farmacia.
+                {status.hoursSinceLastBackup !== null
+                  ? `${status.hoursSinceLastBackup} horas`
+                  : 'instantes'}
+                . Cumple con la política de continuidad de la farmacia.
               </>
             ) : (
               <>
@@ -169,7 +174,11 @@ export function BackupManagementPage() {
         <Box
           sx={{
             display: 'grid',
-            gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))', md: 'repeat(4, minmax(0, 1fr))' },
+            gridTemplateColumns: {
+              xs: 'minmax(0, 1fr)',
+              sm: 'repeat(2, minmax(0, 1fr))',
+              md: 'repeat(4, minmax(0, 1fr))',
+            },
             gap: 2,
           }}
         >
@@ -208,9 +217,7 @@ export function BackupManagementPage() {
                 ÚLTIMO RESPALDO
               </Typography>
               <Typography variant="body1" sx={{ fontWeight: 700, mt: 0.5 }}>
-                {status?.lastBackupAt
-                  ? formatDateTime(status.lastBackupAt)
-                  : 'Sin registros'}
+                {status?.lastBackupAt ? formatDateTime(status.lastBackupAt) : 'Sin registros'}
               </Typography>
               <Typography variant="caption" color="text.secondary">
                 {formatBytes(status?.lastBackupSizeBytes)}
@@ -247,7 +254,16 @@ export function BackupManagementPage() {
 
         {/* Tabla de Copias de Seguridad */}
         <Paper variant="outlined">
-          <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Box
+            sx={{
+              p: 2,
+              borderBottom: 1,
+              borderColor: 'divider',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}
+          >
             <Typography variant="h6" sx={{ fontWeight: 700 }}>
               Historial de Copias de Seguridad Disponibles
             </Typography>
@@ -262,10 +278,16 @@ export function BackupManagementPage() {
                 <TableRow>
                   <TableCell sx={{ fontWeight: 700 }}>Archivo de Respaldo</TableCell>
                   <TableCell sx={{ fontWeight: 700 }}>Fecha y Hora</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 700 }}>Tamaño</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700 }}>
+                    Tamaño
+                  </TableCell>
                   <TableCell sx={{ fontWeight: 700 }}>Suma SHA-256</TableCell>
-                  <TableCell align="center" sx={{ fontWeight: 700 }}>Integridad</TableCell>
-                  <TableCell align="center" sx={{ fontWeight: 700 }}>Acciones</TableCell>
+                  <TableCell align="center" sx={{ fontWeight: 700 }}>
+                    Integridad
+                  </TableCell>
+                  <TableCell align="center" sx={{ fontWeight: 700 }}>
+                    Acciones
+                  </TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -284,7 +306,9 @@ export function BackupManagementPage() {
                 ) : !status?.items.length ? (
                   <TableRow>
                     <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
-                      <Typography color="text.secondary">No hay copias de seguridad registradas en el directorio.</Typography>
+                      <Typography color="text.secondary">
+                        No hay copias de seguridad registradas en el directorio.
+                      </Typography>
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -293,13 +317,14 @@ export function BackupManagementPage() {
                       <TableCell sx={{ fontWeight: 600, fontFamily: 'monospace' }}>
                         {row.filename}
                       </TableCell>
-                      <TableCell>
-                        {formatDateTime(row.createdAt)}
-                      </TableCell>
+                      <TableCell>{formatDateTime(row.createdAt)}</TableCell>
                       <TableCell align="right">{formatBytes(row.sizeBytes)}</TableCell>
                       <TableCell>
                         <Tooltip title={row.sha256}>
-                          <Typography variant="caption" sx={{ fontFamily: 'monospace', cursor: 'help' }}>
+                          <Typography
+                            variant="caption"
+                            sx={{ fontFamily: 'monospace', cursor: 'help' }}
+                          >
                             {row.sha256 !== 'N/A' ? `${row.sha256.substring(0, 16)}…` : 'N/A'}
                           </Typography>
                         </Tooltip>
@@ -337,9 +362,20 @@ export function BackupManagementPage() {
             📖 Protocolo Rápido de Recuperación ante Desastres (DR)
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-            En caso de corrupción o pérdida de datos en la base principal, el procedimiento de restauración debe ejecutarse siguiendo estrictamente el runbook técnico en <code>docs/runbooks/backup-restore.md</code>:
+            En caso de corrupción o pérdida de datos en la base principal, el procedimiento de
+            restauración debe ejecutarse siguiendo estrictamente el runbook técnico en{' '}
+            <code>docs/runbooks/backup-restore.md</code>:
           </Typography>
-          <Box component="pre" sx={{ bgcolor: 'action.hover', p: 1.5, borderRadius: 1, fontSize: '0.85rem', overflowX: 'auto' }}>
+          <Box
+            component="pre"
+            sx={{
+              bgcolor: 'action.hover',
+              p: 1.5,
+              borderRadius: 1,
+              fontSize: '0.85rem',
+              overflowX: 'auto',
+            }}
+          >
             {`# 1. Verificar integridad del volcado antes de restaurar:
 ./infra/scripts/verify-backup.sh infra/backups/<archivo.dump>
 
@@ -353,7 +389,9 @@ export function BackupManagementPage() {
           <DialogTitle sx={{ fontWeight: 700 }}>¿Generar nueva copia de seguridad?</DialogTitle>
           <DialogContent>
             <DialogContentText>
-              Esta acción extraerá un volcado lógico consistente de PostgreSQL mediante <code>pg_dump</code>, calculará su checksum SHA-256 y validará su integridad física inmediatamente.
+              Esta acción extraerá un volcado lógico consistente de PostgreSQL mediante{' '}
+              <code>pg_dump</code>, calculará su checksum SHA-256 y validará su integridad física
+              inmediatamente.
             </DialogContentText>
           </DialogContent>
           <DialogActions sx={{ p: 2 }}>

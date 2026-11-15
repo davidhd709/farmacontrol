@@ -102,11 +102,7 @@ function renderPresentationsDialog(
     <ThemeProvider theme={appTheme}>
       <QueryClientProvider client={queryClient}>
         <AuthContext.Provider value={authContext}>
-          <ProductPresentationsDialog
-            open={true}
-            onClose={onClose}
-            product={product}
-          />
+          <ProductPresentationsDialog open={true} onClose={onClose} product={product} />
         </AuthContext.Provider>
       </QueryClientProvider>
     </ThemeProvider>,
@@ -119,15 +115,11 @@ describe('Gestión de Presentaciones Comerciales y Factores de Conversión (UX-0
   });
 
   it('muestra la información del producto, unidad base y la lista de presentaciones comerciales', async () => {
-    vi.spyOn(presentationsApi, 'fetchProductPresentations').mockResolvedValue(
-      mockPresentations,
-    );
+    vi.spyOn(presentationsApi, 'fetchProductPresentations').mockResolvedValue(mockPresentations);
 
     renderPresentationsDialog();
 
-    expect(
-      screen.getByText('Presentaciones Comerciales y Equivalencias'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Presentaciones Comerciales y Equivalencias')).toBeInTheDocument();
     expect(screen.getByText(/Amoxicilina 500mg/)).toBeInTheDocument();
     expect(screen.getByText('AMOX-500')).toBeInTheDocument();
 
@@ -145,25 +137,21 @@ describe('Gestión de Presentaciones Comerciales y Factores de Conversión (UX-0
   });
 
   it('permite registrar una nueva presentación comercial con factor de conversión entero (RN-004)', async () => {
-    vi.spyOn(presentationsApi, 'fetchProductPresentations').mockResolvedValue(
-      mockPresentations,
-    );
+    vi.spyOn(presentationsApi, 'fetchProductPresentations').mockResolvedValue(mockPresentations);
 
-    const createSpy = vi
-      .spyOn(presentationsApi, 'createProductPresentation')
-      .mockResolvedValue({
-        id: 'pres-3',
-        productId: 'prod-amox',
-        name: 'Blíster x 10',
-        barcode: '7705555444433',
-        conversionFactor: 10,
-        price: '11000.00',
-        cost: '6500.00',
-        isDefault: false,
-        isActive: true,
-        createdAt: '2026-09-02T10:00:00.000Z',
-        updatedAt: '2026-09-02T10:00:00.000Z',
-      });
+    const createSpy = vi.spyOn(presentationsApi, 'createProductPresentation').mockResolvedValue({
+      id: 'pres-3',
+      productId: 'prod-amox',
+      name: 'Blíster x 10',
+      barcode: '7705555444433',
+      conversionFactor: 10,
+      price: '11000.00',
+      cost: '6500.00',
+      isDefault: false,
+      isActive: true,
+      createdAt: '2026-09-02T10:00:00.000Z',
+      updatedAt: '2026-09-02T10:00:00.000Z',
+    });
 
     renderPresentationsDialog();
 
@@ -174,9 +162,7 @@ describe('Gestión de Presentaciones Comerciales y Factores de Conversión (UX-0
     fireEvent.click(screen.getByTestId('add-presentation-btn'));
 
     // Esperar a que abra el diálogo secundario
-    expect(
-      screen.getByText('Nueva Presentación Comercial'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Nueva Presentación Comercial')).toBeInTheDocument();
 
     // Llenar campos
     const nameInput = screen.getByLabelText(/Nombre de la presentación/i);
@@ -211,9 +197,7 @@ describe('Gestión de Presentaciones Comerciales y Factores de Conversión (UX-0
   });
 
   it('valida que el factor de conversión sea mayor o igual a 1 y entero', async () => {
-    vi.spyOn(presentationsApi, 'fetchProductPresentations').mockResolvedValue(
-      mockPresentations,
-    );
+    vi.spyOn(presentationsApi, 'fetchProductPresentations').mockResolvedValue(mockPresentations);
 
     renderPresentationsDialog();
 
@@ -240,9 +224,7 @@ describe('Gestión de Presentaciones Comerciales y Factores de Conversión (UX-0
   });
 
   it('permite inactivar una presentación comercial secundaria', async () => {
-    vi.spyOn(presentationsApi, 'fetchProductPresentations').mockResolvedValue(
-      mockPresentations,
-    );
+    vi.spyOn(presentationsApi, 'fetchProductPresentations').mockResolvedValue(mockPresentations);
 
     const deactivateSpy = vi
       .spyOn(presentationsApi, 'deactivateProductPresentation')
@@ -273,9 +255,7 @@ describe('Gestión de Presentaciones Comerciales y Factores de Conversión (UX-0
   });
 
   it('ejecuta el simulador de conversión matemática exacta (RN-004)', async () => {
-    vi.spyOn(presentationsApi, 'fetchProductPresentations').mockResolvedValue(
-      mockPresentations,
-    );
+    vi.spyOn(presentationsApi, 'fetchProductPresentations').mockResolvedValue(mockPresentations);
 
     const convertSpy = vi
       .spyOn(presentationsApi, 'convertProductPresentationUnits')
@@ -291,9 +271,7 @@ describe('Gestión de Presentaciones Comerciales y Factores de Conversión (UX-0
     renderPresentationsDialog();
 
     await waitFor(() => {
-      expect(
-        screen.getByText(/Calculadora de Equivalencia/i),
-      ).toBeInTheDocument();
+      expect(screen.getByText(/Calculadora de Equivalencia/i)).toBeInTheDocument();
     });
 
     const calcBtn = screen.getByTestId('calculate-conversion-btn');
@@ -307,14 +285,14 @@ describe('Gestión de Presentaciones Comerciales y Factores de Conversión (UX-0
     });
 
     await waitFor(() => {
-      expect(screen.getByText(/Resultado: 1 Unidad individual = 5 UNIDAD\(s\)/i)).toBeInTheDocument();
+      expect(
+        screen.getByText(/Resultado: 1 Unidad individual = 5 UNIDAD\(s\)/i),
+      ).toBeInTheDocument();
     });
   });
 
   it('oculta botones de gestión si el usuario solo tiene permiso de lectura', async () => {
-    vi.spyOn(presentationsApi, 'fetchProductPresentations').mockResolvedValue(
-      mockPresentations,
-    );
+    vi.spyOn(presentationsApi, 'fetchProductPresentations').mockResolvedValue(mockPresentations);
 
     const readOnlyAuth = createMockAuthContext([SYSTEM_PERMISSIONS.PRODUCTS_READ]);
     renderPresentationsDialog(mockProduct, vi.fn(), readOnlyAuth);

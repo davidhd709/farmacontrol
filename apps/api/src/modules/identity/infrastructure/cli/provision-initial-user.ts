@@ -18,10 +18,10 @@ export async function runProvisionInitialUser(): Promise<void> {
 
   if (!username || !password) {
     console.error(
-      '[Aprovisionamiento] ERROR: Debe configurar las variables de entorno INITIAL_ADMIN_USERNAME e INITIAL_ADMIN_PASSWORD para crear el usuario inicial.'
+      '[Aprovisionamiento] ERROR: Debe configurar las variables de entorno INITIAL_ADMIN_USERNAME e INITIAL_ADMIN_PASSWORD para crear el usuario inicial.',
     );
     console.error(
-      '[Aprovisionamiento] Ejemplo: INITIAL_ADMIN_USERNAME=admin_farmacia INITIAL_ADMIN_PASSWORD="MiPasswordSuperSegura#2026" pnpm db:seed:admin'
+      '[Aprovisionamiento] Ejemplo: INITIAL_ADMIN_USERNAME=admin_farmacia INITIAL_ADMIN_PASSWORD="MiPasswordSuperSegura#2026" pnpm db:seed:admin',
     );
     process.exit(1);
   }
@@ -29,14 +29,11 @@ export async function runProvisionInitialUser(): Promise<void> {
   const passwordHasher = new Argon2PasswordHasherAdapter();
   const passwordService = new PasswordService(passwordHasher);
   const userRepository = new PrismaUserRepository();
-  const provisioningService = new UserProvisioningService(
-    userRepository,
-    passwordService
-  );
+  const provisioningService = new UserProvisioningService(userRepository, passwordService);
 
   try {
     console.log(
-      `[Aprovisionamiento] Iniciando creación controlada de usuario inicial: "${username.trim().toLowerCase()}"...`
+      `[Aprovisionamiento] Iniciando creación controlada de usuario inicial: "${username.trim().toLowerCase()}"...`,
     );
 
     // 1. Asegurar la existencia de roles y permisos base
@@ -64,11 +61,9 @@ export async function runProvisionInitialUser(): Promise<void> {
       },
     });
 
+    console.log(`[Aprovisionamiento] ✅ Usuario inicial creado exitosamente con ID: ${user.id}`);
     console.log(
-      `[Aprovisionamiento] ✅ Usuario inicial creado exitosamente con ID: ${user.id}`
-    );
-    console.log(
-      `[Aprovisionamiento] ✅ Rol de Super Administrador (${adminRole.name}) asignado con éxito`
+      `[Aprovisionamiento] ✅ Rol de Super Administrador (${adminRole.name}) asignado con éxito`,
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

@@ -128,7 +128,9 @@ export class PrismaAuditEventRepository implements AuditEventRepositoryPort {
     };
   }
 
-  public async findPaginated(filters: AuditQueryFilters): Promise<PaginatedResponse<AuditEventDto>> {
+  public async findPaginated(
+    filters: AuditQueryFilters,
+  ): Promise<PaginatedResponse<AuditEventDto>> {
     const page = Math.max(1, Number(filters.page) || 1);
     const pageSize = Math.min(100, Math.max(1, Number(filters.pageSize) || 20));
     const skip = (page - 1) * pageSize;

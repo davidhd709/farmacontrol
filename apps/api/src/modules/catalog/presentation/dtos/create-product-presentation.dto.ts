@@ -40,8 +40,15 @@ export class CreateProductPresentationValidationPipe implements PipeTransform {
 
     // unitOfMeasureId
     let unitOfMeasureId: string | null = null;
-    if (record.unitOfMeasureId !== undefined && record.unitOfMeasureId !== null && record.unitOfMeasureId !== '') {
-      if (typeof record.unitOfMeasureId !== 'string' || !UUID_REGEX.test(record.unitOfMeasureId.trim())) {
+    if (
+      record.unitOfMeasureId !== undefined &&
+      record.unitOfMeasureId !== null &&
+      record.unitOfMeasureId !== ''
+    ) {
+      if (
+        typeof record.unitOfMeasureId !== 'string' ||
+        !UUID_REGEX.test(record.unitOfMeasureId.trim())
+      ) {
         throw new BadRequestException('El campo "unitOfMeasureId" debe ser un UUID válido.');
       }
       unitOfMeasureId = record.unitOfMeasureId.trim();
@@ -49,9 +56,18 @@ export class CreateProductPresentationValidationPipe implements PipeTransform {
 
     // containedPresentationId
     let containedPresentationId: string | null = null;
-    if (record.containedPresentationId !== undefined && record.containedPresentationId !== null && record.containedPresentationId !== '') {
-      if (typeof record.containedPresentationId !== 'string' || !UUID_REGEX.test(record.containedPresentationId.trim())) {
-        throw new BadRequestException('El campo "containedPresentationId" debe ser un UUID válido.');
+    if (
+      record.containedPresentationId !== undefined &&
+      record.containedPresentationId !== null &&
+      record.containedPresentationId !== ''
+    ) {
+      if (
+        typeof record.containedPresentationId !== 'string' ||
+        !UUID_REGEX.test(record.containedPresentationId.trim())
+      ) {
+        throw new BadRequestException(
+          'El campo "containedPresentationId" debe ser un UUID válido.',
+        );
       }
       containedPresentationId = record.containedPresentationId.trim();
     }
@@ -62,7 +78,9 @@ export class CreateProductPresentationValidationPipe implements PipeTransform {
       name = record.name.trim();
     }
     if (name && (name.length < 1 || name.length > 100)) {
-      throw new BadRequestException('El nombre de la presentación debe tener entre 1 y 100 caracteres.');
+      throw new BadRequestException(
+        'El nombre de la presentación debe tener entre 1 y 100 caracteres.',
+      );
     }
 
     // barcode
@@ -87,7 +105,9 @@ export class CreateProductPresentationValidationPipe implements PipeTransform {
     if (record.conversionFactor !== undefined && record.conversionFactor !== null) {
       const factorNum = Number(record.conversionFactor);
       if (isNaN(factorNum) || !Number.isInteger(factorNum) || factorNum <= 0) {
-        throw new BadRequestException('El factor de conversión debe ser un número entero estrictamente mayor a 0.');
+        throw new BadRequestException(
+          'El factor de conversión debe ser un número entero estrictamente mayor a 0.',
+        );
       }
       conversionFactor = factorNum;
       quantityContained = factorNum;
@@ -107,9 +127,12 @@ export class CreateProductPresentationValidationPipe implements PipeTransform {
     if (record.price === undefined || record.price === null) {
       throw new BadRequestException('El campo "price" es obligatorio.');
     }
-    const priceNum = typeof record.price === 'number' ? record.price : parseFloat(String(record.price));
+    const priceNum =
+      typeof record.price === 'number' ? record.price : parseFloat(String(record.price));
     if (isNaN(priceNum) || priceNum < 0) {
-      throw new BadRequestException('El precio de la presentación debe ser un número mayor o igual a 0.');
+      throw new BadRequestException(
+        'El precio de la presentación debe ser un número mayor o igual a 0.',
+      );
     }
 
     // cost
@@ -117,15 +140,20 @@ export class CreateProductPresentationValidationPipe implements PipeTransform {
     if (record.cost !== undefined && record.cost !== null) {
       const num = typeof record.cost === 'number' ? record.cost : parseFloat(String(record.cost));
       if (isNaN(num) || num < 0) {
-        throw new BadRequestException('El costo de la presentación debe ser un número mayor o igual a 0.');
+        throw new BadRequestException(
+          'El costo de la presentación debe ser un número mayor o igual a 0.',
+        );
       }
       cost = num;
     }
 
     const isDefault = record.isDefault !== undefined ? Boolean(record.isDefault) : false;
-    const isDefaultPurchase = record.isDefaultPurchase !== undefined ? Boolean(record.isDefaultPurchase) : false;
-    const isDefaultSale = record.isDefaultSale !== undefined ? Boolean(record.isDefaultSale) : isDefault;
-    const purchaseEnabled = record.purchaseEnabled !== undefined ? Boolean(record.purchaseEnabled) : true;
+    const isDefaultPurchase =
+      record.isDefaultPurchase !== undefined ? Boolean(record.isDefaultPurchase) : false;
+    const isDefaultSale =
+      record.isDefaultSale !== undefined ? Boolean(record.isDefaultSale) : isDefault;
+    const purchaseEnabled =
+      record.purchaseEnabled !== undefined ? Boolean(record.purchaseEnabled) : true;
     const saleEnabled = record.saleEnabled !== undefined ? Boolean(record.saleEnabled) : true;
 
     return {

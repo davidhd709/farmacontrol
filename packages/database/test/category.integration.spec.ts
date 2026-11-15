@@ -24,9 +24,7 @@ describe('Category — Integridad de Persistencia en PostgreSQL (Integration)', 
     });
 
     expect(category.id).toBeDefined();
-    expect(category.id).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    );
+    expect(category.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
     expect(category.name).toBe('Analgésicos');
     expect(category.description).toBe('Medicamentos para el alivio del dolor y la inflamación');
     expect(category.isActive).toBe(true);
@@ -46,7 +44,7 @@ describe('Category — Integridad de Persistencia en PostgreSQL (Integration)', 
         data: {
           name: 'Antibióticos',
         },
-      })
+      }),
     ).rejects.toThrow();
   });
 
@@ -62,7 +60,7 @@ describe('Category — Integridad de Persistencia en PostgreSQL (Integration)', 
         data: {
           name: 'vitaminas',
         },
-      })
+      }),
     ).rejects.toThrow();
   });
 

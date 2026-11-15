@@ -16,18 +16,22 @@ import {
 export class UnitOfMeasureService {
   constructor(
     @Inject(UNIT_OF_MEASURE_REPOSITORY)
-    private readonly repository: UnitOfMeasureRepositoryPort
+    private readonly repository: UnitOfMeasureRepositoryPort,
   ) {}
 
   public async create(payload: CreateUnitOfMeasurePayload): Promise<UnitOfMeasure> {
     const existingCode = await this.repository.findByCode(payload.code);
     if (existingCode) {
-      throw new ConflictException(`Ya existe una unidad de medida con el código '${payload.code.toUpperCase()}'.`);
+      throw new ConflictException(
+        `Ya existe una unidad de medida con el código '${payload.code.toUpperCase()}'.`,
+      );
     }
 
     const existingName = await this.repository.findByName(payload.name);
     if (existingName) {
-      throw new ConflictException(`Ya existe una unidad de medida con el nombre '${payload.name}'.`);
+      throw new ConflictException(
+        `Ya existe una unidad de medida con el nombre '${payload.name}'.`,
+      );
     }
 
     const unit = UnitOfMeasure.create({
@@ -49,7 +53,9 @@ export class UnitOfMeasureService {
     if (payload.name && payload.name.trim().toLowerCase() !== unit.name.toLowerCase()) {
       const existingName = await this.repository.findByName(payload.name);
       if (existingName && existingName.id !== id) {
-        throw new ConflictException(`Ya existe otra unidad de medida con el nombre '${payload.name}'.`);
+        throw new ConflictException(
+          `Ya existe otra unidad de medida con el nombre '${payload.name}'.`,
+        );
       }
     }
 
@@ -71,7 +77,9 @@ export class UnitOfMeasureService {
     return unit;
   }
 
-  public async list(filters: UnitOfMeasureQueryFilters = {}): Promise<PaginatedResponse<UnitOfMeasureDto>> {
+  public async list(
+    filters: UnitOfMeasureQueryFilters = {},
+  ): Promise<PaginatedResponse<UnitOfMeasureDto>> {
     const { items, total } = await this.repository.findAll(filters);
     const page = filters.page ?? 1;
     const pageSize = filters.pageSize ?? 50;

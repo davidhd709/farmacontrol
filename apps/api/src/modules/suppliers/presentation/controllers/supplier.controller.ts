@@ -105,7 +105,9 @@ export class SupplierController {
         !user.permissions.includes(SYSTEM_PERMISSIONS.THIRD_PARTIES_DEACTIVATE) &&
         (await this.supplierService.getSupplierById(id)).isActive !== dto.isActive
       ) {
-        throw new ForbiddenException('Solo un administrador puede desactivar o reactivar proveedores.');
+        throw new ForbiddenException(
+          'Solo un administrador puede desactivar o reactivar proveedores.',
+        );
       }
       const supplier = await this.supplierService.updateSupplier(id, dto, {
         userId: user.id,

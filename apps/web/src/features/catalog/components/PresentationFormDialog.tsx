@@ -24,21 +24,11 @@ import {
   Typography,
 } from '@mui/material';
 import { Controller, useForm } from 'react-hook-form';
-import type {
-  ProductDto,
-  ProductPresentationDto,
-  UnitOfMeasureDto,
-} from '@farmacia/contracts';
+import type { ProductDto, ProductPresentationDto, UnitOfMeasureDto } from '@farmacia/contracts';
 import { ApiError } from '../../../api/http-client';
 import { useUnitsOfMeasure } from '../hooks/useUnitsOfMeasure';
-import {
-  useCreatePresentation,
-  useUpdatePresentation,
-} from '../hooks/usePresentations';
-import {
-  presentationSchema,
-  type PresentationFormValues,
-} from '../validation/presentation.schema';
+import { useCreatePresentation, useUpdatePresentation } from '../hooks/usePresentations';
+import { presentationSchema, type PresentationFormValues } from '../validation/presentation.schema';
 
 interface PresentationFormDialogProps {
   open: boolean;
@@ -131,8 +121,12 @@ export function PresentationFormDialog({
   }, [watchedCustomName, selectedUom]);
 
   // Factor de la presentación contenida (1 si es unidad base)
-  const containedFactor = selectedContainedPresentation ? selectedContainedPresentation.conversionFactor : 1;
-  const containedName = selectedContainedPresentation ? selectedContainedPresentation.name : `Unidad base (${product.baseUnit})`;
+  const containedFactor = selectedContainedPresentation
+    ? selectedContainedPresentation.conversionFactor
+    : 1;
+  const containedName = selectedContainedPresentation
+    ? selectedContainedPresentation.name
+    : `Unidad base (${product.baseUnit})`;
 
   // Factor base calculado total
   const calculatedBaseUnits = watchedQuantity * containedFactor;
@@ -199,11 +193,15 @@ export function PresentationFormDialog({
           isDefault: values.isDefaultSale || values.isDefault,
         };
         if (values.unitOfMeasureId) updatePayload.unitOfMeasureId = values.unitOfMeasureId;
-        if (values.containedPresentationId) updatePayload.containedPresentationId = values.containedPresentationId;
-        if (values.quantityContained !== undefined) updatePayload.quantityContained = values.quantityContained;
-        if (values.purchaseEnabled !== undefined) updatePayload.purchaseEnabled = values.purchaseEnabled;
+        if (values.containedPresentationId)
+          updatePayload.containedPresentationId = values.containedPresentationId;
+        if (values.quantityContained !== undefined)
+          updatePayload.quantityContained = values.quantityContained;
+        if (values.purchaseEnabled !== undefined)
+          updatePayload.purchaseEnabled = values.purchaseEnabled;
         if (values.saleEnabled !== undefined) updatePayload.saleEnabled = values.saleEnabled;
-        if (values.isDefaultPurchase !== undefined) updatePayload.isDefaultPurchase = values.isDefaultPurchase;
+        if (values.isDefaultPurchase !== undefined)
+          updatePayload.isDefaultPurchase = values.isDefaultPurchase;
         if (values.isDefaultSale !== undefined) updatePayload.isDefaultSale = values.isDefaultSale;
 
         await updateMutation.mutateAsync({
@@ -221,7 +219,8 @@ export function PresentationFormDialog({
           isDefault: values.isDefaultSale || values.isDefault,
         };
         if (values.unitOfMeasureId) createPayload.unitOfMeasureId = values.unitOfMeasureId;
-        if (values.containedPresentationId) createPayload.containedPresentationId = values.containedPresentationId;
+        if (values.containedPresentationId)
+          createPayload.containedPresentationId = values.containedPresentationId;
         if (values.quantityContained !== undefined && values.unitOfMeasureId) {
           createPayload.quantityContained = values.quantityContained;
         }
@@ -266,9 +265,7 @@ export function PresentationFormDialog({
   const unitEquivalentCost =
     calculatedBaseUnits > 0 ? (watchedCost / calculatedBaseUnits).toFixed(2) : '0.00';
   const estimatedMargin =
-    watchedPrice > 0
-      ? (((watchedPrice - watchedCost) / watchedPrice) * 100).toFixed(1)
-      : '0.0';
+    watchedPrice > 0 ? (((watchedPrice - watchedCost) / watchedPrice) * 100).toFixed(1) : '0.0';
 
   return (
     <Dialog
@@ -279,9 +276,7 @@ export function PresentationFormDialog({
       aria-labelledby="presentation-dialog-title"
     >
       <DialogTitle id="presentation-dialog-title">
-        {isEditing
-          ? 'Editar Presentación Comercial'
-          : 'Nueva Presentación Comercial'}
+        {isEditing ? 'Editar Presentación Comercial' : 'Nueva Presentación Comercial'}
         <Typography variant="body2" component="div" color="text.secondary" sx={{ mt: 0.5 }}>
           Producto: <strong>{product.name}</strong> • Unidad base:{' '}
           <Chip
@@ -313,7 +308,10 @@ export function PresentationFormDialog({
                 <Box
                   sx={{
                     display: 'grid',
-                    gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'minmax(0, 1fr) minmax(0, 1fr)' },
+                    gridTemplateColumns: {
+                      xs: 'minmax(0, 1fr)',
+                      sm: 'minmax(0, 1fr) minmax(0, 1fr)',
+                    },
                     gap: 2,
                   }}
                 >
@@ -341,7 +339,8 @@ export function PresentationFormDialog({
                           ))}
                         </Select>
                         <FormHelperText>
-                          {selectedUom?.description || 'Selecciona el tipo de empaque (ej. Blíster, Caja, Six-Pack)'}
+                          {selectedUom?.description ||
+                            'Selecciona el tipo de empaque (ej. Blíster, Caja, Six-Pack)'}
                         </FormHelperText>
                       </FormControl>
                     )}
@@ -359,7 +358,9 @@ export function PresentationFormDialog({
                         fullWidth
                         size="small"
                         error={Boolean(errors.name)}
-                        helperText={errors.name?.message || 'Nombre descriptivo de la presentación.'}
+                        helperText={
+                          errors.name?.message || 'Nombre descriptivo de la presentación.'
+                        }
                       />
                     )}
                   />
@@ -389,12 +390,12 @@ export function PresentationFormDialog({
                           htmlInput: { min: 1, step: 1 },
                         }}
                         onChange={(e) =>
-                          field.onChange(
-                            e.target.value === '' ? '' : parseInt(e.target.value, 10),
-                          )
+                          field.onChange(e.target.value === '' ? '' : parseInt(e.target.value, 10))
                         }
                         error={Boolean(errors.quantityContained)}
-                        helperText={errors.quantityContained?.message || 'Cantidad física contenida'}
+                        helperText={
+                          errors.quantityContained?.message || 'Cantidad física contenida'
+                        }
                       />
                     )}
                   />
@@ -404,7 +405,9 @@ export function PresentationFormDialog({
                     control={control}
                     render={({ field }) => (
                       <FormControl fullWidth size="small">
-                        <InputLabel id="contained-presentation-label">Unidad o Empaque contenido</InputLabel>
+                        <InputLabel id="contained-presentation-label">
+                          Unidad o Empaque contenido
+                        </InputLabel>
                         <Select
                           labelId="contained-presentation-label"
                           id="contained-presentation-select"
@@ -413,7 +416,8 @@ export function PresentationFormDialog({
                           onChange={(e) => field.onChange(e.target.value || null)}
                         >
                           <MenuItem value="">
-                            <strong>Unidad base: {product.baseUnit}</strong> (contiene unidades base)
+                            <strong>Unidad base: {product.baseUnit}</strong> (contiene unidades
+                            base)
                           </MenuItem>
                           {validContainedOptions.map((pres) => (
                             <MenuItem key={pres.id} value={pres.id}>
@@ -442,20 +446,26 @@ export function PresentationFormDialog({
                     borderRadius: 1.5,
                   }}
                 >
-                  <Typography variant="caption" sx={{ fontWeight: 700, color: 'info.main', display: 'block', mb: 0.5 }}>
+                  <Typography
+                    variant="caption"
+                    sx={{ fontWeight: 700, color: 'info.main', display: 'block', mb: 0.5 }}
+                  >
                     Resumen de Equivalencia:
                   </Typography>
                   <Typography variant="body1" sx={{ fontWeight: 700, color: 'text.primary' }}>
                     1 {presentationDisplayName} = {watchedQuantity} {containedName}
                     {selectedContainedPresentation ? (
                       <span style={{ color: '#1976d2' }}>
-                        {' '}= {calculatedBaseUnits.toLocaleString('es-CO')} {product.baseUnit}
+                        {' '}
+                        = {calculatedBaseUnits.toLocaleString('es-CO')} {product.baseUnit}
                       </span>
                     ) : null}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
                     Total ingresado o descontado de inventario por cada empaque:{' '}
-                    <strong>{calculatedBaseUnits.toLocaleString('es-CO')} {product.baseUnit}</strong>
+                    <strong>
+                      {calculatedBaseUnits.toLocaleString('es-CO')} {product.baseUnit}
+                    </strong>
                   </Typography>
                 </Paper>
               </Stack>
@@ -572,10 +582,22 @@ export function PresentationFormDialog({
                 name="purchaseEnabled"
                 control={control}
                 render={({ field }) => (
-                  <Paper variant="outlined" sx={{ p: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Paper
+                    variant="outlined"
+                    sx={{
+                      p: 1.5,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}
+                  >
                     <Box>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>Disponible en Compras</Typography>
-                      <Typography variant="caption" color="text.secondary">Habilitada para recibir a proveedores</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        Disponible en Compras
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Habilitada para recibir a proveedores
+                      </Typography>
                     </Box>
                     <Switch
                       checked={field.value}
@@ -590,10 +612,22 @@ export function PresentationFormDialog({
                 name="saleEnabled"
                 control={control}
                 render={({ field }) => (
-                  <Paper variant="outlined" sx={{ p: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Paper
+                    variant="outlined"
+                    sx={{
+                      p: 1.5,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}
+                  >
                     <Box>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>Disponible en Ventas (POS)</Typography>
-                      <Typography variant="caption" color="text.secondary">Habilitada para facturar a clientes</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        Disponible en Ventas (POS)
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Habilitada para facturar a clientes
+                      </Typography>
                     </Box>
                     <Switch
                       checked={field.value}
@@ -608,10 +642,22 @@ export function PresentationFormDialog({
                 name="isDefaultSale"
                 control={control}
                 render={({ field }) => (
-                  <Paper variant="outlined" sx={{ p: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Paper
+                    variant="outlined"
+                    sx={{
+                      p: 1.5,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}
+                  >
                     <Box>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>Principal en Ventas</Typography>
-                      <Typography variant="caption" color="text.secondary">Opción sugerida por defecto en POS</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        Principal en Ventas
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Opción sugerida por defecto en POS
+                      </Typography>
                     </Box>
                     <Switch
                       checked={field.value}
@@ -626,10 +672,22 @@ export function PresentationFormDialog({
                 name="isDefaultPurchase"
                 control={control}
                 render={({ field }) => (
-                  <Paper variant="outlined" sx={{ p: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Paper
+                    variant="outlined"
+                    sx={{
+                      p: 1.5,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}
+                  >
                     <Box>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>Principal en Compras</Typography>
-                      <Typography variant="caption" color="text.secondary">Sugerida al recibir facturas</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        Principal en Compras
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Sugerida al recibir facturas
+                      </Typography>
                     </Box>
                     <Switch
                       checked={field.value}

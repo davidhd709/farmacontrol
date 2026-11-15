@@ -7,7 +7,7 @@ import type {
 import { apiRequest } from '../../../api/http-client';
 
 export async function fetchPurchases(
-  filters: PurchaseQueryFilters = {}
+  filters: PurchaseQueryFilters = {},
 ): Promise<PaginatedResponse<PurchaseDto>> {
   const query = new URLSearchParams();
 
@@ -20,10 +20,9 @@ export async function fetchPurchases(
   if (filters.pageSize) query.set('pageSize', String(filters.pageSize));
 
   const qs = query.toString();
-  return apiRequest<PaginatedResponse<PurchaseDto>>(
-    qs ? `purchases?${qs}` : 'purchases',
-    { method: 'GET' }
-  );
+  return apiRequest<PaginatedResponse<PurchaseDto>>(qs ? `purchases?${qs}` : 'purchases', {
+    method: 'GET',
+  });
 }
 
 export async function fetchPurchaseById(id: string): Promise<PurchaseDto> {
@@ -32,9 +31,7 @@ export async function fetchPurchaseById(id: string): Promise<PurchaseDto> {
   });
 }
 
-export async function receivePurchase(
-  payload: ReceivePurchasePayload
-): Promise<PurchaseDto> {
+export async function receivePurchase(payload: ReceivePurchasePayload): Promise<PurchaseDto> {
   return apiRequest<PurchaseDto>('purchases/receive', {
     method: 'POST',
     body: JSON.stringify(payload),

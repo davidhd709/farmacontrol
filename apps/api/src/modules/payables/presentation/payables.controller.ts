@@ -113,7 +113,9 @@ export class PayablesController {
    */
   @Get(':id/movements')
   @RequirePermissions(SYSTEM_PERMISSIONS.PAYABLES_READ)
-  async getMovements(@Param('id', ParseUUIDPipe) id: string): Promise<ApiResponse<PayableMovementsDto>> {
+  async getMovements(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<ApiResponse<PayableMovementsDto>> {
     const data = await this.svc.getMovements(id);
     return { success: true, data };
   }

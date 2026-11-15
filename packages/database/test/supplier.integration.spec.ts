@@ -28,9 +28,7 @@ describe('Supplier — Integridad de Persistencia en PostgreSQL (Integration)', 
     });
 
     expect(supplier.id).toBeDefined();
-    expect(supplier.id).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    );
+    expect(supplier.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
     expect(supplier.taxId).toBe('900123456-1');
     expect(supplier.name).toBe('Distribuidora Farmacéutica del Valle S.A.S.');
     expect(supplier.contactName).toBe('Carlos Gómez');
@@ -56,7 +54,7 @@ describe('Supplier — Integridad de Persistencia en PostgreSQL (Integration)', 
           taxId: '800987654-3',
           name: 'Laboratorios Genéricos Sucursal 2',
         },
-      })
+      }),
     ).rejects.toThrow();
   });
 

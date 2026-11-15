@@ -60,7 +60,10 @@ class VoucherPayment implements PromiseLike<Result> {
       concept: (this.payload.notes as string | undefined) || 'Pago de factura (prueba)',
     };
     if (this.target === 'RECEIVABLE') {
-      const row = await prisma.receivable.findUnique({ where: { id: this.id }, select: { customerId: true } });
+      const row = await prisma.receivable.findUnique({
+        where: { id: this.id },
+        select: { customerId: true },
+      });
       return {
         path: 'treasury/cash-receipts/collections',
         body: {
@@ -73,8 +76,18 @@ class VoucherPayment implements PromiseLike<Result> {
     }
     const supplierId =
       this.target === 'PAYABLE'
-        ? (await prisma.payable.findUnique({ where: { id: this.id }, select: { supplierId: true } }))?.supplierId
-        : (await prisma.expense.findUnique({ where: { id: this.id }, select: { supplierId: true } }))?.supplierId;
+        ? (
+            await prisma.payable.findUnique({
+              where: { id: this.id },
+              select: { supplierId: true },
+            })
+          )?.supplierId
+        : (
+            await prisma.expense.findUnique({
+              where: { id: this.id },
+              select: { supplierId: true },
+            })
+          )?.supplierId;
     return {
       path: 'treasury/disbursements',
       body: {
@@ -100,7 +113,11 @@ class VoucherPayment implements PromiseLike<Result> {
     let result: Result = { status: res.status, body: res.body };
     if (res.status === 201) {
       const detailPath =
-        this.target === 'RECEIVABLE' ? 'receivables' : this.target === 'PAYABLE' ? 'payables' : 'expenses';
+        this.target === 'RECEIVABLE'
+          ? 'receivables'
+          : this.target === 'PAYABLE'
+            ? 'payables'
+            : 'expenses';
       let detail = request(this.server).get(`/api/v1/${detailPath}/${this.id}`);
       if (this.headers.cookie) detail = detail.set('Cookie', this.headers.cookie);
       const updated = await detail;

@@ -291,8 +291,9 @@ export function AccountingSetupPage() {
             {openingData ? (
               <>
                 <Typography variant="body2" sx={{ mb: 1 }}>
-                  Registrados con fecha {formatDate(openingData.entryDate)}. Si la apertura ya inicializó Caja,
-                  su corrección requiere revisar conjuntamente el asiento y el saldo operativo.
+                  Registrados con fecha {formatDate(openingData.entryDate)}. Si la apertura ya
+                  inicializó Caja, su corrección requiere revisar conjuntamente el asiento y el
+                  saldo operativo.
                 </Typography>
                 <TableContainer>
                   <Table size="small" aria-label="Saldos de apertura registrados">

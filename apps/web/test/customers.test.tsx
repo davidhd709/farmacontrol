@@ -2,11 +2,7 @@ import { ThemeProvider } from '@mui/material';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  SYSTEM_PERMISSIONS,
-  SYSTEM_ROLES,
-  type CustomerDto,
-} from '@farmacia/contracts';
+import { SYSTEM_PERMISSIONS, SYSTEM_ROLES, type CustomerDto } from '@farmacia/contracts';
 import { AuthContext, type AuthContextValue } from '../src/features/auth/context/auth-context';
 import * as customersApi from '../src/features/customers/api/customers.api';
 import { CustomerFormDialog } from '../src/features/customers/components/CustomerFormDialog';
@@ -48,25 +44,16 @@ const mockAuthContext: AuthContextValue = {
     username: 'cajero_1',
     isActive: true,
     roles: [SYSTEM_ROLES.CAJERO],
-    permissions: [
-      SYSTEM_PERMISSIONS.CUSTOMERS_READ,
-      SYSTEM_PERMISSIONS.CUSTOMERS_MANAGE,
-    ],
+    permissions: [SYSTEM_PERMISSIONS.CUSTOMERS_READ, SYSTEM_PERMISSIONS.CUSTOMERS_MANAGE],
   },
   roles: [SYSTEM_ROLES.CAJERO],
-  permissions: [
-    SYSTEM_PERMISSIONS.CUSTOMERS_READ,
-    SYSTEM_PERMISSIONS.CUSTOMERS_MANAGE,
-  ],
+  permissions: [SYSTEM_PERMISSIONS.CUSTOMERS_READ, SYSTEM_PERMISSIONS.CUSTOMERS_MANAGE],
   isAuthenticated: true,
   isLoading: false,
   login: vi.fn(),
   logout: vi.fn(),
   hasPermission: (perm: string) =>
-    [
-      SYSTEM_PERMISSIONS.CUSTOMERS_READ,
-      SYSTEM_PERMISSIONS.CUSTOMERS_MANAGE,
-    ].includes(perm as any),
+    [SYSTEM_PERMISSIONS.CUSTOMERS_READ, SYSTEM_PERMISSIONS.CUSTOMERS_MANAGE].includes(perm as any),
   hasAnyPermission: () => true,
   hasAllPermissions: () => true,
   hasRole: () => true,
@@ -78,7 +65,7 @@ function renderWithProviders(ui: React.ReactElement) {
       <ThemeProvider theme={appTheme}>
         <AuthContext.Provider value={mockAuthContext}>{ui}</AuthContext.Provider>
       </ThemeProvider>
-    </MemoryRouter>
+    </MemoryRouter>,
   );
 }
 
@@ -102,8 +89,12 @@ describe('CustomerFormDialog del POS (registro rápido de cliente)', () => {
     );
 
     expect(screen.getByText('Registrar Nuevo Cliente')).toBeInTheDocument();
-    fireEvent.change(screen.getByPlaceholderText('Ej. 1020304050'), { target: { value: '987654321' } });
-    fireEvent.change(screen.getByPlaceholderText('Ej. Juan Pérez'), { target: { value: 'Mateo Botero' } });
+    fireEvent.change(screen.getByPlaceholderText('Ej. 1020304050'), {
+      target: { value: '987654321' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('Ej. Juan Pérez'), {
+      target: { value: 'Mateo Botero' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Registrar Cliente' }));
 
     await waitFor(() => {

@@ -89,14 +89,18 @@ export class ExpensesController {
     @Query(new QueryShapeValidationPipe({ fromDate: 'date?', toDate: 'date?' }))
     query: Record<string, string>,
   ): Promise<ExpenseWithoutSupplierDto[]> {
-    return this.service.listWithoutSupplier({ fromDate: query['fromDate'], toDate: query['toDate'] });
+    return this.service.listWithoutSupplier({
+      fromDate: query['fromDate'],
+      toDate: query['toDate'],
+    });
   }
 
   @Post(':id/supplier')
   @RequirePermissions(SYSTEM_PERMISSIONS.EXPENSES_MANAGE)
   async assignSupplier(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body(new RequestShapeValidationPipe({ supplierId: 'uuid' })) payload: AssignExpenseSupplierPayload,
+    @Body(new RequestShapeValidationPipe({ supplierId: 'uuid' }))
+    payload: AssignExpenseSupplierPayload,
     @CurrentUser() user: AuthenticatedUserContext,
   ): Promise<ExpenseDto> {
     return this.service.assignSupplier(id, payload.supplierId, user.id);

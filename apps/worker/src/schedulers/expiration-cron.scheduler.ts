@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  OnApplicationBootstrap,
-} from '@nestjs/common';
+import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { Cron, CronExpression, Interval } from '@nestjs/schedule';
 import { ExpirationEvaluatorService } from '../services/expiration-evaluator.service';
 import { JobQueueService } from '../services/job-queue.service';
@@ -47,9 +43,14 @@ export class ExpirationCronScheduler implements OnApplicationBootstrap {
   async handleIdempotencyCleanup(): Promise<void> {
     try {
       const deleted = await this.idempotencyCleanup.deleteExpired();
-      if (deleted > 0) this.logger.log(`[Worker Scheduler] Eliminadas ${deleted} claves de idempotencia expiradas.`);
+      if (deleted > 0)
+        this.logger.log(
+          `[Worker Scheduler] Eliminadas ${deleted} claves de idempotencia expiradas.`,
+        );
     } catch (err: unknown) {
-      this.logger.error(`[Worker Scheduler] Error limpiando claves de idempotencia: ${err instanceof Error ? err.message : String(err)}`);
+      this.logger.error(
+        `[Worker Scheduler] Error limpiando claves de idempotencia: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 

@@ -1,4 +1,8 @@
-import { businessDayStart, businessDayEnd, businessToday } from '../../../common/utils/business-date';
+import {
+  businessDayStart,
+  businessDayEnd,
+  businessToday,
+} from '../../../common/utils/business-date';
 import { Injectable, Optional } from '@nestjs/common';
 import { prisma, PrismaClient, Prisma } from '@farmacia/database';
 import {
@@ -6,14 +10,8 @@ import {
   CreateCashMovementData,
 } from '../domain/cash-movement.repository';
 import { CashMovement } from '../domain/cash-movement.entity';
-import {
-  CashMovementQueryFilters,
-  CashBalanceDto,
-  PaymentMethod,
-} from '@farmacia/contracts';
-import {
-  InvalidCashPaymentMethodException,
-} from '../domain/cash.exceptions';
+import { CashMovementQueryFilters, CashBalanceDto, PaymentMethod } from '@farmacia/contracts';
+import { InvalidCashPaymentMethodException } from '../domain/cash.exceptions';
 import {
   calculateNewCashBalanceCents,
   centsToMoneyString,
@@ -28,10 +26,7 @@ export class PrismaCashMovementRepository implements ICashMovementRepository {
     this.client = customClient ?? prisma;
   }
 
-  async saveTransactional(
-    data: CreateCashMovementData,
-    externalTx?: any
-  ): Promise<CashMovement> {
+  async saveTransactional(data: CreateCashMovementData, externalTx?: any): Promise<CashMovement> {
     if (data.paymentMethod !== 'EFECTIVO') {
       throw new InvalidCashPaymentMethodException();
     }
@@ -40,7 +35,9 @@ export class PrismaCashMovementRepository implements ICashMovementRepository {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(742189321)`;
 
       // 1. Obtener el último movimiento para conocer el saldo anterior
-      const lastRows = await tx.$queryRaw<Array<{ balance_after: Prisma.Decimal; created_at: Date }>>`
+      const lastRows = await tx.$queryRaw<
+        Array<{ balance_after: Prisma.Decimal; created_at: Date }>
+      >`
         SELECT balance_after, created_at
         FROM cash_movements
         ORDER BY created_at DESC, id DESC
@@ -64,7 +61,9 @@ export class PrismaCashMovementRepository implements ICashMovementRepository {
       // now() en PostgreSQL representa el inicio de la transacción, anterior a una posible
       // espera del cerrojo. Asignar el orden de registro bajo el mismo cerrojo evita que
       // un movimiento posterior quede antes de su saldo predecesor. No cambia históricos.
-      const createdAt = new Date(Math.max(Date.now(), (lastRows[0]?.created_at.getTime() ?? 0) + 1));
+      const createdAt = new Date(
+        Math.max(Date.now(), (lastRows[0]?.created_at.getTime() ?? 0) + 1),
+      );
 
       // 2. Crear el movimiento inmutable
       const created = await tx.cashMovement.create({
@@ -136,10 +135,7 @@ export class PrismaCashMovementRepository implements ICashMovementRepository {
 
     for (const mov of todayMovements) {
       const amountCents = parseMoneyToCents(mov.amount.toString(), 'Monto');
-      if (
-        mov.movementType === 'INGRESO_VENTA' ||
-        mov.movementType === 'INGRESO_MANUAL'
-      ) {
+      if (mov.movementType === 'INGRESO_VENTA' || mov.movementType === 'INGRESO_MANUAL') {
         totalIncomeTodayCents += amountCents;
       } else if (mov.movementType !== 'SALDO_APERTURA') {
         totalExpenseTodayCents += amountCents;
@@ -156,7 +152,7 @@ export class PrismaCashMovementRepository implements ICashMovementRepository {
   }
 
   async findAll(
-    filters: CashMovementQueryFilters
+    filters: CashMovementQueryFilters,
   ): Promise<{ items: CashMovement[]; total: number }> {
     const where: Prisma.CashMovementWhereInput = {};
 
@@ -175,7 +171,10 @@ export class PrismaCashMovementRepository implements ICashMovementRepository {
       where.createdAt = {};
       if (startDate) {
         const start = new Date(startDate);
-        where.createdAt.gte = typeof startDate === 'string' && startDate.length === 10 ? businessDayStart(startDate) : start;
+        where.createdAt.gte =
+          typeof startDate === 'string' && startDate.length === 10
+            ? businessDayStart(startDate)
+            : start;
       }
       if (endDate) {
         const end = new Date(endDate);
@@ -220,7 +219,7 @@ export class PrismaCashMovementRepository implements ICashMovementRepository {
           createdAt: r.createdAt,
           createdByUserId: r.createdByUserId,
           createdByUsername: r.createdByUser?.username,
-        })
+        }),
     );
 
     return { items, total };

@@ -279,7 +279,8 @@ export class ProductService {
         `El código "${term}" está asignado a dos productos distintos; corríjalo en el catálogo.`,
       );
     }
-    if (byBarcode) return { product: await this.getProductDtoById(byBarcode.id), presentationId: null };
+    if (byBarcode)
+      return { product: await this.getProductDtoById(byBarcode.id), presentationId: null };
     if (presentation) {
       return {
         product: await this.getProductDtoById(presentation.productId),

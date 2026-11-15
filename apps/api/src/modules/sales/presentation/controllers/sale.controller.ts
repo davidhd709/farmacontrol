@@ -220,9 +220,7 @@ export class SaleController {
 
   @Get(':id/history')
   @RequirePermissions(SYSTEM_PERMISSIONS.SALES_READ)
-  public async getHistory(
-    @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<SaleActionHistoryDto> {
+  public async getHistory(@Param('id', ParseUUIDPipe) id: string): Promise<SaleActionHistoryDto> {
     try {
       return await this.saleService.getSaleActionHistory(id);
     } catch (error) {

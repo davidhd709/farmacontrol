@@ -1,13 +1,5 @@
 import { QueryShapeValidationPipe } from '../../../../common/pagination/request-shape.pipe';
-import {
-  Controller,
-  Get,
-  Post,
-  Param,
-  Query,
-  UseGuards,
-  ParseUUIDPipe,
-} from '@nestjs/common';
+import { Controller, Get, Post, Param, Query, UseGuards, ParseUUIDPipe } from '@nestjs/common';
 import {
   SYSTEM_PERMISSIONS,
   CashMovementDto,
@@ -18,9 +10,7 @@ import { ApiResponse } from '@nestjs/swagger';
 import { CashService } from '../../application/cash.service';
 import { retiredRoute, VOUCHER_REPLACEMENT } from '../../../../common/http/retired-route';
 import { CashMovementQueryDto, CashMovementQueryValidationPipe } from '../dtos/cash-query.dto';
-import {
-  SessionAuthGuard,
-} from '../../../identity/presentation/guards/session-auth.guard';
+import { SessionAuthGuard } from '../../../identity/presentation/guards/session-auth.guard';
 import { PermissionsGuard } from '../../../identity/presentation/guards/permissions.guard';
 import { RequirePermissions } from '../../../identity/presentation/decorators/require-permissions.decorator';
 
@@ -31,7 +21,10 @@ export class CashController {
 
   /** Retirada: el efectivo entra y sale con recibos de caja y comprobantes de egreso. */
   @Post()
-  @ApiResponse({ status: 410, description: 'Ruta retirada: use recibos de caja o comprobantes de egreso.' })
+  @ApiResponse({
+    status: 410,
+    description: 'Ruta retirada: use recibos de caja o comprobantes de egreso.',
+  })
   @RequirePermissions(SYSTEM_PERMISSIONS.CASH_MOVEMENTS)
   public create(): never {
     return retiredRoute('POST /api/v1/cash-movements', VOUCHER_REPLACEMENT);

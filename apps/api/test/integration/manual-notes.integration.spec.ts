@@ -33,11 +33,16 @@ describe('Notas contables manuales', () => {
   beforeEach(async () => {
     await cleanTestDatabase();
     await seedRbac(prisma);
-    const admin = await provisioning.provisionInitialUser({ username: 'contadora_nt', password: 'AdminPassword#2026' });
+    const admin = await provisioning.provisionInitialUser({
+      username: 'contadora_nt',
+      password: 'AdminPassword#2026',
+    });
     const adminRole = await prisma.role.findUniqueOrThrow({ where: { name: 'admin' } });
     await prisma.userRole.create({ data: { userId: admin.id!, roleId: adminRole.id } });
     adminCookie = `${SESSION_COOKIE_NAME}=${(await auth.login('contadora_nt', 'AdminPassword#2026')).rawToken}`;
-    const cashier = await prisma.user.create({ data: { username: 'cajero_nt', passwordHash: admin.passwordHash } });
+    const cashier = await prisma.user.create({
+      data: { username: 'cajero_nt', passwordHash: admin.passwordHash },
+    });
     const cashierRole = await prisma.role.findUniqueOrThrow({ where: { name: 'cajero' } });
     await prisma.userRole.create({ data: { userId: cashier.id, roleId: cashierRole.id } });
     cashierCookie = `${SESSION_COOKIE_NAME}=${(await auth.login('cajero_nt', 'AdminPassword#2026')).rawToken}`;
@@ -65,7 +70,9 @@ describe('Notas contables manuales', () => {
   });
 
   const send = (body: object, key: string | null = randomUUID(), cookie = adminCookie) => {
-    const req = request(app.getHttpServer()).post('/api/v1/accounting/manual-notes').set('Cookie', cookie);
+    const req = request(app.getHttpServer())
+      .post('/api/v1/accounting/manual-notes')
+      .set('Cookie', cookie);
     if (key) req.set('Idempotency-Key', key);
     return req.send(body);
   };
@@ -85,22 +92,36 @@ describe('Notas contables manuales', () => {
     expect(entry.status).toBe('POSTED');
     expect(entry.description).toMatch(/^NTC-000001 /);
     expect(entry.lines).toHaveLength(2);
-    expect(await prisma.auditEvent.count({ where: { action: 'accounting:manual_note_created' } })).toBe(2);
+    expect(
+      await prisma.auditEvent.count({ where: { action: 'accounting:manual_note_created' } }),
+    ).toBe(2);
   });
 
   it('rechaza notas desbalanceadas, cuentas agrupadoras y líneas con ambos lados', async () => {
-    await send(note({ lines: [
-      { accountId: energia, debit: '100.00', credit: '0' },
-      { accountId: caja, debit: '0', credit: '90.00' },
-    ] })).expect(400);
-    await send(note({ lines: [
-      { accountId: agrupadora, debit: '100.00', credit: '0' },
-      { accountId: caja, debit: '0', credit: '100.00' },
-    ] })).expect(400);
-    await send(note({ lines: [
-      { accountId: energia, debit: '100.00', credit: '100.00' },
-      { accountId: caja, debit: '0', credit: '0' },
-    ] })).expect(400);
+    await send(
+      note({
+        lines: [
+          { accountId: energia, debit: '100.00', credit: '0' },
+          { accountId: caja, debit: '0', credit: '90.00' },
+        ],
+      }),
+    ).expect(400);
+    await send(
+      note({
+        lines: [
+          { accountId: agrupadora, debit: '100.00', credit: '0' },
+          { accountId: caja, debit: '0', credit: '100.00' },
+        ],
+      }),
+    ).expect(400);
+    await send(
+      note({
+        lines: [
+          { accountId: energia, debit: '100.00', credit: '100.00' },
+          { accountId: caja, debit: '0', credit: '0' },
+        ],
+      }),
+    ).expect(400);
     await send(note({ description: '  ' })).expect(400);
     await send(note({ entryDate: '15/07/2026' })).expect(400);
     expect(await prisma.journalEntry.count()).toBe(0);
@@ -109,8 +130,12 @@ describe('Notas contables manuales', () => {
   it('respeta el período cerrado y el bloqueo de documentos', async () => {
     await prisma.fiscalPeriod.create({
       data: {
-        year: 2026, month: 6, name: 'Junio 2026', status: 'CLOSED',
-        startDate: new Date('2026-06-01'), endDate: new Date('2026-06-30'),
+        year: 2026,
+        month: 6,
+        name: 'Junio 2026',
+        status: 'CLOSED',
+        startDate: new Date('2026-06-01'),
+        endDate: new Date('2026-06-30'),
       },
     });
     const closed = await send(note({ entryDate: '2026-06-20' })).expect(400);
@@ -145,6 +170,8 @@ describe('Notas contables manuales', () => {
       .set('Cookie', adminCookie)
       .send({ entryDate: '2026-08-05', reason: 'Valor errado' })
       .expect(201);
-    expect(await prisma.journalEntry.count({ where: { reversalOfId: created.body.journalEntryId } })).toBe(1);
+    expect(
+      await prisma.journalEntry.count({ where: { reversalOfId: created.body.journalEntryId } }),
+    ).toBe(1);
   });
 });

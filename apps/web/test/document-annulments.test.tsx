@@ -138,13 +138,11 @@ describe('Anulación de documentos en la web', () => {
       pageSize: 25,
       totalPages: 1,
     });
-    const cancel = vi
-      .spyOn(treasuryApi, 'cancelTreasuryDocument')
-      .mockResolvedValue({
-        ...receipt,
-        status: 'ANULADO',
-        cancellationReason: 'Cliente equivocado',
-      });
+    const cancel = vi.spyOn(treasuryApi, 'cancelTreasuryDocument').mockResolvedValue({
+      ...receipt,
+      status: 'ANULADO',
+      cancellationReason: 'Cliente equivocado',
+    });
     renderWith(<CashReceiptsPage />, [
       SYSTEM_PERMISSIONS.ACCOUNTING_READ,
       SYSTEM_PERMISSIONS.CASH_RECEIPTS_ANNUL,

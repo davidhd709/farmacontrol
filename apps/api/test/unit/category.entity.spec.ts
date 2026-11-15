@@ -9,9 +9,7 @@ describe('Category Entity (Unit)', () => {
     });
 
     expect(category.id).toBeDefined();
-    expect(category.id).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    );
+    expect(category.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
     expect(category.name).toBe('Medicamentos Generales');
     expect(category.description).toBe('Categoría principal de medicamentos');
     expect(category.isActive).toBe(true);
@@ -21,19 +19,19 @@ describe('Category Entity (Unit)', () => {
 
   it('debe rechazar nombres vacíos o menores a 2 caracteres', () => {
     expect(() => Category.create({ name: '' })).toThrow(
-      'El nombre de la categoría no puede estar vacío.'
+      'El nombre de la categoría no puede estar vacío.',
     );
     expect(() => Category.create({ name: '   ' })).toThrow(
-      'El nombre de la categoría no puede estar vacío.'
+      'El nombre de la categoría no puede estar vacío.',
     );
     expect(() => Category.create({ name: 'A' })).toThrow(
-      'El nombre de la categoría debe tener al menos 2 caracteres.'
+      'El nombre de la categoría debe tener al menos 2 caracteres.',
     );
   });
 
   it('debe rechazar nombres que excedan 100 caracteres', () => {
     expect(() => Category.create({ name: 'a'.repeat(101) })).toThrow(
-      'El nombre de la categoría no puede exceder 100 caracteres.'
+      'El nombre de la categoría no puede exceder 100 caracteres.',
     );
   });
 
@@ -42,7 +40,7 @@ describe('Category Entity (Unit)', () => {
       Category.create({
         name: 'Válido',
         description: 'd'.repeat(256),
-      })
+      }),
     ).toThrow('La descripción de la categoría no puede exceder 255 caracteres.');
   });
 

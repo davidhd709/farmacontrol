@@ -41,25 +41,31 @@ describe('PostgreSQL Database Isolation & Connection (Integration)', () => {
 
   describe('Protección defensiva contra bases de datos no destinadas a testing', () => {
     it('debe extraer el nombre de la base de datos de forma limpia sin exponer credenciales', () => {
-      const url = 'postgresql://usuario_privado:secreto_super_seguro@localhost:5434/farmacia_db?schema=public';
+      const url =
+        'postgresql://usuario_privado:secreto_super_seguro@localhost:5434/farmacia_db?schema=public';
       expect(extractDatabaseName(url)).toBe('farmacia_db');
     });
 
     it('debe ACEPTAR URLs que apunten a farmacia_test o que terminen en _test', () => {
       expect(() =>
-        validateTestDatabaseUrl('postgresql://user:pass@localhost:5434/farmacia_test?schema=public')
+        validateTestDatabaseUrl(
+          'postgresql://user:pass@localhost:5434/farmacia_test?schema=public',
+        ),
       ).not.toThrow();
 
       expect(() =>
-        validateTestDatabaseUrl('postgresql://user:pass@localhost:5434/otra_base_test?schema=public')
+        validateTestDatabaseUrl(
+          'postgresql://user:pass@localhost:5434/otra_base_test?schema=public',
+        ),
       ).not.toThrow();
     });
 
     it('debe RECHAZAR explícitamente cualquier configuración que apunte a farmacia_db (base de desarrollo)', () => {
-      const devUrl = 'postgresql://farmacia_user:secret_pass@localhost:5434/farmacia_db?schema=public';
+      const devUrl =
+        'postgresql://farmacia_user:secret_pass@localhost:5434/farmacia_db?schema=public';
 
       expect(() => validateTestDatabaseUrl(devUrl)).toThrowError(
-        '[Seguridad] Operación de pruebas rechazada: la base de datos configurada "farmacia_db" no es una base de datos de pruebas válida'
+        '[Seguridad] Operación de pruebas rechazada: la base de datos configurada "farmacia_db" no es una base de datos de pruebas válida',
       );
 
       // Comprobar que el mensaje de error NUNCA expone la contraseña o credenciales
@@ -76,7 +82,7 @@ describe('PostgreSQL Database Isolation & Connection (Integration)', () => {
       const prodUrl = 'postgresql://admin:super_secret@remotehost:5432/farmacia_prod?schema=public';
 
       expect(() => validateTestDatabaseUrl(prodUrl)).toThrowError(
-        '[Seguridad] Operación de pruebas rechazada: la base de datos configurada "farmacia_prod" no es una base de datos de pruebas válida'
+        '[Seguridad] Operación de pruebas rechazada: la base de datos configurada "farmacia_prod" no es una base de datos de pruebas válida',
       );
     });
   });

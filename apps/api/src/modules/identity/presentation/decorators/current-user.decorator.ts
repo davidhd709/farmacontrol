@@ -10,5 +10,5 @@ export const CurrentUser = createParamDecorator(
   (_data: unknown, ctx: ExecutionContext): AuthenticatedUserContext | undefined => {
     const request = ctx.switchToHttp().getRequest<Request>();
     return request.user;
-  }
+  },
 );

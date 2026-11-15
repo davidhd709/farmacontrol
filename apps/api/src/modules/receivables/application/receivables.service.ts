@@ -20,10 +20,18 @@ import {
   ReceivableStatus,
   ReceivableMovementsDto,
 } from '@farmacia/contracts';
-import { buildDocumentMovements, RawDocumentMovement } from '../../../common/utils/document-movements';
+import {
+  buildDocumentMovements,
+  RawDocumentMovement,
+} from '../../../common/utils/document-movements';
 import { centsToMoneyString, parseMoneyToCents } from '../../treasury/domain/treasury-rules';
 import { recordSourceBankMovement } from '../../treasury/application/record-source-bank-movement';
-import { agingBreakdown, agingBucketOf, agingStartDate, daysOverdue } from '../../../common/utils/aging';
+import {
+  agingBreakdown,
+  agingBucketOf,
+  agingStartDate,
+  daysOverdue,
+} from '../../../common/utils/aging';
 import { accountingPolicyAt } from '../../company/application/accounting-policy.reader';
 
 import { IdempotencyService } from '../../../common/idempotency/idempotency.service';
@@ -282,7 +290,12 @@ export class ReceivablesService {
     }
     // Bloqueo pesimista para evitar doble abono concurrente
     const rows = await tx.$queryRaw<
-      Array<{ customerId: string; amountPaid: Prisma.Decimal; balance: Prisma.Decimal; status: string }>
+      Array<{
+        customerId: string;
+        amountPaid: Prisma.Decimal;
+        balance: Prisma.Decimal;
+        status: string;
+      }>
     >`
       SELECT customer_id AS "customerId", amount_paid AS "amountPaid", balance, status
       FROM receivables
@@ -365,7 +378,10 @@ export class ReceivablesService {
       rows.map((row) => ({
         balanceCents: parseMoneyToCents(row.balance.toString(), 'Saldo de cartera'),
         bucket: agingBucketOf(
-          daysOverdue(agingStartDate(agingBaseDate, { dueDate: row.dueDate, issuedAt: row.createdAt }), today),
+          daysOverdue(
+            agingStartDate(agingBaseDate, { dueDate: row.dueDate, issuedAt: row.createdAt }),
+            today,
+          ),
         ),
       })),
     );
@@ -407,7 +423,13 @@ export class ReceivablesService {
    */
   async reversePaymentInTransaction(
     tx: any,
-    input: { receivableId: string; paymentId: string; reason: string; userId: string; moveMoney: boolean },
+    input: {
+      receivableId: string;
+      paymentId: string;
+      reason: string;
+      userId: string;
+      moveMoney: boolean;
+    },
   ) {
     const { receivableId, paymentId, userId, moveMoney } = input;
     const trimmedReason = input.reason;
@@ -447,9 +469,7 @@ export class ReceivablesService {
     });
 
     if (!payment || payment.receivableId !== receivableId) {
-      throw new NotFoundException(
-        `Abono "${paymentId}" no encontrado en esta cuenta por cobrar`,
-      );
+      throw new NotFoundException(`Abono "${paymentId}" no encontrado en esta cuenta por cobrar`);
     }
 
     if (payment.isReversed) {

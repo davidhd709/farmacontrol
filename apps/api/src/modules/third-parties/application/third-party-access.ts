@@ -21,7 +21,9 @@ export function thirdPartyAccess(
 ): ThirdPartyAccess {
   const has = (permission: string) => permissions.includes(permission);
   const all = has(
-    mode === 'read' ? SYSTEM_PERMISSIONS.THIRD_PARTIES_READ : SYSTEM_PERMISSIONS.THIRD_PARTIES_MANAGE,
+    mode === 'read'
+      ? SYSTEM_PERMISSIONS.THIRD_PARTIES_READ
+      : SYSTEM_PERMISSIONS.THIRD_PARTIES_MANAGE,
   );
   const roles = new Set<ScopedThirdPartyRole>();
   if (has(SYSTEM_PERMISSIONS.CUSTOMERS_MANAGE)) roles.add('CUSTOMER');
@@ -54,7 +56,12 @@ export function canReachThirdParty(
   );
 }
 
-type RoleFlags = { isCustomer?: boolean; isSupplier?: boolean; isEmployee?: boolean; isOther?: boolean };
+type RoleFlags = {
+  isCustomer?: boolean;
+  isSupplier?: boolean;
+  isEmployee?: boolean;
+  isOther?: boolean;
+};
 
 /**
  * Tipos que un usuario con alcance limitado no puede asignar ni quitar. Devuelve el mensaje del
@@ -67,14 +74,22 @@ export function roleChangeOutsideScope(
   current?: Required<RoleFlags>,
 ): string | null {
   if (access.all) return null;
-  const before = current ?? { isCustomer: false, isSupplier: false, isEmployee: false, isOther: false };
+  const before = current ?? {
+    isCustomer: false,
+    isSupplier: false,
+    isEmployee: false,
+    isOther: false,
+  };
   const after = {
     isCustomer: requested.isCustomer ?? before.isCustomer,
     isSupplier: requested.isSupplier ?? before.isSupplier,
     isEmployee: requested.isEmployee ?? before.isEmployee,
     isOther: requested.isOther ?? before.isOther,
   };
-  const own = { isCustomer: access.roles.includes('CUSTOMER'), isSupplier: access.roles.includes('SUPPLIER') };
+  const own = {
+    isCustomer: access.roles.includes('CUSTOMER'),
+    isSupplier: access.roles.includes('SUPPLIER'),
+  };
   // Debe conservar (o recibir, al crear) al menos uno de sus tipos
   if (!((own.isCustomer && after.isCustomer) || (own.isSupplier && after.isSupplier))) {
     return own.isCustomer && !own.isSupplier

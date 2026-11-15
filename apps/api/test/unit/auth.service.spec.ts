@@ -58,7 +58,7 @@ describe('AuthService (Unit)', () => {
       mockUserRepository,
       mockPasswordHasher,
       mockSessionService,
-      mockRbacRepository
+      mockRbacRepository,
     );
   });
 
@@ -83,10 +83,7 @@ describe('AuthService (Unit)', () => {
       const result = await authService.login(validUsername, validPassword);
 
       expect(mockUserRepository.findByUsername).toHaveBeenCalled();
-      expect(mockPasswordHasher.verify).toHaveBeenCalledWith(
-        validPassword,
-        samplePasswordHash
-      );
+      expect(mockPasswordHasher.verify).toHaveBeenCalledWith(validPassword, samplePasswordHash);
       expect(mockSessionService.createSession).toHaveBeenCalledWith(sampleUserId);
       expect(result.user.id).toBe(sampleUserId);
       expect(result.rawToken).toBe(sampleRawToken);
@@ -98,15 +95,12 @@ describe('AuthService (Unit)', () => {
       vi.mocked(mockUserRepository.findByUsername).mockResolvedValue(null);
       vi.mocked(mockPasswordHasher.verify).mockResolvedValue(false);
 
-      await expect(
-        authService.login('usuario_inexistente', validPassword)
-      ).rejects.toThrow(InvalidCredentialsException);
+      await expect(authService.login('usuario_inexistente', validPassword)).rejects.toThrow(
+        InvalidCredentialsException,
+      );
 
       // Verificación de mitigación: verify fue invocado contra DUMMY_ARGON2_HASH
-      expect(mockPasswordHasher.verify).toHaveBeenCalledWith(
-        validPassword,
-        DUMMY_ARGON2_HASH
-      );
+      expect(mockPasswordHasher.verify).toHaveBeenCalledWith(validPassword, DUMMY_ARGON2_HASH);
       expect(mockSessionService.createSession).not.toHaveBeenCalled();
     });
 
@@ -139,14 +133,11 @@ describe('AuthService (Unit)', () => {
       vi.mocked(mockUserRepository.findByUsername).mockResolvedValue(inactiveUser);
       vi.mocked(mockPasswordHasher.verify).mockResolvedValue(false);
 
-      await expect(
-        authService.login(validUsername, validPassword)
-      ).rejects.toThrow(InvalidCredentialsException);
-
-      expect(mockPasswordHasher.verify).toHaveBeenCalledWith(
-        validPassword,
-        DUMMY_ARGON2_HASH
+      await expect(authService.login(validUsername, validPassword)).rejects.toThrow(
+        InvalidCredentialsException,
       );
+
+      expect(mockPasswordHasher.verify).toHaveBeenCalledWith(validPassword, DUMMY_ARGON2_HASH);
       expect(mockSessionService.createSession).not.toHaveBeenCalled();
     });
 
@@ -163,13 +154,13 @@ describe('AuthService (Unit)', () => {
       vi.mocked(mockUserRepository.findByUsername).mockResolvedValue(activeUser);
       vi.mocked(mockPasswordHasher.verify).mockResolvedValue(false); // Contraseña no coincide
 
-      await expect(
-        authService.login(validUsername, 'ContrasenaIncorrecta1#')
-      ).rejects.toThrow(InvalidCredentialsException);
+      await expect(authService.login(validUsername, 'ContrasenaIncorrecta1#')).rejects.toThrow(
+        InvalidCredentialsException,
+      );
 
       expect(mockPasswordHasher.verify).toHaveBeenCalledWith(
         'ContrasenaIncorrecta1#',
-        samplePasswordHash
+        samplePasswordHash,
       );
       expect(mockSessionService.createSession).not.toHaveBeenCalled();
     });
@@ -178,21 +169,18 @@ describe('AuthService (Unit)', () => {
       vi.mocked(mockPasswordHasher.verify).mockResolvedValue(false);
 
       await expect(
-        authService.login('ab', validPassword) // username < 3 caracteres
+        authService.login('ab', validPassword), // username < 3 caracteres
       ).rejects.toThrow(InvalidCredentialsException);
 
-      expect(mockPasswordHasher.verify).toHaveBeenCalledWith(
-        validPassword,
-        DUMMY_ARGON2_HASH
-      );
+      expect(mockPasswordHasher.verify).toHaveBeenCalledWith(validPassword, DUMMY_ARGON2_HASH);
     });
 
     it('debe rechazar entradas vacías sin procesar', async () => {
       await expect(authService.login('', validPassword)).rejects.toThrow(
-        InvalidCredentialsException
+        InvalidCredentialsException,
       );
       await expect(authService.login(validUsername, '')).rejects.toThrow(
-        InvalidCredentialsException
+        InvalidCredentialsException,
       );
     });
   });

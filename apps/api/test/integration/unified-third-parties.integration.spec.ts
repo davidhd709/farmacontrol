@@ -37,7 +37,9 @@ describe('Terceros unificado', () => {
       name: 'Laura Restrepo',
       phone: '3001234567',
     });
-    const third = await prisma.thirdParty.findUniqueOrThrow({ where: { documentNumber: '1098765432' } });
+    const third = await prisma.thirdParty.findUniqueOrThrow({
+      where: { documentNumber: '1098765432' },
+    });
     expect(third.isCustomer).toBe(true);
     expect(third.isSupplier).toBe(false);
     expect(third.customerId).toBe(customer.id);
@@ -50,7 +52,10 @@ describe('Terceros unificado', () => {
       documentNumber: '900123456',
       name: 'Droguería Aliada',
     });
-    const supplier = await suppliers.createSupplier({ taxId: '900123456', name: 'Droguería Aliada S.A.S.' });
+    const supplier = await suppliers.createSupplier({
+      taxId: '900123456',
+      name: 'Droguería Aliada S.A.S.',
+    });
 
     const thirds = await prisma.thirdParty.findMany({ where: { documentNumber: '900123456' } });
     expect(thirds).toHaveLength(1);
@@ -63,7 +68,10 @@ describe('Terceros unificado', () => {
   });
 
   it('un proveedor nuevo queda como tercero con NIT', async () => {
-    const supplier = await suppliers.createSupplier({ taxId: '800555111', name: 'Distribuidora Andina' });
+    const supplier = await suppliers.createSupplier({
+      taxId: '800555111',
+      name: 'Distribuidora Andina',
+    });
     const third = await prisma.thirdParty.findUniqueOrThrow({ where: { supplierId: supplier.id } });
     expect(third.documentType).toBe('NIT');
     expect(third.isSupplier).toBe(true);

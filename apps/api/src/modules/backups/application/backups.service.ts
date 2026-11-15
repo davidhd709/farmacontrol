@@ -61,7 +61,10 @@ export class BackupsService {
       try {
         fs.mkdirSync(this.backupDirectory, { recursive: true });
       } catch (err) {
-        this.logger.warn(`No fue posible crear el directorio de backups: ${this.backupDirectory}`, err);
+        this.logger.warn(
+          `No fue posible crear el directorio de backups: ${this.backupDirectory}`,
+          err,
+        );
       }
     }
   }
@@ -214,7 +217,9 @@ export class BackupsService {
     // Sanitización básica de seguridad para evitar path traversal
     const safeFilename = path.basename(filename);
     if (!safeFilename.endsWith('.dump')) {
-      throw new NotFoundException('El archivo especificado no es un respaldo válido de PostgreSQL (.dump).');
+      throw new NotFoundException(
+        'El archivo especificado no es un respaldo válido de PostgreSQL (.dump).',
+      );
     }
 
     const filePath = path.join(this.backupDirectory, safeFilename);

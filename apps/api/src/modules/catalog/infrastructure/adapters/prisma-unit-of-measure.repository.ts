@@ -76,7 +76,7 @@ export class PrismaUnitOfMeasureRepository implements UnitOfMeasureRepositoryPor
   }
 
   public async findAll(
-    filters: UnitOfMeasureQueryFilters = {}
+    filters: UnitOfMeasureQueryFilters = {},
   ): Promise<{ items: UnitOfMeasure[]; total: number }> {
     const page = Math.max(1, filters.page ?? 1);
     const pageSize = Math.min(100, Math.max(1, filters.pageSize ?? 50));

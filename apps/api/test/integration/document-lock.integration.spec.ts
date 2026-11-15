@@ -51,7 +51,13 @@ describe('Bloqueo de documentos por fecha', () => {
 
     caja = (
       await prisma.account.create({
-        data: { code: '110505', name: 'CAJA GENERAL', type: 'ASSET', level: 1, allowsMovement: true },
+        data: {
+          code: '110505',
+          name: 'CAJA GENERAL',
+          type: 'ASSET',
+          level: 1,
+          allowsMovement: true,
+        },
       })
     ).id;
     ventas = (
@@ -86,9 +92,14 @@ describe('Bloqueo de documentos por fecha', () => {
 
   it('impide registrar y reversar asientos con fecha igual o anterior al corte', async () => {
     const julio = await post('2026-07-20', 'antes-del-bloqueo');
-    await setLock({ lockedThrough: '2026-07-31', reason: 'Informe a corte de julio revisado' }).expect(201);
+    await setLock({
+      lockedThrough: '2026-07-31',
+      reason: 'Informe a corte de julio revisado',
+    }).expect(201);
 
-    await expect(post('2026-07-31', 'en-el-corte')).rejects.toThrow(/bloqueados hasta el 2026-07-31/);
+    await expect(post('2026-07-31', 'en-el-corte')).rejects.toThrow(
+      /bloqueados hasta el 2026-07-31/,
+    );
     await expect(post('2026-07-15', 'antes-del-corte')).rejects.toThrow(/bloqueados/);
     await expect(post('2026-08-01', 'despues-del-corte')).resolves.toBeDefined();
 
@@ -145,6 +156,8 @@ describe('Bloqueo de documentos por fecha', () => {
     await expect(
       prisma.documentLock.update({ where: { id: lock.id }, data: { reason: 'otro' } }),
     ).rejects.toThrow(/inmutable/);
-    await expect(prisma.documentLock.delete({ where: { id: lock.id } })).rejects.toThrow(/inmutable/);
+    await expect(prisma.documentLock.delete({ where: { id: lock.id } })).rejects.toThrow(
+      /inmutable/,
+    );
   });
 });

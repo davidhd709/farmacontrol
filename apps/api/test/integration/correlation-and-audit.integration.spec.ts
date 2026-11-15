@@ -42,7 +42,7 @@ describe('CorrelationId & HTTP Audit Trail (Integration with PostgreSQL)', () =>
 
     expect(res.headers['x-correlation-id']).toBeDefined();
     expect(res.headers['x-correlation-id']).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
     );
   });
 
@@ -128,12 +128,10 @@ describe('CorrelationId & HTTP Audit Trail (Integration with PostgreSQL)', () =>
     });
 
     // 1. Iniciar sesión
-    const loginRes = await request(app.getHttpServer())
-      .post('/api/v1/auth/login')
-      .send({
-        username: 'logout_admin',
-        password: 'SecurePassword#2026',
-      });
+    const loginRes = await request(app.getHttpServer()).post('/api/v1/auth/login').send({
+      username: 'logout_admin',
+      password: 'SecurePassword#2026',
+    });
 
     const cookieHeader = loginRes.headers['set-cookie'];
     expect(cookieHeader).toBeDefined();
