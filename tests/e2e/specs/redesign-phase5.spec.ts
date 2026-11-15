@@ -1,7 +1,14 @@
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
-import { adminStateFile, apiAs, businessDay, call, loadFixtures } from '../support/api';
+import {
+  adminStateFile,
+  apiAs,
+  businessDay,
+  call,
+  createStockedProduct,
+  loadFixtures,
+} from '../support/api';
 import { fillDateField } from '../support/date-field';
 
 /**
@@ -147,6 +154,66 @@ test('inactivar un tercero nombra el registro y el efecto; un error de guardado 
   // Nada cambió: el cliente sigue activo y el foco vuelve al botón que abrió el diálogo
   await expect(deactivate).toBeVisible();
   await expect(deactivate).toBeFocused();
+});
+
+test('ajuste de inventario desde la interfaz: confirma su impacto y anuncia el resultado', async ({
+  page,
+}) => {
+  const admin = await apiAs(fixtures.admin.username, fixtures.admin.password);
+  const product = await createStockedProduct(admin, fixtures, {
+    name: 'Gasa ajuste E2E',
+    basePrice: 800,
+    lots: [{ suffix: 'AJU', daysToExpire: 300, quantity: 10 }],
+  });
+  const lotNumber = product.lots[0].lotNumber;
+  const purposes = await call<Array<{ purpose: string; accountId: string | null }>>(
+    admin,
+    'get',
+    'accounting/purposes',
+  );
+  const surplusBefore = purposes.find((p) => p.purpose === 'INVENTORY_SURPLUS')?.accountId ?? null;
+  try {
+    await page.goto('/inventory/lots');
+    await page.getByLabel('Número de Lote').fill(lotNumber);
+    await expect(page.getByRole('cell', { name: lotNumber }).first()).toBeVisible();
+    await page.getByRole('button', { name: 'Ajuste Manual' }).click();
+    const dialog = page.getByRole('dialog', { name: /Ajuste Manual de Inventario/ });
+    await dialog.getByRole('combobox', { name: /^Producto/ }).click();
+    await page.getByRole('option', { name: new RegExp(product.code) }).click();
+    await dialog.getByRole('combobox', { name: /Lote Específico/ }).click();
+    await page.getByRole('option', { name: new RegExp(lotNumber) }).click();
+    await dialog.getByLabel(/Cantidad a Ajustar/).fill('2');
+    await dialog.getByLabel(/Motivo Justificado/).fill('Sobrante en conteo E2E');
+    await dialog.getByRole('button', { name: 'Revisar y Confirmar' }).click();
+    const confirm = page.getByRole('dialog', { name: 'Confirmar Ajuste en Kardex' });
+    await expect(confirm).toBeVisible();
+
+    // Sin la cuenta de sobrantes configurada el servidor rechaza el ajuste: el error queda en la
+    // confirmación y nada cambia
+    if (!surplusBefore) {
+      await confirm.getByRole('button', { name: 'Asentar Ajuste' }).click();
+      await expect(confirm.getByRole('alert')).toContainText(
+        '«Sobrantes de inventario» (INVENTORY_SURPLUS)',
+      );
+      await shot(page, 'ajuste-inventario-error-1440', false);
+      const accounts = await call<
+        Array<{ id: string; type: string; allowsMovement: boolean; isActive: boolean }>
+      >(admin, 'get', 'accounts');
+      const income = accounts.find((a) => a.type === 'INCOME' && a.allowsMovement && a.isActive)!;
+      await call(admin, 'put', 'accounting/purposes/INVENTORY_SURPLUS', { accountId: income.id });
+    }
+
+    // Reintento desde el mismo diálogo (misma clave de idempotencia): se asienta una sola vez
+    await confirm.getByRole('button', { name: 'Asentar Ajuste' }).click();
+    await expect(page.getByRole('status')).toContainText('Ajuste asentado');
+    await expect(page.getByRole('cell', { name: '12 UNIDAD' }).first()).toBeVisible();
+    await shot(page, 'ajuste-inventario-exito-1440', false);
+  } finally {
+    if (!surplusBefore) {
+      await call(admin, 'put', 'accounting/purposes/INVENTORY_SURPLUS', { accountId: null });
+    }
+    await admin.dispose();
+  }
 });
 
 const WIDTHS = [

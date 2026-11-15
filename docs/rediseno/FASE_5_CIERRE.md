@@ -199,15 +199,76 @@ Las capturas también mostraron tres defectos, que se corrigieron:
 
 ## Pendientes
 
-- **Idempotencia en el servidor.** `cancelSale`, `cancelCreditNote`, `receivePurchase` y `adjustInventory` no envían `Idempotency-Key`. La web ya bloquea el doble envío, pero la protección completa es un cambio de servidor; se deja documentado y fuera de este plan.
-- **Código sin uso:**
-  - `AlertModalContext` (`useAlertModal`, `confirmAction`) no lo usa ninguna pantalla. Si se usara, perdería su mensaje de éxito porque cierra el modal justo después de mostrarlo.
-  - `ReceivableReversalDialog` no tiene ruta que lo abra; la reversión de abonos se hace anulando el recibo.
-  - El esquema `payables/validation/reversal.schema.ts` solo lo usa su prueba.
-- **Comprobantes de egreso.** `VoucherFormDialog` confirma con «Registrar» y luego «Confirmar», pero no nombra el tercero en la confirmación.
-- **Avisos de éxito sin revisar uno por uno:** creación de lote, ajuste de inventario, saldos iniciales, asistente de empresa y perfiles tributarios. Sus formularios nombran la acción; falta confirmar en el navegador que cada uno anuncia el resultado.
-- **Revisión visual en otros anchos.** Las 8 pantallas se capturaron en tres anchos; el resto de la matriz se revisó en código y en las capturas responsive previas (`docs/responsive/`).
-- **Lint.** Siguen las advertencias previas, que no son errores: web 33 (36 al iniciar la fase), API 98, worker 3, base de datos 3.
+Los pendientes de esta fase se resolvieron en un cierre posterior. Ver «Cierre de pendientes de la fase 5».
+
+## Cierre de pendientes de la fase 5
+
+### Idempotencia del ajuste de inventario (cambio de servidor)
+
+Se revisaron las cuatro operaciones que no enviaban `Idempotency-Key`. Solo el ajuste de inventario podía duplicar su efecto.
+
+| Operación | Protección ante un envío repetido | Cambio |
+|---|---|---|
+| Anular venta | Bloquea la venta (`FOR UPDATE`) y valida su estado: la repetición responde 409 «ya anulada» sin efectos | Ninguno |
+| Anular nota crédito | Bloquea la nota y la venta, y valida el estado `ANULADA` | Ninguno |
+| Recibir compra | Clave única `(proveedor, factura)`: la repetición responde 409 «factura duplicada» | Ninguno |
+| Ajustar inventario | Cada envío asentaba un ajuste nuevo | `Idempotency-Key` |
+
+- **Causa.** Si la respuesta de un ajuste se perdía, por ejemplo por un corte de red, el reintento asentaba un segundo ajuste en el lote, el Kardex y la contabilidad.
+- **Cambio en el servidor.** `POST /api/v1/inventory/movements/adjust` acepta la cabecera `Idempotency-Key`.
+  - **Misma clave y mismo contenido:** responde el ajuste original sin escribir nada, aunque los dos envíos lleguen a la vez.
+  - **Misma clave con otro contenido:** responde 409 sin efectos.
+  - **Sin clave:** se comporta como antes. Así no cambia el contrato para otros clientes ni para las pruebas existentes.
+  - **Transacción.** La consulta y el registro de la clave van en la misma transacción serializable del ajuste, antes de bloquear el lote.
+- **Cambio en la web.** El diálogo de ajuste siempre envía la clave. La conserva mientras se reintenta el mismo ajuste y la renueva tras un éxito o si cambian los datos.
+- **Pruebas.** La prueba de integración `inventory-adjustments.integration.spec.ts`, con PostgreSQL real, cubre:
+  - el reintento con la misma clave;
+  - dos envíos simultáneos;
+  - una clave con otro contenido;
+  - el comportamiento sin clave.
+
+### Código sin uso retirado
+
+- `AlertModalContext` y su proveedor en `main.tsx`.
+- `ReceivableReversalDialog`, la función `revertReceivablePayment` de la web y los esquemas de reversión de cartera y de proveedores. El endpoint del servidor sigue existiendo y conserva sus pruebas de API.
+- Se retiraron también las pruebas que solo cubrían ese código.
+
+### Comprobante de egreso y recibo de caja
+
+La confirmación de un recibo o egreso nuevo usa ahora la confirmación común:
+
+- **Registro:** nombra el tercero (cliente o proveedor), el valor y el medio de pago.
+- **Efectos:** por cada factura, el abono o pago y la baja de su saldo; el dinero que entra o sale de caja o de la cuenta bancaria elegida; y el asiento.
+- **Botón:** «Registrar recibo de caja» o «Registrar comprobante de egreso».
+- **Error:** un error del servidor queda en la confirmación.
+
+### Avisos de éxito
+
+| Formulario | Aviso |
+|---|---|
+| Registrar lote | «Lote registrado con su existencia inicial.» |
+| Ajuste de inventario | «Ajuste asentado: el lote, el Kardex y la contabilidad quedaron actualizados.» |
+| Saldos de apertura | «Saldos de apertura registrados con su asiento.» |
+| Perfil tributario de la empresa | «Perfil tributario registrado, vigente desde el …» |
+| Clasificación tributaria de un producto | «Clasificación … registrada y activa desde el …» |
+
+En el diálogo de ajuste, el error del servidor queda ahora en la confirmación y se puede reintentar con la misma clave. Antes la confirmación se cerraba y el error quedaba arriba del formulario, fuera de la vista.
+
+La E2E `redesign-phase5.spec.ts` hace el ajuste desde la interfaz:
+
+1. Sin cuenta de sobrantes configurada, el servidor lo rechaza y el error se ve en la confirmación.
+2. Se asigna la cuenta por API y se reintenta desde el mismo diálogo.
+3. El aviso de éxito aparece y el saldo pasa de 10 a 12.
+
+Capturas: `ajuste-inventario-error-1440.png` y `ajuste-inventario-exito-1440.png`.
+
+El mensaje del servidor para un propósito sin cuenta nombraba solo el código técnico. Ahora dice: «Falta un mapeo activo e imputable para «Sobrantes de inventario» (INVENTORY_SURPLUS): asígnale una cuenta en Contabilidad → Propósitos contables.»
+
+### Lo que sigue abierto
+
+- **OpenAPI.** Ningún endpoint idempotente documenta todavía la cabecera `Idempotency-Key` con `@ApiHeader`; hacerlo es un cambio transversal de documentación.
+- **Configuración de la empresa.** Las secciones de `CompanySettingsPage` no se revisaron una por una en busca del aviso de éxito.
+- **Lint.** Siguen las advertencias previas, que no son errores.
 
 ## Siguiente paso
 
