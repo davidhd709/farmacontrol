@@ -1,6 +1,8 @@
 # Estado de avance — FarmaControl
 
-**Corte:** 18 de octubre de 2026 · rama `fase-5-frontend` · referencia: [auditoría 2026-10-06](AUDITORIA_2026-10-06.md)
+**Corte:** 15 de noviembre de 2026 · rama `main` · referencia: [auditoría 2026-10-06](AUDITORIA_2026-10-06.md)
+
+> Desde el 25 de octubre la hoja de ruta del producto es la de [ADR-006](adr/ADR-006-producto-multisector-y-contabilidad-configurable.md) (F3 a F8 implementadas; sigue F9, multiempresa) y el rediseño de la interfaz (`docs/rediseno/`, fases 1 a 5) quedó cerrado el 15 de noviembre. Este documento conserva las fases 0–8 de la auditoría; la sección 4 y la deuda técnica están al día con ese corte.
 
 Este documento resume qué se corrigió desde la auditoría técnica, qué falta para llegar al 100 % y qué decisiones del cliente bloquean el cierre. Lo que aquí figura como hecho está en `main` con pruebas ejecutadas contra PostgreSQL real.
 
@@ -130,6 +132,20 @@ Auditoría de seguridad de la fase (Antigravity, sólo lectura): dos P1 y un P2 
 | Instalación | Una base nueva no tenía ubicación de inventario y la web no permite crearla: una migración crea la Bodega principal sólo si no existe ninguna | `a27b95e` |
 | CI de respaldos | Las pruebas de respaldos pasan en GitHub Actions desde el aislamiento de pruebas (#7) | `2aac389` |
 
+### Deuda cerrada el 15 de noviembre
+
+| Tema | Qué hace ahora |
+|---|---|
+| Prueba intermitente de apertura de caja | Anular un asiento reintenta los mismos fallos transitorios que las demás operaciones serializables (transacción expirada, 40001 por SQL directo, interbloqueo) y hasta diez veces; antes, bajo carga, la carrera con la incorporación del efectivo podía responder 500 en lugar de 409 |
+| Prueba intermitente de perfiles tributarios | Roles, producto y sesiones se crean una vez por archivo; entre pruebas solo se borran los perfiles |
+| OpenAPI | Las 13 operaciones que leen `Idempotency-Key` la documentan (obligatoria en todas salvo el ajuste de inventario) |
+| Configuración de la empresa | Avisos de éxito al configurar la empresa, agregar una sucursal y registrar una política; reintento si la carga falla; fechas dd/mm/aaaa |
+| Terceros | Editar un cliente o proveedor desde su módulo actualiza su tercero (y el otro rol, si lo tiene) en la misma transacción; cambiar el documento de un tercero con ambos roles se rechaza con 409 |
+| Límites entre módulos | La prueba de arquitectura vigila también ventas, compras, contabilidad, catálogo, terceros, tesorería, gastos y empresa |
+| Signo del Kardex | La regla «el tipo da el sentido» pasa a los contratos compartidos y el API entrega `signedQuantityBaseUnits`; el historial guardado no cambia |
+| Dependencias | Parcheados `body-parser`, `multer`, `qs` (API), `zod` (web), `js-yaml`, `vitest`, `vite`, `undici` y `fast-uri` |
+| Lint | Web y worker sin advertencias; sin variables ni imports sin uso en el repositorio. Se detectaron y corrigieron dos errores de tipos que el `typecheck` real (`tsc -b`) marcaba en la web |
+
 ## 3. Pasos obligatorios al desplegar estos cambios
 
 1. **Respaldo** de la base antes de migrar.
@@ -170,7 +186,7 @@ Ninguna se implementó por supuesto; las que se tocaron quedaron con la opción 
 |---|---|---|---|
 | 1 | Una o varias cajas, apertura, arqueo y tolerancias | HU-015 turnos de caja | No existe |
 | 2 | Inventario sin lote y cantidades fraccionarias | T-09 completo | Inventario sin lote resuelto en F4 ([ADR-006](adr/ADR-006-producto-multisector-y-contabilidad-configurable.md#implementación-de-f4-catálogo-e-inventario-multisector)): modo de control por producto (servicio, simple, lote, lote y vencimiento, serie). Las cantidades fraccionarias siguen pendientes: la unidad base es entera |
-| 3 | IVA: productos gravados, tarifas | T-16 | La venta siempre usa IVA 0 |
+| 3 | IVA: productos gravados, tarifas | T-16 | Resuelto en F6 ([ADR-006](adr/ADR-006-producto-multisector-y-contabilidad-configurable.md)): catálogo normativo y clasificación tributaria por producto |
 | 4 | Tope de descuento, quién autoriza, motivo | T-19, T-20 | Permiso `sales:discount` (cajero lo conserva); sin tope porcentual |
 | 5 | Quién emite notas crédito y notas débito | T-18 | Admin y supervisor (los roles inventario y compras perdieron las notas débito) |
 | 6 | Reembolso en efectivo de ventas a crédito no pagadas | — | Permitido |
@@ -185,10 +201,10 @@ Ninguna se implementó por supuesto; las que se tocaron quedaron con la opción 
 | 15 | Canal del recordatorio de pago y franja "Corriente" en cartera | Fase 3 | No existe / franja extra |
 | 16 | Nombre del sistema | T-01 | FarmaControl provisional |
 | 17 | Participantes, duración y criterio de la UAT | T-40, T-41 | — |
-| 18 | Método de costo del inventario (promedio ponderado o por lote) | Costo de ventas y valorización | El costo de venta y la valorización usan el costo fijo del catálogo, que las compras no actualizan; la cuenta de inventarios se descuadra con el tiempo |
-| 19 | Mapeo de ventas gravadas/excluidas, descuentos, SIMPLE e inventario en el PUC | Asientos correctos | Toda venta va a 413595 (ventas excluidas) mientras no haya IVA; varios mapeos parecen invertidos (ver preguntas A2–A4 y B1) |
+| 18 | Método de costo del inventario (promedio ponderado o por lote) | Costo de ventas y valorización | Resuelto en F2 y F5: promedio ponderado móvil por defecto; PEPS y costo identificado por lote elegibles por empresa |
+| 19 | Mapeo de ventas gravadas/excluidas, descuentos, SIMPLE e inventario en el PUC | Asientos correctos | Resuelto en F7: plantilla PUC por sector y mapeos versionados por empresa. Sigue abierta la pregunta A3.9 (ver deuda técnica) |
 | 20 | Rol de Contabilidad | Acceso de la contadora | Sólo el administrador tiene permisos contables |
-| 21 | Venta a crédito en el POS | Cartera desde la operación diaria | El backend la admite con plazo fijo de 30 días (incluso a Consumidor Final), pero el POS no la ofrece |
+| 21 | Venta a crédito en el POS | Cartera desde la operación diaria | El POS ofrece contado o crédito y exige un cliente distinto del Consumidor Final; el plazo sigue fijo en 30 días (decisión 9) |
 | 22 | Descuentos y cambio de precio en el POS | T-19, T-20 | El backend los admite con permiso; el POS no tiene el campo (siempre envía 0) |
 | 23 | Asientos de ajustes de inventario, bajas por vencimiento, movimientos manuales de caja y banco | Contabilidad completa | Resuelto en F8 ([ADR-006](adr/ADR-006-producto-multisector-y-contabilidad-configurable.md#implementación-de-f8-cobertura-contable-completa-y-reportes)): ajustes y existencias iniciales al costo del submayor; caja y banco manuales contra una cuenta de contrapartida obligatoria |
 
@@ -212,7 +228,7 @@ Ninguna se implementó por supuesto; las que se tocaron quedaron con la opción 
 
 ## 6. Deuda técnica conocida
 
-- **Signo del kardex en la base:** las salidas por venta y devolución se guardan con cantidad positiva y los ajustes negativos con cantidad negativa. El historial es inmutable, así que el sentido se deduce del tipo (así lo hace la pantalla). Unificar el signo exige una decisión y una migración de lectura, no de datos.
+- **Signo del kardex en la base:** el historial guarda el signo de forma heterogénea y es inmutable. Desde el 15 de noviembre el API entrega `signedQuantityBaseUnits` calculado por tipo con la regla de los contratos; cualquier consulta SQL nueva sobre `inventory_movements` debe usar esa misma regla, no el signo guardado.
 - **Idempotencia:** pagos de cartera, CxP, gastos y recepciones de compra reintentan ante conflictos de serialización; las demás operaciones ya tienen pruebas de duplicado concurrente en verde.
 - **Errores sin tipar:** quedan 13 `throw new Error` en dominio y aplicación, todos invariantes internas o de configuración (por ejemplo, falta el Consumidor Final): responden 500 a propósito.
 - **Transacciones de auditoría:** varios servicios abren la transacción con el cliente Prisma global para incluir la auditoría; las pruebas unitarias de esos servicios deben simular `prisma.$transaction`.
@@ -220,15 +236,14 @@ Ninguna se implementó por supuesto; las que se tocaron quedaron con la opción 
 - **RN-006:** el lote es vendible el día de su vencimiento y se marca VENCIDO desde el día siguiente; es la conducta existente, no una regla confirmada.
 - **Consecutivos** (`count() + 1`): se mantienen porque, con reintento en transacción serializable, producen numeración sin saltos. Una secuencia de PostgreSQL deja huecos al revertir, lo que no conviene para documentos con numeración legal. A revisar cuando se defina el comprobante.
 - **Tipos de movimiento de caja:** sin restricción; las pruebas usan valores fuera del contrato (`APERTURA`, `EGRESO`). Revisar datos reales antes de restringirlos.
-- **Prueba intermitente:** el `beforeEach` de `product-tax-profile` puede superar 30 s con el disco lento (no se repitió en las corridas de esta ronda).
-- **`pnpm audit` restante:** `vitest` 3 arrastra `tinypool` (2 críticas) y `@vitest/mocker`: solo desarrollo, no llegan a la imagen; requiere migrar a Vitest 4 como tarea aparte. `deepmerge-ts` (alta) viene fijado por `prisma` 7.10 y solo lo usa la CLI al leer su configuración. `uuid` 8 en `exceljs`: el aviso afecta a v3/v5/v6 con búfer y `exceljs` solo usa `v4()`.
+- **`pnpm audit` restante (15 de noviembre):** `deepmerge-ts` (alta) viene fijado por `prisma` y solo lo usa la CLI al leer su configuración. `uuid` en `exceljs`: el aviso afecta a v3/v5/v6 con búfer y `exceljs` solo usa `v4()`. `glob` y `minimatch` (moderadas) y `deepmerge` (baja) vienen de `@nestjs/cli` y `typescript-eslint`: solo desarrollo, y el parche exige una versión mayor.
 - **Rate limit en memoria:** válido con una sola instancia de la API. Un ataque distribuido contra una cuenta solo lo frena el límite por IP y el costo de Argon2.
 - **RPO de 24 horas:** no hay archivado continuo de WAL (PITR).
 - **Límite por IP en la farmacia:** si todos los equipos salen por la misma IP pública, 20 fallos en 15 minutos bloquean el login en la sede; ajustable con `AUTH_RATE_LIMIT_IP_MAX_ATTEMPTS`.
-- **Terceros:** editar un cliente o proveedor desde su propio módulo no actualiza su tercero (al revés sí, en una sola transacción). Las líneas de notas contables no llevan tercero.
-- **Límites entre módulos:** la prueba de arquitectura vigila lotes, kardex, ubicaciones, caja, cartera, CxP, clientes, proveedores y tesorería; varios módulos siguen escribiendo `audit_events` directamente y las tablas de ventas, compras, contabilidad y catálogo no están vigiladas. Terceros instancia `CustomersLedger`/`SuppliersLedger` directamente porque clientes y proveedores ya importan su módulo (un import de vuelta sería circular).
-- **Notas crédito y descuentos:** la devolución se registra neta del descuento en `SALES_RETURNS`; no se revierte la parte proporcional en `SALES_DISCOUNTS`.
-- 128 advertencias de lint por `any` y componentes de más de 600 líneas, a reducir solo cuando se toquen.
+- **Terceros:** las líneas de notas contables no llevan tercero. Inactivar un cliente o proveedor desde su módulo no inactiva el tercero (a propósito: puede tener el otro rol).
+- **Límites entre módulos:** 17 archivos de 9 módulos escriben `audit_events` directamente en lugar de usar `AuditService`; los perfiles tributarios de producto los gestiona contabilidad y no están en la prueba. Terceros instancia `CustomersLedger`/`SuppliersLedger` directamente porque clientes y proveedores ya importan su módulo (un import de vuelta sería circular).
+- **Notas crédito y descuentos:** la devolución se registra neta del descuento en `SALES_RETURNS`; no se revierte la parte proporcional en `SALES_DISCOUNTS`. No es un error técnico sino la pregunta A3.9 de `PREGUNTAS_CONTADORA.md`; según ADR-006 debe resolverse como una política contable por empresa con valor por defecto.
+- 91 advertencias de lint en el API, todas `no-explicit-any` (sobre todo al mapear filas de Prisma en repositorios), a reducir cuando se toque cada archivo.
 
 ## 7. Siguiente paso recomendado
 
