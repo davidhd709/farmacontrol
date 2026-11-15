@@ -13,6 +13,8 @@ import type { ExpenseDto } from '@farmacia/contracts';
 import { PrintableDocumentLayout } from './PrintableDocumentLayout';
 import { formatCurrencyCop } from '../../utils/print-document';
 import { numberToWordsCop } from '../../utils/number-to-words';
+import { formatDate } from '../../utils/date-format';
+import { paymentMethodLabel } from '../../features/sales/sale-labels';
 
 interface Props {
   open: boolean;
@@ -21,12 +23,7 @@ interface Props {
   actions?: React.ReactNode;
 }
 
-export const ExpensePrintDialog: React.FC<Props> = ({
-  open,
-  expense,
-  onClose,
-  actions,
-}) => {
+export const ExpensePrintDialog: React.FC<Props> = ({ open, expense, onClose, actions }) => {
   if (!expense) return null;
 
   const docNumber = expense.documentNumber || `GAS-${expense.id.slice(0, 8).toUpperCase()}`;
@@ -81,7 +78,10 @@ export const ExpensePrintDialog: React.FC<Props> = ({
                 Beneficiario / Proveedor:
               </Typography>
               <Typography variant="body1" sx={{ fontWeight: 800, color: '#0f172a', mt: 0.25 }}>
-                {expense.beneficiary} {expense.supplierName ? `(${expense.supplierName})` : ''}
+                {expense.beneficiary}
+                {expense.supplierName && expense.supplierName !== expense.beneficiary
+                  ? ` (${expense.supplierName})`
+                  : ''}
               </Typography>
             </Box>
 
@@ -150,7 +150,9 @@ export const ExpensePrintDialog: React.FC<Props> = ({
                 variant="body2"
                 sx={{ fontWeight: 700, color: '#0f172a', fontFamily: 'monospace', mt: 0.25 }}
               >
-                {expense.accountCode ? `${expense.accountCode} — ${expense.accountName || ''}` : 'No parametrizada'}
+                {expense.accountCode
+                  ? `${expense.accountCode} — ${expense.accountName || ''}`
+                  : 'No parametrizada'}
               </Typography>
             </Box>
           </Box>
@@ -177,9 +179,11 @@ export const ExpensePrintDialog: React.FC<Props> = ({
                 Medio de Pago / Cuenta:
               </Typography>
               <Typography variant="body2" sx={{ color: '#0f172a', fontWeight: 600, mt: 0.25 }}>
-                {expense.paymentMethod || 'No especificado'}{' '}
+                {expense.paymentMethod
+                  ? paymentMethodLabel(expense.paymentMethod)
+                  : 'No especificado'}{' '}
                 {expense.bankAccountName ? `— ${expense.bankAccountName}` : ''}
-                {expense.dueDate ? ` (Vence: ${expense.dueDate})` : ''}
+                {expense.dueDate ? ` (Vence: ${formatDate(expense.dueDate)})` : ''}
               </Typography>
             </Box>
 
@@ -259,10 +263,16 @@ export const ExpensePrintDialog: React.FC<Props> = ({
                   <TableCell sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1 }}>
                     Medio de Pago
                   </TableCell>
-                  <TableCell align="right" sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1 }}>
+                  <TableCell
+                    align="right"
+                    sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1 }}
+                  >
                     Valor Pagado
                   </TableCell>
-                  <TableCell align="center" sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1 }}>
+                  <TableCell
+                    align="center"
+                    sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1 }}
+                  >
                     Estado
                   </TableCell>
                 </TableRow>
@@ -277,7 +287,9 @@ export const ExpensePrintDialog: React.FC<Props> = ({
                     }}
                   >
                     <TableCell>{p.paymentDate}</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>{p.paymentMethod}</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>
+                      {paymentMethodLabel(p.paymentMethod)}
+                    </TableCell>
                     <TableCell align="right" sx={{ fontWeight: 800, fontFamily: 'monospace' }}>
                       {formatCurrencyCop(Number(p.amount))}
                     </TableCell>
@@ -386,7 +398,10 @@ export const ExpensePrintDialog: React.FC<Props> = ({
             <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>
               Abonado / Pagado:
             </Typography>
-            <Typography variant="body2" sx={{ fontWeight: 800, fontFamily: 'monospace', color: '#16a34a' }}>
+            <Typography
+              variant="body2"
+              sx={{ fontWeight: 800, fontFamily: 'monospace', color: '#16a34a' }}
+            >
               {formatCurrencyCop(Number(expense.amountPaid))}
             </Typography>
           </Box>
@@ -403,7 +418,10 @@ export const ExpensePrintDialog: React.FC<Props> = ({
             <Typography variant="subtitle2" sx={{ fontWeight: 900, letterSpacing: 0.5 }}>
               SALDO PENDIENTE:
             </Typography>
-            <Typography variant="h6" sx={{ fontWeight: 900, fontFamily: 'monospace', color: '#ffffff' }}>
+            <Typography
+              variant="h6"
+              sx={{ fontWeight: 900, fontFamily: 'monospace', color: '#ffffff' }}
+            >
               {formatCurrencyCop(Number(expense.balance))}
             </Typography>
           </Box>

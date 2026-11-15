@@ -274,7 +274,10 @@ test('compra de varias páginas, su nota débito y un egreso automático: impres
   await page.getByRole('button', { name: automatic!.documentNumber }).click();
   const restriction = page.getByTestId('treasury-actions-restriction');
   await expect(restriction).toContainText(`Lo generó la nota crédito ${note.creditNoteNumber}`);
-  await expect(restriction.getByRole('link', { name: 'Ir a notas crédito' })).toBeVisible();
+  const sourceLink = restriction.getByRole('link', {
+    name: `Abrir la nota crédito ${note.creditNoteNumber}`,
+  });
+  await expect(sourceLink).toBeVisible();
   await expect(page.getByRole('button', { name: 'Anular Documento' })).toHaveCount(0);
   await shot(page, 'egreso-automatico-1440');
   const disbursementPdf = await pdfOf(page, 'egreso-automatico');
@@ -283,5 +286,92 @@ test('compra de varias páginas, su nota débito y un egreso automático: impres
     `Emitido automáticamente por la nota crédito ${note.creditNoteNumber}`,
   );
   expect(disbursementPdf.text).toContain(legalName);
+
+  // «Abrir la nota crédito» lleva al documento exacto, que se imprime con el mismo formato
+  await sourceLink.click();
+  await expect(page).toHaveURL(new RegExp(`/credit-notes\\?nota=${note.creditNoteNumber}`));
+  const creditNoteDialog = page.getByRole('dialog');
+  await expect(creditNoteDialog).toContainText(`Detalle de Nota Crédito ${note.creditNoteNumber}`);
+  await expect(creditNoteDialog).toContainText(legalName);
+  const creditNotePdf = await pdfOf(page, 'nota-credito');
+  expect(creditNotePdf.size).toMatch(/612 x 792/);
+  expect(creditNotePdf.pages).toBe(1);
+  expect(creditNotePdf.text).toContain(legalName);
+  expect(creditNotePdf.text).toContain(note.creditNoteNumber);
+  expect(creditNotePdf.text).toContain('Devolución para el egreso automático');
+  expect(creditNotePdf.text).not.toMatch(/900\.000\.000-1|contacto@farmacontrol\.com/);
+  await admin.dispose();
+});
+
+test('causación de gasto y su asiento contable: impresión y PDF', async ({ page }) => {
+  const admin = await apiAs(fixtures.admin.username, fixtures.admin.password);
+  const legalName = await ensureCompany(admin);
+  const code = uniqueCode('G4');
+  const accounts = await call<
+    { id: string; code: string; type: string; allowsMovement: boolean; isActive: boolean }[]
+  >(admin, 'get', 'accounts');
+  const expenseAccount = accounts.find(
+    (account) => account.type === 'EXPENSE' && account.allowsMovement && account.isActive,
+  );
+  expect(expenseAccount, 'el plan de cuentas de E2E debe tener una cuenta de gasto').toBeTruthy();
+  const category = await call<{ id: string }>(admin, 'post', 'expense-categories', {
+    name: `Rediseño ${code}`,
+    accountId: expenseAccount!.id,
+  });
+  const expense = await call<{ id: string; beneficiary: string }>(
+    admin,
+    'post',
+    'expenses',
+    {
+      categoryId: category.id,
+      description: `Mantenimiento nevera ${code}`,
+      supplierId: fixtures.supplierId,
+      documentNumber: code,
+      amount: '125000.00',
+      expenseDate: businessDay(0),
+      paymentMethod: 'CREDITO',
+    },
+    { 'Idempotency-Key': randomUUID() },
+  );
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/expenses?gasto=${expense.id}`);
+  await expect(page.getByRole('dialog')).toContainText('Detalle de Gasto e Historial de Pagos');
+  await page.getByRole('dialog').getByRole('button', { name: 'Imprimir' }).click();
+  const expenseDialog = page
+    .getByRole('dialog')
+    .filter({ hasText: 'Causación de Gasto Operativo' });
+  await expect(expenseDialog).toContainText(legalName);
+  await expect(page.getByRole('dialog')).toHaveCount(1);
+  const expensePdf = await pdfOf(page, 'gasto');
+  expect(expensePdf.size).toMatch(/612 x 792/);
+  expect(expensePdf.pages).toBe(1);
+  expect(expensePdf.text).toContain(legalName);
+  expect(expensePdf.text).toContain(expense.beneficiary);
+  // El proveedor no se repite entre paréntesis y el medio de pago sale en palabras
+  expect(expensePdf.text).not.toContain(`(${expense.beneficiary})`);
+  expect(expensePdf.text).toMatch(/Crédito/);
+  expect(expensePdf.text).toContain(code);
+  expect(expensePdf.text).toMatch(/125\.000,00/);
+  await page.keyboard.press('Escape');
+
+  // El asiento de la causación, buscado por su documento de origen en el Libro Diario
+  await page.goto('/accounting/journal');
+  await page.getByLabel('Buscar descripción o documento').fill(expense.id);
+  const row = page.getByRole('row', { name: /125\.000,00/ }).first();
+  await row.getByRole('button', { name: 'Imprimir' }).click();
+  const entryDialog = page.getByRole('dialog');
+  await expect(entryDialog).toContainText('Asiento del Libro Diario');
+  await expect(entryDialog).toContainText(legalName);
+  const entryPdf = await pdfOf(page, 'asiento-contable');
+  expect(entryPdf.size).toMatch(/612 x 792/);
+  expect(entryPdf.pages).toBe(1);
+  expect(entryPdf.text).toContain(legalName);
+  expect(entryPdf.text).toContain(expenseAccount!.code);
+  // Origen en palabras, fecha legible y las dos columnas de valores completas dentro de la hoja
+  expect(entryPdf.text).toContain(`Causación · ${code}`);
+  expect(entryPdf.text).not.toMatch(/EXPENSE|\d{4}-\d{2}-\d{2}T/);
+  expect(entryPdf.text).toMatch(/Débito\s+Crédito/);
+  expect(entryPdf.text).toMatch(/125\.000,00/);
   await admin.dispose();
 });

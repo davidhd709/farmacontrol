@@ -47,34 +47,7 @@ import { FilterBar } from '../../../components/layout/FilterBar';
 import { DateField } from '../../../components/DateField';
 import PrintIcon from '@mui/icons-material/Print';
 import { JournalEntryPrintDialog } from '../../../components/documents/JournalEntryPrintDialog';
-
-const sourceTypeLabels: Record<
-  string,
-  { label: string; color: 'primary' | 'secondary' | 'success' | 'warning' | 'info' | 'default' }
-> = {
-  SALE: { label: 'Venta', color: 'success' },
-  SALE_CANCEL: { label: 'Anulación de venta', color: 'secondary' },
-  CREDIT_NOTE: { label: 'Devolución', color: 'warning' },
-  CREDIT_NOTE_CANCEL: { label: 'Anulación de devolución', color: 'secondary' },
-  PURCHASE: { label: 'Compra', color: 'primary' },
-  DEBIT_NOTE: { label: 'Devolución a proveedor', color: 'primary' },
-  RECEIVABLE_PAYMENT: { label: 'Cobro de cartera', color: 'info' },
-  PAYABLE_PAYMENT: { label: 'Pago a proveedor', color: 'warning' },
-  EXPENSE: { label: 'Causación', color: 'warning' },
-  EXPENSE_PAYMENT: { label: 'Pago de causación', color: 'warning' },
-  CASH_MOVEMENT: { label: 'Recibo / egreso de caja', color: 'info' },
-  BANK_MOVEMENT: { label: 'Recibo / egreso bancario', color: 'info' },
-  INVENTORY_ADJUSTMENT: { label: 'Ajuste de inventario', color: 'default' },
-  INVENTORY_INITIAL: { label: 'Inventario inicial', color: 'default' },
-  LOT_INITIAL: { label: 'Inventario inicial', color: 'default' },
-  METHOD_CHANGE: { label: 'Cambio de método de costeo', color: 'default' },
-  OPENING_BALANCE: { label: 'Saldos iniciales', color: 'default' },
-  AUTO_OPENING: { label: 'Apertura', color: 'default' },
-  FISCAL_CLOSING: { label: 'Cierre mensual', color: 'default' },
-  ANNUAL_CLOSING: { label: 'Cierre anual', color: 'default' },
-  REVERSAL: { label: 'Anulación', color: 'secondary' },
-  MANUAL_NOTE: { label: 'Nota contable', color: 'default' },
-};
+import { journalSourceType } from '../journal-source-types';
 
 /** Estado del asiento en palabras del usuario (no se depende solo del color). */
 function statusOf(entry: JournalEntryDto): {
@@ -88,8 +61,7 @@ function statusOf(entry: JournalEntryDto): {
     : { label: 'Borrador', color: 'default' };
 }
 
-const originOf = (sourceType: string) =>
-  sourceTypeLabels[sourceType] ?? { label: 'Otro documento', color: 'default' as const };
+const originOf = journalSourceType;
 
 /** Documento de origen legible, con enlace a la pantalla donde se consulta. */
 function SourceDocument({ entry }: { entry: JournalEntryDto }) {
@@ -298,27 +270,27 @@ export const JournalEntriesPage = () => {
             value={toDate}
             onChange={(value) => setToDate(value)}
           />
-        <FormControl size="small" fullWidth>
-          <InputLabel>Origen</InputLabel>
-          <Select
-            value={sourceType}
-            label="Origen"
-            onChange={(e) => setSourceType(e.target.value)}
-          >
-            <MenuItem value="">Todos los orígenes</MenuItem>
-            <MenuItem value="SALE">Ventas (POS)</MenuItem>
-            <MenuItem value="PURCHASE">Compras</MenuItem>
-            <MenuItem value="RECEIVABLE_PAYMENT">Cobro de Cartera</MenuItem>
-            <MenuItem value="PAYABLE_PAYMENT">Pago Proveedores</MenuItem>
-            <MenuItem value="CREDIT_NOTE">Devoluciones</MenuItem>
-            <MenuItem value="EXPENSE">Causaciones</MenuItem>
-            <MenuItem value="EXPENSE_PAYMENT">Pagos de causaciones</MenuItem>
-            <MenuItem value="CASH_MOVEMENT">Recibos y egresos de caja</MenuItem>
-            <MenuItem value="BANK_MOVEMENT">Recibos y egresos bancarios</MenuItem>
-            <MenuItem value="REVERSAL">Anulaciones</MenuItem>
-            <MenuItem value="MANUAL_NOTE">Notas contables</MenuItem>
-          </Select>
-        </FormControl>
+          <FormControl size="small" fullWidth>
+            <InputLabel>Origen</InputLabel>
+            <Select
+              value={sourceType}
+              label="Origen"
+              onChange={(e) => setSourceType(e.target.value)}
+            >
+              <MenuItem value="">Todos los orígenes</MenuItem>
+              <MenuItem value="SALE">Ventas (POS)</MenuItem>
+              <MenuItem value="PURCHASE">Compras</MenuItem>
+              <MenuItem value="RECEIVABLE_PAYMENT">Cobro de Cartera</MenuItem>
+              <MenuItem value="PAYABLE_PAYMENT">Pago Proveedores</MenuItem>
+              <MenuItem value="CREDIT_NOTE">Devoluciones</MenuItem>
+              <MenuItem value="EXPENSE">Causaciones</MenuItem>
+              <MenuItem value="EXPENSE_PAYMENT">Pagos de causaciones</MenuItem>
+              <MenuItem value="CASH_MOVEMENT">Recibos y egresos de caja</MenuItem>
+              <MenuItem value="BANK_MOVEMENT">Recibos y egresos bancarios</MenuItem>
+              <MenuItem value="REVERSAL">Anulaciones</MenuItem>
+              <MenuItem value="MANUAL_NOTE">Notas contables</MenuItem>
+            </Select>
+          </FormControl>
           <TextField
             label="Buscar descripción o documento"
             size="small"

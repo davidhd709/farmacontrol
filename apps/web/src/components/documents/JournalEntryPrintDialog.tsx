@@ -13,6 +13,8 @@ import type { JournalEntryDto } from '@farmacia/contracts';
 import { PrintableDocumentLayout } from './PrintableDocumentLayout';
 import { formatCurrencyCop } from '../../utils/print-document';
 import { numberToWordsCop } from '../../utils/number-to-words';
+import { formatDate, formatDateTime } from '../../utils/date-format';
+import { journalSourceType } from '../../features/accounting/journal-source-types';
 
 interface Props {
   open: boolean;
@@ -21,12 +23,7 @@ interface Props {
   actions?: React.ReactNode;
 }
 
-export const JournalEntryPrintDialog: React.FC<Props> = ({
-  open,
-  entry,
-  onClose,
-  actions,
-}) => {
+export const JournalEntryPrintDialog: React.FC<Props> = ({ open, entry, onClose, actions }) => {
   if (!entry) return null;
 
   const docNumber =
@@ -107,7 +104,8 @@ export const JournalEntryPrintDialog: React.FC<Props> = ({
                 Origen / Tipo de Fuente:
               </Typography>
               <Typography variant="body2" sx={{ fontWeight: 700, color: '#0f172a', mt: 0.25 }}>
-                {entry.sourceType} {entry.sourceDocument ? `(${entry.sourceDocument.number})` : ''}
+                {journalSourceType(entry.sourceType).label}
+                {entry.sourceDocument ? ` · ${entry.sourceDocument.number}` : ''}
               </Typography>
             </Box>
 
@@ -145,7 +143,9 @@ export const JournalEntryPrintDialog: React.FC<Props> = ({
                 Fecha de Contabilización:
               </Typography>
               <Typography variant="body2" sx={{ fontWeight: 700, color: '#0f172a', mt: 0.25 }}>
-                {entry.postedAt || entry.entryDate || entry.createdAt}
+                {entry.postedAt
+                  ? formatDateTime(entry.postedAt)
+                  : formatDate(entry.entryDate || entry.createdAt)}
               </Typography>
             </Box>
           </Box>
@@ -202,22 +202,65 @@ export const JournalEntryPrintDialog: React.FC<Props> = ({
             overflow: 'hidden',
           }}
         >
-          <Table size="small">
+          {/* Anchos fijos: con la distribución automática los valores empujaban la columna Crédito fuera de la hoja */}
+          <Table size="small" sx={{ tableLayout: 'fixed', width: '100%' }}>
             <TableHead sx={{ '& .MuiTableCell-head': { bgcolor: '#0f172a' } }}>
               <TableRow>
-                <TableCell sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1, width: '16%' }}>
+                <TableCell
+                  sx={{
+                    color: '#ffffff',
+                    fontWeight: 800,
+                    fontSize: '0.75rem',
+                    py: 1,
+                    width: '12%',
+                  }}
+                >
                   Código PUC
                 </TableCell>
-                <TableCell sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1, width: '34%' }}>
+                <TableCell
+                  sx={{
+                    color: '#ffffff',
+                    fontWeight: 800,
+                    fontSize: '0.75rem',
+                    py: 1,
+                    width: '27%',
+                  }}
+                >
                   Denominación de la Cuenta
                 </TableCell>
-                <TableCell sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1, width: '24%' }}>
+                <TableCell
+                  sx={{
+                    color: '#ffffff',
+                    fontWeight: 800,
+                    fontSize: '0.75rem',
+                    py: 1,
+                    width: '27%',
+                  }}
+                >
                   Tercero / Glosa de Partida
                 </TableCell>
-                <TableCell align="right" sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1, width: '13%' }}>
+                <TableCell
+                  align="right"
+                  sx={{
+                    color: '#ffffff',
+                    fontWeight: 800,
+                    fontSize: '0.75rem',
+                    py: 1,
+                    width: '17%',
+                  }}
+                >
                   Débito
                 </TableCell>
-                <TableCell align="right" sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1, width: '13%' }}>
+                <TableCell
+                  align="right"
+                  sx={{
+                    color: '#ffffff',
+                    fontWeight: 800,
+                    fontSize: '0.75rem',
+                    py: 1,
+                    width: '17%',
+                  }}
+                >
                   Crédito
                 </TableCell>
               </TableRow>
@@ -235,16 +278,34 @@ export const JournalEntryPrintDialog: React.FC<Props> = ({
                     <TableCell sx={{ fontFamily: 'monospace', fontWeight: 800, color: '#0f172a' }}>
                       {line.accountCode}
                     </TableCell>
-                    <TableCell sx={{ fontWeight: 600, color: '#1e293b' }}>
+                    <TableCell sx={{ fontWeight: 600, color: '#1e293b', overflowWrap: 'anywhere' }}>
                       {line.accountName}
                     </TableCell>
-                    <TableCell sx={{ color: '#475569', fontSize: '0.8rem' }}>
+                    <TableCell
+                      sx={{ color: '#475569', fontSize: '0.8rem', overflowWrap: 'anywhere' }}
+                    >
                       {line.description || '-'}
                     </TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 700, fontFamily: 'monospace' }}>
+                    <TableCell
+                      align="right"
+                      sx={{
+                        fontWeight: 700,
+                        fontFamily: 'monospace',
+                        fontSize: '0.8rem',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
                       {Number(line.debit) > 0 ? formatCurrencyCop(Number(line.debit)) : '-'}
                     </TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 700, fontFamily: 'monospace' }}>
+                    <TableCell
+                      align="right"
+                      sx={{
+                        fontWeight: 700,
+                        fontFamily: 'monospace',
+                        fontSize: '0.8rem',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
                       {Number(line.credit) > 0 ? formatCurrencyCop(Number(line.credit)) : '-'}
                     </TableCell>
                   </TableRow>
@@ -401,7 +462,10 @@ export const JournalEntryPrintDialog: React.FC<Props> = ({
             <Typography variant="subtitle2" sx={{ fontWeight: 900, letterSpacing: 0.5 }}>
               SUMAS IGUALES:
             </Typography>
-            <Typography variant="h6" sx={{ fontWeight: 900, fontFamily: 'monospace', color: '#ffffff' }}>
+            <Typography
+              variant="h6"
+              sx={{ fontWeight: 900, fontFamily: 'monospace', color: '#ffffff' }}
+            >
               {formatCurrencyCop(totalDebit)}
             </Typography>
           </Box>
