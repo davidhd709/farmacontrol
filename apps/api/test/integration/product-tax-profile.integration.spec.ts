@@ -26,15 +26,13 @@ describe('Product tax profiles 11.3a PostgreSQL', () => {
     app = module.createNestApplication();
     app.setGlobalPrefix('api/v1');
     await app.init();
-  }, 30000);
-
-  beforeEach(async () => {
-    await cleanTestDatabase();
+    // Roles, producto y sesiones se crean una vez: las pruebas solo escriben perfiles tributarios,
+    // y repetir dos inicios de sesión con Argon2 en cada prueba superaba el tiempo del hook bajo
+    // carga de la suite completa
     await seedRbac(prisma);
     const category = await prisma.category.create({ data: { name: 'Prueba fiscal' } });
     const product = await prisma.product.create({
       data: {
-        inventoryControlMode: 'LOT_EXPIRY',
         inventoryControlMode: 'LOT_EXPIRY',
         categoryId: category.id,
         code: 'SKU-FISCAL',
@@ -58,7 +56,11 @@ describe('Product tax profiles 11.3a PostgreSQL', () => {
     const cashierRole = await prisma.role.findUniqueOrThrow({ where: { name: 'cajero' } });
     await prisma.userRole.create({ data: { userId: cashier.id, roleId: cashierRole.id } });
     cashierCookie = `${SESSION_COOKIE_NAME}=${(await auth.login('tax_cashier', 'AdminPassword#2026')).rawToken}`;
-  }, 30000);
+  }, 60000);
+
+  beforeEach(async () => {
+    await prisma.productTaxProfile.deleteMany();
+  });
 
   afterAll(async () => {
     if (app) await app.close();
