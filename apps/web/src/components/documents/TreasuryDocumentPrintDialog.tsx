@@ -13,12 +13,21 @@ import type { TreasuryDocumentDto } from '@farmacia/contracts';
 import { PrintableDocumentLayout } from './PrintableDocumentLayout';
 import { formatCurrencyCop } from '../../utils/print-document';
 import { numberToWordsCop } from '../../utils/number-to-words';
+import { treasuryOriginDescription } from '../../features/treasury/treasury-document-actions';
+
+const ORIGIN_TEXT: Record<TreasuryDocumentDto['origin'], string> = {
+  AUTOMATICO: '',
+  MANUAL: 'Registro manual contra una cuenta contable',
+  CARTERA: 'Abono a facturas de venta a crédito',
+  PROVEEDOR: 'Pago de facturas de compra o causaciones',
+};
 
 interface Props {
   open: boolean;
   document: TreasuryDocumentDto | null;
   onClose: () => void;
   actions?: React.ReactNode;
+  notice?: React.ReactNode;
 }
 
 export const TreasuryDocumentPrintDialog: React.FC<Props> = ({
@@ -26,6 +35,7 @@ export const TreasuryDocumentPrintDialog: React.FC<Props> = ({
   document,
   onClose,
   actions,
+  notice,
 }) => {
   if (!document) return null;
 
@@ -52,6 +62,7 @@ export const TreasuryDocumentPrintDialog: React.FC<Props> = ({
           : 'Firma y Cédula Beneficiario (Recibí Conforme)'
       }
       actions={actions}
+      notice={notice}
       maxWidth="md"
     >
       {/* CUADÍCULA FORMAL CONTABLE DEL TERCERO Y OPERACIÓN */}
@@ -111,7 +122,29 @@ export const TreasuryDocumentPrintDialog: React.FC<Props> = ({
             </Box>
           </Box>
 
-          {/* FILA 2: CONCEPTO DE LA OPERACIÓN */}
+          {/* FILA 2: ORIGEN DEL DOCUMENTO */}
+          <Box sx={{ p: 1.5, borderBottom: '1px solid #cbd5e1' }} data-testid="treasury-doc-origin">
+            <Typography
+              variant="caption"
+              sx={{
+                display: 'block',
+                color: '#475569',
+                fontWeight: 700,
+                fontSize: '0.72rem',
+                textTransform: 'uppercase',
+                letterSpacing: 0.5,
+              }}
+            >
+              Origen:
+            </Typography>
+            <Typography variant="body2" sx={{ fontWeight: 600, color: '#1e293b', mt: 0.25 }}>
+              {document.origin === 'AUTOMATICO'
+                ? `Emitido automáticamente por ${treasuryOriginDescription(document)}`
+                : ORIGIN_TEXT[document.origin]}
+            </Typography>
+          </Box>
+
+          {/* FILA 3: CONCEPTO DE LA OPERACIÓN */}
           <Box sx={{ p: 1.5, borderBottom: document.counterpartAccount ? '1px solid #cbd5e1' : 'none' }}>
             <Typography
               variant="caption"
@@ -180,7 +213,7 @@ export const TreasuryDocumentPrintDialog: React.FC<Props> = ({
             }}
           >
             <Table size="small">
-              <TableHead sx={{ bgcolor: '#0f172a' }}>
+              <TableHead sx={{ '& .MuiTableCell-head': { bgcolor: '#0f172a' } }}>
                 <TableRow>
                   <TableCell sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1 }}>
                     Documento Relacionado

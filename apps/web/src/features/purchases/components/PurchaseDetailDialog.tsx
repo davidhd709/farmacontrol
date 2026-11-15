@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useContext } from 'react';
+import { QueryClient, QueryClientContext, useQuery } from '@tanstack/react-query';
 import {
   Dialog,
   DialogTitle,
@@ -26,7 +27,11 @@ import { StatusChip } from '../../../components/StatusChip';
 import { purchaseStatus } from '../purchase-labels';
 import { expirationDateLabel, lotNumberLabel } from '../../catalog/utils/inventory-control';
 import { formatDate, formatDateTime } from '../../../utils/date-format';
-import { useCompanyInfo } from '../../company/hooks/useCompanyInfo';
+import { useCompanyLetterhead } from '../../company/hooks/useCompanyLetterhead';
+import { fetchPurchaseDebitNotes, type DebitNoteDto } from '../../accounting/api/accounting.api';
+
+// El detalle también se monta sin proveedor de consultas en algunas pruebas
+const fallbackClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 import { printDocument, downloadDocumentPdf } from '../../../utils/print-document';
 
 interface PurchaseDetailDialogProps {
@@ -35,6 +40,10 @@ interface PurchaseDetailDialogProps {
   purchase: PurchaseDto | null;
   /** Abre la devolución al proveedor de esta compra (solo si la compra la admite) */
   onStartReturn?: () => void;
+  /** Abre la nota débito imprimible; sin él no se listan las notas de la compra */
+  onPrintDebitNote?: (debitNote: DebitNoteDto) => void;
+  /** Abre el comprobante imprimible con el formato común; sin él, se imprime este detalle */
+  onPrint?: () => void;
 }
 
 export const PurchaseDetailDialog: React.FC<PurchaseDetailDialogProps> = ({
@@ -42,16 +51,31 @@ export const PurchaseDetailDialog: React.FC<PurchaseDetailDialogProps> = ({
   onClose,
   purchase,
   onStartReturn,
+  onPrintDebitNote,
+  onPrint,
 }) => {
-  const company = useCompanyInfo();
+  const client = useContext(QueryClientContext) ?? fallbackClient;
+  const debitNotes = useQuery(
+    {
+      queryKey: ['purchase-debit-notes', purchase?.id],
+      queryFn: () => fetchPurchaseDebitNotes(purchase!.id),
+      enabled: open && Boolean(purchase) && Boolean(onPrintDebitNote),
+      retry: false,
+    },
+    client,
+  );
+  // Membrete real: lo que la empresa no tenga configurado no se imprime (rediseño, fase 4)
+  const { company } = useCompanyLetterhead(open);
   if (!purchase) return null;
 
   const handlePrint = () => {
-    printDocument(`${purchase.invoiceNumber}_Compra`);
+    if (onPrint) onPrint();
+    else printDocument(`${purchase.invoiceNumber}_Compra`);
   };
 
   const handleDownloadPdf = () => {
-    downloadDocumentPdf(`${purchase.invoiceNumber}_Compra`);
+    if (onPrint) onPrint();
+    else downloadDocumentPdf(`${purchase.invoiceNumber}_Compra`);
   };
 
   // Extraer metadatos de factura de compra si existen
@@ -77,7 +101,8 @@ export const PurchaseDetailDialog: React.FC<PurchaseDetailDialogProps> = ({
       fullWidth
       slotProps={{
         paper: {
-          className: 'print-document',
+          // Con la plantilla común (onPrint) este detalle ya no es lo que se imprime
+          className: onPrint ? undefined : 'print-document',
           sx: {
             borderRadius: 2.5,
             boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
@@ -105,10 +130,18 @@ export const PurchaseDetailDialog: React.FC<PurchaseDetailDialogProps> = ({
         {/* Encabezado Institucional de la Farmacia */}
         <Box sx={{ pb: 2, mb: 2, borderBottom: '1px solid #E0E0E0' }}>
           <Typography variant="h6" sx={{ fontWeight: 800, color: 'primary.main', lineHeight: 1.2 }}>
-            {company.legalName}
+            {company?.legalName ?? 'Empresa sin configurar'}
           </Typography>
           <Typography variant="caption" color="text.secondary" component="div">
-            {company.taxIdFull} • {company.address} {company.phone ? `• Tel: ${company.phone}` : ''}
+            {[
+              company?.taxId
+                ? `NIT ${company.taxId}${company.taxIdCheckDigit ? `-${company.taxIdCheckDigit}` : ''}`
+                : null,
+              company?.address,
+              company?.phone ? `Tel. ${company.phone}` : null,
+            ]
+              .filter(Boolean)
+              .join(' • ')}
           </Typography>
         </Box>
         {/* Cabecera Informativa de Factura */}
@@ -289,6 +322,37 @@ export const PurchaseDetailDialog: React.FC<PurchaseDetailDialogProps> = ({
             )}
           </Box>
         </Box>
+
+        {/* Notas débito de la compra, con su salida imprimible (rediseño, fase 4) */}
+        {onPrintDebitNote && (debitNotes.data?.length ?? 0) > 0 && (
+          <Box className="no-print" sx={{ mt: 2 }} data-testid="purchase-debit-notes">
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
+              Devoluciones al proveedor (notas débito)
+            </Typography>
+            <Stack spacing={1}>
+              {debitNotes.data!.map((note) => (
+                <Stack
+                  key={note.id}
+                  direction="row"
+                  spacing={2}
+                  sx={{ alignItems: 'center', justifyContent: 'space-between' }}
+                >
+                  <Typography variant="body2">
+                    <strong>{note.debitNoteNumber}</strong> · {formatDate(note.createdAt)} · {note.reason}
+                  </Typography>
+                  <Button
+                    size="small"
+                    startIcon={<PrintIcon />}
+                    onClick={() => onPrintDebitNote(note)}
+                    aria-label={`Imprimir ${note.debitNoteNumber}`}
+                  >
+                    Imprimir
+                  </Button>
+                </Stack>
+              ))}
+            </Stack>
+          </Box>
+        )}
       </DialogContent>
 
       <DialogActions className="no-print" sx={{ p: 2, display: 'flex', justifyContent: 'space-between' }}>

@@ -9,7 +9,8 @@ import {
   TableHead,
   TableRow,
 } from '@mui/material';
-import type { DebitNoteDto } from '@farmacia/contracts';
+// Tipo que devuelve el cliente del API (el de contracts exige campos que la lista no trae)
+import type { DebitNoteDto } from '../../features/accounting/api/accounting.api';
 import { PrintableDocumentLayout } from './PrintableDocumentLayout';
 import { formatCurrencyCop } from '../../utils/print-document';
 import { numberToWordsCop } from '../../utils/number-to-words';
@@ -176,7 +177,7 @@ export const DebitNotePrintDialog: React.FC<Props> = ({
           }}
         >
           <Table size="small">
-            <TableHead sx={{ bgcolor: '#0f172a' }}>
+            <TableHead sx={{ '& .MuiTableCell-head': { bgcolor: '#0f172a' } }}>
               <TableRow>
                 <TableCell sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1 }}>
                   Producto / Descripción

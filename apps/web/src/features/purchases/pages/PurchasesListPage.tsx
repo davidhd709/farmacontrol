@@ -31,6 +31,9 @@ import { StatusChip } from '../../../components/StatusChip';
 import { purchaseStatus } from '../purchase-labels';
 import { formatCop } from '../../../utils/money';
 import { usePermissions } from '../../auth/hooks/usePermissions';
+import { DebitNotePrintDialog } from '../../../components/documents/DebitNotePrintDialog';
+import { PurchasePrintDialog } from '../../../components/documents/PurchasePrintDialog';
+import type { DebitNoteDto } from '../../accounting/api/accounting.api';
 
 export const PurchasesListPage: React.FC = () => {
   const [purchases, setPurchases] = useState<PurchaseDto[]>([]);
@@ -38,6 +41,9 @@ export const PurchasesListPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [createdDebitNote, setCreatedDebitNote] = useState<DebitNoteDto | null>(null);
+  const [printDebitNote, setPrintDebitNote] = useState<DebitNoteDto | null>(null);
+  const [printPurchase, setPrintPurchase] = useState<PurchaseDto | null>(null);
   const [purchaseForDebitNote, setPurchaseForDebitNote] = useState<PurchaseDto | null>(null);
 
   // Filtros
@@ -298,7 +304,21 @@ export const PurchasesListPage: React.FC = () => {
       )}
 
       {successMsg && (
-        <Alert severity="success" sx={{ mt: 2 }} onClose={() => setSuccessMsg(null)}>
+        <Alert
+          severity="success"
+          sx={{ mt: 2 }}
+          onClose={() => {
+            setSuccessMsg(null);
+            setCreatedDebitNote(null);
+          }}
+          action={
+            createdDebitNote ? (
+              <Button color="inherit" size="small" onClick={() => setPrintDebitNote(createdDebitNote)}>
+                Imprimir {createdDebitNote.debitNoteNumber}
+              </Button>
+            ) : undefined
+          }
+        >
           {successMsg}
         </Alert>
       )}
@@ -308,6 +328,15 @@ export const PurchasesListPage: React.FC = () => {
         open={detailOpen}
         onClose={() => setDetailOpen(false)}
         purchase={selectedPurchase}
+        onPrint={() => {
+          setDetailOpen(false);
+          setPrintPurchase(selectedPurchase);
+        }}
+        onPrintDebitNote={(note) => {
+          // Un solo diálogo imprimible abierto: si no, la impresión saldría con los dos
+          setDetailOpen(false);
+          setPrintDebitNote(note);
+        }}
         onStartReturn={
           canReturn && selectedPurchase?.status === 'RECEIVED'
             ? () => {
@@ -323,11 +352,24 @@ export const PurchasesListPage: React.FC = () => {
         open={Boolean(purchaseForDebitNote)}
         purchase={purchaseForDebitNote}
         onClose={() => setPurchaseForDebitNote(null)}
-        onCreated={(number) => {
+        onCreated={(number, note) => {
           setPurchaseForDebitNote(null);
+          setCreatedDebitNote(note);
           setSuccessMsg(`Nota débito ${number} registrada correctamente.`);
           void loadData();
         }}
+      />
+
+      {/* Comprobante de compra y nota débito imprimibles, con el formato común (rediseño, fase 4) */}
+      <PurchasePrintDialog
+        open={Boolean(printPurchase)}
+        purchase={printPurchase}
+        onClose={() => setPrintPurchase(null)}
+      />
+      <DebitNotePrintDialog
+        open={Boolean(printDebitNote)}
+        debitNote={printDebitNote}
+        onClose={() => setPrintDebitNote(null)}
       />
     </Box>
   );

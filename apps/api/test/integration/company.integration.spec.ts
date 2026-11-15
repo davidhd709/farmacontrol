@@ -15,6 +15,8 @@ describe('Empresa y políticas contables (PostgreSQL real)', () => {
   let app: INestApplication;
   let cookie: string;
   let cashierCookie: string;
+  let auth: AuthService;
+  let passwordHash: string;
 
   beforeAll(async () => {
     const module = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -22,7 +24,7 @@ describe('Empresa y políticas contables (PostgreSQL real)', () => {
     app.setGlobalPrefix('api/v1');
     await app.init();
     const provisioning = module.get(UserProvisioningService);
-    const auth = module.get(AuthService);
+    auth = module.get(AuthService);
     await cleanTestDatabase();
     await seedRbac(prisma);
     const admin = await provisioning.provisionInitialUser({
@@ -32,6 +34,7 @@ describe('Empresa y políticas contables (PostgreSQL real)', () => {
     const adminRole = await prisma.role.findUniqueOrThrow({ where: { name: 'admin' } });
     await prisma.userRole.create({ data: { userId: admin.id!, roleId: adminRole.id } });
     cookie = `${SESSION_COOKIE_NAME}=${(await auth.login('company_admin', 'AdminPassword#2026')).rawToken}`;
+    passwordHash = admin.passwordHash;
     const cashier = await prisma.user.create({
       data: { username: 'company_cajero', passwordHash: admin.passwordHash, isActive: true },
     });
@@ -108,6 +111,36 @@ describe('Empresa y políticas contables (PostgreSQL real)', () => {
     });
     await api().get('/api/v1/company').set('Cookie', cashierCookie).expect(403);
     await api().get('/api/v1/company/letterhead').expect(401);
+  });
+
+  it('el membrete lo leen tesorería y gastos para imprimir; sin un permiso que imprima, 403 (rediseño fase 4)', async () => {
+    await setup().expect(201);
+    const cookieWith = async (username: string, permissions: string[]) => {
+      const role = await prisma.role.create({ data: { name: `rol_${username}` } });
+      for (const name of permissions) {
+        const permission = await prisma.permission.findUniqueOrThrow({ where: { name } });
+        await prisma.rolePermission.create({
+          data: { roleId: role.id, permissionId: permission.id },
+        });
+      }
+      const user = await prisma.user.create({ data: { username, passwordHash, isActive: true } });
+      await prisma.userRole.create({ data: { userId: user.id, roleId: role.id } });
+      return `${SESSION_COOKIE_NAME}=${(await auth.login(username, 'AdminPassword#2026')).rawToken}`;
+    };
+    for (const [username, permission] of [
+      ['membrete_egresos', 'comprobante_egreso.crear'],
+      ['membrete_recibos', 'recibo_caja.crear_manual'],
+      ['membrete_gastos', 'expenses:read'],
+      ['membrete_contable', 'accounting:read'],
+    ] as const) {
+      const res = await api()
+        .get('/api/v1/company/letterhead')
+        .set('Cookie', await cookieWith(username, [permission]))
+        .expect(200);
+      expect(res.body.company.legalName).toBe('Droguería La Esperanza S.A.S.');
+    }
+    const inventoryOnly = await cookieWith('membrete_inventario', ['inventory:read']);
+    await api().get('/api/v1/company/letterhead').set('Cookie', inventoryOnly).expect(403);
   });
 
   it('configura la empresa una sola vez, con sucursal principal y auditoría', async () => {

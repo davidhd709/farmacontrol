@@ -251,7 +251,7 @@ export const ExpensePrintDialog: React.FC<Props> = ({
             }}
           >
             <Table size="small">
-              <TableHead sx={{ bgcolor: '#0f172a' }}>
+              <TableHead sx={{ '& .MuiTableCell-head': { bgcolor: '#0f172a' } }}>
                 <TableRow>
                   <TableCell sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1 }}>
                     Fecha Pago

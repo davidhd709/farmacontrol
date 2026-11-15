@@ -36,6 +36,9 @@ import { formatDate } from '../../../utils/date-format';
 import { DateField } from '../../../components/DateField';
 import { TreasuryDocumentPrintDialog } from '../../../components/documents/TreasuryDocumentPrintDialog';
 import { TreasuryDocumentCorrectionDialog } from '../components/TreasuryDocumentCorrectionDialog';
+import { treasuryDocumentActions } from '../treasury-document-actions';
+import { StatusChip } from '../../../components/StatusChip';
+import { Link as RouterLink, useSearchParams } from 'react-router-dom';
 
 const LABELS: Record<
   TreasuryDocumentType,
@@ -92,6 +95,9 @@ const originOf = (doc: TreasuryDocumentDto) => {
       .map((a) => a.documentNumber ?? APPLICATION_LABELS[a.documentType])
       .join(', ');
   }
+  if (doc.referenceDocumentType === 'TREASURY_DOCUMENT_CANCEL') {
+    return 'Devolución por anulación';
+  }
   if (doc.referenceDocumentType && doc.referenceDocumentType !== 'TREASURY_DOCUMENT') {
     return `${REFERENCE_LABELS[doc.referenceDocumentType] ?? doc.referenceDocumentType} ${doc.referenceDocumentId ?? ''}`;
   }
@@ -107,9 +113,26 @@ const money = (value: string) =>
  */
 export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) {
   const labels = LABELS[type];
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
-  const [search, setSearch] = useState('');
+  // Filtros en la URL (rediseño, fase 4): se conservan al volver, recargar o compartir el enlace
+  const [searchParams, setSearchParams] = useSearchParams();
+  const fromDate = searchParams.get('desde') ?? '';
+  const toDate = searchParams.get('hasta') ?? '';
+  const search = searchParams.get('q') ?? '';
+  const setFilters = (changes: Record<string, string>) =>
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        for (const [key, value] of Object.entries(changes)) {
+          if (value) next.set(key, value);
+          else next.delete(key);
+        }
+        return next;
+      },
+      { replace: true },
+    );
+  const setFromDate = (value: string) => setFilters({ desde: value });
+  const setToDate = (value: string) => setFilters({ hasta: value });
+  const setSearch = (value: string) => setFilters({ q: value });
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(25);
   const [selected, setSelected] = useState<TreasuryDocumentDto | null>(null);
@@ -144,16 +167,8 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
       }),
   });
 
-  // Anular exige su propio permiso (el manual, además el contable); los automáticos, desde su documento
-  const canAnnul = (doc: TreasuryDocumentDto) =>
-    doc.status === 'VIGENTE' &&
-    doc.origin !== 'AUTOMATICO' &&
-    hasPermission(
-      doc.documentType === 'COMPROBANTE_EGRESO'
-        ? SYSTEM_PERMISSIONS.DISBURSEMENTS_ANNUL
-        : SYSTEM_PERMISSIONS.CASH_RECEIPTS_ANNUL,
-    ) &&
-    (doc.origin !== 'MANUAL' || hasPermission(SYSTEM_PERMISSIONS.ACCOUNTING_READ));
+  // Qué se puede hacer con el documento abierto y, si algo no, por qué (mismas reglas del servidor)
+  const actions = selected ? treasuryDocumentActions(selected, hasPermission) : null;
 
   const annul = async () => {
     if (!selected) return;
@@ -245,8 +260,7 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
           <Box sx={{ mt: 1.5 }}>
             <QuickDateRange
               onSelect={({ from, to }) => {
-                setFromDate(from);
-                setToDate(to);
+                setFilters({ desde: from, hasta: to });
                 setPage(0);
               }}
             />
@@ -265,6 +279,7 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
                 <TableCell sx={{ fontWeight: 700 }}>Concepto</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>Auxiliar</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>Origen / facturas</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Estado</TableCell>
                 <TableCell sx={{ fontWeight: 700 }} align="right">
                   Valor
                 </TableCell>
@@ -273,13 +288,13 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={7} align="center" sx={{ py: 5 }}>
+                  <TableCell colSpan={8} align="center" sx={{ py: 5 }}>
                     <CircularProgress size={28} />
                   </TableCell>
                 </TableRow>
               ) : !data?.items.length ? (
                 <TableRow>
-                  <TableCell colSpan={7} align="center" sx={{ py: 5, color: 'text.secondary' }}>
+                  <TableCell colSpan={8} align="center" sx={{ py: 5, color: 'text.secondary' }}>
                     No hay documentos para los filtros seleccionados.
                   </TableCell>
                 </TableRow>
@@ -312,11 +327,12 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
                         label={doc.source === 'CAJA' ? 'Caja' : (doc.bankAccountName ?? 'Banco')}
                       />
                     </TableCell>
+                    <TableCell>{originOf(doc)}</TableCell>
                     <TableCell>
-                      {originOf(doc)}
-                      {doc.status === 'ANULADO' && (
-                        <Chip size="small" variant="outlined" label="Anulado" sx={{ ml: 1 }} />
-                      )}
+                      <StatusChip
+                        label={doc.status === 'ANULADO' ? 'Anulado' : 'Vigente'}
+                        tone={doc.status === 'ANULADO' ? 'error' : 'success'}
+                      />
                     </TableCell>
                     <TableCell align="right" sx={{ fontWeight: 700 }}>
                       {money(doc.amount)}
@@ -351,8 +367,30 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
           setAnnulError(null);
           setAnnulReason('');
         }}
+        notice={
+          actions?.restriction ? (
+            <Alert
+              severity="info"
+              data-testid="treasury-actions-restriction"
+              action={
+                actions.source ? (
+                  <Button
+                    component={RouterLink}
+                    to={actions.source.to}
+                    color="inherit"
+                    size="small"
+                  >
+                    {actions.source.label}
+                  </Button>
+                ) : undefined
+              }
+            >
+              {actions.restriction}
+            </Alert>
+          ) : undefined
+        }
         actions={
-          selected && canAnnul(selected) ? (
+          selected && actions?.canAnnul ? (
             annulOpen ? (
               <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                 {annulError && (
@@ -390,18 +428,20 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
               </Stack>
             ) : (
               <Stack direction="row" spacing={1}>
-                <Button
-                  color="warning"
-                  variant="outlined"
-                  onClick={() => {
-                    const toCorrect = selected;
-                    setSelected(null);
-                    setCorrectionDoc(toCorrect);
-                  }}
-                  sx={{ textTransform: 'none', fontWeight: 600 }}
-                >
-                  Corregir Documento
-                </Button>
+                {actions.canCorrect && (
+                  <Button
+                    color="warning"
+                    variant="outlined"
+                    onClick={() => {
+                      const toCorrect = selected;
+                      setSelected(null);
+                      setCorrectionDoc(toCorrect);
+                    }}
+                    sx={{ textTransform: 'none', fontWeight: 600 }}
+                  >
+                    Corregir Documento
+                  </Button>
+                )}
                 <Button
                   color="error"
                   variant="outlined"

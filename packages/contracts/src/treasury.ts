@@ -193,6 +193,16 @@ export interface CancelTreasuryDocumentPayload {
   reason: string;
 }
 
+/**
+ * Corrección de un recibo o egreso (rediseño, fase 4): anula el documento y emite su reemplazo en
+ * una sola transacción, con la anulación y el registro de siempre. El reemplazo conserva el tipo,
+ * el origen y el cliente o proveedor del original; exige Idempotency-Key.
+ */
+export interface CorrectTreasuryDocumentPayload {
+  reason: string;
+  replacement: CreateCashReceiptPayload | CreateDisbursementPayload;
+}
+
 export interface TreasuryDocumentFilters {
   type?: TreasuryDocumentType;
   fromDate?: string;

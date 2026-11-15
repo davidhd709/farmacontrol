@@ -36,7 +36,8 @@ body {
  */
 @media print {
   /* Ocultar la aplicación de fondo y el backdrop del modal */
-  body:has(.print-document) > #root,
+  /* Solo el documento: ni la aplicación ni otros diálogos o avisos abiertos (rediseño, fase 4) */
+  body:has(.print-document) > *:not(.MuiDialog-root:has(.print-document)),
   .MuiDialog-root:has(.print-document) .MuiBackdrop-root {
     display: none !important;
   }
@@ -124,6 +125,19 @@ body {
   /* -------------------------------------------------------------------------
    * B. FORMATO CONTABLE CORPORATIVO (Recibos, Egresos, Notas, Compras, Diario)
    * ------------------------------------------------------------------------- */
+  /* Margen de carta propio: sin él heredaba el de 3 mm de la tirilla POS (rediseño, fase 4) */
+  @page corporate-letter {
+    size: letter;
+    margin: 14mm 12mm;
+  }
+
+  /* Desde la raíz: si solo lo llevara el diálogo, el cambio de página dejaría una hoja en blanco */
+  html:has(.corporate-doc-print),
+  html:has(.corporate-doc-print) body,
+  .corporate-doc-print {
+    page: corporate-letter;
+  }
+
   .corporate-doc-print {
     width: 100% !important;
     max-width: 100% !important;

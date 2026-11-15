@@ -4,6 +4,7 @@ import type {
   BankAccountsSummaryDto,
   BankMovementDirection,
   BankMovementDto,
+  CorrectTreasuryDocumentPayload,
   CreateCashReceiptPayload,
   CreateDisbursementPayload,
   CreateBankAccountDto,
@@ -141,5 +142,21 @@ export async function cancelTreasuryDocument(
   return apiRequest<TreasuryDocumentDto>(path, {
     method: 'POST',
     body: JSON.stringify({ reason }),
+  });
+}
+
+/**
+ * Corrige un recibo o egreso en una sola transacción del servidor: anula el original y emite el
+ * reemplazo. La clave se conserva entre reintentos del mismo formulario.
+ */
+export async function correctTreasuryDocument(
+  id: string,
+  payload: CorrectTreasuryDocumentPayload,
+  idempotencyKey: string,
+): Promise<TreasuryDocumentDto> {
+  return apiRequest<TreasuryDocumentDto>(`treasury/documents/${encodeURIComponent(id)}/correct`, {
+    method: 'POST',
+    headers: { 'Idempotency-Key': idempotencyKey },
+    body: JSON.stringify(payload),
   });
 }

@@ -22,6 +22,7 @@ import type { PurchaseDto } from '@farmacia/contracts';
 import {
   createPurchaseDebitNote,
   fetchPurchaseDebitNotes,
+  type DebitNoteDto,
 } from '../../accounting/api/accounting.api';
 import { fetchInventoryLots } from '../../inventory/api/inventory.api';
 
@@ -35,7 +36,7 @@ interface Props {
   open: boolean;
   purchase: PurchaseDto | null;
   onClose: () => void;
-  onCreated: (debitNoteNumber: string) => void;
+  onCreated: (debitNoteNumber: string, debitNote: DebitNoteDto) => void;
 }
 
 // El diálogo también se monta fuera del proveedor de consultas (pruebas aisladas)
@@ -167,7 +168,7 @@ export const DebitNoteDialog: React.FC<Props> = ({ open, purchase, onClose, onCr
         retryRef.current = { fingerprint, key: crypto.randomUUID() };
       }
       const nd = await createPurchaseDebitNote(purchase.id, payload, retryRef.current.key);
-      onCreated(nd.debitNoteNumber);
+      onCreated(nd.debitNoteNumber, nd);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo registrar la nota débito.');
     } finally {

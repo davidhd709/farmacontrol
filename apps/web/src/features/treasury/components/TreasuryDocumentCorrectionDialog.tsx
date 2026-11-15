@@ -24,16 +24,14 @@ import {
   Typography,
 } from '@mui/material';
 import type {
+  CreateCashReceiptPayload,
+  CreateDisbursementPayload,
   TreasuryDocumentDto,
   TreasuryVoucherPaymentMethod,
 } from '@farmacia/contracts';
 import { useBankAccountOptions } from '../hooks/useTreasury';
 import { CounterpartAccountSelect } from '../../accounting/components/CounterpartAccountSelect';
-import {
-  cancelTreasuryDocument,
-  createCashReceipt,
-  createDisbursement,
-} from '../api/treasury.api';
+import { correctTreasuryDocument } from '../api/treasury.api';
 import { SweetModal } from '../../../components/SweetModal';
 import { formatMoney, toCents } from '../../../utils/money';
 import { formatDate } from '../../../utils/date-format';
@@ -53,14 +51,22 @@ const CORRECTION_REASON_PRESETS = [
   'Otro motivo',
 ];
 
-export const TreasuryDocumentCorrectionDialog: React.FC<Props> = ({
+/**
+ * Corrección de un recibo o egreso (rediseño, fase 4): el servidor anula el original y emite el
+ * reemplazo en una sola transacción. Si algo falla, el original sigue vigente y nada se aplica.
+ */
+export const TreasuryDocumentCorrectionDialog: React.FC<Props> = ({ document, ...rest }) => {
+  // Los hooks del formulario viven en un componente propio: nunca después de un return
+  if (!document) return null;
+  return <CorrectionForm key={document.id} document={document} {...rest} />;
+};
+
+const CorrectionForm: React.FC<Props & { document: TreasuryDocumentDto }> = ({
   open,
   document,
   onClose,
   onSuccess,
 }) => {
-  if (!document) return null;
-
   const isReceipt = document.documentType === 'RECIBO_CAJA';
   const docTypeName = isReceipt ? 'Recibo de Caja' : 'Comprobante de Egreso';
 
@@ -72,6 +78,13 @@ export const TreasuryDocumentCorrectionDialog: React.FC<Props> = ({
   const [amount, setAmount] = useState('');
   const [selectedAmounts, setSelectedAmounts] = useState<Record<string, string>>({});
   const [reason, setReason] = useState('');
+  // Una clave por formulario: un reintento tras un corte de red no corrige dos veces
+  const [idempotencyKey] = useState(() => crypto.randomUUID());
+  // Los abonos o pagos ya revertidos uno a uno no se vuelven a aplicar
+  const activeApplications = useMemo(
+    () => (document.applications ?? []).filter((app) => !app.isReversed),
+    [document.applications],
+  );
 
   // Estados de proceso y confirmación
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -93,13 +106,11 @@ export const TreasuryDocumentCorrectionDialog: React.FC<Props> = ({
 
     // Inicializar facturas aplicadas
     const initialApps: Record<string, string> = {};
-    if (document.applications && document.applications.length > 0) {
-      document.applications.forEach((app, idx) => {
-        initialApps[app.documentNumber || `app-${idx}`] = app.amount;
-      });
-    }
+    activeApplications.forEach((app) => {
+      initialApps[app.documentId] = app.amount;
+    });
     setSelectedAmounts(initialApps);
-  }, [open, document]);
+  }, [open, document, activeApplications]);
 
   // Cálculo de totales corregidos en centavos
   const totalCorrectedCents = useMemo(() => {
@@ -157,104 +168,63 @@ export const TreasuryDocumentCorrectionDialog: React.FC<Props> = ({
     setConfirmOpen(true);
   };
 
+  const buildReplacement = (): CreateCashReceiptPayload | CreateDisbursementPayload => {
+    const base = {
+      paymentMethod,
+      bankAccountId: paymentMethod === 'TRANSFERENCIA' ? bankAccountId : undefined,
+      concept: `${concept.trim()} (Corrección de ${document.documentNumber})`,
+    };
+    const manual = {
+      ...base,
+      kind: 'MANUAL' as const,
+      amount: (totalCorrectedCents / 100).toFixed(2),
+      counterpartAccountId: counterpartAccountId || document.counterpartAccountId || '',
+      thirdPartyId: document.thirdPartyId || undefined,
+    };
+    if (document.origin === 'MANUAL') return manual;
+    const applied = activeApplications.filter(
+      (app) => toCents(selectedAmounts[app.documentId] || '0') > 0,
+    );
+    if (isReceipt) {
+      return {
+        ...base,
+        kind: 'CARTERA',
+        customerId: document.customerId || '',
+        applications: applied.map((app) => ({
+          receivableId: app.documentId,
+          amount: (toCents(selectedAmounts[app.documentId]) / 100).toFixed(2),
+        })),
+      };
+    }
+    return {
+      ...base,
+      kind: 'PROVEEDOR',
+      supplierId: document.supplierId || '',
+      applications: applied.map((app) => ({
+        documentType: app.documentType as 'FACTURA_COMPRA' | 'CAUSACION_GASTO',
+        documentId: app.documentId,
+        amount: (toCents(selectedAmounts[app.documentId]) / 100).toFixed(2),
+      })),
+    };
+  };
+
   const handleExecuteCorrection = async () => {
     setSubmitting(true);
     setError(null);
     try {
-      // 1. Anular el documento original mediante el procedimiento transaccional existente
-      const cancelReason = `Corregido por reemplazo: ${reason.trim()}`;
-      await cancelTreasuryDocument(
-        {
-          id: document.id,
-          documentType: document.documentType,
-          origin: document.origin,
-        },
-        cancelReason,
+      const newDoc = await correctTreasuryDocument(
+        document.id,
+        { reason: reason.trim(), replacement: buildReplacement() },
+        idempotencyKey,
       );
-
-      // 2. Registrar el nuevo documento de reemplazo
-      const idempotencyKey = crypto.randomUUID();
-      const basePayload = {
-        paymentMethod,
-        bankAccountId: paymentMethod === 'TRANSFERENCIA' ? bankAccountId : undefined,
-        concept: `${concept.trim()} (Corrección de ${document.documentNumber})`,
-      };
-
-      let newDoc: TreasuryDocumentDto;
-
-      if (isReceipt) {
-        if (document.origin === 'CARTERA') {
-          // Reconstruir aplicaciones de cartera
-          const apps = Object.entries(selectedAmounts).map(([docNum, val]) => {
-            const originalApp = (document.applications || []).find(
-              (a) => a.documentNumber === docNum,
-            );
-            return {
-              receivableId: originalApp?.documentId || docNum,
-              amount: (toCents(val) / 100).toFixed(2),
-            };
-          });
-          newDoc = await createCashReceipt(
-            {
-              ...basePayload,
-              kind: 'CARTERA',
-              customerId: document.customerId || '',
-              applications: apps,
-            },
-            idempotencyKey,
-          );
-        } else {
-          newDoc = await createCashReceipt(
-            {
-              ...basePayload,
-              kind: 'MANUAL',
-              amount: (totalCorrectedCents / 100).toFixed(2),
-              counterpartAccountId: counterpartAccountId || document.counterpartAccountId || '',
-              thirdPartyId: document.thirdPartyId || undefined,
-            },
-            idempotencyKey,
-          );
-        }
-      } else {
-        // Comprobante de egreso
-        if (document.origin === 'PROVEEDOR') {
-          const apps = Object.entries(selectedAmounts).map(([docNum, val]) => {
-            const originalApp = (document.applications || []).find(
-              (a) => a.documentNumber === docNum,
-            );
-            return {
-              documentType: (originalApp?.documentType as 'FACTURA_COMPRA' | 'CAUSACION_GASTO') || 'FACTURA_COMPRA',
-              documentId: originalApp?.documentId || docNum,
-              amount: (toCents(val) / 100).toFixed(2),
-            };
-          });
-          newDoc = await createDisbursement(
-            {
-              ...basePayload,
-              kind: 'PROVEEDOR',
-              supplierId: document.supplierId || '',
-              applications: apps,
-            },
-            idempotencyKey,
-          );
-        } else {
-          newDoc = await createDisbursement(
-            {
-              ...basePayload,
-              kind: 'MANUAL',
-              amount: (totalCorrectedCents / 100).toFixed(2),
-              counterpartAccountId: counterpartAccountId || document.counterpartAccountId || '',
-              thirdPartyId: document.thirdPartyId || undefined,
-            },
-            idempotencyKey,
-          );
-        }
-      }
-
       setConfirmOpen(false);
       onSuccess(newDoc);
-    } catch (err: any) {
-      setError(err?.message || 'Error al ejecutar la corrección del documento.');
+    } catch (err) {
+      // El servidor no aplicó nada: el original sigue vigente
+      setConfirmOpen(false);
+      setError(
+        `${err instanceof Error ? err.message : 'No se pudo corregir el documento.'} ${document.documentNumber} sigue vigente; no se aplicó ningún cambio.`,
+      );
     } finally {
       setSubmitting(false);
     }
@@ -262,7 +232,12 @@ export const TreasuryDocumentCorrectionDialog: React.FC<Props> = ({
 
   return (
     <>
-      <Dialog open={open && !confirmOpen} onClose={submitting ? undefined : onClose} maxWidth="md" fullWidth>
+      <Dialog
+        open={open && !confirmOpen}
+        onClose={submitting ? undefined : onClose}
+        maxWidth="md"
+        fullWidth
+      >
         <DialogTitle sx={{ fontWeight: 700, pb: 1 }}>
           Corregir {docTypeName} {document.documentNumber}
         </DialogTitle>
@@ -273,7 +248,10 @@ export const TreasuryDocumentCorrectionDialog: React.FC<Props> = ({
 
             {/* SECCIÓN 1: DATOS ORIGINALES */}
             <Paper variant="outlined" sx={{ p: 2, bgcolor: 'action.hover', borderRadius: 2 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: 'text.secondary' }}>
+              <Typography
+                variant="subtitle2"
+                sx={{ fontWeight: 700, mb: 1, color: 'text.secondary' }}
+              >
                 1. Información del Documento Original a Corregir
               </Typography>
               <Box
@@ -295,16 +273,15 @@ export const TreasuryDocumentCorrectionDialog: React.FC<Props> = ({
                   <Typography variant="caption" color="text.secondary" component="div">
                     Fecha de expedición:
                   </Typography>
-                  <Typography variant="body2">
-                    {formatDate(document.documentDate)}
-                  </Typography>
+                  <Typography variant="body2">{formatDate(document.documentDate)}</Typography>
                 </Box>
                 <Box>
                   <Typography variant="caption" color="text.secondary" component="div">
                     Medio de pago original:
                   </Typography>
                   <Typography variant="body2">
-                    {document.paymentMethod} {document.bankAccountName ? `(${document.bankAccountName})` : ''}
+                    {document.paymentMethod}{' '}
+                    {document.bankAccountName ? `(${document.bankAccountName})` : ''}
                   </Typography>
                 </Box>
                 <Box>
@@ -319,16 +296,17 @@ export const TreasuryDocumentCorrectionDialog: React.FC<Props> = ({
                   <Typography variant="caption" color="text.secondary" component="div">
                     Concepto original:
                   </Typography>
-                  <Typography variant="body2">
-                    {document.concept}
-                  </Typography>
+                  <Typography variant="body2">{document.concept}</Typography>
                 </Box>
               </Box>
             </Paper>
 
             {/* SECCIÓN 2: CAMPOS DE CORRECCIÓN */}
             <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'primary.main', mb: 1.5 }}>
+              <Typography
+                variant="subtitle2"
+                sx={{ fontWeight: 700, color: 'primary.main', mb: 1.5 }}
+              >
                 2. Datos Corregidos que Reemplazarán al Documento
               </Typography>
 
@@ -349,7 +327,9 @@ export const TreasuryDocumentCorrectionDialog: React.FC<Props> = ({
                       labelId="corr-pm-label"
                       label="Medio de Pago Corregido"
                       value={paymentMethod}
-                      onChange={(e) => setPaymentMethod(e.target.value as TreasuryVoucherPaymentMethod)}
+                      onChange={(e) =>
+                        setPaymentMethod(e.target.value as TreasuryVoucherPaymentMethod)
+                      }
                     >
                       <MenuItem value="EFECTIVO">Efectivo (Caja General)</MenuItem>
                       <MenuItem value="TRANSFERENCIA">Transferencia Bancaria</MenuItem>
@@ -358,7 +338,9 @@ export const TreasuryDocumentCorrectionDialog: React.FC<Props> = ({
 
                   {paymentMethod === 'TRANSFERENCIA' && (
                     <FormControl size="small" fullWidth disabled={submitting}>
-                      <InputLabel id="corr-bank-label">Cuenta Bancaria de Destino/Retiro</InputLabel>
+                      <InputLabel id="corr-bank-label">
+                        Cuenta Bancaria de Destino/Retiro
+                      </InputLabel>
                       <Select
                         labelId="corr-bank-label"
                         label="Cuenta Bancaria de Destino/Retiro"
@@ -396,9 +378,14 @@ export const TreasuryDocumentCorrectionDialog: React.FC<Props> = ({
                 )}
 
                 {/* Facturas aplicadas en Cartera o Proveedores */}
-                {document.applications && document.applications.length > 0 && (
+                {activeApplications.length > 0 && (
                   <Box sx={{ mt: 1 }}>
-                    <Typography variant="caption" color="text.secondary" component="div" sx={{ mb: 1 }}>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      component="div"
+                      sx={{ mb: 1 }}
+                    >
                       Facturas aplicadas y valores a corregir:
                     </Typography>
                     <TableContainer component={Paper} variant="outlined">
@@ -406,17 +393,23 @@ export const TreasuryDocumentCorrectionDialog: React.FC<Props> = ({
                         <TableHead sx={{ bgcolor: 'action.hover' }}>
                           <TableRow>
                             <TableCell sx={{ fontWeight: 700 }}>Factura / Documento</TableCell>
-                            <TableCell sx={{ fontWeight: 700 }} align="right">Valor Aplicado Original</TableCell>
-                            <TableCell sx={{ fontWeight: 700, width: 180 }} align="right">Valor Corregido ($)</TableCell>
+                            <TableCell sx={{ fontWeight: 700 }} align="right">
+                              Valor Aplicado Original
+                            </TableCell>
+                            <TableCell sx={{ fontWeight: 700, width: 180 }} align="right">
+                              Valor Corregido ($)
+                            </TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
-                          {document.applications.map((app, idx) => {
-                            const key = app.documentNumber || `app-${idx}`;
+                          {activeApplications.map((app) => {
+                            const key = app.documentId;
                             return (
                               <TableRow key={key}>
                                 <TableCell sx={{ fontWeight: 600 }}>{app.documentNumber}</TableCell>
-                                <TableCell align="right">{formatMoney(toCents(app.amount))}</TableCell>
+                                <TableCell align="right">
+                                  {formatMoney(toCents(app.amount))}
+                                </TableCell>
                                 <TableCell align="right">
                                   <TextField
                                     size="small"
@@ -455,7 +448,9 @@ export const TreasuryDocumentCorrectionDialog: React.FC<Props> = ({
                       <TableCell sx={{ fontWeight: 700 }}>Concepto / Atributo</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Valor Original</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Valor Corregido</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }} align="center">Impacto</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }} align="center">
+                        Impacto
+                      </TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -465,7 +460,9 @@ export const TreasuryDocumentCorrectionDialog: React.FC<Props> = ({
                       <TableCell sx={{ fontWeight: 600 }}>{paymentMethod}</TableCell>
                       <TableCell align="center">
                         <Chip
-                          label={document.paymentMethod === paymentMethod ? 'Sin cambio' : 'Modificado'}
+                          label={
+                            document.paymentMethod === paymentMethod ? 'Sin cambio' : 'Modificado'
+                          }
                           size="small"
                           color={document.paymentMethod === paymentMethod ? 'default' : 'warning'}
                           variant="outlined"
@@ -475,7 +472,9 @@ export const TreasuryDocumentCorrectionDialog: React.FC<Props> = ({
                     <TableRow>
                       <TableCell>Total del Documento</TableCell>
                       <TableCell>{formatMoney(originalTotalCents)}</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>{formatMoney(totalCorrectedCents)}</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>
+                        {formatMoney(totalCorrectedCents)}
+                      </TableCell>
                       <TableCell align="center">
                         <Chip
                           label={
@@ -486,7 +485,13 @@ export const TreasuryDocumentCorrectionDialog: React.FC<Props> = ({
                                 : formatMoney(differenceCents)
                           }
                           size="small"
-                          color={differenceCents === 0 ? 'default' : differenceCents > 0 ? 'info' : 'error'}
+                          color={
+                            differenceCents === 0
+                              ? 'default'
+                              : differenceCents > 0
+                                ? 'info'
+                                : 'error'
+                          }
                         />
                       </TableCell>
                     </TableRow>
@@ -497,7 +502,10 @@ export const TreasuryDocumentCorrectionDialog: React.FC<Props> = ({
 
             {/* SECCIÓN 4: MOTIVO OBLIGATORIO */}
             <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'primary.main', mb: 1 }}>
+              <Typography
+                variant="subtitle2"
+                sx={{ fontWeight: 700, color: 'primary.main', mb: 1 }}
+              >
                 4. Motivo Obligatorio de la Corrección *
               </Typography>
               <Typography variant="caption" color="text.secondary" component="div" sx={{ mb: 1 }}>
@@ -537,13 +545,27 @@ export const TreasuryDocumentCorrectionDialog: React.FC<Props> = ({
                 Efecto Contable y Financiero de la Operación:
               </Typography>
               <Typography variant="body2" component="div">
-                • El documento <strong>{document.documentNumber}</strong> pasará a estado <strong>ANULADO</strong>, revirtiendo sus movimientos de dinero y asientos contables históricos.
+                • <strong>{document.documentNumber}</strong> queda <strong>ANULADO</strong>: se
+                revierten sus{' '}
+                {document.origin === 'MANUAL'
+                  ? 'asiento contable'
+                  : isReceipt
+                    ? 'abonos a cartera'
+                    : 'pagos'}{' '}
+                y su movimiento de {document.source === 'BANCO' ? 'banco' : 'caja'}, con fecha de
+                hoy.
               </Typography>
               <Typography variant="body2" component="div">
-                • Se emitirá un <strong>nuevo documento oficial de reemplazo</strong> con su propio número consecutivo y partida doble cuadrada.
+                • Se emite un documento de reemplazo con su propio consecutivo y su asiento, por{' '}
+                {formatMoney(totalCorrectedCents)}.
               </Typography>
               <Typography variant="body2" component="div">
-                • Se mantendrá trazabilidad bidireccional permanente entre el documento original y el que lo sustituye.
+                • La anulación del original nombra su reemplazo, y el concepto del reemplazo nombra
+                al original.
+              </Typography>
+              <Typography variant="body2" component="div">
+                • Todo ocurre en una sola operación: si hoy está en un período cerrado o bloqueado,
+                o falta saldo, no se aplica nada.
               </Typography>
             </Alert>
           </Stack>

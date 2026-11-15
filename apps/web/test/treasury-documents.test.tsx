@@ -24,12 +24,16 @@ import {
 
 const ADMIN_PERMISSIONS = Object.values(SYSTEM_PERMISSIONS);
 
-function renderPage(page: React.ReactElement, permissions: string[] = ADMIN_PERMISSIONS) {
+function renderPage(
+  page: React.ReactElement,
+  permissions: string[] = ADMIN_PERMISSIONS,
+  initialEntries: string[] = ['/'],
+) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
       <ThemeProvider theme={appTheme}>
-        <MemoryRouter>{withAuth(page, permissions)}</MemoryRouter>
+        <MemoryRouter initialEntries={initialEntries}>{withAuth(page, permissions)}</MemoryRouter>
       </ThemeProvider>
     </QueryClientProvider>,
   );
@@ -384,12 +388,7 @@ describe('Recibos de caja y comprobantes de egreso', () => {
         pageSize: 25,
         totalPages: 1,
       });
-      const cancelSpy = vi.spyOn(treasuryApi, 'cancelTreasuryDocument').mockResolvedValue({
-        ...rcCartera,
-        status: 'ANULADO',
-        cancellationReason: 'Corregido por reemplazo: Ajuste en valores aplicados',
-      });
-      const createSpy = vi.spyOn(treasuryApi, 'createCashReceipt').mockResolvedValue({
+      const correctSpy = vi.spyOn(treasuryApi, 'correctTreasuryDocument').mockResolvedValue({
         ...rcCartera,
         id: 'rc-102',
         documentNumber: 'RC-000102',
@@ -430,17 +429,18 @@ describe('Recibos de caja y comprobantes de egreso', () => {
       expect(await screen.findByText('¿Confirmar Corrección del Documento?')).toBeInTheDocument();
       fireEvent.click(screen.getByRole('button', { name: 'Confirmar y Reemplazar' }));
 
+      // Una sola llamada: el servidor anula y emite el reemplazo en la misma transacción
       await waitFor(() => {
-        expect(cancelSpy).toHaveBeenCalledWith(
-          expect.objectContaining({ id: 'rc-101', documentType: 'RECIBO_CAJA' }),
-          expect.stringContaining('Ajuste en valores aplicados'),
-        );
-        expect(createSpy).toHaveBeenCalledWith(
-          expect.objectContaining({
-            kind: 'CARTERA',
-            customerId: 'cust-1',
-            applications: [{ receivableId: 'rec-1', amount: '40000.00' }],
-          }),
+        expect(correctSpy).toHaveBeenCalledWith(
+          'rc-101',
+          {
+            reason: 'Ajuste en valores aplicados',
+            replacement: expect.objectContaining({
+              kind: 'CARTERA',
+              customerId: 'cust-1',
+              applications: [{ receivableId: 'rec-1', amount: '40000.00' }],
+            }),
+          },
           expect.any(String),
         );
       });
@@ -487,11 +487,7 @@ describe('Recibos de caja y comprobantes de egreso', () => {
         pageSize: 25,
         totalPages: 1,
       });
-      const cancelSpy = vi.spyOn(treasuryApi, 'cancelTreasuryDocument').mockResolvedValue({
-        ...ceProveedor,
-        status: 'ANULADO',
-      });
-      const createSpy = vi.spyOn(treasuryApi, 'createDisbursement').mockResolvedValue({
+      const correctSpy = vi.spyOn(treasuryApi, 'correctTreasuryDocument').mockResolvedValue({
         ...ceProveedor,
         id: 'ce-202',
         documentNumber: 'CE-000202',
@@ -520,18 +516,18 @@ describe('Recibos de caja y comprobantes de egreso', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Confirmar y Reemplazar' }));
 
       await waitFor(() => {
-        expect(cancelSpy).toHaveBeenCalledWith(
-          expect.objectContaining({ id: 'ce-201', documentType: 'COMPROBANTE_EGRESO' }),
-          expect.stringContaining('Error en el concepto digitado'),
-        );
-        expect(createSpy).toHaveBeenCalledWith(
-          expect.objectContaining({
-            kind: 'PROVEEDOR',
-            supplierId: 'sup-1',
-            applications: [
-              { documentType: 'FACTURA_COMPRA', documentId: 'pay-1', amount: '70000.00' },
-            ],
-          }),
+        expect(correctSpy).toHaveBeenCalledWith(
+          'ce-201',
+          {
+            reason: 'Error en el concepto digitado',
+            replacement: expect.objectContaining({
+              kind: 'PROVEEDOR',
+              supplierId: 'sup-1',
+              applications: [
+                { documentType: 'FACTURA_COMPRA', documentId: 'pay-1', amount: '70000.00' },
+              ],
+            }),
+          },
           expect.any(String),
         );
       });
@@ -579,11 +575,7 @@ describe('Recibos de caja y comprobantes de egreso', () => {
           isActive: true,
         },
       ]);
-      const cancelSpy = vi.spyOn(treasuryApi, 'cancelTreasuryDocument').mockResolvedValue({
-        ...rcManual,
-        status: 'ANULADO',
-      });
-      const createSpy = vi.spyOn(treasuryApi, 'createCashReceipt').mockResolvedValue({
+      const correctSpy = vi.spyOn(treasuryApi, 'correctTreasuryDocument').mockResolvedValue({
         ...rcManual,
         id: 'rc-302',
         documentNumber: 'RC-000302',
@@ -616,16 +608,17 @@ describe('Recibos de caja y comprobantes de egreso', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Confirmar y Reemplazar' }));
 
       await waitFor(() => {
-        expect(cancelSpy).toHaveBeenCalledWith(
-          expect.objectContaining({ id: 'rc-301' }),
-          expect.stringContaining('Corrección de medio de pago'),
-        );
-        expect(createSpy).toHaveBeenCalledWith(
-          expect.objectContaining({
-            kind: 'MANUAL',
-            paymentMethod: 'TRANSFERENCIA',
-            bankAccountId: 'bank-1',
-          }),
+        expect(correctSpy).toHaveBeenCalledWith(
+          'rc-301',
+          {
+            reason: 'Corrección de medio de pago',
+            replacement: expect.objectContaining({
+              kind: 'MANUAL',
+              paymentMethod: 'TRANSFERENCIA',
+              bankAccountId: 'bank-1',
+              counterpartAccountId: 'acc-4135',
+            }),
+          },
           expect.any(String),
         );
       });
@@ -679,5 +672,153 @@ describe('Recibos de caja y comprobantes de egreso', () => {
         within(dialog2).getByDisplayValue('Pendiente de verificar soporte físico'),
       ).toBeInTheDocument();
     });
+  });
+});
+
+describe('Rediseño fase 4: acciones de cada documento y su motivo', () => {
+  const cartera: TreasuryDocumentDto = {
+    id: 'rc-500',
+    documentType: 'RECIBO_CAJA',
+    documentNumber: 'RC-000500',
+    documentDate: '2026-11-10',
+    amount: '30000.00',
+    paymentMethod: 'EFECTIVO',
+    source: 'CAJA',
+    bankAccountName: null,
+    concept: 'Abono FAC-9',
+    referenceDocumentType: null,
+    referenceDocumentId: null,
+    thirdPartyName: 'Marta Crédito',
+    customerId: 'cust-1',
+    origin: 'CARTERA',
+    counterpartAccount: null,
+    applications: [
+      {
+        documentType: 'FACTURA_VENTA',
+        documentId: 'rec-9',
+        documentNumber: 'FAC-9',
+        amount: '30000.00',
+        isReversed: false,
+      },
+      {
+        documentType: 'FACTURA_VENTA',
+        documentId: 'rec-8',
+        documentNumber: 'FAC-8',
+        amount: '5000.00',
+        isReversed: true,
+      },
+    ],
+    status: 'VIGENTE',
+    cancelledAt: null,
+    cancelledByName: null,
+    cancellationReason: null,
+    createdByName: 'cartera',
+    createdAt: '2026-11-10T10:00:00.000Z',
+  };
+  const list = (items: TreasuryDocumentDto[]) =>
+    vi
+      .spyOn(treasuryApi, 'getTreasuryDocuments')
+      .mockResolvedValue({ items, total: items.length, page: 1, pageSize: 25, totalPages: 1 });
+
+  it('un egreso automático solo se imprime y dice desde dónde se corrige', async () => {
+    list([{ ...egreso, status: 'VIGENTE', cancelledAt: null, cancelledByName: null, cancellationReason: null }]);
+    renderPage(<DisbursementVouchersPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'CE-000001' }));
+    const notice = await screen.findByTestId('treasury-actions-restriction');
+    expect(notice).toHaveTextContent('Lo generó el gasto exp-1');
+    expect(notice).toHaveTextContent('se corrige o anula desde ese documento');
+    expect(within(notice).getByRole('link', { name: 'Ir a gastos' })).toHaveAttribute('href', '/expenses');
+    expect(screen.queryByRole('button', { name: 'Corregir Documento' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Anular Documento' })).toBeNull();
+    expect(screen.getByTestId('treasury-doc-origin')).toHaveTextContent(
+      'Emitido automáticamente por el gasto exp-1',
+    );
+  });
+
+  it('sin permiso de anular no hay acciones y se nombra el permiso que falta', async () => {
+    list([cartera]);
+    renderPage(<CashReceiptsPage />, [SYSTEM_PERMISSIONS.CASH_RECEIPTS_COLLECT]);
+    fireEvent.click(await screen.findByRole('button', { name: 'RC-000500' }));
+    expect(await screen.findByTestId('treasury-actions-restriction')).toHaveTextContent(
+      'Anular o corregir exige el permiso «Anular recibos de caja» (recibo_caja.anular)',
+    );
+    expect(screen.queryByRole('button', { name: 'Anular Documento' })).toBeNull();
+  });
+
+  it('con permiso de anular pero no de registrar el reemplazo: anula, no corrige, y explica', async () => {
+    list([cartera]);
+    renderPage(<CashReceiptsPage />, [SYSTEM_PERMISSIONS.CASH_RECEIPTS_ANNUL]);
+    fireEvent.click(await screen.findByRole('button', { name: 'RC-000500' }));
+    expect(await screen.findByTestId('treasury-actions-restriction')).toHaveTextContent(
+      'Puedes anularlo. Corregirlo emite un documento de reemplazo',
+    );
+    expect(screen.getByRole('button', { name: 'Anular Documento' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Corregir Documento' })).toBeNull();
+  });
+
+  it('un documento anulado muestra su estado y no admite cambios', async () => {
+    list([
+      {
+        ...cartera,
+        status: 'ANULADO',
+        cancelledAt: '2026-11-11T10:00:00.000Z',
+        cancelledByName: 'admin',
+        cancellationReason: 'Corregido con RC-000501: valor mal digitado',
+      },
+    ]);
+    renderPage(<CashReceiptsPage />);
+    const row = (await screen.findByRole('button', { name: 'RC-000500' })).closest('tr')!;
+    expect(within(row).getByText('Anulado')).toBeInTheDocument();
+    fireEvent.click(within(row).getByRole('button', { name: 'RC-000500' }));
+    expect(await screen.findByTestId('treasury-actions-restriction')).toHaveTextContent(
+      'Documento anulado: no admite cambios',
+    );
+    expect(screen.getByText(/Corregido con RC-000501/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Corregir Documento' })).toBeNull();
+  });
+
+  it('la corrección no reaplica abonos revertidos y, si el servidor la rechaza, avisa que el original sigue vigente', async () => {
+    list([cartera]);
+    const correctSpy = vi
+      .spyOn(treasuryApi, 'correctTreasuryDocument')
+      .mockRejectedValue(new Error('No es posible reversar asientos: los documentos están bloqueados.'));
+    renderPage(<CashReceiptsPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'RC-000500' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Corregir Documento' }));
+    await screen.findByText(/Corregir Recibo de Caja RC-000500/);
+    // Solo la factura con abono vigente
+    expect(screen.getByText('FAC-9')).toBeInTheDocument();
+    expect(screen.queryByText('FAC-8')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ajuste en valores aplicados' }));
+    const buttons = screen.getAllByRole('button', { name: 'Corregir Documento' });
+    fireEvent.click(buttons[buttons.length - 1]);
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirmar y Reemplazar' }));
+
+    expect(
+      await screen.findByText(/RC-000500 sigue vigente; no se aplicó ningún cambio/),
+    ).toBeInTheDocument();
+    expect(correctSpy).toHaveBeenCalledWith(
+      'rc-500',
+      expect.objectContaining({
+        replacement: expect.objectContaining({
+          applications: [{ receivableId: 'rec-9', amount: '30000.00' }],
+        }),
+      }),
+      expect.any(String),
+    );
+  });
+
+  it('los filtros de fecha y búsqueda se toman de la URL', async () => {
+    const spy = list([]);
+    renderPage(<CashReceiptsPage />, ADMIN_PERMISSIONS, [
+      '/treasury/receipts?desde=2026-11-01&hasta=2026-11-30&q=Marta',
+    ]);
+    await waitFor(() =>
+      expect(spy).toHaveBeenCalledWith(
+        expect.objectContaining({ fromDate: '2026-11-01', toDate: '2026-11-30', search: 'Marta' }),
+      ),
+    );
+    expect(screen.getByLabelText('Buscar número, concepto o documento')).toHaveValue('Marta');
   });
 });

@@ -14,6 +14,7 @@ import {
   SYSTEM_PERMISSIONS,
   type CreateCashReceiptPayload,
   type CancelTreasuryDocumentPayload,
+  type CorrectTreasuryDocumentPayload,
   type CreateDisbursementPayload,
   type TreasuryDocumentDto,
 } from '@farmacia/contracts';
@@ -24,7 +25,10 @@ import {
 } from '../../identity/presentation/guards/session-auth.guard';
 import { CurrentUser } from '../../identity/presentation/decorators/current-user.decorator';
 import { PermissionsGuard } from '../../identity/presentation/guards/permissions.guard';
-import { RequirePermissions } from '../../identity/presentation/decorators/require-permissions.decorator';
+import {
+  RequireAnyPermissions,
+  RequirePermissions,
+} from '../../identity/presentation/decorators/require-permissions.decorator';
 
 /**
  * Registro de recibos de caja y comprobantes de egreso (ADR-007). Cada documento tiene su
@@ -123,5 +127,24 @@ export class TreasuryVouchersController {
       documentType: 'COMPROBANTE_EGRESO',
       origins: ['PROVEEDOR', 'MANUAL'],
     });
+  }
+
+  /**
+   * Corrige un recibo o un egreso: anula el original y emite el reemplazo en una sola
+   * transacción (rediseño, fase 4). El servicio exige el permiso de anular del tipo, el de crear
+   * el reemplazo y, si es manual, el contable; el reemplazo conserva origen y tercero.
+   */
+  @Post('documents/:id/correct')
+  @RequireAnyPermissions(
+    SYSTEM_PERMISSIONS.CASH_RECEIPTS_ANNUL,
+    SYSTEM_PERMISSIONS.DISBURSEMENTS_ANNUL,
+  )
+  correctDocument(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() payload: CorrectTreasuryDocumentPayload,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
+    @CurrentUser() user: AuthenticatedUserContext,
+  ): Promise<TreasuryDocumentDto> {
+    return this.vouchers.correctDocument(id, payload, user, idempotencyKey);
   }
 }

@@ -89,12 +89,19 @@ export class CompanyController {
     );
   }
 
+  // Lo pide todo módulo que imprime documentos (rediseño, fase 4): ventas, compras, tesorería,
+  // contabilidad y gastos. Solo expone el membrete, no la configuración de la empresa.
   @Get('letterhead')
   @RequireAnyPermissions(
     SYSTEM_PERMISSIONS.COMPANY_READ,
     SYSTEM_PERMISSIONS.SALES_READ,
     SYSTEM_PERMISSIONS.SALES_CREATE,
     SYSTEM_PERMISSIONS.PURCHASES_READ,
+    SYSTEM_PERMISSIONS.ACCOUNTING_READ,
+    SYSTEM_PERMISSIONS.CASH_RECEIPTS_COLLECT,
+    SYSTEM_PERMISSIONS.CASH_RECEIPTS_MANUAL,
+    SYSTEM_PERMISSIONS.DISBURSEMENTS_CREATE,
+    SYSTEM_PERMISSIONS.EXPENSES_READ,
   )
   @ApiOperation({
     summary:

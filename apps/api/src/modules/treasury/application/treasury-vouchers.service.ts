@@ -9,6 +9,7 @@ import {
 import { prisma, Prisma } from '@farmacia/database';
 import {
   SYSTEM_PERMISSIONS,
+  type CorrectTreasuryDocumentPayload,
   type CreateCashReceiptPayload,
   type CreateDisbursementPayload,
   type TreasuryDocumentDto,
@@ -70,6 +71,20 @@ function isIdempotencyKeyCollision(error: unknown): boolean {
 }
 
 const MAX_APPLICATIONS = 50;
+// El motivo de la anulación guarda además «Corregido con CE-000000: » (máximo 500 en total)
+const MAX_CORRECTION_REASON = 300;
+
+interface VoucherPlan {
+  voucher: Voucher;
+  apply: (tx: Tx, documentId: string, movement: { source: 'CAJA' | 'BANCO'; id: string }) => Promise<void>;
+  /**
+   * Corre en la misma transacción antes de registrar el documento, con el número ya tomado (la
+   * corrección anula aquí: el anulado es inmutable y su motivo ya debe nombrar el reemplazo)
+   */
+  before?: (tx: Tx, documentNumber: string) => Promise<void>;
+  /** Corre en la misma transacción después de registrarlo, con su id y su número */
+  after?: (tx: Tx, documentId: string, documentNumber: string) => Promise<void>;
+}
 
 /**
  * Recibo de caja y comprobante de egreso como documento de origen (ADR-007). En una sola
@@ -95,6 +110,23 @@ export class TreasuryVouchersService {
     user: VoucherUser,
     idempotencyKey?: string,
   ): Promise<TreasuryDocumentDto> {
+    const plan = await this.planCashReceipt(payload, user);
+    return this.run('/api/v1/treasury/cash-receipts', payload, user, idempotencyKey, plan);
+  }
+
+  async createDisbursement(
+    payload: CreateDisbursementPayload,
+    user: VoucherUser,
+    idempotencyKey?: string,
+  ): Promise<TreasuryDocumentDto> {
+    const plan = await this.planDisbursement(payload, user);
+    return this.run('/api/v1/treasury/disbursements', payload, user, idempotencyKey, plan);
+  }
+
+  private async planCashReceipt(
+    payload: CreateCashReceiptPayload,
+    user: VoucherUser,
+  ): Promise<VoucherPlan> {
     const base = this.validateBase(payload, user, 'RECIBO_CAJA');
     if (payload.kind === 'CARTERA') {
       // Lo autoriza recibo_caja.crear_abono en la ruta; el asiento no exige permiso contable
@@ -103,7 +135,7 @@ export class TreasuryVouchersService {
         id: this.uuid(a.receivableId, 'Factura'),
         amountCents: this.money(a.amount, 'Valor abonado'),
       }));
-      return this.run('/api/v1/treasury/cash-receipts', payload, user, idempotencyKey, {
+      return {
         voucher: {
           ...base,
           documentType: 'RECIBO_CAJA',
@@ -126,12 +158,12 @@ export class TreasuryVouchersService {
             });
           }
         },
-      });
+      };
     }
     if (payload.kind !== 'MANUAL') {
       throw new BadRequestException('El tipo de recibo debe ser MANUAL o CARTERA.');
     }
-    return this.runManual('/api/v1/treasury/cash-receipts', payload, user, idempotencyKey, {
+    return this.planManual(payload, user, {
       ...base,
       documentType: 'RECIBO_CAJA',
       origin: 'MANUAL',
@@ -139,11 +171,10 @@ export class TreasuryVouchersService {
     });
   }
 
-  async createDisbursement(
+  private async planDisbursement(
     payload: CreateDisbursementPayload,
     user: VoucherUser,
-    idempotencyKey?: string,
-  ): Promise<TreasuryDocumentDto> {
+  ): Promise<VoucherPlan> {
     const base = this.validateBase(payload, user, 'COMPROBANTE_EGRESO');
     if (payload.kind === 'PROVEEDOR') {
       const supplierId = this.uuid(payload.supplierId, 'Proveedor');
@@ -160,7 +191,7 @@ export class TreasuryVouchersService {
         };
       });
       // Lo autoriza comprobante_egreso.crear en la ruta; el asiento no exige permiso contable
-      return this.run('/api/v1/treasury/disbursements', payload, user, idempotencyKey, {
+      return {
         voucher: {
           ...base,
           documentType: 'COMPROBANTE_EGRESO',
@@ -197,12 +228,12 @@ export class TreasuryVouchersService {
             }
           }
         },
-      });
+      };
     }
     if (payload.kind !== 'MANUAL') {
       throw new BadRequestException('El tipo de egreso debe ser MANUAL o PROVEEDOR.');
     }
-    return this.runManual('/api/v1/treasury/disbursements', payload, user, idempotencyKey, {
+    return this.planManual(payload, user, {
       ...base,
       documentType: 'COMPROBANTE_EGRESO',
       origin: 'MANUAL',
@@ -232,142 +263,7 @@ export class TreasuryVouchersService {
       return await this.idempotency.retryOnSerialization(() =>
         prisma.$transaction(
           async (tx) => {
-            const locked = await tx.$queryRaw<Array<{ id: string }>>`
-              SELECT id FROM treasury_documents WHERE id = ${id}::uuid FOR UPDATE
-            `;
-            if (!locked.length) throw new NotFoundException('Documento no encontrado.');
-            const doc = await tx.treasuryDocument.findUniqueOrThrow({
-              where: { id },
-              include: {
-                receivablePayments: { select: { id: true, receivableId: true, amount: true, isReversed: true } },
-                payablePayments: { select: { id: true, payableId: true, amount: true, isReversed: true } },
-                expensePayments: { select: { id: true, amount: true, isReversed: true } },
-              },
-            });
-            if (doc.documentType !== expected.documentType) {
-              throw new NotFoundException('Documento no encontrado.');
-            }
-            if (doc.status === 'ANULADO') {
-              throw new ConflictException(`El documento ${doc.documentNumber} ya está anulado.`);
-            }
-            if (doc.origin === 'AUTOMATICO') {
-              throw new ConflictException(
-                `${doc.documentNumber} lo generó otro documento (${doc.referenceDocumentType ?? 'origen'}): anúlelo desde el documento de origen.`,
-              );
-            }
-            const origin = doc.origin as 'CARTERA' | 'PROVEEDOR' | 'MANUAL';
-            if (!expected.origins.includes(origin)) {
-              throw new BadRequestException(
-                origin === 'CARTERA'
-                  ? 'El abono a cartera se anula en POST /api/v1/treasury/cash-receipts/collections/:id/cancel.'
-                  : 'El recibo manual se anula en POST /api/v1/treasury/cash-receipts/:id/cancel.',
-              );
-            }
-            if (origin === 'MANUAL') {
-              this.requirePermission(
-                user,
-                SYSTEM_PERMISSIONS.ACCOUNTING_READ,
-                'anular documentos manuales contra una contrapartida contable',
-              );
-              requirePaymentMethodPermission(user.permissions, doc.paymentMethod);
-            }
-
-            // 1. Cada abono o pago vigente se reversa con su asiento, sin mover dinero todavía
-            const label = `Anulación ${doc.documentNumber}: ${reason}`;
-            let pendingCents = 0n;
-            for (const payment of doc.receivablePayments.filter((p) => !p.isReversed)) {
-              await this.receivablesService.reversePaymentInTransaction(tx, {
-                receivableId: payment.receivableId,
-                paymentId: payment.id,
-                reason: label,
-                userId: user.id,
-                moveMoney: false,
-              });
-              pendingCents += parseMoneyToCents(payment.amount.toFixed(2), 'Abono');
-            }
-            for (const payment of doc.payablePayments.filter((p) => !p.isReversed)) {
-              await this.payablesService.reversePaymentInTransaction(tx, {
-                payableId: payment.payableId,
-                paymentId: payment.id,
-                reason: label,
-                userId: user.id,
-                moveMoney: false,
-              });
-              pendingCents += parseMoneyToCents(payment.amount.toFixed(2), 'Pago');
-            }
-            for (const payment of doc.expensePayments.filter((p) => !p.isReversed)) {
-              await this.expensesService.reversePaymentInTransaction(tx, {
-                paymentId: payment.id,
-                reason: label,
-                userId: user.id,
-                moveMoney: false,
-              });
-              pendingCents += parseMoneyToCents(payment.amount.toFixed(2), 'Pago');
-            }
-            if (origin === 'MANUAL') {
-              pendingCents = parseMoneyToCents(doc.amount.toFixed(2), 'Valor del documento');
-              const movementId = doc.cashMovementId ?? doc.bankMovementId;
-              const reversed = await this.accountingEngine.reverseSourceEntry(
-                doc.cashMovementId ? 'CASH_MOVEMENT' : 'BANK_MOVEMENT',
-                movementId!,
-                label,
-                user.id,
-                tx,
-              );
-              if (!reversed) {
-                throw new ConflictException(
-                  `${doc.documentNumber} no tiene un asiento publicado para reversar; la anulación fue detenida.`,
-                );
-              }
-            }
-
-            // 2. Un solo movimiento contrario por lo que seguía aplicado
-            if (pendingCents > 0n) {
-              const isReceipt = doc.documentType === 'RECIBO_CAJA';
-              const amount = centsToMoneyString(pendingCents);
-              if (doc.bankMovementId) {
-                await recordSourceBankMovement(tx, {
-                  bankAccountId: doc.bankAccountId!,
-                  movementType: isReceipt ? 'WITHDRAWAL' : 'DEPOSIT',
-                  amount,
-                  concept: label,
-                  referenceDocumentType: 'TREASURY_DOCUMENT_CANCEL',
-                  referenceDocumentId: doc.id,
-                  createdById: user.id,
-                });
-              } else {
-                await this.cashService.recordMovementInTransaction(tx, {
-                  movementType: isReceipt ? 'EGRESO_MANUAL' : 'INGRESO_MANUAL',
-                  amount,
-                  paymentMethod: 'EFECTIVO',
-                  reason: label,
-                  referenceDocumentType: 'TREASURY_DOCUMENT_CANCEL',
-                  referenceDocumentId: doc.id,
-                  createdByUserId: user.id,
-                });
-              }
-            }
-
-            // 3. Estado del documento y auditoría
-            await tx.treasuryDocument.update({
-              where: { id: doc.id },
-              data: { status: 'ANULADO', cancelledAt: new Date(), cancelledById: user.id, cancellationReason: reason },
-            });
-            await tx.auditEvent.create({
-              data: {
-                userId: user.id,
-                action: 'treasury:document_cancelled',
-                entity: 'TreasuryDocument',
-                entityId: doc.id,
-                details: {
-                  documentNumber: doc.documentNumber,
-                  origin,
-                  amount: doc.amount.toFixed(2),
-                  returnedAmount: centsToMoneyString(pendingCents),
-                  reason,
-                },
-              },
-            });
+            const doc = await this.cancelInTransaction(tx, id, reason, user, expected);
             return this.documentsService.getById(doc.id, tx);
           },
           { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
@@ -384,6 +280,258 @@ export class TreasuryVouchersService {
       if (error instanceof TreasuryValidationError) throw new BadRequestException(error.message);
       throw error;
     }
+  }
+
+  /**
+   * Corrección de un recibo o egreso (rediseño, fase 4; antes la web anulaba y luego creaba en
+   * dos llamadas, y un fallo en la segunda dejaba el original anulado sin reemplazo). En una
+   * sola transacción serializable y con Idempotency-Key: anula el original con la misma
+   * anulación de siempre (reversa abonos, pagos o asiento y devuelve el dinero) y emite el
+   * reemplazo con el mismo registro de siempre. No amplía reglas: el reemplazo conserva el tipo,
+   * el origen y el cliente o proveedor, como el formulario de corrección, y exige los permisos
+   * de anular y de crear. Si algo falla (saldo, período cerrado, bloqueo de documentos) no
+   * queda nada aplicado.
+   */
+  async correctDocument(
+    id: string,
+    payload: CorrectTreasuryDocumentPayload,
+    user: VoucherUser,
+    idempotencyKey?: string,
+  ): Promise<TreasuryDocumentDto> {
+    if (!payload || typeof payload !== 'object') {
+      throw new BadRequestException('El cuerpo de la solicitud debe ser un objeto JSON válido.');
+    }
+    const reason = typeof payload.reason === 'string' ? payload.reason.trim() : '';
+    if (reason.length < 5 || reason.length > MAX_CORRECTION_REASON) {
+      throw new BadRequestException(
+        `El motivo de la corrección es obligatorio (entre 5 y ${MAX_CORRECTION_REASON} caracteres).`,
+      );
+    }
+    const original = await prisma.treasuryDocument.findUnique({
+      where: { id },
+      select: {
+        documentType: true,
+        documentNumber: true,
+        origin: true,
+        customerId: true,
+        supplierId: true,
+        referenceDocumentType: true,
+      },
+    });
+    if (!original) throw new NotFoundException('Documento no encontrado.');
+    if (original.origin === 'AUTOMATICO') {
+      throw new ConflictException(
+        `${original.documentNumber} lo generó otro documento (${original.referenceDocumentType ?? 'origen'}): corríjalo desde el documento de origen.`,
+      );
+    }
+    const isReceipt = original.documentType === 'RECIBO_CAJA';
+    const origin = original.origin as 'CARTERA' | 'PROVEEDOR' | 'MANUAL';
+    this.requirePermission(
+      user,
+      isReceipt ? SYSTEM_PERMISSIONS.CASH_RECEIPTS_ANNUL : SYSTEM_PERMISSIONS.DISBURSEMENTS_ANNUL,
+      isReceipt ? 'anular recibos de caja' : 'anular comprobantes de egreso',
+    );
+    const replacement = payload.replacement;
+    if (!replacement || typeof replacement !== 'object' || replacement.kind !== origin) {
+      throw new BadRequestException(
+        'La corrección conserva el tipo de documento: el reemplazo debe ser del mismo origen que el original.',
+      );
+    }
+    let plan: VoucherPlan;
+    if (isReceipt) {
+      const receipt = replacement as CreateCashReceiptPayload;
+      if (origin === 'CARTERA') {
+        this.requirePermission(user, SYSTEM_PERMISSIONS.CASH_RECEIPTS_COLLECT, 'registrar abonos a cartera');
+        if (receipt.customerId !== original.customerId) {
+          throw new BadRequestException('La corrección conserva el cliente del recibo original.');
+        }
+      }
+      plan = await this.planCashReceipt(receipt, user);
+    } else {
+      const disbursement = replacement as CreateDisbursementPayload;
+      this.requirePermission(user, SYSTEM_PERMISSIONS.DISBURSEMENTS_CREATE, 'registrar comprobantes de egreso');
+      if (origin === 'PROVEEDOR' && disbursement.supplierId !== original.supplierId) {
+        throw new BadRequestException('La corrección conserva el proveedor del comprobante original.');
+      }
+      plan = await this.planDisbursement(disbursement, user);
+    }
+
+    return this.run(`/api/v1/treasury/documents/${id}/correct`, payload, user, idempotencyKey, {
+      ...plan,
+      // El original queda enlazado a su reemplazo en el motivo visible de su anulación
+      before: async (tx, replacementNumber) => {
+        await this.cancelInTransaction(tx, id, `Corregido con ${replacementNumber}: ${reason}`, user, {
+          documentType: original.documentType as TreasuryDocumentType,
+          origins: [origin],
+        });
+      },
+      after: async (tx, replacementId, replacementNumber) => {
+        await tx.auditEvent.create({
+          data: {
+            userId: user.id,
+            action: 'treasury:document_corrected',
+            entity: 'TreasuryDocument',
+            entityId: id,
+            details: {
+              documentNumber: original.documentNumber,
+              replacementId,
+              replacementNumber,
+              reason,
+            },
+          },
+        });
+      },
+    });
+  }
+
+  /**
+   * Cuerpo de la anulación dentro de una transacción ya abierta (la usan la anulación y la
+   * corrección). Bloquea el documento y valida estado, origen y permisos antes de reversar.
+   */
+  private async cancelInTransaction(
+    tx: Tx,
+    id: string,
+    reason: string,
+    user: VoucherUser,
+    expected: { documentType: TreasuryDocumentType; origins: Array<'CARTERA' | 'PROVEEDOR' | 'MANUAL'> },
+  ) {
+    const locked = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM treasury_documents WHERE id = ${id}::uuid FOR UPDATE
+    `;
+    if (!locked.length) throw new NotFoundException('Documento no encontrado.');
+    const doc = await tx.treasuryDocument.findUniqueOrThrow({
+      where: { id },
+      include: {
+        receivablePayments: { select: { id: true, receivableId: true, amount: true, isReversed: true } },
+        payablePayments: { select: { id: true, payableId: true, amount: true, isReversed: true } },
+        expensePayments: { select: { id: true, amount: true, isReversed: true } },
+      },
+    });
+    if (doc.documentType !== expected.documentType) {
+      throw new NotFoundException('Documento no encontrado.');
+    }
+    if (doc.status === 'ANULADO') {
+      throw new ConflictException(`El documento ${doc.documentNumber} ya está anulado.`);
+    }
+    if (doc.origin === 'AUTOMATICO') {
+      throw new ConflictException(
+        `${doc.documentNumber} lo generó otro documento (${doc.referenceDocumentType ?? 'origen'}): anúlelo desde el documento de origen.`,
+      );
+    }
+    const origin = doc.origin as 'CARTERA' | 'PROVEEDOR' | 'MANUAL';
+    if (!expected.origins.includes(origin)) {
+      throw new BadRequestException(
+        origin === 'CARTERA'
+          ? 'El abono a cartera se anula en POST /api/v1/treasury/cash-receipts/collections/:id/cancel.'
+          : 'El recibo manual se anula en POST /api/v1/treasury/cash-receipts/:id/cancel.',
+      );
+    }
+    if (origin === 'MANUAL') {
+      this.requirePermission(
+        user,
+        SYSTEM_PERMISSIONS.ACCOUNTING_READ,
+        'anular documentos manuales contra una contrapartida contable',
+      );
+      requirePaymentMethodPermission(user.permissions, doc.paymentMethod);
+    }
+
+    // 1. Cada abono o pago vigente se reversa con su asiento, sin mover dinero todavía
+    const label = `Anulación ${doc.documentNumber}: ${reason}`;
+    let pendingCents = 0n;
+    for (const payment of doc.receivablePayments.filter((p) => !p.isReversed)) {
+      await this.receivablesService.reversePaymentInTransaction(tx, {
+        receivableId: payment.receivableId,
+        paymentId: payment.id,
+        reason: label,
+        userId: user.id,
+        moveMoney: false,
+      });
+      pendingCents += parseMoneyToCents(payment.amount.toFixed(2), 'Abono');
+    }
+    for (const payment of doc.payablePayments.filter((p) => !p.isReversed)) {
+      await this.payablesService.reversePaymentInTransaction(tx, {
+        payableId: payment.payableId,
+        paymentId: payment.id,
+        reason: label,
+        userId: user.id,
+        moveMoney: false,
+      });
+      pendingCents += parseMoneyToCents(payment.amount.toFixed(2), 'Pago');
+    }
+    for (const payment of doc.expensePayments.filter((p) => !p.isReversed)) {
+      await this.expensesService.reversePaymentInTransaction(tx, {
+        paymentId: payment.id,
+        reason: label,
+        userId: user.id,
+        moveMoney: false,
+      });
+      pendingCents += parseMoneyToCents(payment.amount.toFixed(2), 'Pago');
+    }
+    if (origin === 'MANUAL') {
+      pendingCents = parseMoneyToCents(doc.amount.toFixed(2), 'Valor del documento');
+      const movementId = doc.cashMovementId ?? doc.bankMovementId;
+      const reversed = await this.accountingEngine.reverseSourceEntry(
+        doc.cashMovementId ? 'CASH_MOVEMENT' : 'BANK_MOVEMENT',
+        movementId!,
+        label,
+        user.id,
+        tx,
+      );
+      if (!reversed) {
+        throw new ConflictException(
+          `${doc.documentNumber} no tiene un asiento publicado para reversar; la anulación fue detenida.`,
+        );
+      }
+    }
+
+    // 2. Un solo movimiento contrario por lo que seguía aplicado
+    if (pendingCents > 0n) {
+      const isReceipt = doc.documentType === 'RECIBO_CAJA';
+      const amount = centsToMoneyString(pendingCents);
+      if (doc.bankMovementId) {
+        await recordSourceBankMovement(tx, {
+          bankAccountId: doc.bankAccountId!,
+          movementType: isReceipt ? 'WITHDRAWAL' : 'DEPOSIT',
+          amount,
+          concept: label,
+          referenceDocumentType: 'TREASURY_DOCUMENT_CANCEL',
+          referenceDocumentId: doc.id,
+          createdById: user.id,
+        });
+      } else {
+        await this.cashService.recordMovementInTransaction(tx, {
+          movementType: isReceipt ? 'EGRESO_MANUAL' : 'INGRESO_MANUAL',
+          amount,
+          paymentMethod: 'EFECTIVO',
+          reason: label,
+          referenceDocumentType: 'TREASURY_DOCUMENT_CANCEL',
+          referenceDocumentId: doc.id,
+          createdByUserId: user.id,
+        });
+      }
+    }
+
+    // 3. Estado del documento y auditoría
+    await tx.treasuryDocument.update({
+      where: { id: doc.id },
+      data: { status: 'ANULADO', cancelledAt: new Date(), cancelledById: user.id, cancellationReason: reason },
+    });
+    await tx.auditEvent.create({
+      data: {
+        userId: user.id,
+        action: 'treasury:document_cancelled',
+        entity: 'TreasuryDocument',
+        entityId: doc.id,
+        details: {
+          documentNumber: doc.documentNumber,
+          origin,
+          amount: doc.amount.toFixed(2),
+          returnedAmount: centsToMoneyString(pendingCents),
+          reason,
+        },
+      },
+    });
+    return doc;
   }
 
   // ------------------------------------------------------------------ //
@@ -467,13 +615,11 @@ export class TreasuryVouchersService {
     }
   }
 
-  private async runManual(
-    endpoint: string,
+  private async planManual(
     payload: CreateCashReceiptPayload | CreateDisbursementPayload,
     user: VoucherUser,
-    idempotencyKey: string | undefined,
     base: Omit<Voucher, 'amountCents' | 'counterpartAccountId' | 'thirdPartyId'>,
-  ) {
+  ): Promise<VoucherPlan> {
     const counterpartAccountId = this.uuid(payload.counterpartAccountId, 'Cuenta de contrapartida');
     const thirdPartyId =
       payload.thirdPartyId === undefined ||
@@ -497,7 +643,7 @@ export class TreasuryVouchersService {
     ) {
       throw new BadRequestException('El tercero indicado no existe.');
     }
-    return this.run(endpoint, payload, user, idempotencyKey, {
+    return {
       voucher,
       apply: async (tx, _documentId, movement) => {
         await this.accountingEngine.handleManualTreasuryMovement(
@@ -514,7 +660,7 @@ export class TreasuryVouchersService {
           tx,
         );
       },
-    });
+    };
   }
 
   private async run(
@@ -522,14 +668,7 @@ export class TreasuryVouchersService {
     payload: unknown,
     user: VoucherUser,
     idempotencyKey: string | undefined,
-    plan: {
-      voucher: Voucher;
-      apply: (
-        tx: Tx,
-        documentId: string,
-        movement: { source: 'CAJA' | 'BANCO'; id: string },
-      ) => Promise<void>;
-    },
+    plan: VoucherPlan,
   ): Promise<TreasuryDocumentDto> {
     // Todo documento mueve dinero: un reintento sin clave lo duplicaría (AGENTS.md §6)
     const key = idempotencyKey?.trim();
@@ -554,10 +693,11 @@ export class TreasuryVouchersService {
 
             const documentId = randomUUID();
             const amount = centsToMoneyString(voucher.amountCents);
-            const movement = await this.recordMovement(tx, voucher, documentId, amount, user.id);
             const [{ number }] = await tx.$queryRaw<Array<{ number: string }>>`
               SELECT next_treasury_document_number(${voucher.documentType}) AS number
             `;
+            if (plan.before) await plan.before(tx, number);
+            const movement = await this.recordMovement(tx, voucher, documentId, amount, user.id);
             await tx.treasuryDocument.create({
               data: {
                 id: documentId,
@@ -579,6 +719,7 @@ export class TreasuryVouchersService {
               },
             });
             await plan.apply(tx, documentId, movement);
+            if (plan.after) await plan.after(tx, documentId, number);
             await tx.auditEvent.create({
               data: {
                 userId: user.id,

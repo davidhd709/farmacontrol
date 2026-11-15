@@ -48,7 +48,8 @@ export const JournalEntryPrintDialog: React.FC<Props> = ({
       documentNumber={docNumber}
       documentDate={entry.entryDate || entry.createdAt}
       status={entry.status}
-      isCancelled={Boolean(entry.reversedByEntryId || entry.reversalOfId)}
+      // Anulado es el asiento reversado; la reversión misma es un asiento vigente con su motivo
+      isCancelled={Boolean(entry.reversedByEntryId)}
       cancellationReason={entry.reversalReason}
       createdByName={entry.createdByName || 'Motor Contable'}
       recipientLabel="Contador Público / Revisor Fiscal"
@@ -202,7 +203,7 @@ export const JournalEntryPrintDialog: React.FC<Props> = ({
           }}
         >
           <Table size="small">
-            <TableHead sx={{ bgcolor: '#0f172a' }}>
+            <TableHead sx={{ '& .MuiTableCell-head': { bgcolor: '#0f172a' } }}>
               <TableRow>
                 <TableCell sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1, width: '16%' }}>
                   Código PUC

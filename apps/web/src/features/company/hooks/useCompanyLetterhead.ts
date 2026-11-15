@@ -3,13 +3,13 @@ import { QueryClient, QueryClientContext, useQuery } from '@tanstack/react-query
 import { fetchCompanyLetterhead } from '../api/company.api';
 
 // Los documentos imprimibles también se montan fuera del proveedor de consultas (pruebas, vistas
-// sueltas); igual que useCompanyInfo, se usa un cliente propio en ese caso.
+// sueltas); en ese caso se usa un cliente propio.
 const fallbackClient = new QueryClient({
   defaultOptions: { queries: { retry: false, staleTime: 1000 * 60 * 30 } },
 });
 
 /**
- * Membrete del emisor para documentos impresos. A diferencia de useCompanyInfo no inventa
+ * Membrete del emisor para documentos impresos. No inventa
  * datos: lo que la empresa no tenga configurado no se imprime.
  */
 export function useCompanyLetterhead(enabled = true) {

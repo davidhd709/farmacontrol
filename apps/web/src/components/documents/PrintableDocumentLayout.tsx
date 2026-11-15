@@ -13,9 +13,21 @@ import {
 import PrintIcon from '@mui/icons-material/Print';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import CloseIcon from '@mui/icons-material/Close';
-import { useCompanyInfo } from '../../features/company/hooks/useCompanyInfo';
-import { formatDateTime } from '../../utils/date-format';
+import { useCompanyLetterhead } from '../../features/company/hooks/useCompanyLetterhead';
+import { formatDate, formatDateTime } from '../../utils/date-format';
 import { printDocument, downloadDocumentPdf } from '../../utils/print-document';
+
+// Estado en español sin cambiar los códigos internos que pasa cada documento
+const STATUS_LABELS: Record<string, string> = {
+  VIGENTE: 'Vigente',
+  CONFIRMADA: 'Confirmada',
+  EMITIDA: 'Emitida',
+  RECEIVED: 'Recibida',
+  POSTED: 'Publicado',
+  DRAFT: 'Borrador',
+  PENDIENTE: 'Pendiente',
+  PAGADO: 'Pagado',
+};
 
 export interface PrintableDocumentLayoutProps {
   open: boolean;
@@ -33,6 +45,8 @@ export interface PrintableDocumentLayoutProps {
   recipientLabel?: string;
   maxWidth?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   actions?: React.ReactNode;
+  /** Aviso en pantalla (no se imprime): p. ej. por qué una acción no está disponible */
+  notice?: React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -52,10 +66,21 @@ export const PrintableDocumentLayout: React.FC<PrintableDocumentLayoutProps> = (
   recipientLabel = 'Firma y Cédula Beneficiario / Recibí Conforme',
   maxWidth = 'md',
   actions,
+  notice,
   children,
 }) => {
-  const company = useCompanyInfo();
-  const cancelled = isCancelled || status === 'ANULADO' || status === 'CANCELLED';
+  // Membrete real del emisor (rediseño, fase 4): lo que la empresa no tenga configurado no se
+  // imprime; antes se rellenaba con un NIT y un correo de ejemplo
+  const { company, isLoading } = useCompanyLetterhead(open);
+  const taxId = company?.taxId
+    ? `NIT ${company.taxId}${company.taxIdCheckDigit ? `-${company.taxIdCheckDigit}` : ''}`
+    : null;
+  const contact = [company?.address, company?.phone ? `Tel. ${company.phone}` : null, company?.email]
+    .filter(Boolean)
+    .join(' • ');
+  const cancelled =
+    isCancelled || status === 'ANULADO' || status === 'ANULADA' || status === 'CANCELLED';
+  const statusLabel = cancelled ? 'Anulado' : status ? (STATUS_LABELS[status] ?? status) : 'Vigente';
 
   const fullDocTitle = `${documentNumber}_${documentType.replace(/\s+/g, '_')}`;
 
@@ -114,7 +139,7 @@ export const PrintableDocumentLayout: React.FC<PrintableDocumentLayoutProps> = (
         </Typography>
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
           <Chip
-            label={cancelled ? 'ANULADO' : status || 'VIGENTE'}
+            label={statusLabel}
             color={cancelled ? 'error' : 'success'}
             size="small"
             sx={{ fontWeight: 700 }}
@@ -124,6 +149,11 @@ export const PrintableDocumentLayout: React.FC<PrintableDocumentLayoutProps> = (
 
       {/* LIENZO DE LA HOJA DE DOCUMENTO OFICIAL (TIPO CARTA CONTABLE) */}
       <DialogContent sx={{ p: { xs: 1, sm: 2 }, '@media print': { p: 0 } }}>
+        {notice && (
+          <Box className="no-print" sx={{ mb: 1.5 }}>
+            {notice}
+          </Box>
+        )}
         <Box
           className="document-sheet"
           sx={{
@@ -191,22 +221,23 @@ export const PrintableDocumentLayout: React.FC<PrintableDocumentLayoutProps> = (
                   letterSpacing: 0.5,
                 }}
               >
-                {company.legalName}
+                {company?.legalName ?? (isLoading ? '' : 'Empresa sin configurar')}
               </Typography>
-              {company.tradeName && company.tradeName !== company.legalName && (
+              {company?.tradeName && company.tradeName !== company.legalName && (
                 <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#334155', mt: 0.25 }}>
                   {company.tradeName}
                 </Typography>
               )}
-              <Typography variant="body2" sx={{ fontWeight: 700, color: '#0f172a', mt: 0.5, fontSize: '0.9rem' }}>
-                NIT: {company.taxIdFull}
-              </Typography>
-              <Typography variant="caption" sx={{ color: '#475569', mt: 0.25, fontSize: '0.8rem' }}>
-                {company.address} {company.phone ? `• Tel: ${company.phone}` : ''}
-              </Typography>
-              <Typography variant="caption" sx={{ color: '#475569', fontSize: '0.8rem' }}>
-                {company.email} • Barranquilla, Colombia
-              </Typography>
+              {taxId && (
+                <Typography variant="body2" sx={{ fontWeight: 700, color: '#0f172a', mt: 0.5, fontSize: '0.9rem' }}>
+                  {taxId}
+                </Typography>
+              )}
+              {contact && (
+                <Typography variant="caption" sx={{ color: '#475569', mt: 0.25, fontSize: '0.8rem' }}>
+                  {contact}
+                </Typography>
+              )}
             </Box>
 
             {/* COLUMNA DERECHA: RECUADRO OFICIAL DEL DOCUMENTO */}
@@ -252,7 +283,7 @@ export const PrintableDocumentLayout: React.FC<PrintableDocumentLayoutProps> = (
                 }}
               >
                 <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>
-                  Fecha: {formatDateTime(documentDate).slice(0, 10)}
+                  Fecha: {formatDate(documentDate)}
                 </Typography>
                 <Typography
                   variant="caption"
@@ -261,7 +292,7 @@ export const PrintableDocumentLayout: React.FC<PrintableDocumentLayoutProps> = (
                     color: cancelled ? '#b91c1c' : '#15803d',
                   }}
                 >
-                  {cancelled ? 'ANULADO' : status || 'VIGENTE'}
+                  {statusLabel}
                 </Typography>
               </Box>
             </Box>
@@ -399,10 +430,10 @@ export const PrintableDocumentLayout: React.FC<PrintableDocumentLayoutProps> = (
             }}
           >
             <Typography variant="caption" sx={{ fontSize: 'inherit', color: 'inherit' }}>
-              Documento oficial generado por FarmaControl • Sistema de Gestión Farmacéutica y Contable
+              Generado por FarmaControl
             </Typography>
             <Typography variant="caption" sx={{ fontSize: 'inherit', color: 'inherit', fontWeight: 600 }}>
-              Página 1 de 1
+              {documentNumber}
             </Typography>
           </Box>
         </Box>

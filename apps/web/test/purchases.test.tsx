@@ -1,5 +1,5 @@
 import { ThemeProvider } from '@mui/material';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -20,6 +20,7 @@ import { ReceivePurchasePage } from '../src/features/purchases/pages/ReceivePurc
 import { DebitNoteDialog } from '../src/features/purchases/components/DebitNoteDialog';
 import * as accountingApi from '../src/features/accounting/api/accounting.api';
 import * as inventoryApi from '../src/features/inventory/api/inventory.api';
+import * as companyApi from '../src/features/company/api/company.api';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { businessToday, addDaysToDate } from '../src/utils/business-date';
 import { appTheme } from '../src/theme/app-theme';
@@ -185,6 +186,77 @@ describe('Purchases Frontend (UX-15 & UX-16)', () => {
         expect(screen.getByText('LOTE-AMX-2026')).toBeInTheDocument();
       });
     });
+  });
+
+  it('la compra y su nota débito se imprimen con el formato común y el membrete real (fase 4)', async () => {
+    vi.spyOn(companyApi, 'fetchCompanyLetterhead').mockResolvedValue({
+      company: {
+        legalName: 'Droguería La Esperanza S.A.S.',
+        tradeName: null,
+        taxId: '900123456',
+        taxIdCheckDigit: '8',
+        address: 'Calle 1 # 2-3',
+        phone: null,
+        email: null,
+      },
+    } as never);
+    vi.spyOn(accountingApi, 'fetchPurchaseDebitNotes').mockResolvedValue([
+      {
+        id: 'dn-1',
+        debitNoteNumber: 'ND-000003',
+        purchaseId: 'purch-1',
+        purchaseInvoiceNumber: 'FAC-2026-789',
+        supplierId: 'sup-1',
+        supplierName: 'Distribuidora Médica del Norte',
+        reason: 'Empaque dañado',
+        subtotal: 8000,
+        taxTotal: 0,
+        total: 8000,
+        createdById: 'usr-1',
+        createdByName: 'compras',
+        createdAt: '2026-09-27T10:00:00.000Z',
+        lines: [],
+      },
+    ]);
+    const user = userEvent.setup();
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <ThemeProvider theme={appTheme}>
+          <MemoryRouter>
+            <AuthContext.Provider
+              value={createMockAuthContext([SYSTEM_PERMISSIONS.PURCHASES_READ])}
+            >
+              <PurchasesListPage />
+            </AuthContext.Provider>
+          </MemoryRouter>
+        </ThemeProvider>
+      </QueryClientProvider>,
+    );
+    await user.click(await screen.findByRole('button', { name: 'Ver Detalle' }));
+    const notes = await screen.findByTestId('purchase-debit-notes');
+    expect(notes).toHaveTextContent('ND-000003');
+    await user.click(screen.getByRole('button', { name: 'Imprimir ND-000003' }));
+
+    // Un solo diálogo abierto: el detalle se cierra para que la impresión no salga con los dos
+    const noteDialog = await screen.findByRole('dialog');
+    await waitFor(() => expect(noteDialog).toHaveTextContent('Nota Débito a Proveedor ND-000003'));
+    expect(noteDialog).toHaveTextContent('Droguería La Esperanza S.A.S.');
+    expect(noteDialog).toHaveTextContent('NIT 900123456-8');
+    expect(noteDialog).not.toHaveTextContent('900.000.000-1');
+    await user.click(screen.getByRole('button', { name: 'Cerrar' }));
+
+    await user.click(screen.getByRole('button', { name: 'Ver Detalle' }));
+    await user.click(await screen.findByRole('button', { name: 'Imprimir' }));
+    await waitFor(() => expect(screen.getAllByRole('dialog')).toHaveLength(1));
+    const purchaseDialog = screen.getByRole('dialog');
+    expect(purchaseDialog).toHaveTextContent('Comprobante de Recepción de Compra');
+    expect(purchaseDialog).toHaveTextContent('Recibida');
+    expect(purchaseDialog).toHaveTextContent('NIT 900123456-8');
+    expect(
+      within(purchaseDialog).getByRole('button', { name: 'Descargar PDF' }),
+    ).toBeInTheDocument();
   });
 
   describe('ReceivePurchasePage (UX-16)', () => {

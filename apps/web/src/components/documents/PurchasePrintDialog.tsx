@@ -13,6 +13,7 @@ import type { PurchaseDto } from '@farmacia/contracts';
 import { PrintableDocumentLayout } from './PrintableDocumentLayout';
 import { formatCurrencyCop } from '../../utils/print-document';
 import { numberToWordsCop } from '../../utils/number-to-words';
+import { formatDate } from '../../utils/date-format';
 
 interface Props {
   open: boolean;
@@ -29,7 +30,13 @@ export const PurchasePrintDialog: React.FC<Props> = ({
 }) => {
   if (!purchase) return null;
 
-  const totalNum = Number((purchase as any).total ?? purchase.totalAmount) || 0;
+  const totalNum = Number(purchase.totalAmount) || 0;
+  // Retenciones practicadas: bajan lo que se paga al proveedor, no el total de la factura
+  const withholdings = [
+    ['Retención en la fuente', purchase.withholdingIncome],
+    ['Retención de IVA', purchase.withholdingVat],
+    ['Retención de ICA', purchase.withholdingIca],
+  ].filter(([, value]) => Number(value) > 0) as Array<[string, string]>;
 
   return (
     <PrintableDocumentLayout
@@ -97,7 +104,7 @@ export const PurchasePrintDialog: React.FC<Props> = ({
               </Typography>
               <Typography variant="body2" sx={{ fontWeight: 700, color: '#0f172a', mt: 0.25 }}>
                 {purchase.paymentCondition || 'Contado'}{' '}
-                {purchase.dueDate ? `— Vence: ${purchase.dueDate}` : ''}
+                {purchase.dueDate ? `— Vence: ${formatDate(purchase.dueDate)}` : ''}
               </Typography>
             </Box>
           </Box>
@@ -174,7 +181,7 @@ export const PurchasePrintDialog: React.FC<Props> = ({
           }}
         >
           <Table size="small">
-            <TableHead sx={{ bgcolor: '#0f172a' }}>
+            <TableHead sx={{ '& .MuiTableCell-head': { bgcolor: '#0f172a' } }}>
               <TableRow>
                 <TableCell sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1 }}>
                   Producto / Presentación
@@ -219,7 +226,7 @@ export const PurchasePrintDialog: React.FC<Props> = ({
                         <strong>{line.lotNumber}</strong>
                         {line.expirationDate && (
                           <Typography variant="caption" sx={{ display: 'block', color: '#64748b' }}>
-                            Vence: {line.expirationDate}
+                            Vence: {formatDate(line.expirationDate)}
                           </Typography>
                         )}
                       </>
@@ -228,10 +235,10 @@ export const PurchasePrintDialog: React.FC<Props> = ({
                     )}
                   </TableCell>
                   <TableCell align="right" sx={{ fontWeight: 800 }}>
-                    {(line as any).quantity ?? line.quantityCommercial}
+                    {Number(line.quantityCommercial).toLocaleString('es-CO')}
                   </TableCell>
                   <TableCell align="right" sx={{ fontFamily: 'monospace' }}>
-                    {formatCurrencyCop(Number((line as any).costPrice ?? line.unitCost))}
+                    {formatCurrencyCop(Number(line.unitCost))}
                   </TableCell>
                   <TableCell align="right" sx={{ fontFamily: 'monospace' }}>
                     {formatCurrencyCop(Number(line.vatAmount || 0))}
@@ -307,7 +314,8 @@ export const PurchasePrintDialog: React.FC<Props> = ({
           <Box sx={{ p: 1, borderBottom: '1px solid #cbd5e1', display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
             <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>Subtotal:</Typography>
             <Typography variant="body2" sx={{ fontWeight: 700, fontFamily: 'monospace' }}>
-              {formatCurrencyCop(Number(purchase.subtotal))}
+              {/* Las compras anteriores al motor tributario no guardan el subtotal */}
+              {purchase.subtotal === null ? '—' : formatCurrencyCop(Number(purchase.subtotal))}
             </Typography>
           </Box>
           <Box sx={{ p: 1, borderBottom: '1px solid #cbd5e1', display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
@@ -322,6 +330,25 @@ export const PurchasePrintDialog: React.FC<Props> = ({
               {formatCurrencyCop(totalNum)}
             </Typography>
           </Box>
+          {withholdings.map(([label, value]) => (
+            <Box
+              key={label}
+              sx={{ p: 1, borderTop: '1px solid #cbd5e1', display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}
+            >
+              <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>{label}:</Typography>
+              <Typography variant="body2" sx={{ fontWeight: 700, fontFamily: 'monospace' }}>
+                -{formatCurrencyCop(Number(value))}
+              </Typography>
+            </Box>
+          ))}
+          {withholdings.length > 0 && (
+            <Box sx={{ p: 1, borderTop: '1px solid #334155', display: 'flex', justifyContent: 'space-between' }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>POR PAGAR AL PROVEEDOR:</Typography>
+              <Typography variant="subtitle2" sx={{ fontWeight: 800, fontFamily: 'monospace' }}>
+                {formatCurrencyCop(Number(purchase.payableAmount))}
+              </Typography>
+            </Box>
+          )}
         </Box>
       </Box>
     </PrintableDocumentLayout>
