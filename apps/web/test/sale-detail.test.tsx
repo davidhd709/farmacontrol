@@ -164,6 +164,26 @@ describe('Detalle de venta (rediseño fase 1)', () => {
     );
   });
 
+  it('la devolución parcial arranca desde el detalle con la factura cargada y muestra su impacto (fase 2)', async () => {
+    const user = userEvent.setup();
+    renderDetail([P.SALES_READ, P.SALES_CREDIT_NOTE]);
+    await user.click(await screen.findByTestId('sale-detail-return-btn'));
+    expect(
+      await screen.findByText(/Devolución \/ Nota Crédito — Factura VEN-000123/),
+    ).toBeInTheDocument();
+    await user.type(screen.getByLabelText('Cantidad a devolver de Acetaminofén 500 mg'), '1');
+    const review = screen.getByTestId('credit-note-review-lines');
+    expect(review).toHaveTextContent(/1 × Acetaminofén 500 mg — \$\s?10\.000/);
+    const effects = screen.getByTestId('credit-note-effects');
+    expect(effects).toHaveTextContent(
+      /Caja\s*Sale \$\s?10\.000,00 de la caja abierta como egreso en efectivo/,
+    );
+    expect(effects).toHaveTextContent(/Cartera\s*Sin cambios en el saldo del cliente/);
+    expect(effects).toHaveTextContent(/Inventario\s*Las unidades vuelven a su lote original/);
+    await user.click(screen.getByLabelText('Reintegrar unidades al inventario (lote original)'));
+    expect(effects).toHaveTextContent(/no vuelven al stock disponible/);
+  });
+
   it('una venta anulada no ofrece devolución ni anulación', async () => {
     vi.mocked(salesApi.fetchSaleById).mockResolvedValue({ ...sale, status: 'CANCELLED' });
     renderDetail([P.SALES_READ, P.SALES_CREDIT_NOTE, P.SALES_CANCEL]);

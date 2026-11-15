@@ -43,6 +43,7 @@ import {
   type CreditNoteFormValues,
 } from '../validation/credit-note.schema';
 import { fromCents, toCents } from '../../../utils/money';
+import { paymentMethodLabel } from '../sale-labels';
 
 interface Props {
   open: boolean;
@@ -132,47 +133,30 @@ export const CreditNoteDialog: React.FC<Props> = ({
     return map;
   }, [sale, creditNotes]);
 
-  // Cálculos de resumen
-  const linesSummary = useMemo(() => {
-    if (!sale) return [];
-    return (sale.lines ?? [])
-      .map((line) => {
-        const qty = Number(quantities[line.id] || 0);
-        if (qty <= 0) return null;
-        const factor = Number(line.quantityCommercial) || 1;
-        const lineTotal = (toCents(line.total) * qty) / factor;
-        const lineSubtotal = (toCents(line.subtotal) * qty) / factor;
-        const lineTax = (toCents(line.taxAmount) * qty) / factor;
-        return {
-          id: line.id,
-          name: line.productName || line.productCode || line.productId,
-          qty,
-          subtotal: fromCents(Math.round(lineSubtotal)),
-          tax: fromCents(Math.round(lineTax)),
-          total: fromCents(Math.round(lineTotal)),
-        };
-      })
-      .filter(Boolean) as Array<{
-      id: string;
-      name: string;
-      qty: number;
-      subtotal: number;
-      tax: number;
-      total: number;
-    }>;
-  }, [sale, quantities]);
+  // Cálculos de resumen. Sin useMemo: watch() devuelve siempre el mismo objeto `quantities`
+  // (RHF lo muta en sitio), así que una memoización por referencia dejaba el resumen en $0.
+  const linesSummary = (sale?.lines ?? [])
+    .map((line) => {
+      const qty = Number(quantities?.[line.id] || 0);
+      if (qty <= 0) return null;
+      const factor = Number(line.quantityCommercial) || 1;
+      const lineTotal = (toCents(line.total) * qty) / factor;
+      const lineSubtotal = (toCents(line.subtotal) * qty) / factor;
+      const lineTax = (toCents(line.taxAmount) * qty) / factor;
+      return {
+        id: line.id,
+        name: line.productName || line.productCode || line.productId,
+        qty,
+        subtotal: fromCents(Math.round(lineSubtotal)),
+        tax: fromCents(Math.round(lineTax)),
+        total: fromCents(Math.round(lineTotal)),
+      };
+    })
+    .filter((l): l is NonNullable<typeof l> => l !== null);
 
-  const estimatedTotal = useMemo(() => {
-    return linesSummary.reduce((acc, l) => acc + l.total, 0);
-  }, [linesSummary]);
-
-  const estimatedSubtotal = useMemo(() => {
-    return linesSummary.reduce((acc, l) => acc + l.subtotal, 0);
-  }, [linesSummary]);
-
-  const estimatedTax = useMemo(() => {
-    return linesSummary.reduce((acc, l) => acc + l.tax, 0);
-  }, [linesSummary]);
+  const estimatedTotal = linesSummary.reduce((acc, l) => acc + l.total, 0);
+  const estimatedSubtotal = linesSummary.reduce((acc, l) => acc + l.subtotal, 0);
+  const estimatedTax = linesSummary.reduce((acc, l) => acc + l.tax, 0);
 
   if (!sale) return null;
 
@@ -233,8 +217,13 @@ export const CreditNoteDialog: React.FC<Props> = ({
         </DialogTitle>
 
         {/* REQ-009: Stepper de procedimiento guiado */}
-        <Box sx={{ px: 3, py: 1.5, bgcolor: 'action.hover', borderBottom: 1, borderColor: 'divider' }}>
-          <Stepper activeStep={linesSummary.length > 0 ? (reason.trim().length >= 5 ? 3 : 2) : 1} alternativeLabel>
+        <Box
+          sx={{ px: 3, py: 1.5, bgcolor: 'action.hover', borderBottom: 1, borderColor: 'divider' }}
+        >
+          <Stepper
+            activeStep={linesSummary.length > 0 ? (reason.trim().length >= 5 ? 3 : 2) : 1}
+            alternativeLabel
+          >
             <Step completed>
               <StepLabel>1. Buscar Factura</StepLabel>
             </Step>
@@ -254,7 +243,10 @@ export const CreditNoteDialog: React.FC<Props> = ({
           <Stack spacing={3}>
             {/* PASO 1: RESUMEN DE LA FACTURA ELEGIBLE */}
             <Paper variant="outlined" sx={{ p: 2, bgcolor: 'background.default', borderRadius: 2 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, color: 'text.secondary' }}>
+              <Typography
+                variant="subtitle2"
+                sx={{ fontWeight: 700, mb: 1, color: 'text.secondary' }}
+              >
                 Paso 1. Factura elegible para devolución
               </Typography>
               <Stack
@@ -284,7 +276,11 @@ export const CreditNoteDialog: React.FC<Props> = ({
                     Medio de pago original:
                   </Typography>
                   <Box sx={{ mt: 0.5 }}>
-                    <Chip label={sale.paymentMethod} size="small" variant="outlined" />
+                    <Chip
+                      label={paymentMethodLabel(sale.paymentMethod)}
+                      size="small"
+                      variant="outlined"
+                    />
                   </Box>
                 </Box>
                 <Box>
@@ -300,7 +296,16 @@ export const CreditNoteDialog: React.FC<Props> = ({
 
             {/* PASO 2: SELECCIÓN DE PRODUCTOS */}
             <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5, flexWrap: 'wrap', gap: 1 }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  mb: 1.5,
+                  flexWrap: 'wrap',
+                  gap: 1,
+                }}
+              >
                 <Box>
                   <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'primary.main' }}>
                     Paso 2. Seleccionar los productos
@@ -413,12 +418,20 @@ export const CreditNoteDialog: React.FC<Props> = ({
 
             {/* PASO 3: MOTIVO Y SOLUCIÓN */}
             <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'primary.main', mb: 1 }}>
+              <Typography
+                variant="subtitle2"
+                sx={{ fontWeight: 700, color: 'primary.main', mb: 1 }}
+              >
                 Paso 3. Indicar el motivo y la solución
               </Typography>
 
               <Box sx={{ mb: 2 }}>
-                <Typography variant="caption" color="text.secondary" component="div" sx={{ mb: 0.75 }}>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  component="div"
+                  sx={{ mb: 0.75 }}
+                >
                   Motivos frecuentes (haz clic para autocompletar):
                 </Typography>
                 <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
@@ -533,7 +546,10 @@ export const CreditNoteDialog: React.FC<Props> = ({
 
             {/* PASO 4: REVISAR Y CONFIRMAR (RESUMEN) */}
             <Paper variant="outlined" sx={{ p: 2, bgcolor: 'action.hover', borderRadius: 2 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'primary.main', mb: 1.5 }}>
+              <Typography
+                variant="subtitle2"
+                sx={{ fontWeight: 700, color: 'primary.main', mb: 1.5 }}
+              >
                 Paso 4. Revisar y confirmar devolución
               </Typography>
 
@@ -554,23 +570,66 @@ export const CreditNoteDialog: React.FC<Props> = ({
                 </Stack>
               </Box>
 
+              {linesSummary.length > 0 && (
+                <Box
+                  component="ul"
+                  data-testid="credit-note-review-lines"
+                  sx={{ m: 0, mb: 1, pl: 2.5 }}
+                >
+                  {linesSummary.map((l) => (
+                    <Typography component="li" variant="body2" key={l.id}>
+                      {l.qty} × {l.name} — {money(l.total)}
+                    </Typography>
+                  ))}
+                </Box>
+              )}
+
               <Divider sx={{ my: 1 }} />
 
-              <Box>
-                <Typography variant="caption" color="text.secondary" component="div">
-                  <strong>Efecto en inventario:</strong>{' '}
+              {/* Impacto antes de confirmar: cada área afectada con su efecto, en texto */}
+              <Box
+                component="dl"
+                data-testid="credit-note-effects"
+                sx={{
+                  m: 0,
+                  display: 'grid',
+                  gridTemplateColumns: { xs: '1fr', sm: '110px 1fr' },
+                  columnGap: 2,
+                  rowGap: 0.5,
+                  '& dt': { fontWeight: 700, fontSize: '0.85rem' },
+                  '& dd': { m: 0, fontSize: '0.85rem', mb: { xs: 0.75, sm: 0 } },
+                }}
+              >
+                <dt>Caja</dt>
+                <dd>
+                  {refundMethod === 'EFECTIVO'
+                    ? `Sale ${money(estimatedTotal)} de la caja abierta como egreso en efectivo.`
+                    : 'Sin movimiento de efectivo.'}
+                </dd>
+                <dt>Cartera</dt>
+                <dd>
+                  {refundMethod === 'CREDITO_CARTERA'
+                    ? `Baja ${money(estimatedTotal)} el saldo por cobrar del cliente.`
+                    : 'Sin cambios en el saldo del cliente.'}
+                </dd>
+                {refundMethod === 'TRANSFERENCIA' && (
+                  <>
+                    <dt>Bancos</dt>
+                    <dd>{`Sale ${money(estimatedTotal)} de la cuenta bancaria de la venta.`}</dd>
+                  </>
+                )}
+                <dt>Inventario</dt>
+                <dd>
                   {restock
-                    ? 'Reintegro físico de las unidades a su lote original en Kardex'
-                    : 'Baja de inventario por avería o merma (sin retorno a stock disponible)'}
-                </Typography>
-                <Typography variant="caption" color="text.secondary" component="div">
-                  <strong>Efecto financiero:</strong>{' '}
-                  {refundMethod === 'EFECTIVO' && 'Se registrará un comprobante de egreso en caja.'}
-                  {refundMethod === 'CREDITO_CARTERA' &&
-                    'Se reducirá automáticamente el saldo en cuentas por cobrar del cliente.'}
-                  {refundMethod === 'TRANSFERENCIA' &&
-                    'Se registrará una reversión en la cuenta bancaria de la venta.'}
-                </Typography>
+                    ? 'Las unidades vuelven a su lote original y quedan en el Kardex.'
+                    : 'Baja por avería o merma: las unidades no vuelven al stock disponible.'}
+                </dd>
+                {isExchange && (
+                  <>
+                    <dt>Cambio</dt>
+                    <dd>Al confirmar se abre el punto de venta para la venta de reemplazo.</dd>
+                  </>
+                )}
               </Box>
             </Paper>
 
