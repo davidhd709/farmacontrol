@@ -3,22 +3,15 @@ import { ThemeProvider } from '@mui/material';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type {
-  ExpenseCategoryDto,
-  ExpenseDto,
-  PayablePaymentDto,
-  ReceivablePaymentDto,
-} from '@farmacia/contracts';
+import type { ExpenseCategoryDto, ExpenseDto, PayablePaymentDto } from '@farmacia/contracts';
 import { SYSTEM_PERMISSIONS } from '@farmacia/contracts';
 import { withAuth } from './support-auth';
 import { ExpensesWithoutSupplierDialog } from '../src/features/expenses/components/ExpensesWithoutSupplierDialog';
 import { ExpenseFormDialog } from '../src/features/expenses/components/ExpenseFormDialog';
 import { ExpenseReasonDialog } from '../src/features/expenses/components/ExpenseReasonDialog';
 import { ExpensesPage } from '../src/features/expenses/pages/ExpensesPage';
-import { ReceivableReversalDialog } from '../src/features/receivables/components/ReceivableReversalDialog';
 import { PayableReversalDialog } from '../src/features/payables/components/PayableReversalDialog';
 import * as api from '../src/features/expenses/api/expenses.api';
-import * as receivables from '../src/features/receivables/api/receivables.api';
 import * as payables from '../src/features/payables/api/payables.api';
 import * as parties from '../src/features/third-parties/api/third-parties.api';
 import { appTheme } from '../src/theme/app-theme';
@@ -181,46 +174,26 @@ it.each(['cancel', 'reverse'] as const)(
   },
 );
 
-it.each(['receivable', 'payable'] as const)(
-  'la reversión %s valida y mantiene el payload reason',
-  async (kind) => {
-    const payment = { id: 'payment', amount: '0.10', paymentMethod: 'EFECTIVO' };
-    const spy =
-      kind === 'receivable'
-        ? vi.spyOn(receivables, 'revertReceivablePayment').mockResolvedValue({} as never)
-        : vi.spyOn(payables, 'revertPayablePayment').mockResolvedValue({} as never);
-    mount(
-      kind === 'receivable' ? (
-        <ReceivableReversalDialog
-          accountId="account"
-          payment={payment as ReceivablePaymentDto}
-          onClose={vi.fn()}
-        />
-      ) : (
-        <PayableReversalDialog
-          accountId="account"
-          payment={payment as PayablePaymentDto}
-          onClose={vi.fn()}
-        />
-      ),
-    );
-    const button = screen.getByRole('button', {
-      name: kind === 'receivable' ? 'Confirmar Anulación' : 'Revertir pago',
-    });
-    fireEvent.click(button);
-    expect(
-      await screen.findByText(
-        kind === 'receivable' ? /El motivo es obligatorio/ : 'Escribe el motivo.',
-      ),
-    ).toBeInTheDocument();
-    expect(spy).not.toHaveBeenCalled();
-    change(/Motivo de la/, ' Motivo válido ');
-    fireEvent.click(button);
-    // La confirmación común entrega el motivo recortado
-    const reason = kind === 'receivable' ? ' Motivo válido ' : 'Motivo válido';
-    await waitFor(() => expect(spy).toHaveBeenCalledWith('account', 'payment', { reason }));
-  },
-);
+it('la reversión de un pago a proveedor valida el motivo y lo envía recortado', async () => {
+  const payment = { id: 'payment', amount: '0.10', paymentMethod: 'EFECTIVO' };
+  const spy = vi.spyOn(payables, 'revertPayablePayment').mockResolvedValue({} as never);
+  mount(
+    <PayableReversalDialog
+      accountId="account"
+      payment={payment as PayablePaymentDto}
+      onClose={vi.fn()}
+    />,
+  );
+  const button = screen.getByRole('button', { name: 'Revertir pago' });
+  fireEvent.click(button);
+  expect(await screen.findByText('Escribe el motivo.')).toBeInTheDocument();
+  expect(spy).not.toHaveBeenCalled();
+  change(/Motivo de la/, ' Motivo válido ');
+  fireEvent.click(button);
+  await waitFor(() =>
+    expect(spy).toHaveBeenCalledWith('account', 'payment', { reason: 'Motivo válido' }),
+  );
+});
 
 it('integra los diálogos en gastos y conserva cancellationReason/reversalReason recortados', async () => {
   vi.spyOn(api, 'fetchExpenses').mockResolvedValue({

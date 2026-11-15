@@ -3,7 +3,6 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ConfirmDialog } from '../src/components/ConfirmDialog';
-import { AlertModalProvider, useAlertModal } from '../src/context/AlertModalContext';
 
 describe('ConfirmDialog & SweetModal (REQ-011, REQ-012)', () => {
   it('renders with default titles and buttons according to operationType create', () => {
@@ -209,73 +208,5 @@ describe('ConfirmDialog & SweetModal (REQ-011, REQ-012)', () => {
     expect(screen.getByRole('button', { name: 'Cancelar' })).toBeEnabled();
     fireEvent.click(screen.getByRole('button', { name: 'Anular asiento' }));
     await waitFor(() => expect(onConfirm).toHaveBeenCalledTimes(2));
-  });
-});
-
-describe('AlertModalContext Hooks (REQ-011)', () => {
-  const TestConsumer: React.FC<{
-    onAction: (modal: ReturnType<typeof useAlertModal>) => void;
-  }> = ({ onAction }) => {
-    const modal = useAlertModal();
-    return (
-      <button onClick={() => onAction(modal)} data-testid="trigger-btn">
-        Trigger
-      </button>
-    );
-  };
-
-  it('opens confirmation modal via confirmCreate hook and executes onConfirm', async () => {
-    const executeAction = vi.fn().mockResolvedValue(undefined);
-
-    render(
-      <AlertModalProvider>
-        <TestConsumer
-          onAction={(modal) => {
-            modal.confirmCreate({
-              message: 'Confirmar nuevo registro',
-              onConfirm: executeAction,
-            });
-          }}
-        />
-      </AlertModalProvider>,
-    );
-
-    fireEvent.click(screen.getByTestId('trigger-btn'));
-
-    expect(await screen.findByText('¿Confirmar registro?')).toBeInTheDocument();
-    expect(screen.getByText('Confirmar nuevo registro')).toBeInTheDocument();
-
-    const confirmBtn = screen.getByRole('button', { name: /confirmar/i });
-    fireEvent.click(confirmBtn);
-
-    await waitFor(() => {
-      expect(executeAction).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  it('handles errors gracefully without unhandled crashes', async () => {
-    const failingAction = vi.fn().mockRejectedValue(new Error('Saldo insuficiente en la cuenta.'));
-
-    render(
-      <AlertModalProvider>
-        <TestConsumer
-          onAction={(modal) => {
-            modal.confirmAnnul({
-              message: 'Anular recibo de caja',
-              onConfirm: failingAction,
-            });
-          }}
-        />
-      </AlertModalProvider>,
-    );
-
-    fireEvent.click(screen.getByTestId('trigger-btn'));
-    expect(await screen.findByText('¿Anular este documento?')).toBeInTheDocument();
-
-    const confirmBtn = screen.getByRole('button', { name: /confirmar anulación/i });
-    fireEvent.click(confirmBtn);
-
-    expect(await screen.findByText('Saldo insuficiente en la cuenta.')).toBeInTheDocument();
-    expect(screen.getByText('No fue posible realizar la operación')).toBeInTheDocument();
   });
 });

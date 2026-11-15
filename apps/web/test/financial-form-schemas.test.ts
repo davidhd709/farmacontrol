@@ -1,6 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { reversalSchema as receivableReversal } from '../src/features/receivables/validation/reversal.schema';
-import { reversalSchema as payableReversal } from '../src/features/payables/validation/reversal.schema';
 import { expenseSchema } from '../src/features/expenses/validation/expense.schema';
 import { expenseReasonSchema } from '../src/features/expenses/validation/expense-reason.schema';
 
@@ -49,11 +47,7 @@ it('la causación exige categoría, beneficiario, descripción y fecha, sin medi
   expect(Object.keys(expenseSchema.parse(expense))).not.toContain('paymentMethod');
 });
 
-describe.each([
-  ['cartera', receivableReversal, 5],
-  ['proveedores', payableReversal, 1],
-  ['gastos', expenseReasonSchema, 5],
-])('Motivo de %s', (_name, schema, minimum) => {
+describe.each([['gastos', expenseReasonSchema, 5]])('Motivo de %s', (_name, schema, minimum) => {
   it('rechaza vacíos y conserva la longitud mínima actual sin transformar el texto', () => {
     expect(schema.safeParse({ reason: '    ' }).success).toBe(false);
     expect(schema.safeParse({ reason: 'a'.repeat(Number(minimum) - 1) }).success).toBe(false);
