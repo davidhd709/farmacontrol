@@ -9,6 +9,21 @@ export interface IdempotencyRecord {
   responseBody: unknown;
 }
 
+/**
+ * Fallos transitorios de una transacción serializable que se resuelven repitiéndola entera:
+ * conflicto de serialización, interbloqueo o transacción interactiva expirada bajo carga.
+ */
+export function isRetryableTransactionError(error: unknown): boolean {
+  return (
+    (error instanceof Prisma.PrismaClientKnownRequestError &&
+      (error.code === 'P2034' ||
+        error.code === 'P2028' ||
+        (error.code === 'P2010' && ['40001', '40P01'].includes(String(error.meta?.code))))) ||
+    (error instanceof Error &&
+      /40001|40P01|could not serialize access|deadlock detected/i.test(error.message))
+  );
+}
+
 @Injectable()
 export class IdempotencyService {
   async retryOnSerialization<T>(operation: () => Promise<T>): Promise<T> {
@@ -16,14 +31,7 @@ export class IdempotencyService {
       try {
         return await operation();
       } catch (error) {
-        const retryable =
-          (error instanceof Prisma.PrismaClientKnownRequestError &&
-            (error.code === 'P2034' ||
-              error.code === 'P2028' ||
-              (error.code === 'P2010' && ['40001', '40P01'].includes(String(error.meta?.code))))) ||
-          (error instanceof Error &&
-            /40001|40P01|could not serialize access|deadlock detected/i.test(error.message));
-        if (!retryable || attempt >= 9) throw error;
+        if (!isRetryableTransactionError(error) || attempt >= 9) throw error;
         await new Promise((resolve) => setTimeout(resolve, 20 * (attempt + 1)));
       }
     }

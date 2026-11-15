@@ -1,5 +1,6 @@
 import { businessDateOf, calendarDate } from '../../../common/utils/business-date';
 import { resolveSourceDocuments } from './journal-source-documents';
+import { isRetryableTransactionError } from '../../../common/idempotency/idempotency.service';
 import { Injectable } from '@nestjs/common';
 import { AccountingPurpose as DbPurpose, prisma, Prisma } from '@farmacia/database';
 import {
@@ -415,7 +416,10 @@ export class JournalService {
       throw new AccountingValidationError('Motivo de reversión inválido.');
     const reason = input.reason.trim();
     if (tx) return this.reverseOnce(input, date, reason, tx);
-    for (let attempt = 0; attempt < 3; attempt++) {
+    // Mismos fallos transitorios y número de intentos que las demás operaciones serializables:
+    // bajo carga, una anulación que compite con otra escritura sobre el mismo asiento debe
+    // terminar en su respuesta de negocio (la reversa o un 409), no en un error interno.
+    for (let attempt = 0; attempt < 10; attempt++) {
       try {
         return await prisma.$transaction(
           (client) => this.reverseOnce(input, date, reason, client),
@@ -424,7 +428,8 @@ export class JournalService {
           },
         );
       } catch (error) {
-        if (isCode(error, 'P2002') || isCode(error, 'P2034')) {
+        const retryable = isRetryableTransactionError(error);
+        if (isCode(error, 'P2002') || retryable) {
           const existing = await prisma.journalEntry.findUnique({
             where: { reversalOfId: input.entryId },
             include: journalInclude,
@@ -437,7 +442,10 @@ export class JournalService {
             return existing;
           }
         }
-        if (isCode(error, 'P2034') && attempt < 2) continue;
+        if (retryable && attempt < 9) {
+          await new Promise((resolve) => setTimeout(resolve, 20 * (attempt + 1)));
+          continue;
+        }
         throw error;
       }
     }
