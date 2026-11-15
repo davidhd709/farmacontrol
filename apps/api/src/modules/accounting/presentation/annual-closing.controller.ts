@@ -26,6 +26,7 @@ import { PermissionsGuard } from '../../identity/presentation/guards/permissions
 import { RequirePermissions } from '../../identity/presentation/decorators/require-permissions.decorator';
 import { CurrentUser } from '../../identity/presentation/decorators/current-user.decorator';
 import type { AuthenticatedUserContext } from '../../identity/presentation/guards/session-auth.guard';
+import { ApiIdempotencyKey } from '../../../common/idempotency/api-idempotency-key.decorator';
 
 function handle(error: unknown): never {
   if (error instanceof AccountingValidationError) throw new BadRequestException(error.message);
@@ -54,6 +55,7 @@ export class AnnualClosingController {
   }
 
   @Post()
+  @ApiIdempotencyKey()
   @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_MANAGE)
   async close(
     @Body(new RequestShapeValidationPipe({ year: 'integer' })) body: { year: number },

@@ -46,6 +46,33 @@ describe('OpenAPI', () => {
     expect(bankResponses['410']).toBeDefined();
   });
 
+  it('documenta la cabecera Idempotency-Key en cada operación que la lee', async () => {
+    const response = await request(app.getHttpServer()).get('/api/v1/docs-json').expect(200);
+    const expected: Array<[string, boolean]> = [
+      ['/api/v1/sales/confirm', true],
+      ['/api/v1/sales/{saleId}/credit-notes', true],
+      ['/api/v1/purchases/{purchaseId}/debit-notes', true],
+      ['/api/v1/expenses', true],
+      ['/api/v1/accounting/manual-notes', true],
+      ['/api/v1/accounting/annual-closings', true],
+      ['/api/v1/accounting/opening-balances', true],
+      ['/api/v1/accounting/opening-balances/{id}/cash', true],
+      ['/api/v1/treasury/cash-receipts/collections', true],
+      ['/api/v1/treasury/cash-receipts', true],
+      ['/api/v1/treasury/disbursements', true],
+      ['/api/v1/treasury/documents/{id}/correct', true],
+      ['/api/v1/inventory/movements/adjust', false],
+    ];
+    for (const [path, required] of expected) {
+      const operation = response.body.paths[path]?.post;
+      expect(operation, path).toBeDefined();
+      const header = (operation.parameters ?? []).find(
+        (p: { in: string; name: string }) => p.in === 'header' && p.name === 'Idempotency-Key',
+      );
+      expect(header, path).toMatchObject({ required, schema: { type: 'string', maxLength: 100 } });
+    }
+  });
+
   it('serves the Swagger UI', async () => {
     const response = await request(app.getHttpServer()).get('/api/v1/docs').expect(200);
     expect(response.headers['content-type']).toContain('text/html');

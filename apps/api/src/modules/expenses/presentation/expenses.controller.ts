@@ -39,6 +39,7 @@ import {
 } from '../../identity/presentation/decorators/require-permissions.decorator';
 import { CurrentUser } from '../../identity/presentation/decorators/current-user.decorator';
 import { retiredRoute, DISBURSEMENT_REPLACEMENT } from '../../../common/http/retired-route';
+import { ApiIdempotencyKey } from '../../../common/idempotency/api-idempotency-key.decorator';
 
 @Controller('expenses')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
@@ -123,6 +124,7 @@ export class ExpensesController {
   }
 
   @Post()
+  @ApiIdempotencyKey()
   @RequirePermissions(SYSTEM_PERMISSIONS.EXPENSES_MANAGE)
   async create(
     @Body(

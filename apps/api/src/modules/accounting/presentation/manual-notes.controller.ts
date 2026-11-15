@@ -21,6 +21,7 @@ import { PermissionsGuard } from '../../identity/presentation/guards/permissions
 import { RequirePermissions } from '../../identity/presentation/decorators/require-permissions.decorator';
 import { CurrentUser } from '../../identity/presentation/decorators/current-user.decorator';
 import type { AuthenticatedUserContext } from '../../identity/presentation/guards/session-auth.guard';
+import { ApiIdempotencyKey } from '../../../common/idempotency/api-idempotency-key.decorator';
 
 @Controller('accounting/manual-notes')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
@@ -28,6 +29,7 @@ export class ManualNotesController {
   constructor(private readonly manualNotesService: ManualNotesService) {}
 
   @Post()
+  @ApiIdempotencyKey()
   @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_MANAGE)
   async create(
     @Body(

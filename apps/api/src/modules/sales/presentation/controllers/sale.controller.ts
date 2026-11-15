@@ -52,6 +52,7 @@ import {
   SaleHasReceivablePaymentsException,
   IdempotencyConflictException,
 } from '../../domain/sale.exceptions';
+import { ApiIdempotencyKey } from '../../../../common/idempotency/api-idempotency-key.decorator';
 
 @Controller('sales')
 @UseGuards(SessionAuthGuard, PermissionsGuard)
@@ -149,6 +150,7 @@ export class SaleController {
   }
 
   @Post('confirm')
+  @ApiIdempotencyKey()
   @ApiResponse({ status: 400, description: 'Datos inválidos o cantidad de series incorrecta.' })
   @ApiResponse({ status: 404, description: 'Cliente solicitado no encontrado.' })
   @ApiResponse({

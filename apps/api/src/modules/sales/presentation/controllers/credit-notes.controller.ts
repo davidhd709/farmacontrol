@@ -32,6 +32,7 @@ import { RequirePermissions } from '../../../identity/presentation/decorators/re
 import { CurrentUser } from '../../../identity/presentation/decorators/current-user.decorator';
 import { CreateCreditNoteValidationPipe } from '../dtos/create-credit-note.dto';
 import { IdempotencyConflictException } from '../../domain/sale.exceptions';
+import { ApiIdempotencyKey } from '../../../../common/idempotency/api-idempotency-key.decorator';
 
 @Controller()
 @UseGuards(SessionAuthGuard, PermissionsGuard)
@@ -39,6 +40,7 @@ export class CreditNotesController {
   constructor(private readonly creditNotesService: CreditNotesService) {}
 
   @Post('sales/:saleId/credit-notes')
+  @ApiIdempotencyKey()
   @RequirePermissions(SYSTEM_PERMISSIONS.SALES_CREDIT_NOTE)
   async createForSale(
     @Param('saleId', ParseUUIDPipe) saleId: string,

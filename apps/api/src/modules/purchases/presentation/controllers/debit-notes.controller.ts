@@ -22,6 +22,7 @@ import { RequirePermissions } from '../../../identity/presentation/decorators/re
 import { CurrentUser } from '../../../identity/presentation/decorators/current-user.decorator';
 import { CreateDebitNoteValidationPipe } from '../dtos/create-debit-note.dto';
 import { IdempotencyConflictException } from '../../../sales/domain/sale.exceptions';
+import { ApiIdempotencyKey } from '../../../../common/idempotency/api-idempotency-key.decorator';
 
 @Controller()
 @UseGuards(SessionAuthGuard, PermissionsGuard)
@@ -29,6 +30,7 @@ export class DebitNotesController {
   constructor(private readonly debitNotesService: DebitNotesService) {}
 
   @Post('purchases/:purchaseId/debit-notes')
+  @ApiIdempotencyKey()
   @RequirePermissions(SYSTEM_PERMISSIONS.PURCHASES_DEBIT_NOTE)
   async createForPurchase(
     @Param('purchaseId', ParseUUIDPipe) purchaseId: string,

@@ -29,6 +29,7 @@ import {
   RequireAnyPermissions,
   RequirePermissions,
 } from '../../identity/presentation/decorators/require-permissions.decorator';
+import { ApiIdempotencyKey } from '../../../common/idempotency/api-idempotency-key.decorator';
 
 /**
  * Registro de recibos de caja y comprobantes de egreso (ADR-007). Cada documento tiene su
@@ -46,6 +47,7 @@ export class TreasuryVouchersController {
 
   /** Recibo de caja de abono a cartera: el cliente y las facturas a crédito que abona. */
   @Post('cash-receipts/collections')
+  @ApiIdempotencyKey()
   @HttpCode(HttpStatus.CREATED)
   @RequirePermissions(SYSTEM_PERMISSIONS.CASH_RECEIPTS_COLLECT)
   createCollectionReceipt(
@@ -58,6 +60,7 @@ export class TreasuryVouchersController {
 
   /** Recibo de caja manual (otros ingresos) contra la contrapartida elegida. */
   @Post('cash-receipts')
+  @ApiIdempotencyKey()
   @HttpCode(HttpStatus.CREATED)
   @RequirePermissions(SYSTEM_PERMISSIONS.CASH_RECEIPTS_MANUAL)
   createCashReceipt(
@@ -74,6 +77,7 @@ export class TreasuryVouchersController {
   }
 
   @Post('disbursements')
+  @ApiIdempotencyKey()
   @HttpCode(HttpStatus.CREATED)
   @RequirePermissions(SYSTEM_PERMISSIONS.DISBURSEMENTS_CREATE)
   createDisbursement(
@@ -135,6 +139,7 @@ export class TreasuryVouchersController {
    * el reemplazo y, si es manual, el contable; el reemplazo conserva origen y tercero.
    */
   @Post('documents/:id/correct')
+  @ApiIdempotencyKey()
   @RequireAnyPermissions(
     SYSTEM_PERMISSIONS.CASH_RECEIPTS_ANNUL,
     SYSTEM_PERMISSIONS.DISBURSEMENTS_ANNUL,

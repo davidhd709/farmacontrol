@@ -27,6 +27,7 @@ import { PermissionsGuard } from '../../identity/presentation/guards/permissions
 import { RequirePermissions } from '../../identity/presentation/decorators/require-permissions.decorator';
 import { CurrentUser } from '../../identity/presentation/decorators/current-user.decorator';
 import type { AuthenticatedUserContext } from '../../identity/presentation/guards/session-auth.guard';
+import { ApiIdempotencyKey } from '../../../common/idempotency/api-idempotency-key.decorator';
 
 function objectBody(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -72,6 +73,7 @@ export class AccountingSetupController {
   }
 
   @Post('opening-balances')
+  @ApiIdempotencyKey()
   @HttpCode(HttpStatus.CREATED)
   @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_MANAGE)
   @ApiOperation({
@@ -91,6 +93,7 @@ export class AccountingSetupController {
   }
 
   @Post('opening-balances/:id/cash')
+  @ApiIdempotencyKey()
   @HttpCode(HttpStatus.CREATED)
   @RequirePermissions(SYSTEM_PERMISSIONS.ACCOUNTING_MANAGE, SYSTEM_PERMISSIONS.CASH_MOVEMENTS)
   @ApiOperation({

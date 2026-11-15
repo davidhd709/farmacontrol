@@ -26,6 +26,7 @@ import {
   INVENTORY_MOVEMENT_NOTES_MAX_LENGTH,
 } from '@farmacia/contracts';
 import { InventoryMovementService } from '../../application/services/inventory-movement.service';
+import { ApiIdempotencyKey } from '../../../../common/idempotency/api-idempotency-key.decorator';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -62,6 +63,7 @@ export class InventoryMovementController {
   }
 
   @Post('adjust')
+  @ApiIdempotencyKey({ required: false })
   @RequirePermissions(SYSTEM_PERMISSIONS.INVENTORY_ADJUST)
   @HttpCode(HttpStatus.CREATED)
   public async adjustInventory(
