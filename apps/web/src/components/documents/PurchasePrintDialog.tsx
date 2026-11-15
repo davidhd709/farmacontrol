@@ -22,12 +22,7 @@ interface Props {
   actions?: React.ReactNode;
 }
 
-export const PurchasePrintDialog: React.FC<Props> = ({
-  open,
-  purchase,
-  onClose,
-  actions,
-}) => {
+export const PurchasePrintDialog: React.FC<Props> = ({ open, purchase, onClose, actions }) => {
   if (!purchase) return null;
 
   const totalNum = Number(purchase.totalAmount) || 0;
@@ -130,7 +125,10 @@ export const PurchasePrintDialog: React.FC<Props> = ({
               >
                 Observaciones de Recepción:
               </Typography>
-              <Typography variant="body2" sx={{ color: '#1e293b', mt: 0.25, fontStyle: purchase.notes ? 'normal' : 'italic' }}>
+              <Typography
+                variant="body2"
+                sx={{ color: '#1e293b', mt: 0.25, fontStyle: purchase.notes ? 'normal' : 'italic' }}
+              >
                 {purchase.notes || 'Sin observaciones registradas.'}
               </Typography>
             </Box>
@@ -189,16 +187,28 @@ export const PurchasePrintDialog: React.FC<Props> = ({
                 <TableCell sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1 }}>
                   Lote / Vencimiento
                 </TableCell>
-                <TableCell align="right" sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1 }}>
+                <TableCell
+                  align="right"
+                  sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1 }}
+                >
                   Cant.
                 </TableCell>
-                <TableCell align="right" sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1 }}>
+                <TableCell
+                  align="right"
+                  sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1 }}
+                >
                   Costo Unit.
                 </TableCell>
-                <TableCell align="right" sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1 }}>
+                <TableCell
+                  align="right"
+                  sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1 }}
+                >
                   IVA ($)
                 </TableCell>
-                <TableCell align="right" sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1 }}>
+                <TableCell
+                  align="right"
+                  sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1 }}
+                >
                   Total Línea
                 </TableCell>
               </TableRow>
@@ -311,39 +321,90 @@ export const PurchasePrintDialog: React.FC<Props> = ({
             bgcolor: '#ffffff',
           }}
         >
-          <Box sx={{ p: 1, borderBottom: '1px solid #cbd5e1', display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
-            <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>Subtotal:</Typography>
+          <Box
+            sx={{
+              p: 1,
+              borderBottom: '1px solid #cbd5e1',
+              display: 'flex',
+              justifyContent: 'space-between',
+              fontSize: '0.8rem',
+            }}
+          >
+            <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>
+              Subtotal:
+            </Typography>
             <Typography variant="body2" sx={{ fontWeight: 700, fontFamily: 'monospace' }}>
               {/* Las compras anteriores al motor tributario no guardan el subtotal */}
               {purchase.subtotal === null ? '—' : formatCurrencyCop(Number(purchase.subtotal))}
             </Typography>
           </Box>
-          <Box sx={{ p: 1, borderBottom: '1px solid #cbd5e1', display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
-            <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>IVA / Impuestos:</Typography>
+          <Box
+            sx={{
+              p: 1,
+              borderBottom: '1px solid #cbd5e1',
+              display: 'flex',
+              justifyContent: 'space-between',
+              fontSize: '0.8rem',
+            }}
+          >
+            <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>
+              IVA / Impuestos:
+            </Typography>
             <Typography variant="body2" sx={{ fontWeight: 700, fontFamily: 'monospace' }}>
               {formatCurrencyCop(Number(purchase.vatTotal || 0))}
             </Typography>
           </Box>
-          <Box sx={{ p: 1, bgcolor: '#0f172a', color: '#ffffff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 900, letterSpacing: 0.5 }}>TOTAL COMPRA:</Typography>
-            <Typography variant="h6" sx={{ fontWeight: 900, fontFamily: 'monospace', color: '#ffffff' }}>
+          <Box
+            sx={{
+              p: 1,
+              bgcolor: '#0f172a',
+              color: '#ffffff',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}
+          >
+            <Typography variant="subtitle2" sx={{ fontWeight: 900, letterSpacing: 0.5 }}>
+              TOTAL COMPRA:
+            </Typography>
+            <Typography
+              variant="h6"
+              sx={{ fontWeight: 900, fontFamily: 'monospace', color: '#ffffff' }}
+            >
               {formatCurrencyCop(totalNum)}
             </Typography>
           </Box>
           {withholdings.map(([label, value]) => (
             <Box
               key={label}
-              sx={{ p: 1, borderTop: '1px solid #cbd5e1', display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}
+              sx={{
+                p: 1,
+                borderTop: '1px solid #cbd5e1',
+                display: 'flex',
+                justifyContent: 'space-between',
+                fontSize: '0.8rem',
+              }}
             >
-              <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>{label}:</Typography>
+              <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>
+                {label}:
+              </Typography>
               <Typography variant="body2" sx={{ fontWeight: 700, fontFamily: 'monospace' }}>
                 -{formatCurrencyCop(Number(value))}
               </Typography>
             </Box>
           ))}
           {withholdings.length > 0 && (
-            <Box sx={{ p: 1, borderTop: '1px solid #334155', display: 'flex', justifyContent: 'space-between' }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>POR PAGAR AL PROVEEDOR:</Typography>
+            <Box
+              sx={{
+                p: 1,
+                borderTop: '1px solid #334155',
+                display: 'flex',
+                justifyContent: 'space-between',
+              }}
+            >
+              <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
+                POR PAGAR AL PROVEEDOR:
+              </Typography>
               <Typography variant="subtitle2" sx={{ fontWeight: 800, fontFamily: 'monospace' }}>
                 {formatCurrencyCop(Number(purchase.payableAmount))}
               </Typography>

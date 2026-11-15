@@ -263,7 +263,12 @@ export const PosPaymentDialog: React.FC<PosPaymentDialogProps> = ({
                     setAmountPaidStr(String(total));
                   }
                 }}
-                sx={{ mb: 2, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 1 }}
+                sx={{
+                  mb: 2,
+                  display: 'grid',
+                  gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
+                  gap: 1,
+                }}
               >
                 <FormControlLabel
                   value="EFECTIVO"

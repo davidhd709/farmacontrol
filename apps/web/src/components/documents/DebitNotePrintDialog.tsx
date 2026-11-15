@@ -22,12 +22,7 @@ interface Props {
   actions?: React.ReactNode;
 }
 
-export const DebitNotePrintDialog: React.FC<Props> = ({
-  open,
-  debitNote,
-  onClose,
-  actions,
-}) => {
+export const DebitNotePrintDialog: React.FC<Props> = ({ open, debitNote, onClose, actions }) => {
   if (!debitNote) return null;
 
   const totalNum = Number(debitNote.total) || 0;
@@ -185,16 +180,28 @@ export const DebitNotePrintDialog: React.FC<Props> = ({
                 <TableCell sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1 }}>
                   Lote
                 </TableCell>
-                <TableCell align="right" sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1 }}>
+                <TableCell
+                  align="right"
+                  sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1 }}
+                >
                   Cant. Devuelta
                 </TableCell>
-                <TableCell align="right" sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1 }}>
+                <TableCell
+                  align="right"
+                  sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1 }}
+                >
                   Costo Unitario
                 </TableCell>
-                <TableCell align="right" sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1 }}>
+                <TableCell
+                  align="right"
+                  sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1 }}
+                >
                   IVA ($)
                 </TableCell>
-                <TableCell align="right" sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1 }}>
+                <TableCell
+                  align="right"
+                  sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1 }}
+                >
                   Total Débito
                 </TableCell>
               </TableRow>
@@ -344,7 +351,10 @@ export const DebitNotePrintDialog: React.FC<Props> = ({
             <Typography variant="subtitle2" sx={{ fontWeight: 900, letterSpacing: 0.5 }}>
               TOTAL DÉBITO:
             </Typography>
-            <Typography variant="h6" sx={{ fontWeight: 900, fontFamily: 'monospace', color: '#ffffff' }}>
+            <Typography
+              variant="h6"
+              sx={{ fontWeight: 900, fontFamily: 'monospace', color: '#ffffff' }}
+            >
               {formatCurrencyCop(totalNum)}
             </Typography>
           </Box>

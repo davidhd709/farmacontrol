@@ -116,7 +116,11 @@ export function CategoriesPage() {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <HomeBackButton />
             <Box>
-              <Typography component="h1" variant="h4" sx={{ fontWeight: 800, color: 'text.primary' }}>
+              <Typography
+                component="h1"
+                variant="h4"
+                sx={{ fontWeight: 800, color: 'text.primary' }}
+              >
                 Categorías
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
@@ -143,135 +147,158 @@ export function CategoriesPage() {
           </PermissionGate>
         </Box>
 
-          {isError ? (
-            <Alert severity="error">
-              {error instanceof Error
-                ? error.message
-                : 'No fue posible cargar las categorías. Intenta nuevamente.'}
-            </Alert>
-          ) : null}
+        {isError ? (
+          <Alert severity="error">
+            {error instanceof Error
+              ? error.message
+              : 'No fue posible cargar las categorías. Intenta nuevamente.'}
+          </Alert>
+        ) : null}
 
-          {/* Filtros de búsqueda y estado */}
-          <Paper variant="outlined" sx={{ p: 2 }}>
-            <Box
-              sx={{
-                display: 'flex',
-                flexDirection: { xs: 'column', sm: 'row' },
-                gap: 2,
-                alignItems: { sm: 'center' },
-                justifyContent: 'space-between',
+        {/* Filtros de búsqueda y estado */}
+        <Paper variant="outlined" sx={{ p: 2 }}>
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: { xs: 'column', sm: 'row' },
+              gap: 2,
+              alignItems: { sm: 'center' },
+              justifyContent: 'space-between',
+            }}
+          >
+            <TextField
+              id="category-search-input"
+              label="Buscar categoría"
+              placeholder="Filtrar por nombre o descripción..."
+              size="small"
+              value={searchTerm}
+              onChange={handleSearchChange}
+              sx={{ flex: 1, minWidth: { sm: 280 } }}
+              slotProps={{
+                input: {
+                  endAdornment: searchTerm ? (
+                    <InputAdornment position="end">
+                      <Button
+                        size="small"
+                        onClick={() => {
+                          setSearchTerm('');
+                          setPage(0);
+                        }}
+                        sx={{ minWidth: 'auto', p: 0.5 }}
+                        aria-label="Limpiar búsqueda"
+                      >
+                        ✕
+                      </Button>
+                    </InputAdornment>
+                  ) : null,
+                },
               }}
-            >
-              <TextField
-                id="category-search-input"
-                label="Buscar categoría"
-                placeholder="Filtrar por nombre o descripción..."
-                size="small"
-                value={searchTerm}
-                onChange={handleSearchChange}
-                sx={{ flex: 1, minWidth: { sm: 280 } }}
-                slotProps={{
-                  input: {
-                    endAdornment: searchTerm ? (
-                      <InputAdornment position="end">
-                        <Button
-                          size="small"
-                          onClick={() => {
-                            setSearchTerm('');
-                            setPage(0);
-                          }}
-                          sx={{ minWidth: 'auto', p: 0.5 }}
-                          aria-label="Limpiar búsqueda"
-                        >
-                          ✕
-                        </Button>
-                      </InputAdornment>
-                    ) : null,
-                  },
-                }}
-              />
+            />
 
-              <FormControl size="small" sx={{ minWidth: 160 }}>
-                <InputLabel id="status-filter-label">Estado</InputLabel>
-                <Select
-                  labelId="status-filter-label"
-                  id="status-filter-select"
-                  value={statusFilter}
-                  label="Estado"
-                  onChange={(e) => handleStatusFilterChange(e.target.value as StatusFilterOption)}
-                >
-                  <MenuItem value="active">Activas</MenuItem>
-                  <MenuItem value="inactive">Inactivas</MenuItem>
-                  <MenuItem value="all">Todas</MenuItem>
-                </Select>
-              </FormControl>
-            </Box>
-          </Paper>
+            <FormControl size="small" sx={{ minWidth: 160 }}>
+              <InputLabel id="status-filter-label">Estado</InputLabel>
+              <Select
+                labelId="status-filter-label"
+                id="status-filter-select"
+                value={statusFilter}
+                label="Estado"
+                onChange={(e) => handleStatusFilterChange(e.target.value as StatusFilterOption)}
+              >
+                <MenuItem value="active">Activas</MenuItem>
+                <MenuItem value="inactive">Inactivas</MenuItem>
+                <MenuItem value="all">Todas</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+        </Paper>
 
-          {/* Tabla de categorías */}
-          <Paper variant="outlined">
-            <TableContainer>
-              <Table aria-label="Tabla de categorías de productos">
-                <TableHead>
+        {/* Tabla de categorías */}
+        <Paper variant="outlined">
+          <TableContainer>
+            <Table aria-label="Tabla de categorías de productos">
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 700 }}>Nombre</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Descripción</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Estado</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Última Actualización</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700 }}>
+                    Acciones
+                  </TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {isLoading ? (
                   <TableRow>
-                    <TableCell sx={{ fontWeight: 700 }}>Nombre</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Descripción</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Estado</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Última Actualización</TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 700 }}>
-                      Acciones
+                    <TableCell colSpan={5} align="center" sx={{ py: 6 }}>
+                      <CircularProgress size={32} />
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                        Cargando categorías…
+                      </Typography>
                     </TableCell>
                   </TableRow>
-                </TableHead>
-                <TableBody>
-                  {isLoading ? (
-                    <TableRow>
-                      <TableCell colSpan={5} align="center" sx={{ py: 6 }}>
-                        <CircularProgress size={32} />
-                        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                          Cargando categorías…
-                        </Typography>
+                ) : categories.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} align="center" sx={{ py: 6 }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                        No se encontraron categorías
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                        {searchTerm || statusFilter !== 'all'
+                          ? 'Prueba modificando los criterios de búsqueda o filtro.'
+                          : 'Aún no se han registrado categorías en el sistema.'}
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  categories.map((category) => (
+                    <TableRow key={category.id} hover>
+                      <TableCell sx={{ fontWeight: 600 }}>{category.name}</TableCell>
+                      <TableCell sx={{ color: 'text.secondary', maxWidth: 300 }}>
+                        {category.description || '—'}
                       </TableCell>
-                    </TableRow>
-                  ) : categories.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={5} align="center" sx={{ py: 6 }}>
-                        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                          No se encontraron categorías
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                          {searchTerm || statusFilter !== 'all'
-                            ? 'Prueba modificando los criterios de búsqueda o filtro.'
-                            : 'Aún no se han registrado categorías en el sistema.'}
-                        </Typography>
+                      <TableCell>
+                        <Chip
+                          label={category.isActive ? 'Activa' : 'Inactiva'}
+                          color={category.isActive ? 'success' : 'default'}
+                          size="small"
+                          variant={category.isActive ? 'filled' : 'outlined'}
+                        />
                       </TableCell>
-                    </TableRow>
-                  ) : (
-                    categories.map((category) => (
-                      <TableRow key={category.id} hover>
-                        <TableCell sx={{ fontWeight: 600 }}>{category.name}</TableCell>
-                        <TableCell sx={{ color: 'text.secondary', maxWidth: 300 }}>
-                          {category.description || '—'}
-                        </TableCell>
-                        <TableCell>
-                          <Chip
-                            label={category.isActive ? 'Activa' : 'Inactiva'}
-                            color={category.isActive ? 'success' : 'default'}
-                            size="small"
-                            variant={category.isActive ? 'filled' : 'outlined'}
-                          />
-                        </TableCell>
-                        <TableCell sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>
-                          {formatDate(category.updatedAt)}
-                        </TableCell>
-                        <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
-                          <PermissionGate permission={SYSTEM_PERMISSIONS.CATEGORIES_MANAGE}>
-                            <Box sx={{ display: 'flex', flexDirection: 'row', gap: 1, justifyContent: 'flex-end' }}>
+                      <TableCell sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>
+                        {formatDate(category.updatedAt)}
+                      </TableCell>
+                      <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                        <PermissionGate permission={SYSTEM_PERMISSIONS.CATEGORIES_MANAGE}>
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              flexDirection: 'row',
+                              gap: 1,
+                              justifyContent: 'flex-end',
+                            }}
+                          >
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={() => handleOpenEdit(category)}
+                              aria-label={`Editar categoría ${category.name}`}
+                              sx={{
+                                textTransform: 'none',
+                                fontWeight: 600,
+                                transition: 'transform 0.1s ease',
+                                '&:active': { transform: 'scale(0.98)' },
+                              }}
+                            >
+                              Editar
+                            </Button>
+                            {category.isActive ? (
                               <Button
                                 size="small"
+                                color="error"
                                 variant="outlined"
-                                onClick={() => handleOpenEdit(category)}
-                                aria-label={`Editar categoría ${category.name}`}
+                                onClick={() => handleOpenDeactivate(category)}
+                                aria-label={`Inactivar categoría ${category.name}`}
                                 sx={{
                                   textTransform: 'none',
                                   fontWeight: 600,
@@ -279,46 +306,30 @@ export function CategoriesPage() {
                                   '&:active': { transform: 'scale(0.98)' },
                                 }}
                               >
-                                Editar
+                                Inactivar
                               </Button>
-                              {category.isActive ? (
-                                <Button
-                                  size="small"
-                                  color="error"
-                                  variant="outlined"
-                                  onClick={() => handleOpenDeactivate(category)}
-                                  aria-label={`Inactivar categoría ${category.name}`}
-                                  sx={{
-                                    textTransform: 'none',
-                                    fontWeight: 600,
-                                    transition: 'transform 0.1s ease',
-                                    '&:active': { transform: 'scale(0.98)' },
-                                  }}
-                                >
-                                  Inactivar
-                                </Button>
-                              ) : null}
-                            </Box>
-                          </PermissionGate>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                            ) : null}
+                          </Box>
+                        </PermissionGate>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
 
-            <TablePagination
-              rowsPerPageOptions={[5, 10, 25, 50]}
-              component="div"
-              count={total}
-              rowsPerPage={pageSize}
-              page={page}
-              onPageChange={handleChangePage}
-              onRowsPerPageChange={handleChangeRowsPerPage}
-            />
-          </Paper>
-        </Stack>
+          <TablePagination
+            rowsPerPageOptions={[5, 10, 25, 50]}
+            component="div"
+            count={total}
+            rowsPerPage={pageSize}
+            page={page}
+            onPageChange={handleChangePage}
+            onRowsPerPageChange={handleChangeRowsPerPage}
+          />
+        </Paper>
+      </Stack>
 
       {/* Diálogos modales */}
       <CategoryFormDialog
@@ -352,7 +363,13 @@ export function CategoriesPage() {
       {/* Notificación modal SweetAlert */}
       <SweetModal
         open={snackbar.open}
-        type={snackbar.severity === 'error' ? 'error' : snackbar.severity === 'warning' ? 'warning' : 'success'}
+        type={
+          snackbar.severity === 'error'
+            ? 'error'
+            : snackbar.severity === 'warning'
+              ? 'warning'
+              : 'success'
+        }
         title={snackbar.severity === 'error' ? 'Error' : '¡Buen trabajo!'}
         description={snackbar.message}
         confirmText="OK"

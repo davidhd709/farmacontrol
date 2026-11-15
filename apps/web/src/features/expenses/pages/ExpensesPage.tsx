@@ -482,7 +482,9 @@ export const ExpensesPage: React.FC = () => {
                       hover
                       sx={isCancelled ? { opacity: 0.6, backgroundColor: 'action.hover' } : {}}
                     >
-                      <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatDate(e.expenseDate)}</TableCell>
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                        {formatDate(e.expenseDate)}
+                      </TableCell>
                       <TableCell>
                         <Chip label={e.categoryName} size="small" variant="outlined" />
                       </TableCell>
@@ -700,8 +702,12 @@ export const ExpensesPage: React.FC = () => {
                           Valor Pagado
                         </TableCell>
                         <TableCell sx={{ fontWeight: 'bold' }}>Registrado Por</TableCell>
-                        <TableCell sx={{ fontWeight: 'bold', textAlign: 'center' }}>Estado</TableCell>
-                        <TableCell sx={{ fontWeight: 'bold', textAlign: 'right' }}>Acción</TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', textAlign: 'center' }}>
+                          Estado
+                        </TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', textAlign: 'right' }}>
+                          Acción
+                        </TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>

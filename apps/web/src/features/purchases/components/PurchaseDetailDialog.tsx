@@ -148,7 +148,10 @@ export const PurchaseDetailDialog: React.FC<PurchaseDetailDialogProps> = ({
         <Box
           sx={{
             display: 'grid',
-            gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)' },
+            gridTemplateColumns: {
+              xs: 'minmax(0, 1fr)',
+              sm: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)',
+            },
             gap: 2,
             mb: 3,
           }}
@@ -210,9 +213,7 @@ export const PurchaseDetailDialog: React.FC<PurchaseDetailDialogProps> = ({
             <Typography variant="caption" color="text.secondary">
               Fecha de Registro en Kardex
             </Typography>
-            <Typography variant="body2">
-              {formatDateTime(purchase.createdAt)}
-            </Typography>
+            <Typography variant="body2">{formatDateTime(purchase.createdAt)}</Typography>
           </Box>
 
           {cleanNotes && (
@@ -338,7 +339,8 @@ export const PurchaseDetailDialog: React.FC<PurchaseDetailDialogProps> = ({
                   sx={{ alignItems: 'center', justifyContent: 'space-between' }}
                 >
                   <Typography variant="body2">
-                    <strong>{note.debitNoteNumber}</strong> · {formatDate(note.createdAt)} · {note.reason}
+                    <strong>{note.debitNoteNumber}</strong> · {formatDate(note.createdAt)} ·{' '}
+                    {note.reason}
                   </Typography>
                   <Button
                     size="small"
@@ -355,7 +357,10 @@ export const PurchaseDetailDialog: React.FC<PurchaseDetailDialogProps> = ({
         )}
       </DialogContent>
 
-      <DialogActions className="no-print" sx={{ p: 2, display: 'flex', justifyContent: 'space-between' }}>
+      <DialogActions
+        className="no-print"
+        sx={{ p: 2, display: 'flex', justifyContent: 'space-between' }}
+      >
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
           <Button
             variant="contained"

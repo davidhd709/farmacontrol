@@ -13,7 +13,11 @@ import {
   type TreasuryDocumentType,
   type TreasurySourceDocumentDto,
 } from '@farmacia/contracts';
-import { TreasuryNotFoundError, TreasuryValidationError, validateUuid } from '../domain/treasury-rules';
+import {
+  TreasuryNotFoundError,
+  TreasuryValidationError,
+  validateUuid,
+} from '../domain/treasury-rules';
 
 const TYPES: readonly TreasuryDocumentType[] = ['RECIBO_CAJA', 'COMPROBANTE_EGRESO'];
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -33,13 +37,28 @@ const include = {
   thirdParty: { select: { name: true } },
   counterpartAccount: { select: { code: true, name: true } },
   receivablePayments: {
-    select: { receivableId: true, amount: true, isReversed: true, receivable: { select: { sale: { select: { invoiceNumber: true } } } } },
+    select: {
+      receivableId: true,
+      amount: true,
+      isReversed: true,
+      receivable: { select: { sale: { select: { invoiceNumber: true } } } },
+    },
   },
   payablePayments: {
-    select: { payableId: true, amount: true, isReversed: true, payable: { select: { purchase: { select: { invoiceNumber: true } } } } },
+    select: {
+      payableId: true,
+      amount: true,
+      isReversed: true,
+      payable: { select: { purchase: { select: { invoiceNumber: true } } } },
+    },
   },
   expensePayments: {
-    select: { expenseId: true, amount: true, isReversed: true, expense: { select: { documentNumber: true, description: true } } },
+    select: {
+      expenseId: true,
+      amount: true,
+      isReversed: true,
+      expense: { select: { documentNumber: true, description: true } },
+    },
   },
 } as const;
 type Client = Prisma.TransactionClient | typeof prisma;
@@ -87,7 +106,9 @@ export class TreasuryDocumentsService {
 
     if (filters.type !== undefined) {
       if (!TYPES.includes(filters.type)) {
-        throw new TreasuryValidationError('Tipo de documento inválido: use RECIBO_CAJA o COMPROBANTE_EGRESO.');
+        throw new TreasuryValidationError(
+          'Tipo de documento inválido: use RECIBO_CAJA o COMPROBANTE_EGRESO.',
+        );
       }
       where.documentType = filters.type;
     }
@@ -137,7 +158,9 @@ export class TreasuryDocumentsService {
       orderBy: [{ documentDate: 'desc' }, { documentNumber: 'desc' }],
     });
     const references = await this.resolveReferences(records);
-    const documents = records.map((record) => this.toDto(record, references.get(record.id) ?? null));
+    const documents = records.map((record) =>
+      this.toDto(record, references.get(record.id) ?? null),
+    );
 
     const workbook = new ExcelJS.Workbook();
     workbook.creator = 'FarmaControl';
@@ -266,50 +289,75 @@ export class TreasuryDocumentsService {
     const idsOf = (...types: string[]) => [
       ...new Set(
         records
-          .filter((r) => r.referenceDocumentType && types.includes(r.referenceDocumentType) && r.referenceDocumentId)
+          .filter(
+            (r) =>
+              r.referenceDocumentType &&
+              types.includes(r.referenceDocumentType) &&
+              r.referenceDocumentId,
+          )
           .map((r) => r.referenceDocumentId!),
       ),
     ];
     const uuids = (values: string[]) => values.filter((v) => /^[0-9a-f-]{36}$/i.test(v));
-    const receivableSelect = { id: true, customer: { select: { name: true } }, sale: { select: { invoiceNumber: true } } } as const;
-    const payableSelect = { id: true, supplier: { select: { name: true } }, purchase: { select: { invoiceNumber: true } } } as const;
+    const receivableSelect = {
+      id: true,
+      customer: { select: { name: true } },
+      sale: { select: { invoiceNumber: true } },
+    } as const;
+    const payableSelect = {
+      id: true,
+      supplier: { select: { name: true } },
+      purchase: { select: { invoiceNumber: true } },
+    } as const;
     const expenseSelect = { id: true, beneficiary: true, documentNumber: true } as const;
 
-    const [sales, creditNotes, receivables, receivablePayments, payables, payablePayments, expenses, expensePayments] =
-      await Promise.all([
-        client.sale.findMany({
-          where: { invoiceNumber: { in: idsOf('SALE', 'SALE_CANCEL') } },
-          select: { invoiceNumber: true, customer: { select: { name: true } } },
-        }),
-        client.creditNote.findMany({
-          where: { creditNoteNumber: { in: idsOf('CREDIT_NOTE', 'CREDIT_NOTE_CANCEL') } },
-          select: { id: true, creditNoteNumber: true, sale: { select: { customer: { select: { name: true } } } } },
-        }),
-        client.receivable.findMany({
-          where: { id: { in: uuids(idsOf('RECEIVABLE')) } },
-          select: receivableSelect,
-        }),
-        client.receivablePayment.findMany({
-          where: { id: { in: uuids(idsOf('RECEIVABLE_PAYMENT', 'RECEIVABLE_PAYMENT_REVERSAL')) } },
-          select: { id: true, receivable: { select: receivableSelect } },
-        }),
-        client.payable.findMany({
-          where: { id: { in: uuids(idsOf('PAYABLE')) } },
-          select: payableSelect,
-        }),
-        client.payablePayment.findMany({
-          where: { id: { in: uuids(idsOf('PAYABLE_PAYMENT', 'PAYABLE_PAYMENT_REVERSAL')) } },
-          select: { id: true, payable: { select: payableSelect } },
-        }),
-        client.expense.findMany({
-          where: { id: { in: uuids(idsOf('EXPENSE', 'EXPENSE_CANCEL')) } },
-          select: expenseSelect,
-        }),
-        client.expensePayment.findMany({
-          where: { id: { in: uuids(idsOf('EXPENSE_PAYMENT', 'EXPENSE_PAYMENT_REVERSAL')) } },
-          select: { id: true, expense: { select: expenseSelect } },
-        }),
-      ]);
+    const [
+      sales,
+      creditNotes,
+      receivables,
+      receivablePayments,
+      payables,
+      payablePayments,
+      expenses,
+      expensePayments,
+    ] = await Promise.all([
+      client.sale.findMany({
+        where: { invoiceNumber: { in: idsOf('SALE', 'SALE_CANCEL') } },
+        select: { invoiceNumber: true, customer: { select: { name: true } } },
+      }),
+      client.creditNote.findMany({
+        where: { creditNoteNumber: { in: idsOf('CREDIT_NOTE', 'CREDIT_NOTE_CANCEL') } },
+        select: {
+          id: true,
+          creditNoteNumber: true,
+          sale: { select: { customer: { select: { name: true } } } },
+        },
+      }),
+      client.receivable.findMany({
+        where: { id: { in: uuids(idsOf('RECEIVABLE')) } },
+        select: receivableSelect,
+      }),
+      client.receivablePayment.findMany({
+        where: { id: { in: uuids(idsOf('RECEIVABLE_PAYMENT', 'RECEIVABLE_PAYMENT_REVERSAL')) } },
+        select: { id: true, receivable: { select: receivableSelect } },
+      }),
+      client.payable.findMany({
+        where: { id: { in: uuids(idsOf('PAYABLE')) } },
+        select: payableSelect,
+      }),
+      client.payablePayment.findMany({
+        where: { id: { in: uuids(idsOf('PAYABLE_PAYMENT', 'PAYABLE_PAYMENT_REVERSAL')) } },
+        select: { id: true, payable: { select: payableSelect } },
+      }),
+      client.expense.findMany({
+        where: { id: { in: uuids(idsOf('EXPENSE', 'EXPENSE_CANCEL')) } },
+        select: expenseSelect,
+      }),
+      client.expensePayment.findMany({
+        where: { id: { in: uuids(idsOf('EXPENSE_PAYMENT', 'EXPENSE_PAYMENT_REVERSAL')) } },
+        select: { id: true, expense: { select: expenseSelect } },
+      }),
+    ]);
 
     type Receivable = (typeof receivables)[number];
     type Payable = (typeof payables)[number];
@@ -328,7 +376,8 @@ export class TreasuryDocumentsService {
     });
 
     const byReference = new Map<string, ResolvedReference>();
-    for (const s of sales) byReference.set(s.invoiceNumber, { thirdPartyName: s.customer?.name ?? null, source: null });
+    for (const s of sales)
+      byReference.set(s.invoiceNumber, { thirdPartyName: s.customer?.name ?? null, source: null });
     for (const n of creditNotes) {
       byReference.set(n.creditNoteNumber, {
         thirdPartyName: n.sale?.customer?.name ?? null,
@@ -344,7 +393,9 @@ export class TreasuryDocumentsService {
 
     const result = new Map<string, ResolvedReference>();
     for (const record of records) {
-      const resolved = record.referenceDocumentId ? byReference.get(record.referenceDocumentId) : undefined;
+      const resolved = record.referenceDocumentId
+        ? byReference.get(record.referenceDocumentId)
+        : undefined;
       if (resolved) result.set(record.id, resolved);
     }
     return result;

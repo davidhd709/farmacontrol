@@ -75,12 +75,20 @@ export const PrintableDocumentLayout: React.FC<PrintableDocumentLayoutProps> = (
   const taxId = company?.taxId
     ? `NIT ${company.taxId}${company.taxIdCheckDigit ? `-${company.taxIdCheckDigit}` : ''}`
     : null;
-  const contact = [company?.address, company?.phone ? `Tel. ${company.phone}` : null, company?.email]
+  const contact = [
+    company?.address,
+    company?.phone ? `Tel. ${company.phone}` : null,
+    company?.email,
+  ]
     .filter(Boolean)
     .join(' • ');
   const cancelled =
     isCancelled || status === 'ANULADO' || status === 'ANULADA' || status === 'CANCELLED';
-  const statusLabel = cancelled ? 'Anulado' : status ? (STATUS_LABELS[status] ?? status) : 'Vigente';
+  const statusLabel = cancelled
+    ? 'Anulado'
+    : status
+      ? (STATUS_LABELS[status] ?? status)
+      : 'Vigente';
 
   const fullDocTitle = `${documentNumber}_${documentType.replace(/\s+/g, '_')}`;
 
@@ -183,7 +191,10 @@ export const PrintableDocumentLayout: React.FC<PrintableDocumentLayoutProps> = (
                 textAlign: 'center',
               }}
             >
-              <Typography variant="h6" sx={{ fontWeight: 900, letterSpacing: 2, color: '#b91c1c', fontSize: '1rem' }}>
+              <Typography
+                variant="h6"
+                sx={{ fontWeight: 900, letterSpacing: 2, color: '#b91c1c', fontSize: '1rem' }}
+              >
                 *** DOCUMENTO ANULADO — SIN EFECTO FISCAL NI CONTABLE ***
               </Typography>
               <Typography variant="body2" sx={{ mt: 0.5, color: '#991b1b', fontSize: '0.85rem' }}>
@@ -191,7 +202,11 @@ export const PrintableDocumentLayout: React.FC<PrintableDocumentLayoutProps> = (
                 {cancelledByName ? ` • Anulado por: ${cancelledByName}` : ''}
               </Typography>
               {cancellationReason && (
-                <Typography variant="caption" component="div" sx={{ mt: 0.5, color: '#7f1d1d', fontStyle: 'italic' }}>
+                <Typography
+                  variant="caption"
+                  component="div"
+                  sx={{ mt: 0.5, color: '#7f1d1d', fontStyle: 'italic' }}
+                >
                   Motivo: {cancellationReason}
                 </Typography>
               )}
@@ -224,17 +239,26 @@ export const PrintableDocumentLayout: React.FC<PrintableDocumentLayoutProps> = (
                 {company?.legalName ?? (isLoading ? '' : 'Empresa sin configurar')}
               </Typography>
               {company?.tradeName && company.tradeName !== company.legalName && (
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#334155', mt: 0.25 }}>
+                <Typography
+                  variant="subtitle2"
+                  sx={{ fontWeight: 700, color: '#334155', mt: 0.25 }}
+                >
                   {company.tradeName}
                 </Typography>
               )}
               {taxId && (
-                <Typography variant="body2" sx={{ fontWeight: 700, color: '#0f172a', mt: 0.5, fontSize: '0.9rem' }}>
+                <Typography
+                  variant="body2"
+                  sx={{ fontWeight: 700, color: '#0f172a', mt: 0.5, fontSize: '0.9rem' }}
+                >
                   {taxId}
                 </Typography>
               )}
               {contact && (
-                <Typography variant="caption" sx={{ color: '#475569', mt: 0.25, fontSize: '0.8rem' }}>
+                <Typography
+                  variant="caption"
+                  sx={{ color: '#475569', mt: 0.25, fontSize: '0.8rem' }}
+                >
                   {contact}
                 </Typography>
               )}
@@ -253,8 +277,24 @@ export const PrintableDocumentLayout: React.FC<PrintableDocumentLayoutProps> = (
               }}
             >
               {/* TÍTULO DEL DOCUMENTO */}
-              <Box sx={{ bgcolor: '#0f172a', color: '#ffffff', py: 0.75, px: 1.5, textAlign: 'center' }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 800, letterSpacing: 1.2, textTransform: 'uppercase', fontSize: '0.85rem' }}>
+              <Box
+                sx={{
+                  bgcolor: '#0f172a',
+                  color: '#ffffff',
+                  py: 0.75,
+                  px: 1.5,
+                  textAlign: 'center',
+                }}
+              >
+                <Typography
+                  variant="subtitle2"
+                  sx={{
+                    fontWeight: 800,
+                    letterSpacing: 1.2,
+                    textTransform: 'uppercase',
+                    fontSize: '0.85rem',
+                  }}
+                >
                   {documentType}
                 </Typography>
               </Box>
@@ -264,7 +304,12 @@ export const PrintableDocumentLayout: React.FC<PrintableDocumentLayoutProps> = (
                 <Typography
                   id="printable-doc-title"
                   variant="h5"
-                  sx={{ fontWeight: 900, color: '#0f172a', fontFamily: 'monospace', letterSpacing: 1 }}
+                  sx={{
+                    fontWeight: 900,
+                    color: '#0f172a',
+                    fontFamily: 'monospace',
+                    letterSpacing: 1,
+                  }}
                 >
                   {documentNumber}
                 </Typography>
@@ -311,7 +356,18 @@ export const PrintableDocumentLayout: React.FC<PrintableDocumentLayoutProps> = (
                 pageBreakInside: 'avoid',
               }}
             >
-              <Typography variant="caption" sx={{ display: 'block', mb: 1.5, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, fontSize: '0.7rem' }}>
+              <Typography
+                variant="caption"
+                sx={{
+                  display: 'block',
+                  mb: 1.5,
+                  color: '#64748b',
+                  fontWeight: 600,
+                  textTransform: 'uppercase',
+                  letterSpacing: 0.5,
+                  fontSize: '0.7rem',
+                }}
+              >
                 Control de Auditoría y Firmas Responsables
               </Typography>
               <Box
@@ -333,12 +389,26 @@ export const PrintableDocumentLayout: React.FC<PrintableDocumentLayoutProps> = (
                     justifyContent: 'space-between',
                   }}
                 >
-                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#334155', fontSize: '0.7rem' }}>
+                  <Typography
+                    variant="caption"
+                    sx={{ fontWeight: 700, color: '#334155', fontSize: '0.7rem' }}
+                  >
                     ELABORADO POR:
                   </Typography>
                   <Box>
                     <Box sx={{ borderBottom: '1px dotted #94a3b8', mb: 0.5 }} />
-                    <Typography variant="caption" sx={{ color: '#0f172a', fontWeight: 600, display: 'block', fontSize: '0.7rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: '#0f172a',
+                        fontWeight: 600,
+                        display: 'block',
+                        fontSize: '0.7rem',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
                       {createdByName || 'Usuario Sistema'}
                     </Typography>
                   </Box>
@@ -356,12 +426,18 @@ export const PrintableDocumentLayout: React.FC<PrintableDocumentLayoutProps> = (
                     justifyContent: 'space-between',
                   }}
                 >
-                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#334155', fontSize: '0.7rem' }}>
+                  <Typography
+                    variant="caption"
+                    sx={{ fontWeight: 700, color: '#334155', fontSize: '0.7rem' }}
+                  >
                     REVISADO POR:
                   </Typography>
                   <Box>
                     <Box sx={{ borderBottom: '1px dotted #94a3b8', mb: 0.5 }} />
-                    <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.68rem', display: 'block' }}>
+                    <Typography
+                      variant="caption"
+                      sx={{ color: '#64748b', fontSize: '0.68rem', display: 'block' }}
+                    >
                       Contabilidad / Auditoría
                     </Typography>
                   </Box>
@@ -379,12 +455,18 @@ export const PrintableDocumentLayout: React.FC<PrintableDocumentLayoutProps> = (
                     justifyContent: 'space-between',
                   }}
                 >
-                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#334155', fontSize: '0.7rem' }}>
+                  <Typography
+                    variant="caption"
+                    sx={{ fontWeight: 700, color: '#334155', fontSize: '0.7rem' }}
+                  >
                     APROBADO POR:
                   </Typography>
                   <Box>
                     <Box sx={{ borderBottom: '1px dotted #94a3b8', mb: 0.5 }} />
-                    <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.68rem', display: 'block' }}>
+                    <Typography
+                      variant="caption"
+                      sx={{ color: '#64748b', fontSize: '0.68rem', display: 'block' }}
+                    >
                       Gerencia / Tesorería
                     </Typography>
                   </Box>
@@ -402,12 +484,18 @@ export const PrintableDocumentLayout: React.FC<PrintableDocumentLayoutProps> = (
                     justifyContent: 'space-between',
                   }}
                 >
-                  <Typography variant="caption" sx={{ fontWeight: 700, color: '#334155', fontSize: '0.68rem', lineHeight: 1.1 }}>
+                  <Typography
+                    variant="caption"
+                    sx={{ fontWeight: 700, color: '#334155', fontSize: '0.68rem', lineHeight: 1.1 }}
+                  >
                     {recipientLabel}
                   </Typography>
                   <Box>
                     <Box sx={{ borderBottom: '1px dotted #94a3b8', mb: 0.5 }} />
-                    <Typography variant="caption" sx={{ color: '#64748b', fontSize: '0.68rem', display: 'block' }}>
+                    <Typography
+                      variant="caption"
+                      sx={{ color: '#64748b', fontSize: '0.68rem', display: 'block' }}
+                    >
                       C.C. / NIT:
                     </Typography>
                   </Box>
@@ -432,7 +520,10 @@ export const PrintableDocumentLayout: React.FC<PrintableDocumentLayoutProps> = (
             <Typography variant="caption" sx={{ fontSize: 'inherit', color: 'inherit' }}>
               Generado por FarmaControl
             </Typography>
-            <Typography variant="caption" sx={{ fontSize: 'inherit', color: 'inherit', fontWeight: 600 }}>
+            <Typography
+              variant="caption"
+              sx={{ fontSize: 'inherit', color: 'inherit', fontWeight: 600 }}
+            >
               {documentNumber}
             </Typography>
           </Box>

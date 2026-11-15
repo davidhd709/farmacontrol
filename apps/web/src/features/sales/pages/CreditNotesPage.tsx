@@ -178,7 +178,9 @@ export const CreditNotesPage: React.FC = () => {
       return;
     }
     if (sale.status !== 'COMPLETED') {
-      setErrorMsg(`La factura ${sale.invoiceNumber} debe estar completada para emitir notas crédito.`);
+      setErrorMsg(
+        `La factura ${sale.invoiceNumber} debe estar completada para emitir notas crédito.`,
+      );
       return;
     }
     setSelectSaleOpen(false);
@@ -318,7 +320,11 @@ export const CreditNotesPage: React.FC = () => {
           sx={{ minWidth: 150 }}
         />
 
-        {(numberFilter || clientFilter || statusFilter !== 'ALL' || fromDateFilter || toDateFilter) && (
+        {(numberFilter ||
+          clientFilter ||
+          statusFilter !== 'ALL' ||
+          fromDateFilter ||
+          toDateFilter) && (
           <Button
             variant="text"
             size="small"

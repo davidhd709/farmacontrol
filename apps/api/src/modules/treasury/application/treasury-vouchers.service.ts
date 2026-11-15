@@ -76,7 +76,11 @@ const MAX_CORRECTION_REASON = 300;
 
 interface VoucherPlan {
   voucher: Voucher;
-  apply: (tx: Tx, documentId: string, movement: { source: 'CAJA' | 'BANCO'; id: string }) => Promise<void>;
+  apply: (
+    tx: Tx,
+    documentId: string,
+    movement: { source: 'CAJA' | 'BANCO'; id: string },
+  ) => Promise<void>;
   /**
    * Corre en la misma transacción antes de registrar el documento, con el número ya tomado (la
    * corrección anula aquí: el anulado es inmutable y su motivo ya debe nombrar el reemplazo)
@@ -253,11 +257,16 @@ export class TreasuryVouchersService {
     id: string,
     reasonInput: unknown,
     user: VoucherUser,
-    expected: { documentType: TreasuryDocumentType; origins: Array<'CARTERA' | 'PROVEEDOR' | 'MANUAL'> },
+    expected: {
+      documentType: TreasuryDocumentType;
+      origins: Array<'CARTERA' | 'PROVEEDOR' | 'MANUAL'>;
+    },
   ): Promise<TreasuryDocumentDto> {
     const reason = typeof reasonInput === 'string' ? reasonInput.trim() : '';
     if (reason.length < 3 || reason.length > 500) {
-      throw new BadRequestException('El motivo de la anulación es obligatorio (entre 3 y 500 caracteres).');
+      throw new BadRequestException(
+        'El motivo de la anulación es obligatorio (entre 3 y 500 caracteres).',
+      );
     }
     try {
       return await this.idempotency.retryOnSerialization(() =>
@@ -341,7 +350,11 @@ export class TreasuryVouchersService {
     if (isReceipt) {
       const receipt = replacement as CreateCashReceiptPayload;
       if (origin === 'CARTERA') {
-        this.requirePermission(user, SYSTEM_PERMISSIONS.CASH_RECEIPTS_COLLECT, 'registrar abonos a cartera');
+        this.requirePermission(
+          user,
+          SYSTEM_PERMISSIONS.CASH_RECEIPTS_COLLECT,
+          'registrar abonos a cartera',
+        );
         if (receipt.customerId !== original.customerId) {
           throw new BadRequestException('La corrección conserva el cliente del recibo original.');
         }
@@ -349,9 +362,15 @@ export class TreasuryVouchersService {
       plan = await this.planCashReceipt(receipt, user);
     } else {
       const disbursement = replacement as CreateDisbursementPayload;
-      this.requirePermission(user, SYSTEM_PERMISSIONS.DISBURSEMENTS_CREATE, 'registrar comprobantes de egreso');
+      this.requirePermission(
+        user,
+        SYSTEM_PERMISSIONS.DISBURSEMENTS_CREATE,
+        'registrar comprobantes de egreso',
+      );
       if (origin === 'PROVEEDOR' && disbursement.supplierId !== original.supplierId) {
-        throw new BadRequestException('La corrección conserva el proveedor del comprobante original.');
+        throw new BadRequestException(
+          'La corrección conserva el proveedor del comprobante original.',
+        );
       }
       plan = await this.planDisbursement(disbursement, user);
     }
@@ -360,10 +379,16 @@ export class TreasuryVouchersService {
       ...plan,
       // El original queda enlazado a su reemplazo en el motivo visible de su anulación
       before: async (tx, replacementNumber) => {
-        await this.cancelInTransaction(tx, id, `Corregido con ${replacementNumber}: ${reason}`, user, {
-          documentType: original.documentType as TreasuryDocumentType,
-          origins: [origin],
-        });
+        await this.cancelInTransaction(
+          tx,
+          id,
+          `Corregido con ${replacementNumber}: ${reason}`,
+          user,
+          {
+            documentType: original.documentType as TreasuryDocumentType,
+            origins: [origin],
+          },
+        );
       },
       after: async (tx, replacementId, replacementNumber) => {
         await tx.auditEvent.create({
@@ -393,7 +418,10 @@ export class TreasuryVouchersService {
     id: string,
     reason: string,
     user: VoucherUser,
-    expected: { documentType: TreasuryDocumentType; origins: Array<'CARTERA' | 'PROVEEDOR' | 'MANUAL'> },
+    expected: {
+      documentType: TreasuryDocumentType;
+      origins: Array<'CARTERA' | 'PROVEEDOR' | 'MANUAL'>;
+    },
   ) {
     const locked = await tx.$queryRaw<Array<{ id: string }>>`
       SELECT id FROM treasury_documents WHERE id = ${id}::uuid FOR UPDATE
@@ -402,7 +430,9 @@ export class TreasuryVouchersService {
     const doc = await tx.treasuryDocument.findUniqueOrThrow({
       where: { id },
       include: {
-        receivablePayments: { select: { id: true, receivableId: true, amount: true, isReversed: true } },
+        receivablePayments: {
+          select: { id: true, receivableId: true, amount: true, isReversed: true },
+        },
         payablePayments: { select: { id: true, payableId: true, amount: true, isReversed: true } },
         expensePayments: { select: { id: true, amount: true, isReversed: true } },
       },
@@ -514,7 +544,12 @@ export class TreasuryVouchersService {
     // 3. Estado del documento y auditoría
     await tx.treasuryDocument.update({
       where: { id: doc.id },
-      data: { status: 'ANULADO', cancelledAt: new Date(), cancelledById: user.id, cancellationReason: reason },
+      data: {
+        status: 'ANULADO',
+        cancelledAt: new Date(),
+        cancelledById: user.id,
+        cancellationReason: reason,
+      },
     });
     await tx.auditEvent.create({
       data: {

@@ -92,7 +92,16 @@ export const PurchasesListPage: React.FC = () => {
   return (
     <Box sx={{ py: { xs: 1, md: 2 }, maxWidth: 1400, mx: 'auto' }}>
       {/* Encabezado */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3, flexWrap: 'wrap', gap: 2 }}>
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          mb: 3,
+          flexWrap: 'wrap',
+          gap: 2,
+        }}
+      >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <HomeBackButton />
           <Box>
@@ -178,7 +187,6 @@ export const PurchasesListPage: React.FC = () => {
           size="small"
           sx={{ minWidth: 240, flexGrow: 1 }}
         />
-
       </FilterBar>
 
       {/* Tabla de Compras */}
@@ -243,11 +251,23 @@ export const PurchasesListPage: React.FC = () => {
                     )}
                   </TableCell>
                   <TableCell>{formatDate(purchase.purchaseDate)}</TableCell>
-                  <TableCell sx={{ textAlign: 'right', fontWeight: 800, color: 'text.primary', fontVariantNumeric: 'tabular-nums' }}>
+                  <TableCell
+                    sx={{
+                      textAlign: 'right',
+                      fontWeight: 800,
+                      color: 'text.primary',
+                      fontVariantNumeric: 'tabular-nums',
+                    }}
+                  >
                     {formatCop(purchase.totalAmount)}
                   </TableCell>
                   <TableCell sx={{ textAlign: 'center' }}>
-                    <Chip label={`${purchase.lines.length} productos`} size="small" variant="outlined" sx={{ fontWeight: 600 }} />
+                    <Chip
+                      label={`${purchase.lines.length} productos`}
+                      size="small"
+                      variant="outlined"
+                      sx={{ fontWeight: 600 }}
+                    />
                   </TableCell>
                   <TableCell sx={{ textAlign: 'center' }}>
                     <StatusChip
@@ -315,7 +335,11 @@ export const PurchasesListPage: React.FC = () => {
           }}
           action={
             createdDebitNote ? (
-              <Button color="inherit" size="small" onClick={() => setPrintDebitNote(createdDebitNote)}>
+              <Button
+                color="inherit"
+                size="small"
+                onClick={() => setPrintDebitNote(createdDebitNote)}
+              >
                 Imprimir {createdDebitNote.debitNoteNumber}
               </Button>
             ) : undefined

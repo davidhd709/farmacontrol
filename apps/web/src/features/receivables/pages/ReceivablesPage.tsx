@@ -178,7 +178,6 @@ export function ReceivablesPage() {
           }}
           sx={{ minWidth: 140 }}
         />
-
       </FilterBar>
 
       {/* Tabla */}
@@ -264,7 +263,11 @@ export function ReceivablesPage() {
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                      <Stack
+                        direction="row"
+                        spacing={0.5}
+                        sx={{ alignItems: 'center', flexWrap: 'wrap' }}
+                      >
                         <Chip size="small" label={cfg.label} color={cfg.color} />
                         {overdue && (
                           <Chip size="small" label="Vencida" color="error" variant="outlined" />

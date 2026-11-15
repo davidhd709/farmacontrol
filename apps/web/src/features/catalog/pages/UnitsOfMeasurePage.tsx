@@ -36,7 +36,10 @@ import { HomeBackButton } from '../../../components/HomeBackButton';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { SweetModal } from '../../../components/SweetModal';
 
-const CATEGORY_LABELS: Record<string, { label: string; color: 'primary' | 'secondary' | 'info' | 'success' | 'warning' | 'default' }> = {
+const CATEGORY_LABELS: Record<
+  string,
+  { label: string; color: 'primary' | 'secondary' | 'info' | 'success' | 'warning' | 'default' }
+> = {
   FARMACEUTICA: { label: 'Medicamento / Farma', color: 'primary' },
   EMPAQUE: { label: 'Empaque / Contenedor', color: 'secondary' },
   RETAIL: { label: 'Snacks / Bebidas / Retail', color: 'success' },
@@ -184,7 +187,16 @@ export const UnitsOfMeasurePage: React.FC = () => {
   return (
     <Box sx={{ py: { xs: 1, md: 2 }, maxWidth: 1300, margin: '0 auto' }}>
       {/* Encabezado */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          mb: 3,
+          flexWrap: 'wrap',
+          gap: 2,
+        }}
+      >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <HomeBackButton />
           <Box>
@@ -192,11 +204,17 @@ export const UnitsOfMeasurePage: React.FC = () => {
               Unidades de medida
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Gestión centralizada de unidades base farmacéuticas, empaques y retail (snacks, bebidas, etc.).
+              Gestión centralizada de unidades base farmacéuticas, empaques y retail (snacks,
+              bebidas, etc.).
             </Typography>
           </Box>
         </Box>
-        <Button variant="contained" color="primary" onClick={handleOpenCreate} sx={{ fontWeight: 700 }}>
+        <Button
+          variant="contained"
+          color="primary"
+          onClick={handleOpenCreate}
+          sx={{ fontWeight: 700 }}
+        >
           + Nueva Unidad
         </Button>
       </Box>
@@ -270,9 +288,15 @@ export const UnitsOfMeasurePage: React.FC = () => {
                   <TableCell sx={{ fontWeight: 700, width: '12%' }}>Código</TableCell>
                   <TableCell sx={{ fontWeight: 700, width: '25%' }}>Nombre de Unidad</TableCell>
                   <TableCell sx={{ fontWeight: 700, width: '22%' }}>Categoría / Tipo</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: '25%' }}>Descripción / Uso Sugerido</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: '8%', textAlign: 'center' }}>Estado</TableCell>
-                  <TableCell sx={{ fontWeight: 700, width: '8%', textAlign: 'center' }}>Acciones</TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '25%' }}>
+                    Descripción / Uso Sugerido
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '8%', textAlign: 'center' }}>
+                    Estado
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 700, width: '8%', textAlign: 'center' }}>
+                    Acciones
+                  </TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -286,15 +310,28 @@ export const UnitsOfMeasurePage: React.FC = () => {
                   </TableRow>
                 ) : (
                   data?.items.map((unit) => {
-                    const catInfo = CATEGORY_LABELS[unit.category] || { label: unit.category, color: 'default' };
+                    const catInfo = CATEGORY_LABELS[unit.category] || {
+                      label: unit.category,
+                      color: 'default',
+                    };
                     return (
                       <TableRow key={unit.id} hover>
                         <TableCell sx={{ fontWeight: 700, fontFamily: 'monospace' }}>
-                          <Chip label={unit.code} size="small" variant="filled" sx={{ fontWeight: 'bold' }} />
+                          <Chip
+                            label={unit.code}
+                            size="small"
+                            variant="filled"
+                            sx={{ fontWeight: 'bold' }}
+                          />
                         </TableCell>
                         <TableCell sx={{ fontWeight: 600 }}>{unit.name}</TableCell>
                         <TableCell>
-                          <Chip label={catInfo.label} size="small" color={catInfo.color} variant="outlined" />
+                          <Chip
+                            label={catInfo.label}
+                            size="small"
+                            color={catInfo.color}
+                            variant="outlined"
+                          />
                         </TableCell>
                         <TableCell sx={{ color: 'text.secondary', fontSize: '0.85rem' }}>
                           {unit.description || '—'}
@@ -310,7 +347,11 @@ export const UnitsOfMeasurePage: React.FC = () => {
                         </TableCell>
                         <TableCell align="center">
                           <Stack direction="row" spacing={1} sx={{ justifyContent: 'center' }}>
-                            <Button size="small" variant="text" onClick={() => handleOpenEdit(unit)}>
+                            <Button
+                              size="small"
+                              variant="text"
+                              onClick={() => handleOpenEdit(unit)}
+                            >
                               Editar
                             </Button>
                             <Button
@@ -368,7 +409,11 @@ export const UnitsOfMeasurePage: React.FC = () => {
                 value={formCode}
                 onChange={(e) => setFormCode(e.target.value.toUpperCase())}
                 disabled={Boolean(editingUnit)}
-                helperText={editingUnit ? 'El código identificador no puede modificarse.' : 'Abreviatura corta única (máx. 20 caracteres)'}
+                helperText={
+                  editingUnit
+                    ? 'El código identificador no puede modificarse.'
+                    : 'Abreviatura corta única (máx. 20 caracteres)'
+                }
                 required
                 fullWidth
               />
@@ -389,9 +434,13 @@ export const UnitsOfMeasurePage: React.FC = () => {
                   label="Categoría / Tipo de Producto"
                   onChange={(e) => setFormCategory(e.target.value)}
                 >
-                  <MenuItem value="FARMACEUTICA">Medicamento / Farmacéutica (Pastilla, Cápsula, Ampolla, Jarabe)</MenuItem>
+                  <MenuItem value="FARMACEUTICA">
+                    Medicamento / Farmacéutica (Pastilla, Cápsula, Ampolla, Jarabe)
+                  </MenuItem>
                   <MenuItem value="EMPAQUE">Empaque / Contenedor (Blíster, Caja, Tubo)</MenuItem>
-                  <MenuItem value="RETAIL">Snacks / Bebidas / Retail (Paquete, Lata, Botella, Six-Pack, Paca)</MenuItem>
+                  <MenuItem value="RETAIL">
+                    Snacks / Bebidas / Retail (Paquete, Lata, Botella, Six-Pack, Paca)
+                  </MenuItem>
                   <MenuItem value="PESO_VOLUMEN">Peso / Volumen (mL, L, g, kg)</MenuItem>
                   <MenuItem value="GENERAL">General / Indivisible (Unidad, Pieza, Bolsa)</MenuItem>
                 </Select>
@@ -429,12 +478,17 @@ export const UnitsOfMeasurePage: React.FC = () => {
         description={
           <Stack spacing={1}>
             <Typography variant="body2" color="text.secondary">
-              ¿Estás seguro de que deseas {unitToToggle?.isActive ? 'inactivar' : 'reactivar'} la unidad{' '}
-              <strong>{unitToToggle?.name} ({unitToToggle?.code})</strong>?
+              ¿Estás seguro de que deseas {unitToToggle?.isActive ? 'inactivar' : 'reactivar'} la
+              unidad{' '}
+              <strong>
+                {unitToToggle?.name} ({unitToToggle?.code})
+              </strong>
+              ?
             </Typography>
             {unitToToggle?.isActive && (
               <Typography variant="caption" color="warning.main" sx={{ display: 'block' }}>
-                ⚠️ Los productos que ya usan esta unidad conservarán su histórico, pero no se sugerirá para nuevos registros.
+                ⚠️ Los productos que ya usan esta unidad conservarán su histórico, pero no se
+                sugerirá para nuevos registros.
               </Typography>
             )}
           </Stack>
@@ -446,7 +500,13 @@ export const UnitsOfMeasurePage: React.FC = () => {
       {/* Notificación modal estilo SweetAlert2 */}
       <SweetModal
         open={snackbar.open}
-        type={snackbar.severity === 'error' ? 'error' : snackbar.severity === 'warning' ? 'warning' : 'success'}
+        type={
+          snackbar.severity === 'error'
+            ? 'error'
+            : snackbar.severity === 'warning'
+              ? 'warning'
+              : 'success'
+        }
         title={snackbar.severity === 'error' ? '¡Error!' : '¡Buen trabajo!'}
         text={snackbar.message}
         confirmText="OK"

@@ -94,7 +94,9 @@ export const TreasuryDocumentPrintDialog: React.FC<Props> = ({
                   letterSpacing: 0.5,
                 }}
               >
-                {isReceipt ? 'Recibido de (Cliente / Tercero):' : 'Pagado a (Proveedor / Beneficiario):'}
+                {isReceipt
+                  ? 'Recibido de (Cliente / Tercero):'
+                  : 'Pagado a (Proveedor / Beneficiario):'}
               </Typography>
               <Typography variant="body1" sx={{ fontWeight: 800, color: '#0f172a', mt: 0.25 }}>
                 {thirdPartyName}
@@ -145,7 +147,12 @@ export const TreasuryDocumentPrintDialog: React.FC<Props> = ({
           </Box>
 
           {/* FILA 3: CONCEPTO DE LA OPERACIÓN */}
-          <Box sx={{ p: 1.5, borderBottom: document.counterpartAccount ? '1px solid #cbd5e1' : 'none' }}>
+          <Box
+            sx={{
+              p: 1.5,
+              borderBottom: document.counterpartAccount ? '1px solid #cbd5e1' : 'none',
+            }}
+          >
             <Typography
               variant="caption"
               sx={{
@@ -180,7 +187,10 @@ export const TreasuryDocumentPrintDialog: React.FC<Props> = ({
               >
                 Contrapartida contable imputada:
               </Typography>
-              <Typography variant="body2" sx={{ fontWeight: 700, color: '#0f172a', fontFamily: 'monospace' }}>
+              <Typography
+                variant="body2"
+                sx={{ fontWeight: 700, color: '#0f172a', fontFamily: 'monospace' }}
+              >
                 {document.counterpartAccount}
               </Typography>
             </Box>
@@ -203,7 +213,9 @@ export const TreasuryDocumentPrintDialog: React.FC<Props> = ({
               fontSize: '0.72rem',
             }}
           >
-            {isReceipt ? 'Relación de Facturas de Venta Abonadas' : 'Relación de Facturas de Compra / Gastos Pagados'}
+            {isReceipt
+              ? 'Relación de Facturas de Venta Abonadas'
+              : 'Relación de Facturas de Compra / Gastos Pagados'}
           </Typography>
           <TableContainer
             sx={{
@@ -218,10 +230,16 @@ export const TreasuryDocumentPrintDialog: React.FC<Props> = ({
                   <TableCell sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1 }}>
                     Documento Relacionado
                   </TableCell>
-                  <TableCell align="right" sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1 }}>
+                  <TableCell
+                    align="right"
+                    sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1 }}
+                  >
                     Valor Aplicado
                   </TableCell>
-                  <TableCell align="center" sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1 }}>
+                  <TableCell
+                    align="center"
+                    sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1 }}
+                  >
                     Estado Abono
                   </TableCell>
                 </TableRow>
@@ -322,12 +340,28 @@ export const TreasuryDocumentPrintDialog: React.FC<Props> = ({
           }}
         >
           <Box sx={{ bgcolor: '#0f172a', color: '#ffffff', py: 0.5 }}>
-            <Typography variant="caption" sx={{ fontWeight: 800, letterSpacing: 1, textTransform: 'uppercase' }}>
+            <Typography
+              variant="caption"
+              sx={{ fontWeight: 800, letterSpacing: 1, textTransform: 'uppercase' }}
+            >
               VALOR TOTAL ({isReceipt ? 'RECIBIDO' : 'PAGADO'})
             </Typography>
           </Box>
-          <Box sx={{ py: 1, px: 1.5, bgcolor: '#ffffff', flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Typography variant="h5" sx={{ fontWeight: 900, color: '#0f172a', fontFamily: 'monospace' }}>
+          <Box
+            sx={{
+              py: 1,
+              px: 1.5,
+              bgcolor: '#ffffff',
+              flexGrow: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Typography
+              variant="h5"
+              sx={{ fontWeight: 900, color: '#0f172a', fontFamily: 'monospace' }}
+            >
               {formatCurrencyCop(amountNum)}
             </Typography>
           </Box>

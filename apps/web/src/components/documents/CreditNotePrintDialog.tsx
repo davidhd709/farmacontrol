@@ -27,12 +27,7 @@ const REFUND_LABELS: Record<string, string> = {
   CREDITO_CARTERA: 'Abono a Saldo en Cartera',
 };
 
-export const CreditNotePrintDialog: React.FC<Props> = ({
-  open,
-  creditNote,
-  onClose,
-  actions,
-}) => {
+export const CreditNotePrintDialog: React.FC<Props> = ({ open, creditNote, onClose, actions }) => {
   if (!creditNote) return null;
 
   const totalNum = Number(creditNote.total) || 0;
@@ -157,7 +152,9 @@ export const CreditNotePrintDialog: React.FC<Props> = ({
                   Reintegro Físico a Inventario:
                 </Typography>
                 <Typography variant="body2" sx={{ fontWeight: 700, color: '#0f172a', mt: 0.25 }}>
-                  {creditNote.restock ? 'Sí (Retorno a Kardex de Lotes)' : 'No (Baja por defecto/merma)'}
+                  {creditNote.restock
+                    ? 'Sí (Retorno a Kardex de Lotes)'
+                    : 'No (Baja por defecto/merma)'}
                 </Typography>
               </Box>
             </Box>
@@ -216,16 +213,28 @@ export const CreditNotePrintDialog: React.FC<Props> = ({
                   <TableCell sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1 }}>
                     Lote
                   </TableCell>
-                  <TableCell align="right" sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1 }}>
+                  <TableCell
+                    align="right"
+                    sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1 }}
+                  >
                     Cant.
                   </TableCell>
-                  <TableCell align="right" sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1 }}>
+                  <TableCell
+                    align="right"
+                    sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1 }}
+                  >
                     V. Unitario
                   </TableCell>
-                  <TableCell align="right" sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1 }}>
+                  <TableCell
+                    align="right"
+                    sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1 }}
+                  >
                     IVA / INC
                   </TableCell>
-                  <TableCell align="right" sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1 }}>
+                  <TableCell
+                    align="right"
+                    sx={{ color: '#ffffff', fontWeight: 800, fontSize: '0.75rem', py: 1 }}
+                  >
                     Total
                   </TableCell>
                 </TableRow>
@@ -325,21 +334,55 @@ export const CreditNotePrintDialog: React.FC<Props> = ({
               bgcolor: '#ffffff',
             }}
           >
-            <Box sx={{ p: 1, borderBottom: '1px solid #cbd5e1', display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
-              <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>Subtotal:</Typography>
+            <Box
+              sx={{
+                p: 1,
+                borderBottom: '1px solid #cbd5e1',
+                display: 'flex',
+                justifyContent: 'space-between',
+                fontSize: '0.8rem',
+              }}
+            >
+              <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>
+                Subtotal:
+              </Typography>
               <Typography variant="body2" sx={{ fontWeight: 700, fontFamily: 'monospace' }}>
                 {formatCurrencyCop(Number(creditNote.subtotal))}
               </Typography>
             </Box>
-            <Box sx={{ p: 1, borderBottom: '1px solid #cbd5e1', display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
-              <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>Impuestos (IVA / INC):</Typography>
+            <Box
+              sx={{
+                p: 1,
+                borderBottom: '1px solid #cbd5e1',
+                display: 'flex',
+                justifyContent: 'space-between',
+                fontSize: '0.8rem',
+              }}
+            >
+              <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>
+                Impuestos (IVA / INC):
+              </Typography>
               <Typography variant="body2" sx={{ fontWeight: 700, fontFamily: 'monospace' }}>
                 {formatCurrencyCop(Number(creditNote.taxTotal))}
               </Typography>
             </Box>
-            <Box sx={{ p: 1, bgcolor: '#0f172a', color: '#ffffff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 900, letterSpacing: 0.5 }}>TOTAL NOTA CRÉDITO:</Typography>
-              <Typography variant="h6" sx={{ fontWeight: 900, fontFamily: 'monospace', color: '#ffffff' }}>
+            <Box
+              sx={{
+                p: 1,
+                bgcolor: '#0f172a',
+                color: '#ffffff',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <Typography variant="subtitle2" sx={{ fontWeight: 900, letterSpacing: 0.5 }}>
+                TOTAL NOTA CRÉDITO:
+              </Typography>
+              <Typography
+                variant="h6"
+                sx={{ fontWeight: 900, fontFamily: 'monospace', color: '#ffffff' }}
+              >
                 {formatCurrencyCop(totalNum)}
               </Typography>
             </Box>

@@ -67,7 +67,8 @@ export class TreasuryDocumentsController {
   async list(
     @CurrentUser() user: AuthenticatedUserContext,
     @Query('type', new QueryFieldValidationPipe('type', 'text?')) type?: TreasuryDocumentType,
-    @Query('status', new QueryFieldValidationPipe('status', 'text?')) status?: TreasuryDocumentStatus,
+    @Query('status', new QueryFieldValidationPipe('status', 'text?'))
+    status?: TreasuryDocumentStatus,
     @Query('fromDate', new QueryFieldValidationPipe('fromDate', 'date?')) fromDate?: string,
     @Query('toDate', new QueryFieldValidationPipe('toDate', 'date?')) toDate?: string,
     @Query('search', new QueryFieldValidationPipe('search', 'text?')) search?: string,
@@ -99,7 +100,8 @@ export class TreasuryDocumentsController {
     @CurrentUser() user: AuthenticatedUserContext,
     @Res() res: Response,
     @Query('type', new QueryFieldValidationPipe('type', 'text?')) type?: TreasuryDocumentType,
-    @Query('status', new QueryFieldValidationPipe('status', 'text?')) status?: TreasuryDocumentStatus,
+    @Query('status', new QueryFieldValidationPipe('status', 'text?'))
+    status?: TreasuryDocumentStatus,
     @Query('fromDate', new QueryFieldValidationPipe('fromDate', 'date?')) fromDate?: string,
     @Query('toDate', new QueryFieldValidationPipe('toDate', 'date?')) toDate?: string,
     @Query('search', new QueryFieldValidationPipe('search', 'text?')) search?: string,
@@ -110,9 +112,17 @@ export class TreasuryDocumentsController {
     const buffer = await this.documentsService
       .exportToExcel({ type, status, fromDate, toDate, search })
       .catch(toHttp);
-    const name = type === 'RECIBO_CAJA' ? 'recibos_caja' : type === 'COMPROBANTE_EGRESO' ? 'comprobantes_egreso' : 'recibos_y_egresos';
+    const name =
+      type === 'RECIBO_CAJA'
+        ? 'recibos_caja'
+        : type === 'COMPROBANTE_EGRESO'
+          ? 'comprobantes_egreso'
+          : 'recibos_y_egresos';
     const range = fromDate || toDate ? `_${fromDate ?? 'inicio'}_${toDate ?? 'hoy'}` : '';
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
     res.setHeader('Content-Disposition', `attachment; filename="${name}${range}.xlsx"`);
     res.send(buffer);
   }

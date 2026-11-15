@@ -30,11 +30,16 @@ describe('Recibos de caja y comprobantes de egreso', () => {
     const auth = module.get(AuthService);
     await cleanTestDatabase();
     await seedRbac(prisma);
-    const admin = await provisioning.provisionInitialUser({ username: 'contadora_rc', password: 'AdminPassword#2026' });
+    const admin = await provisioning.provisionInitialUser({
+      username: 'contadora_rc',
+      password: 'AdminPassword#2026',
+    });
     const adminRole = await prisma.role.findUniqueOrThrow({ where: { name: 'admin' } });
     await prisma.userRole.create({ data: { userId: admin.id!, roleId: adminRole.id } });
     adminCookie = `${SESSION_COOKIE_NAME}=${(await auth.login('contadora_rc', 'AdminPassword#2026')).rawToken}`;
-    const cashier = await prisma.user.create({ data: { username: 'cajero_rc', passwordHash: admin.passwordHash } });
+    const cashier = await prisma.user.create({
+      data: { username: 'cajero_rc', passwordHash: admin.passwordHash },
+    });
     const cashierRole = await prisma.role.findUniqueOrThrow({ where: { name: 'cajero' } });
     await prisma.userRole.create({ data: { userId: cashier.id, roleId: cashierRole.id } });
     cashierCookie = `${SESSION_COOKIE_NAME}=${(await auth.login('cajero_rc', 'AdminPassword#2026')).rawToken}`;
@@ -46,7 +51,13 @@ describe('Recibos de caja y comprobantes de egreso', () => {
     await prisma.$executeRaw`UPDATE "treasury_document_sequences" SET "last_value" = 0`;
     bankId = (
       await prisma.bankAccount.create({
-        data: { bankName: 'Bancolombia', accountType: 'AHORROS', accountNumber: '680958', name: 'Recaudos', createdById: userId },
+        data: {
+          bankName: 'Bancolombia',
+          accountType: 'AHORROS',
+          accountNumber: '680958',
+          name: 'Recaudos',
+          createdById: userId,
+        },
       })
     ).id;
   });
@@ -56,7 +67,12 @@ describe('Recibos de caja y comprobantes de egreso', () => {
     await cleanTestDatabase();
   });
 
-  const cash = (movementType: string, amount: string, extra: Partial<Prisma.CashMovementUncheckedCreateInput> = {}, client: Prisma.TransactionClient | typeof prisma = prisma) =>
+  const cash = (
+    movementType: string,
+    amount: string,
+    extra: Partial<Prisma.CashMovementUncheckedCreateInput> = {},
+    client: Prisma.TransactionClient | typeof prisma = prisma,
+  ) =>
     client.cashMovement.create({
       data: {
         movementType,
@@ -69,7 +85,11 @@ describe('Recibos de caja y comprobantes de egreso', () => {
       },
     });
 
-  const bank = (movementType: string, amount: string, extra: Partial<Prisma.BankMovementUncheckedCreateInput> = {}) =>
+  const bank = (
+    movementType: string,
+    amount: string,
+    extra: Partial<Prisma.BankMovementUncheckedCreateInput> = {},
+  ) =>
     prisma.bankMovement.create({
       data: {
         bankAccountId: bankId,
@@ -84,7 +104,10 @@ describe('Recibos de caja y comprobantes de egreso', () => {
     });
 
   it('cada entrada genera un recibo de caja y cada salida un comprobante de egreso, con consecutivo propio', async () => {
-    const abono = await cash('INGRESO_MANUAL', '28000.00', { referenceDocumentType: 'RECEIVABLE', referenceDocumentId: 'CXC-10' });
+    const abono = await cash('INGRESO_MANUAL', '28000.00', {
+      referenceDocumentType: 'RECEIVABLE',
+      referenceDocumentId: 'CXC-10',
+    });
     await cash('EGRESO_MANUAL', '185000.00', { reason: 'Pago energía' });
     await cash('INGRESO_MANUAL', '50000.00');
     const transferencia = await bank('DEPOSIT', '90000.00');
@@ -93,7 +116,12 @@ describe('Recibos de caja y comprobantes de egreso', () => {
 
     const docs = await prisma.treasuryDocument.findMany({ orderBy: { createdAt: 'asc' } });
     expect(docs.map((d) => d.documentNumber)).toEqual([
-      'RC-000001', 'CE-000001', 'RC-000002', 'RC-000003', 'CE-000002', 'CE-000003',
+      'RC-000001',
+      'CE-000001',
+      'RC-000002',
+      'RC-000003',
+      'CE-000002',
+      'CE-000003',
     ]);
     const rcAbono = docs.find((d) => d.cashMovementId === abono.id)!;
     expect(rcAbono.documentType).toBe('RECIBO_CAJA');
@@ -105,10 +133,22 @@ describe('Recibos de caja y comprobantes de egreso', () => {
   });
 
   it('la venta y su anulación son su propio documento: no generan recibo ni egreso adicional', async () => {
-    await cash('INGRESO_VENTA', '28000.00', { referenceDocumentType: 'SALE', referenceDocumentId: 'FAC-000010' });
-    await cash('EGRESO_MANUAL', '28000.00', { referenceDocumentType: 'SALE_CANCEL', referenceDocumentId: 'FAC-000010' });
-    await bank('DEPOSIT', '15000.00', { referenceDocumentType: 'SALE', referenceDocumentId: 'FAC-000011' });
-    await bank('WITHDRAWAL', '15000.00', { referenceDocumentType: 'SALE_CANCEL', referenceDocumentId: 'FAC-000011' });
+    await cash('INGRESO_VENTA', '28000.00', {
+      referenceDocumentType: 'SALE',
+      referenceDocumentId: 'FAC-000010',
+    });
+    await cash('EGRESO_MANUAL', '28000.00', {
+      referenceDocumentType: 'SALE_CANCEL',
+      referenceDocumentId: 'FAC-000010',
+    });
+    await bank('DEPOSIT', '15000.00', {
+      referenceDocumentType: 'SALE',
+      referenceDocumentId: 'FAC-000011',
+    });
+    await bank('WITHDRAWAL', '15000.00', {
+      referenceDocumentType: 'SALE_CANCEL',
+      referenceDocumentId: 'FAC-000011',
+    });
     expect(await prisma.treasuryDocument.count()).toBe(0);
 
     await cash('INGRESO_MANUAL', '1000.00');
@@ -130,14 +170,20 @@ describe('Recibos de caja y comprobantes de egreso', () => {
     ).rejects.toThrow(/falló/);
     await cash('INGRESO_VENTA', '3000.00');
 
-    const numbers = (await prisma.treasuryDocument.findMany({ orderBy: { createdAt: 'asc' } })).map((d) => d.documentNumber);
+    const numbers = (await prisma.treasuryDocument.findMany({ orderBy: { createdAt: 'asc' } })).map(
+      (d) => d.documentNumber,
+    );
     expect(numbers).toEqual(['RC-000001', 'RC-000002']);
   });
 
   it('movimientos simultáneos reciben números distintos y consecutivos', async () => {
-    await Promise.all(Array.from({ length: 12 }, (_, i) => cash('INGRESO_VENTA', `${1000 + i}.00`)));
+    await Promise.all(
+      Array.from({ length: 12 }, (_, i) => cash('INGRESO_VENTA', `${1000 + i}.00`)),
+    );
     const numbers = (await prisma.treasuryDocument.findMany()).map((d) => d.documentNumber).sort();
-    expect(numbers).toEqual(Array.from({ length: 12 }, (_, i) => `RC-${String(i + 1).padStart(6, '0')}`));
+    expect(numbers).toEqual(
+      Array.from({ length: 12 }, (_, i) => `RC-${String(i + 1).padStart(6, '0')}`),
+    );
   });
 
   it('los documentos emitidos son inmutables', async () => {
@@ -146,14 +192,18 @@ describe('Recibos de caja y comprobantes de egreso', () => {
     await expect(
       prisma.treasuryDocument.update({ where: { id: doc.id }, data: { concept: 'otro' } }),
     ).rejects.toThrow(/inmutable/);
-    await expect(prisma.treasuryDocument.delete({ where: { id: doc.id } })).rejects.toThrow(/inmutable/);
+    await expect(prisma.treasuryDocument.delete({ where: { id: doc.id } })).rejects.toThrow(
+      /inmutable/,
+    );
   });
 
   it('la API lista por tipo, identifica al tercero y exige permiso contable', async () => {
     const account = await prisma.account.create({
       data: { code: '513525', name: 'ENERGIA', type: 'EXPENSE', level: 1, allowsMovement: true },
     });
-    const category = await prisma.expenseCategory.create({ data: { name: 'Servicios', accountId: account.id } });
+    const category = await prisma.expenseCategory.create({
+      data: { name: 'Servicios', accountId: account.id },
+    });
     const expense = await prisma.expense.create({
       data: {
         categoryId: category.id,
@@ -168,7 +218,11 @@ describe('Recibos de caja y comprobantes de egreso', () => {
         createdById: userId,
       },
     });
-    await cash('EGRESO_MANUAL', '185000.00', { reason: 'Pago energía', referenceDocumentType: 'EXPENSE', referenceDocumentId: expense.id });
+    await cash('EGRESO_MANUAL', '185000.00', {
+      reason: 'Pago energía',
+      referenceDocumentType: 'EXPENSE',
+      referenceDocumentId: expense.id,
+    });
     await cash('INGRESO_VENTA', '5000.00');
 
     const res = await request(app.getHttpServer())
@@ -190,18 +244,31 @@ describe('Recibos de caja y comprobantes de egreso', () => {
       .expect(200);
     expect(detail.body.documentNumber).toBe('CE-000001');
 
-    await request(app.getHttpServer()).get('/api/v1/treasury/documents?type=OTRO').set('Cookie', adminCookie).expect(400);
-    await request(app.getHttpServer()).get('/api/v1/treasury/documents').set('Cookie', cashierCookie).expect(403);
+    await request(app.getHttpServer())
+      .get('/api/v1/treasury/documents?type=OTRO')
+      .set('Cookie', adminCookie)
+      .expect(400);
+    await request(app.getHttpServer())
+      .get('/api/v1/treasury/documents')
+      .set('Cookie', cashierCookie)
+      .expect(403);
   });
 
   it('filtra por estado y exporta a Excel lo mismo que lista (rediseño, pendiente de la fase 4)', async () => {
     await cash('INGRESO_MANUAL', '28000.00', { reason: 'Aporte de socio' });
     await cash('INGRESO_MANUAL', '1250.50', { reason: 'Reintegro' });
     await cash('EGRESO_MANUAL', '9000.00', { reason: 'Mensajería' });
-    const annulled = await prisma.treasuryDocument.findFirstOrThrow({ where: { documentNumber: 'RC-000002' } });
+    const annulled = await prisma.treasuryDocument.findFirstOrThrow({
+      where: { documentNumber: 'RC-000002' },
+    });
     await prisma.treasuryDocument.update({
       where: { id: annulled.id },
-      data: { status: 'ANULADO', cancelledAt: new Date(), cancelledById: userId, cancellationReason: 'Registrado dos veces' },
+      data: {
+        status: 'ANULADO',
+        cancelledAt: new Date(),
+        cancelledById: userId,
+        cancellationReason: 'Registrado dos veces',
+      },
     });
     const server = app.getHttpServer();
 
@@ -209,13 +276,20 @@ describe('Recibos de caja y comprobantes de egreso', () => {
       .get('/api/v1/treasury/documents?type=RECIBO_CAJA&status=VIGENTE')
       .set('Cookie', adminCookie)
       .expect(200);
-    expect(vigentes.body.items.map((d: { documentNumber: string }) => d.documentNumber)).toEqual(['RC-000001']);
+    expect(vigentes.body.items.map((d: { documentNumber: string }) => d.documentNumber)).toEqual([
+      'RC-000001',
+    ]);
     const anulados = await request(server)
       .get('/api/v1/treasury/documents?status=ANULADO')
       .set('Cookie', adminCookie)
       .expect(200);
-    expect(anulados.body.items.map((d: { documentNumber: string }) => d.documentNumber)).toEqual(['RC-000002']);
-    await request(server).get('/api/v1/treasury/documents?status=BORRADO').set('Cookie', adminCookie).expect(400);
+    expect(anulados.body.items.map((d: { documentNumber: string }) => d.documentNumber)).toEqual([
+      'RC-000002',
+    ]);
+    await request(server)
+      .get('/api/v1/treasury/documents?status=BORRADO')
+      .set('Cookie', adminCookie)
+      .expect(400);
 
     const file = await request(server)
       .get('/api/v1/treasury/documents/export?type=RECIBO_CAJA')
@@ -243,9 +317,17 @@ describe('Recibos de caja y comprobantes de egreso', () => {
       .get('/api/v1/treasury/documents/export?status=ANULADO&fromDate=2000-01-01')
       .set('Cookie', adminCookie)
       .expect(200);
-    expect(onlyAnnulled.headers['content-disposition']).toContain('recibos_y_egresos_2000-01-01_hoy.xlsx');
-    await request(server).get('/api/v1/treasury/documents/export?status=BORRADO').set('Cookie', adminCookie).expect(400);
-    await request(server).get('/api/v1/treasury/documents/export').set('Cookie', cashierCookie).expect(403);
+    expect(onlyAnnulled.headers['content-disposition']).toContain(
+      'recibos_y_egresos_2000-01-01_hoy.xlsx',
+    );
+    await request(server)
+      .get('/api/v1/treasury/documents/export?status=BORRADO')
+      .set('Cookie', adminCookie)
+      .expect(400);
+    await request(server)
+      .get('/api/v1/treasury/documents/export')
+      .set('Cookie', cashierCookie)
+      .expect(403);
     await request(server).get('/api/v1/treasury/documents/export').expect(401);
   });
 });
