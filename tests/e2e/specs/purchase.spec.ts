@@ -31,6 +31,7 @@ test('recibir una compra desde la web crea el lote con su existencia', async ({ 
   await page.getByRole('combobox', { name: /Proveedor/ }).click();
   await page.getByRole('option', { name: /Droguería Mayorista E2E/ }).click();
   await page.getByLabel(/Número de Factura/).fill(invoice);
+  await page.getByRole('button', { name: 'Continuar a productos' }).click();
   await page
     .getByRole('combobox', { name: /Producto/ })
     .first()
@@ -53,11 +54,9 @@ test('recibir una compra desde la web crea el lote con su existencia', async ({ 
     .first()
     .fill('450');
 
-  await page
-    .getByRole('button', { name: /Confirmar Recepción/ })
-    .first()
-    .click();
-  await page.getByRole('button', { name: 'Sí, Confirmar Recepción' }).click();
+  await page.getByRole('button', { name: 'Revisar totales' }).click();
+  await expect(page.getByTestId('purchase-effects')).toContainText('Entran 60 unidades base');
+  await page.getByRole('button', { name: 'Confirmar recepción de compra' }).click();
   await expect(page).toHaveURL(/\/purchases$/);
 
   // El lote se guarda en mayúsculas, como lo normaliza el formulario

@@ -26,11 +26,9 @@ import {
   TableRow,
   Alert,
   CircularProgress,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogContentText,
-  DialogActions,
+  Step,
+  StepButton,
+  Stepper,
   Chip,
   IconButton,
   ToggleButton,
@@ -50,6 +48,20 @@ import { receivePurchase } from '../api/purchases.api';
 import { inventoryControlModeLabel } from '../../catalog/utils/inventory-control';
 import { addDaysToDate, businessToday } from '../../../utils/business-date';
 import { formatDate } from '../../../utils/date-format';
+import { formatCop } from '../../../utils/money';
+
+/** Campos del paso 1: si alguno falla al confirmar, el asistente vuelve a ese paso. */
+const HEADER_FIELDS = [
+  'supplierId',
+  'invoiceNumber',
+  'purchaseDate',
+  'paymentCondition',
+  'creditDays',
+  'dueDate',
+  'notes',
+] as const;
+
+const STEPS = ['Datos de la factura', 'Productos y lotes', 'Totales y revisión'];
 
 export const ReceivePurchasePage: React.FC = () => {
   const navigate = useNavigate();
@@ -65,6 +77,8 @@ export const ReceivePurchasePage: React.FC = () => {
     setValue,
     getValues,
     handleSubmit,
+    trigger,
+    setFocus,
     formState: { errors, isSubmitting: submitting },
   } = useForm<ReceivePurchaseFormValues>({
     resolver: zodResolver(createReceivePurchaseSchema(products)),
@@ -86,8 +100,8 @@ export const ReceivePurchasePage: React.FC = () => {
   const submittingRef = useRef(false);
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
 
-  // Diálogo de confirmación
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  // Asistente en tres pasos; la revisión final hace de confirmación
+  const [step, setStep] = useState(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -205,12 +219,31 @@ export const ReceivePurchasePage: React.FC = () => {
   const calculateSubtotal = (line: PurchaseFormLine) => fromCents(subtotalCents(line));
   const calculateTotal = () => fromCents(lines.reduce((sum, line) => sum + subtotalCents(line), 0));
 
-  const handlePreSubmit = handleSubmit(() => {
-    setErrorMsg(null);
-    setConfirmOpen(true);
-  });
+  const goToLines = async () => {
+    if (await trigger([...HEADER_FIELDS], { shouldFocus: true })) {
+      setErrorMsg(null);
+      setStep(1);
+    }
+  };
+  const goToReview = async () => {
+    if (await trigger('lines', { shouldFocus: true })) {
+      setErrorMsg(null);
+      setStep(2);
+    }
+  };
 
-  const handleConfirmSubmit = handleSubmit(async (values) => {
+  const productOf = (line: PurchaseFormLine) => products.find((p) => p.id === line.productId);
+  const presentationOf = (line: PurchaseFormLine) =>
+    productOf(line)?.presentations?.find((pr) => pr.id === line.presentationId);
+  const baseUnitsOf = (line: PurchaseFormLine) =>
+    Math.round(
+      (parseFloat(line.quantityCommercial) || 0) * (presentationOf(line)?.conversionFactor ?? 1),
+    );
+  const totalBaseUnits = lines.reduce((acc, l) => acc + baseUnitsOf(l), 0);
+  const supplierName = suppliers.find((s) => s.id === supplierId)?.name ?? '';
+
+  const handleConfirmSubmit = handleSubmit(
+    async (values) => {
     if (submittingRef.current) return;
     submittingRef.current = true;
     const {
@@ -257,16 +290,25 @@ export const ReceivePurchasePage: React.FC = () => {
       };
 
       await receivePurchase(payload);
-      setConfirmOpen(false);
       navigate('/purchases');
     } catch (err) {
+      // Se queda en la revisión con los datos intactos; el aviso ofrece volver al paso a corregir
       const msg = err instanceof Error ? err.message : 'Error al registrar la compra.';
       setErrorMsg(msg);
-      setConfirmOpen(false);
     } finally {
       submittingRef.current = false;
     }
-  });
+    },
+    (formErrors) => {
+      const headerError = HEADER_FIELDS.find((field) => formErrors[field]);
+      if (headerError) {
+        setStep(0);
+        setTimeout(() => setFocus(headerError), 0);
+      } else {
+        setStep(1);
+      }
+    },
+  );
 
   if (loadingInitial) {
     return (
@@ -296,14 +338,97 @@ export const ReceivePurchasePage: React.FC = () => {
         </Button>
       </Box>
 
+      <Stepper nonLinear activeStep={step} sx={{ mb: 2 }}>
+        {STEPS.map((label, index) => (
+          <Step key={label} completed={index < step}>
+            <StepButton
+              disabled={index > step || submitting}
+              onClick={() => setStep(index)}
+            >
+              {label}
+            </StepButton>
+          </Step>
+        ))}
+      </Stepper>
+
+      {/* Proveedor, comprobante y total siempre a la vista mientras se captura */}
+      <Paper
+        component="section"
+        aria-label="Resumen de la factura"
+        data-testid="purchase-summary"
+        variant="outlined"
+        sx={{
+          position: 'sticky',
+          top: 64,
+          zIndex: 2,
+          mb: 2,
+          px: 2,
+          py: 1,
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: { xs: 1, sm: 3 },
+          alignItems: 'baseline',
+          bgcolor: 'background.paper',
+        }}
+      >
+        <Typography variant="body2">
+          <Box component="span" sx={{ color: 'text.secondary' }}>
+            Proveedor:{' '}
+          </Box>
+          <strong>{supplierName || 'sin elegir'}</strong>
+        </Typography>
+        <Typography variant="body2">
+          <Box component="span" sx={{ color: 'text.secondary' }}>
+            Factura:{' '}
+          </Box>
+          <strong>{invoiceNumber.trim() ? invoiceNumber.trim().toUpperCase() : 'sin número'}</strong>
+        </Typography>
+        <Typography variant="body2">
+          <Box component="span" sx={{ color: 'text.secondary' }}>
+            Líneas:{' '}
+          </Box>
+          <strong>{lines.filter((l) => l.productId).length}</strong>
+        </Typography>
+        <Typography variant="body2" sx={{ ml: { sm: 'auto' } }}>
+          <Box component="span" sx={{ color: 'text.secondary' }}>
+            Subtotal:{' '}
+          </Box>
+          <strong>{formatCop(calculateTotal())}</strong>
+        </Typography>
+      </Paper>
+
       {errorMsg && (
-        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setErrorMsg(null)}>
+        <Alert
+          severity="error"
+          sx={{ mb: 3 }}
+          onClose={() => setErrorMsg(null)}
+          action={
+            step === 2 ? (
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                <Button color="inherit" size="small" onClick={() => setStep(0)}>
+                  Revisar factura
+                </Button>
+                <Button color="inherit" size="small" onClick={() => setStep(1)}>
+                  Revisar productos
+                </Button>
+              </Box>
+            ) : undefined
+          }
+        >
           {errorMsg}
         </Alert>
       )}
 
-      <form noValidate onSubmit={handlePreSubmit}>
-        {/* Datos de Cabecera de la Factura */}
+      <form
+        noValidate
+        onSubmit={(event) => {
+          if (step === 2) return handleConfirmSubmit(event);
+          event.preventDefault();
+          if (step === 0) void goToLines();
+        }}
+      >
+        {/* Paso 1: datos de la factura */}
+        {step === 0 && (
         <Paper sx={{ p: 3, mb: 3 }}>
           <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
             Datos del Comprobante / Factura
@@ -430,8 +555,10 @@ export const ReceivePurchasePage: React.FC = () => {
             </Box>
           </Box>
         </Paper>
+        )}
 
-        {/* Sección Dinámica de Productos y Lotes a Ingresar */}
+        {/* Paso 2: productos y lotes */}
+        {step === 1 && (
         <Paper sx={{ p: 3, mb: 3, borderRadius: 2 }}>
           <Box
             sx={{
@@ -1169,133 +1296,169 @@ export const ReceivePurchasePage: React.FC = () => {
                 </strong>
               </Typography>
               <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                Total Factura: ${calculateTotal().toLocaleString('es-CO')}
+                Subtotal de líneas: {formatCop(calculateTotal())}
               </Typography>
             </Box>
           </Box>
         </Paper>
+        )}
 
-        {/* Botón de Envío */}
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
-          <Button
-            variant="outlined"
-            component={Link}
-            to="/purchases"
-            size="large"
-            sx={{
-              textTransform: 'none',
-              fontWeight: 600,
-              transition: 'transform 0.1s ease',
-              '&:active': { transform: 'scale(0.98)' },
-            }}
-          >
-            Cancelar
-          </Button>
-          <Button
-            type="submit"
-            disabled={submitting}
-            variant="contained"
-            color="primary"
-            size="large"
-            sx={{
-              fontWeight: 700,
-              px: 4,
-              textTransform: 'none',
-              transition: 'transform 0.1s ease, background-color 0.15s ease',
-              '&:active': { transform: 'scale(0.98)' },
-            }}
-          >
-            Confirmar Recepción de Compra
-          </Button>
+        {/* Paso 3: totales y revisión. Esta pantalla es la confirmación */}
+        {step === 2 && (
+          <Paper sx={{ p: 3, mb: 3 }} component="section" aria-labelledby="purchase-review-title">
+            <Typography id="purchase-review-title" variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
+              Revisar y confirmar la recepción
+            </Typography>
+            <Box
+              component="dl"
+              sx={{
+                m: 0,
+                mb: 2,
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: '180px 1fr' },
+                columnGap: 2,
+                rowGap: 0.5,
+                '& dt': { color: 'text.secondary', fontSize: '0.875rem' },
+                '& dd': { m: 0, fontWeight: 600, fontSize: '0.875rem', mb: { xs: 0.75, sm: 0 } },
+              }}
+            >
+              <dt>Proveedor</dt>
+              <dd>{supplierName}</dd>
+              <dt>Factura</dt>
+              <dd>{invoiceNumber.trim().toUpperCase()}</dd>
+              <dt>Fecha de la factura</dt>
+              <dd>{formatDate(purchaseDate)}</dd>
+              <dt>Condición de pago</dt>
+              <dd>
+                {paymentCondition === 'CONTADO' ? 'Contado' : 'Crédito'} · vence{' '}
+                {formatDate(dueDate)}
+              </dd>
+            </Box>
+
+            <TableContainer sx={{ mb: 2 }}>
+              <Table size="small" aria-label="Líneas a recibir" sx={{ minWidth: 760 }}>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Producto</TableCell>
+                    <TableCell>Presentación</TableCell>
+                    <TableCell align="right">Cantidad</TableCell>
+                    <TableCell align="right">Unidades base</TableCell>
+                    <TableCell align="right">Costo unitario</TableCell>
+                    <TableCell>Lote / serie</TableCell>
+                    <TableCell align="right">Subtotal</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {lines.map((line, idx) => {
+                    const product = productOf(line);
+                    const presentation = presentationOf(line);
+                    const serials = parseSerialNumbers(line.serialNumbers);
+                    return (
+                      <TableRow key={fields[idx]?.id ?? idx}>
+                        <TableCell sx={{ fontWeight: 600 }}>{product?.name ?? '—'}</TableCell>
+                        <TableCell>
+                          {presentation
+                            ? `${presentation.name} (x${presentation.conversionFactor} ${product?.baseUnit ?? ''})`
+                            : `Unidad base (${product?.baseUnit ?? ''})`}
+                        </TableCell>
+                        <TableCell align="right">{line.quantityCommercial}</TableCell>
+                        <TableCell align="right">{baseUnitsOf(line)}</TableCell>
+                        <TableCell align="right">{formatCop(line.unitCost)}</TableCell>
+                        <TableCell>
+                          {line.lotNumber.trim()
+                            ? `${line.lotNumber.trim().toUpperCase()}${line.expirationDate ? ` · vence ${formatDate(line.expirationDate)}` : ''}`
+                            : serials.length > 0
+                              ? `${serials.length} series`
+                              : 'Sin lote'}
+                        </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 600 }}>
+                          {formatCop(calculateSubtotal(line))}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
+
+            <Typography variant="h6" component="p" sx={{ textAlign: 'right', mb: 2 }}>
+              Subtotal de líneas: <strong>{formatCop(calculateTotal())}</strong>
+            </Typography>
+
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
+              Qué registra el sistema al confirmar
+            </Typography>
+            <Box
+              component="dl"
+              data-testid="purchase-effects"
+              sx={{
+                m: 0,
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: '130px 1fr' },
+                columnGap: 2,
+                rowGap: 0.5,
+                '& dt': { fontWeight: 700, fontSize: '0.875rem' },
+                '& dd': { m: 0, fontSize: '0.875rem', mb: { xs: 0.75, sm: 0 } },
+              }}
+            >
+              <dt>Inventario</dt>
+              <dd>
+                Entran {totalBaseUnits.toLocaleString('es-CO')} unidades base. Cada lote queda con
+                su vencimiento y la entrada se registra en el Kardex como compra.
+              </dd>
+              <dt>Proveedor</dt>
+              <dd>
+                Se abre una cuenta por pagar a {supplierName} que vence el {formatDate(dueDate)}.
+              </dd>
+              <dt>Contabilidad</dt>
+              <dd>
+                Se registra el asiento de la compra (inventario contra proveedores). Si la empresa
+                tiene perfil tributario, el IVA y las retenciones se calculan al registrar y el
+                total definitivo queda en el detalle de la compra.
+              </dd>
+            </Box>
+          </Paper>
+        )}
+
+        {/* Navegación del asistente */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
+          {step === 0 ? (
+            <Button variant="outlined" component={Link} to="/purchases" size="large">
+              Cancelar
+            </Button>
+          ) : (
+            <Button
+              variant="outlined"
+              size="large"
+              disabled={submitting}
+              onClick={() => setStep(step - 1)}
+            >
+              Volver
+            </Button>
+          )}
+          {step === 0 && (
+            <Button variant="contained" size="large" onClick={() => void goToLines()}>
+              Continuar a productos
+            </Button>
+          )}
+          {step === 1 && (
+            <Button variant="contained" size="large" onClick={() => void goToReview()}>
+              Revisar totales
+            </Button>
+          )}
+          {step === 2 && (
+            <Button
+              type="submit"
+              variant="contained"
+              size="large"
+              disabled={submitting}
+              sx={{ fontWeight: 700 }}
+            >
+              {submitting ? 'Registrando compra…' : 'Confirmar recepción de compra'}
+            </Button>
+          )}
         </Box>
       </form>
-
-      {/* Diálogo de Confirmación de Impacto en Inventario */}
-      <Dialog
-        open={confirmOpen}
-        onClose={() => (submitting ? undefined : setConfirmOpen(false))}
-        slotProps={{
-          paper: {
-            sx: {
-              borderRadius: 2.5,
-              boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
-            },
-          },
-        }}
-      >
-        <DialogTitle sx={{ fontWeight: 800 }}>
-          Confirmar Recepción e Ingreso a Inventario
-        </DialogTitle>
-        <DialogContent>
-          <DialogContentText component="div">
-            ¿Confirmas la recepción de la factura <strong>{invoiceNumber}</strong> por un total de{' '}
-            <strong>${calculateTotal().toLocaleString()}</strong>?
-            <Box
-              sx={{ mt: 2, p: 2, bgcolor: 'action.hover', borderRadius: 2, fontSize: '0.875rem' }}
-            >
-              <div>
-                <strong>Proveedor:</strong>{' '}
-                {suppliers.find((s) => s.id === supplierId)?.name ?? '—'}
-              </div>
-              <div>
-                <strong>N° Factura:</strong> {invoiceNumber}
-              </div>
-              <div>
-                <strong>Fecha de Emisión:</strong> {formatDate(purchaseDate)}
-              </div>
-              <div>
-                <strong>Fecha de Vencimiento Factura:</strong> {formatDate(dueDate)}
-              </div>
-              <div>
-                <strong>Líneas a Ingresar:</strong> {lines.length} líneas (
-                {lines.reduce((acc, l) => {
-                  const prod = products.find((p) => p.id === l.productId);
-                  const pr = prod?.presentations?.find((pres) => pres.id === l.presentationId);
-                  const f = pr ? pr.conversionFactor : 1;
-                  return acc + Math.round((parseFloat(l.quantityCommercial) || 0) * f);
-                }, 0)}{' '}
-                unidades base a Kardex)
-              </div>
-            </Box>
-            <br />
-            Esta operación registrará de forma atómica:
-            <br />
-            • La factura con sus datos comerciales y vencimiento.
-            <br />
-            • El incremento de existencias en los lotes, saldos o series de cada producto.
-            <br />• Las entradas inmutables en el Kardex de inventario.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
-          <Button
-            onClick={() => setConfirmOpen(false)}
-            disabled={submitting}
-            color="inherit"
-            sx={{
-              textTransform: 'none',
-              fontWeight: 600,
-              transition: 'transform 0.1s ease',
-              '&:active': { transform: 'scale(0.98)' },
-            }}
-          >
-            Modificar
-          </Button>
-          <Button
-            onClick={handleConfirmSubmit}
-            disabled={submitting}
-            variant="contained"
-            color="primary"
-            sx={{
-              textTransform: 'none',
-              fontWeight: 700,
-              transition: 'transform 0.1s ease',
-              '&:active': { transform: 'scale(0.98)' },
-            }}
-          >
-            {submitting ? 'Procesando Transacción...' : 'Sí, Confirmar Recepción'}
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   );
 };
