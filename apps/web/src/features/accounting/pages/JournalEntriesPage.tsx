@@ -325,9 +325,23 @@ export const JournalEntriesPage = () => {
               <CircularProgress />
             </Box>
           ) : isError ? (
-            <Alert severity="error" sx={{ m: 2 }}>
-              Error al cargar los comprobantes contables.
+            <Alert
+              severity="error"
+              sx={{ m: 2 }}
+              action={
+                <Button color="inherit" size="small" onClick={() => void refetch()}>
+                  Reintentar
+                </Button>
+              }
+            >
+              No se pudieron cargar los asientos contables.
             </Alert>
+          ) : !data?.items.length ? (
+            // Fuera de la tabla: en una ventana estrecha el mensaje no queda cortado por el
+            // desplazamiento horizontal
+            <Typography color="text.secondary" sx={{ p: 3, textAlign: 'center' }}>
+              No hay asientos contables para los filtros seleccionados.
+            </Typography>
           ) : (
             <>
               <TableContainer sx={{ maxHeight: 600 }}>

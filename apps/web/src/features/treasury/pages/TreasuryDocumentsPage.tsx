@@ -281,6 +281,7 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
             <DateField
               label="Desde"
               size="small"
+              sx={{ minWidth: 170 }}
               value={fromDate}
               onChange={(value) => {
                 setFromDate(value);
@@ -290,6 +291,7 @@ export function TreasuryDocumentsPage({ type }: { type: TreasuryDocumentType }) 
             <DateField
               label="Hasta"
               size="small"
+              sx={{ minWidth: 170 }}
               value={toDate}
               onChange={(value) => {
                 setToDate(value);
