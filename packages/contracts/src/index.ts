@@ -600,13 +600,49 @@ export type InventoryMovementType =
   | 'SALIDA_DEVOLUCION_COMPRA'
   | 'SALIDA_ANULACION_DEVOLUCION';
 
+export type InventoryMovementDirection = 'in' | 'out' | 'neutral';
+
+const INBOUND_MOVEMENT_TYPES = new Set<string>([
+  'AJUSTE_POSITIVO',
+  'DEVOLUCION_CLIENTE',
+  'TRASLADO_ENTRADA',
+]);
+const OUTBOUND_MOVEMENT_TYPES = new Set<string>([
+  'AJUSTE_NEGATIVO',
+  'DEVOLUCION_PROVEEDOR',
+  'TRASLADO_SALIDA',
+]);
+
+/**
+ * Sentido de un movimiento del Kardex según su tipo. El historial es inmutable y guarda el signo
+ * de forma heterogénea: las salidas por venta o devolución tienen cantidad positiva y los ajustes
+ * negativos, cantidad negativa. Por eso el sentido nunca se deduce del signo guardado.
+ */
+export function inventoryMovementDirection(movementType: string): InventoryMovementDirection {
+  if (movementType.startsWith('ENTRADA') || INBOUND_MOVEMENT_TYPES.has(movementType)) return 'in';
+  if (movementType.startsWith('SALIDA') || OUTBOUND_MOVEMENT_TYPES.has(movementType)) return 'out';
+  return 'neutral';
+}
+
+/** Cantidad con el signo de su efecto en la existencia: positiva si entra, negativa si sale. */
+export function signedMovementQuantity(movementType: string, quantityBaseUnits: number): number {
+  const magnitude = Math.abs(quantityBaseUnits);
+  const direction = inventoryMovementDirection(movementType);
+  if (direction === 'in') return magnitude;
+  if (direction === 'out') return -magnitude;
+  return quantityBaseUnits;
+}
+
 export interface InventoryMovementDto {
   id: string;
   movementType: InventoryMovementType;
   productId: string;
   lotId: string;
   presentationId?: string | null;
+  /** Cantidad tal como se guardó; su signo depende del tipo (ver inventoryMovementDirection) */
   quantityBaseUnits: number;
+  /** Efecto en la existencia: positivo si entra, negativo si sale (calculado por el servidor) */
+  signedQuantityBaseUnits: number;
   presentationFactorHistorical: number;
   quantityCommercial?: string | null;
   balanceAfterBaseUnits: number;

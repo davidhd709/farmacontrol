@@ -14,6 +14,7 @@ import type {
   PaginatedResponse,
   RecordInventoryMovementPayload,
 } from '@farmacia/contracts';
+import { signedMovementQuantity } from '@farmacia/contracts';
 import { serializableTransaction } from '../../../../common/utils/serializable-transaction';
 
 @Injectable()
@@ -136,6 +137,10 @@ export class PrismaInventoryMovementRepository implements IInventoryMovementRepo
         lotId: movement.lotId,
         presentationId: movement.presentationId,
         quantityBaseUnits: movement.quantityBaseUnits,
+        signedQuantityBaseUnits: signedMovementQuantity(
+          movement.movementType,
+          movement.quantityBaseUnits,
+        ),
         presentationFactorHistorical: movement.presentationFactorHistorical,
         quantityCommercial: movement.quantityCommercial?.toString() || null,
         balanceAfterBaseUnits: movement.balanceAfterBaseUnits,
@@ -232,6 +237,7 @@ export class PrismaInventoryMovementRepository implements IInventoryMovementRepo
         lotId: m.lotId,
         presentationId: m.presentationId,
         quantityBaseUnits: m.quantityBaseUnits,
+        signedQuantityBaseUnits: signedMovementQuantity(m.movementType, m.quantityBaseUnits),
         presentationFactorHistorical: m.presentationFactorHistorical,
         quantityCommercial: m.quantityCommercial?.toString() || null,
         balanceAfterBaseUnits: m.balanceAfterBaseUnits,
