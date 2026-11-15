@@ -110,7 +110,8 @@ jobs:
           node-version: 22
           cache: 'pnpm'
 
-      # El script de base temporal exige el cliente PostgreSQL 18 aunque E2E no haga respaldos
+      # El script de base temporal exige el cliente PostgreSQL 18 aunque E2E no haga respaldos;
+      # poppler-utils (pdfinfo, pdftotext) valida los PDF generados en las pruebas de impresión
       - name: Install PostgreSQL 18 client (PGDG)
         run: |
           sudo install -d /usr/share/postgresql-common/pgdg
@@ -120,7 +121,7 @@ jobs:
           echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" \
             | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends postgresql-client-18
+          sudo apt-get install -y --no-install-recommends postgresql-client-18 poppler-utils
           echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
 
       - name: Install dependencies (frozen lockfile)
