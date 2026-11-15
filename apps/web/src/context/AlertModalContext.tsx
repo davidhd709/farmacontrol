@@ -1,6 +1,10 @@
 import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
 import { SweetModal, SweetModalType } from '../components/SweetModal';
-import type { ConfirmOperationType } from '../components/ConfirmDialog';
+import {
+  DEFAULT_CONFIRM_TEXTS,
+  DEFAULT_TITLES,
+  type ConfirmOperationType,
+} from '../components/ConfirmDialog';
 
 export interface AlertModalOptions {
   type?: SweetModalType;
@@ -105,26 +109,6 @@ export const notifyEvent = {
       globalShowAlert({ type: 'warning', title, message, confirmColor: 'warning' });
     }
   },
-};
-
-const DEFAULT_TITLES: Record<ConfirmOperationType, string> = {
-  create: '¿Confirmar registro?',
-  update: '¿Guardar cambios?',
-  delete: '¿Eliminar registro?',
-  annul: '¿Anular este documento?',
-  revert: '¿Revertir operación?',
-  confirm: '¿Confirmar operación?',
-  custom: '¿Está seguro de continuar?',
-};
-
-const DEFAULT_CONFIRM_TEXTS: Record<ConfirmOperationType, string> = {
-  create: 'Confirmar',
-  update: 'Guardar Cambios',
-  delete: 'Eliminar',
-  annul: 'Confirmar Anulación',
-  revert: 'Confirmar Reversión',
-  confirm: 'Confirmar',
-  custom: 'Confirmar',
 };
 
 export const AlertModalProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {

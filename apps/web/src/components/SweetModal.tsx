@@ -189,45 +189,20 @@ export const SweetModal: React.FC<SweetModalProps> = ({
     void onConfirm();
   };
 
-  // Accesibilidad por teclado: Enter confirma, Escape cancela (si no está cargando)
-  React.useEffect(() => {
-    if (!open) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !isLoading) {
-        e.preventDefault();
-        handleCancel();
-      } else if (e.key === 'Enter' && !isLoading) {
-        // Si el foco no está en el botón de cancelar
-        const target = e.target as HTMLElement | null;
-        if (
-          target &&
-          target.tagName === 'BUTTON' &&
-          target.getAttribute('data-action') === 'cancel'
-        ) {
-          return;
-        }
-        e.preventDefault();
-        handleConfirm();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [open, isLoading]);
+  // Teclado (rediseño, fase 5): el botón principal recibe el foco, así que Enter lo activa de
+  // forma nativa; Escape lo maneja el Dialog. Antes un listener global confirmaba con Enter
+  // aunque el foco estuviera en otro control.
 
-  const getButtonBgColor = () => {
-    if (confirmColor === 'error') return '#E05656';
-    if (confirmColor === 'warning') return '#E67E22';
-    if (confirmColor === 'success') return '#2ECC71';
-    if (typeof confirmColor === 'string' && confirmColor.startsWith('#')) return confirmColor;
-    return '#70B9EB'; // Celeste suave característico de SweetAlert
-  };
-
-  const getButtonHoverBgColor = () => {
-    if (confirmColor === 'error') return '#C73B3B';
-    if (confirmColor === 'warning') return '#D35400';
-    if (confirmColor === 'success') return '#27AE60';
-    return '#53A8E2';
-  };
+  // Colores del tema: todos cumplen contraste AA con texto blanco
+  const paletteKey =
+    confirmColor === 'error' ||
+    confirmColor === 'warning' ||
+    confirmColor === 'success' ||
+    confirmColor === 'info'
+      ? confirmColor
+      : 'primary';
+  const customColor =
+    typeof confirmColor === 'string' && confirmColor.startsWith('#') ? confirmColor : null;
 
   return (
     <Dialog
@@ -261,7 +236,7 @@ export const SweetModal: React.FC<SweetModalProps> = ({
           component="h2"
           sx={{
             fontWeight: 700,
-            color: '#545454',
+            color: 'text.primary',
             textAlign: 'center',
             mb: 1.5,
             fontSize: { xs: '1.5rem', sm: '1.75rem' },
@@ -277,7 +252,7 @@ export const SweetModal: React.FC<SweetModalProps> = ({
               <Typography
                 variant="body1"
                 sx={{
-                  color: '#666666',
+                  color: 'text.secondary',
                   textAlign: 'center',
                   fontSize: '1.05rem',
                   lineHeight: 1.5,
@@ -308,7 +283,7 @@ export const SweetModal: React.FC<SweetModalProps> = ({
               variant="contained"
               data-action="cancel"
               sx={{
-                bgcolor: '#AAAAAA',
+                bgcolor: 'grey.700',
                 color: '#ffffff',
                 fontSize: '0.95rem',
                 fontWeight: 600,
@@ -318,7 +293,7 @@ export const SweetModal: React.FC<SweetModalProps> = ({
                 textTransform: 'none',
                 boxShadow: 'none',
                 '&:hover': {
-                  bgcolor: '#888888',
+                  bgcolor: 'grey.800',
                   boxShadow: 'none',
                 },
               }}
@@ -331,11 +306,12 @@ export const SweetModal: React.FC<SweetModalProps> = ({
             onClick={handleConfirm}
             disabled={isLoading}
             variant="contained"
+            color={paletteKey}
             data-action="confirm"
+            autoFocus
             startIcon={isLoading ? <CircularProgress size={18} color="inherit" /> : null}
             sx={{
-              bgcolor: getButtonBgColor(),
-              color: '#ffffff',
+              ...(customColor ? { bgcolor: customColor } : {}),
               fontSize: '1rem',
               fontWeight: 600,
               px: showCancelButton ? 3.5 : 4.5,
@@ -344,10 +320,6 @@ export const SweetModal: React.FC<SweetModalProps> = ({
               textTransform: 'none',
               boxShadow: 'none',
               minWidth: 100,
-              '&:hover': {
-                bgcolor: getButtonHoverBgColor(),
-                boxShadow: '0 4px 12px rgba(112, 185, 235, 0.35)',
-              },
             }}
           >
             {isLoading ? 'Procesando…' : confirmText}

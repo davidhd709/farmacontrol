@@ -327,7 +327,7 @@ export const AdjustInventoryDialog = ({
         onClose={() => {
           if (!submittingRef.current) setConfirmOpen(false);
         }}
-        onConfirm={handleConfirmAdjust}
+        onConfirm={() => handleConfirmAdjust()}
         isLoading={isSubmitting}
         title="Confirmar Ajuste en Kardex"
         description={
