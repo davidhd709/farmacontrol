@@ -27,6 +27,7 @@ import { fetchIncomeStatement, exportIncomeStatementExcel } from '../api/account
 import { QuickDateRange, quickRange } from '../../../components/QuickDateRange';
 import { FilterBar } from '../../../components/layout/FilterBar';
 import { DateField } from '../../../components/DateField';
+import { errorMessage } from '../../../utils/error-message';
 
 function formatMoney(value: string | number | undefined | null): string {
   if (value === undefined || value === null) return '$0.00';
@@ -56,8 +57,8 @@ export const IncomeStatementPage = () => {
       setIsExporting(true);
       setExportError(null);
       await exportIncomeStatementExcel(fromDate, toDate);
-    } catch (err: any) {
-      setExportError(err?.message || 'Error al exportar el Estado de Resultados a Excel.');
+    } catch (err) {
+      setExportError(errorMessage(err, 'Error al exportar el Estado de Resultados a Excel.'));
     } finally {
       setIsExporting(false);
     }

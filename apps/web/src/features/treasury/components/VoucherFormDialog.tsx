@@ -80,6 +80,22 @@ const centsOf = (value: string) => {
  * el abono a cartera con `recibo_caja.crear_abono`, el pago a proveedor con
  * `comprobante_egreso.crear` y el documento manual además con el permiso contable.
  */
+
+/** Borrador guardado en este navegador; se lee con todos los campos opcionales. */
+interface VoucherDraft {
+  mode: Mode;
+  paymentMethod: TreasuryVoucherPaymentMethod;
+  bankAccountId: string;
+  concept: string;
+  notes: string;
+  party: ThirdPartyDto | null;
+  customer: CustomerDto | null;
+  amount: string;
+  counterpartAccountId: string;
+  selected: Record<string, string>;
+  savedAt: string;
+}
+
 export function VoucherFormDialog({
   type,
   open,
@@ -118,7 +134,7 @@ export function VoucherFormDialog({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [statementOpen, setStatementOpen] = useState(false);
-  const [savedDraft, setSavedDraft] = useState<any | null>(null);
+  const [savedDraft, setSavedDraft] = useState<Partial<VoucherDraft> | null>(null);
   const [draftBannerDismissed, setDraftBannerDismissed] = useState(false);
   const [draftToast, setDraftToast] = useState<string | null>(null);
   const retry = useRef<{ fingerprint: string; key: string } | null>(null);
@@ -182,7 +198,7 @@ export function VoucherFormDialog({
       return;
     }
     setError(null);
-    const draftData = {
+    const draftData: VoucherDraft = {
       mode,
       paymentMethod,
       bankAccountId,

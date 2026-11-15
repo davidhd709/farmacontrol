@@ -21,8 +21,10 @@ export class ExpirationCronScheduler implements OnApplicationBootstrap {
     this.logger.log('[Worker Scheduler] Ejecutando escaneo inicial de vencimientos...');
     try {
       await this.expirationEvaluator.evaluate();
-    } catch (err: any) {
-      this.logger.warn(`[Worker Scheduler] Escaneo inicial diferido: ${err.message}`);
+    } catch (err) {
+      this.logger.warn(
+        `[Worker Scheduler] Escaneo inicial diferido: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 
@@ -34,8 +36,10 @@ export class ExpirationCronScheduler implements OnApplicationBootstrap {
     this.logger.log('[Worker Scheduler] Disparando escaneo horario programado de vencimientos...');
     try {
       await this.expirationEvaluator.evaluate();
-    } catch (err: any) {
-      this.logger.error(`[Worker Scheduler] Error en escaneo horario: ${err.message}`);
+    } catch (err) {
+      this.logger.error(
+        `[Worker Scheduler] Error en escaneo horario: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 
@@ -61,8 +65,10 @@ export class ExpirationCronScheduler implements OnApplicationBootstrap {
   async handleJobQueueProcessing(): Promise<void> {
     try {
       await this.jobQueue.processPendingJobs();
-    } catch (err: any) {
-      this.logger.error(`[Worker Scheduler] Error procesando cola de trabajos: ${err.message}`);
+    } catch (err) {
+      this.logger.error(
+        `[Worker Scheduler] Error procesando cola de trabajos: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 }

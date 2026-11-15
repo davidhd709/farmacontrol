@@ -34,6 +34,7 @@ import { CreateLotDialog } from '../components/CreateLotDialog';
 import { AdjustInventoryDialog } from '../components/AdjustInventoryDialog';
 import { expirationDateLabel, lotNumberLabel } from '../../catalog/utils/inventory-control';
 import { FilterBar } from '../../../components/layout/FilterBar';
+import { errorMessage as messageOf } from '../../../utils/error-message';
 
 /** Existencias por producto: suma vendible (lotes vigentes con saldo) que calcula el API. */
 function ProductStockTable({ onShowLots }: { onShowLots: (productId: string) => void }) {
@@ -208,7 +209,7 @@ export const InventoryLotsPage = () => {
       ]);
       setProducts(prodRes.items || []);
       setLocations(locRes || []);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error cargando catálogos para filtros:', err);
     }
   }, []);
@@ -227,8 +228,8 @@ export const InventoryLotsPage = () => {
       });
       setLots(res.items || []);
       setTotal(res.total || 0);
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Error al consultar lotes de inventario.');
+    } catch (err) {
+      setErrorMessage(messageOf(err, 'Error al consultar lotes de inventario.'));
     } finally {
       setLoading(false);
     }

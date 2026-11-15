@@ -41,6 +41,7 @@ import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { AnnualClosingCard } from '../components/AnnualClosingCard';
 import { businessYear } from '../../../utils/business-date';
 import { formatDate } from '../../../utils/date-format';
+import { errorMessage } from '../../../utils/error-message';
 
 function formatMoney(value: string | number): string {
   const num = typeof value === 'number' ? value : Number(value);
@@ -91,8 +92,11 @@ export const FiscalPeriodsPage = () => {
         message: `Períodos del año ${selectedYear} generados correctamente.`,
       });
     },
-    onError: (err: any) => {
-      setFeedback({ type: 'error', message: err.message || 'Error al generar períodos fiscales.' });
+    onError: (err: unknown) => {
+      setFeedback({
+        type: 'error',
+        message: errorMessage(err, 'Error al generar períodos fiscales.'),
+      });
     },
   });
 

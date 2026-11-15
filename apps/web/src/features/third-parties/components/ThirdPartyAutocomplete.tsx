@@ -131,7 +131,9 @@ export const ThirdPartyAutocomplete: React.FC<ThirdPartyAutocompleteProps> = ({
           />
         )}
         renderOption={(props, option) => {
-          const { key, ...restProps } = props as any;
+          const { key, ...restProps } = props as React.HTMLAttributes<HTMLLIElement> & {
+            key: React.Key;
+          };
           const dv = option.verificationDigit ? `-${option.verificationDigit}` : '';
           return (
             <Box

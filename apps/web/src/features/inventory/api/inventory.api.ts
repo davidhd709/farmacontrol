@@ -3,6 +3,8 @@ import type {
   CreateLocationPayload,
   InventoryLotDto,
   InventoryLotQueryFilters,
+  InventoryMovementDto,
+  InventoryMovementQueryFilters,
   LocationDto,
   PaginatedResponse,
 } from '@farmacia/contracts';
@@ -66,7 +68,9 @@ export async function createLocation(payload: CreateLocationPayload): Promise<Lo
   return res.data;
 }
 
-export async function fetchInventoryMovements(filters: any = {}): Promise<any> {
+export async function fetchInventoryMovements(
+  filters: InventoryMovementQueryFilters = {},
+): Promise<PaginatedResponse<InventoryMovementDto>> {
   const query = new URLSearchParams();
   if (filters.productId) query.set('productId', filters.productId);
   if (filters.lotId) query.set('lotId', filters.lotId);
@@ -76,9 +80,12 @@ export async function fetchInventoryMovements(filters: any = {}): Promise<any> {
   if (filters.pageSize) query.set('pageSize', String(filters.pageSize));
 
   const qs = query.toString();
-  return apiRequest(qs ? `inventory/movements?${qs}` : 'inventory/movements', {
-    method: 'GET',
-  });
+  return apiRequest<PaginatedResponse<InventoryMovementDto>>(
+    qs ? `inventory/movements?${qs}` : 'inventory/movements',
+    {
+      method: 'GET',
+    },
+  );
 }
 
 export async function adjustInventory(
@@ -91,9 +98,9 @@ export async function adjustInventory(
     notes?: string;
   },
   idempotencyKey: string,
-): Promise<any> {
+): Promise<InventoryMovementDto> {
   // La clave hace seguro el reintento: si la respuesta se pierde, no se ajusta dos veces
-  const res = await apiRequest<{ data: any }>('inventory/movements/adjust', {
+  const res = await apiRequest<{ data: InventoryMovementDto }>('inventory/movements/adjust', {
     method: 'POST',
     body: JSON.stringify(payload),
     headers: { 'Idempotency-Key': idempotencyKey },

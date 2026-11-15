@@ -25,6 +25,7 @@ import { fetchBalanceSheet, exportBalanceSheetExcel } from '../api/accounting.ap
 import { localIsoDate } from '../../../components/QuickDateRange';
 import { calendarMonthBounds } from '../../../utils/business-date';
 import { DateField } from '../../../components/DateField';
+import { errorMessage } from '../../../utils/error-message';
 
 function formatMoney(value: string | number | undefined | null): string {
   if (value === undefined || value === null) return '$0.00';
@@ -104,8 +105,8 @@ export const BalanceSheetPage = () => {
       setIsExporting(true);
       setExportError(null);
       await exportBalanceSheetExcel(asOfDate);
-    } catch (err: any) {
-      setExportError(err?.message || 'Error al exportar el Balance General a Excel.');
+    } catch (err) {
+      setExportError(errorMessage(err, 'Error al exportar el Balance General a Excel.'));
     } finally {
       setIsExporting(false);
     }

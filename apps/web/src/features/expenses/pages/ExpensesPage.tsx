@@ -62,6 +62,7 @@ import { calendarMonthBounds } from '../../../utils/business-date';
 import { formatDate } from '../../../utils/date-format';
 import { PageHeader } from '../../../components/layout/PageHeader';
 import { DateField } from '../../../components/DateField';
+import { errorMessage } from '../../../utils/error-message';
 
 function formatCurrency(val: string | number | undefined): string {
   if (val === undefined || val === null) return '$0.00';
@@ -109,7 +110,7 @@ export const ExpensesPage: React.FC = () => {
   const loadAuxData = useCallback(async () => {
     try {
       setCategories(await fetchExpenseCategories());
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error al cargar datos auxiliares:', err);
     }
   }, []);
@@ -136,8 +137,8 @@ export const ExpensesPage: React.FC = () => {
       setExpenses(resList.items);
       setTotalPages(resList.totalPages);
       setSummary(resSummary);
-    } catch (err: any) {
-      setError(err?.message || 'Error al consultar gastos.');
+    } catch (err) {
+      setError(errorMessage(err, 'Error al consultar gastos.'));
     } finally {
       setLoading(false);
     }
@@ -221,8 +222,8 @@ export const ExpensesPage: React.FC = () => {
       );
       setCancelModalOpen(false);
       await loadExpenses();
-    } catch (err: any) {
-      throw new Error(err?.message || 'Error al anular el gasto.');
+    } catch (err) {
+      throw new Error(errorMessage(err, 'Error al anular el gasto.'));
     }
   };
 
@@ -245,8 +246,8 @@ export const ExpensesPage: React.FC = () => {
       setSelectedExpense(updated);
       setReversePaymentModalOpen(false);
       await loadExpenses();
-    } catch (err: any) {
-      throw new Error(err?.message || 'Error al revertir el pago.');
+    } catch (err) {
+      throw new Error(errorMessage(err, 'Error al revertir el pago.'));
     }
   };
 

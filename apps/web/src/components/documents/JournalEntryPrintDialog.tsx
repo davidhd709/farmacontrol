@@ -28,7 +28,7 @@ export const JournalEntryPrintDialog: React.FC<Props> = ({ open, entry, onClose,
 
   const docNumber =
     entry.sourceDocument?.number ||
-    (entry as any).consecutiveNumber ||
+    (entry as typeof entry & { consecutiveNumber?: string }).consecutiveNumber ||
     `ASI-${entry.id.slice(0, 8).toUpperCase()}`;
 
   const isManualNote = entry.sourceType === 'MANUAL_NOTE';

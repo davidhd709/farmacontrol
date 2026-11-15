@@ -23,7 +23,7 @@ import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import TuneIcon from '@mui/icons-material/Tune';
 import { HomeBackButton } from '../../../components/HomeBackButton';
 
-import type { InventoryMovementDto, ProductDto } from '@farmacia/contracts';
+import type { InventoryMovementDto, InventoryMovementType, ProductDto } from '@farmacia/contracts';
 import { fetchInventoryMovements } from '../api/inventory.api';
 import { fetchProducts } from '../../catalog/api/products.api';
 import { formatSignedQuantity, movementDirection } from '../movement-direction';
@@ -34,6 +34,7 @@ import {
 } from '../movement-labels';
 import { formatDateTime } from '../../../utils/date-format';
 import { FilterBar } from '../../../components/layout/FilterBar';
+import { errorMessage as messageOf } from '../../../utils/error-message';
 
 export const InventoryMovementsPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -62,13 +63,13 @@ export const InventoryMovementsPage = () => {
 
   // Filtros
   const [products, setProducts] = useState<ProductDto[]>([]);
-  const [selectedType, setSelectedType] = useState('');
+  const [selectedType, setSelectedType] = useState<InventoryMovementType | ''>('');
 
   const loadFilterData = useCallback(async () => {
     try {
       const prodRes = await fetchProducts({ pageSize: 100 });
       setProducts(prodRes.items || []);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error cargando catálogo:', err);
     }
   }, []);
@@ -87,8 +88,8 @@ export const InventoryMovementsPage = () => {
       });
       setMovements(res.items || []);
       setTotal(res.total || 0);
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Error al consultar el historial de movimientos.');
+    } catch (err) {
+      setErrorMessage(messageOf(err, 'Error al consultar el historial de movimientos.'));
     } finally {
       setLoading(false);
     }
@@ -254,7 +255,7 @@ export const InventoryMovementsPage = () => {
           label="Tipo de Movimiento"
           value={selectedType}
           onChange={(e) => {
-            setSelectedType(e.target.value);
+            setSelectedType(e.target.value as InventoryMovementType | '');
             setPage(0);
           }}
           sx={{ minWidth: 200 }}

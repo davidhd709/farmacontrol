@@ -44,6 +44,7 @@ import { formatDate } from '../../../utils/date-format';
 import { useAuth } from '../../auth/hooks/useAuth';
 import { usePermissions } from '../../auth/hooks/usePermissions';
 import { validateNewPassword } from '../../auth/password-policy';
+import { errorMessage } from '../../../utils/error-message';
 
 export function UsersPage() {
   const queryClient = useQueryClient();
@@ -116,9 +117,9 @@ export function UsersPage() {
       setCreateError(null);
       notify(`Usuario "${newUser.username}" creado exitosamente.`);
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
       setIsConfirmCreateOpen(false);
-      const msg = err.message || 'Error al crear el usuario.';
+      const msg = errorMessage(err, 'Error al crear el usuario.');
       setCreateError(msg);
       notify(msg, 'error');
     },
@@ -135,9 +136,9 @@ export function UsersPage() {
         `Usuario "${updated.username}" ${updated.isActive ? 'activado' : 'desactivado'} con éxito.`,
       );
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
       setUserToToggleStatus(null);
-      notify(err.message || 'Error al cambiar estado del usuario.', 'error');
+      notify(errorMessage(err, 'Error al cambiar estado del usuario.'), 'error');
     },
   });
 
@@ -152,9 +153,9 @@ export function UsersPage() {
       setEditError(null);
       notify(`Roles actualizados para "${updated.username}".`);
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
       setIsConfirmEditRolesOpen(false);
-      const msg = err.message || 'Error al actualizar roles.';
+      const msg = errorMessage(err, 'Error al actualizar roles.');
       setEditError(msg);
       notify(msg, 'error');
     },

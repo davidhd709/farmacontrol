@@ -161,7 +161,12 @@ export function ProductPresentationsDialog({
       });
 
       // Manejo seguro tanto si viene plano como si viene en response.result
-      const resData = response as any;
+      const resData = response as unknown as {
+        baseUnits?: number;
+        wholePresentations?: number;
+        remainderBaseUnits?: number;
+        result?: { baseUnits?: number };
+      };
       const baseUnitsValue = resData.baseUnits ?? resData.result?.baseUnits;
       const pres = presentations.find((p) => p.id === targetPresentationId);
       const presName = pres?.name || 'Presentación';

@@ -34,6 +34,7 @@ import {
   fetchPucAccounts,
 } from '../api/expenses.api';
 import { AccountDto } from '../../accounting/api/accounting.api';
+import { errorMessage } from '../../../utils/error-message';
 
 interface Props {
   open: boolean;
@@ -68,8 +69,8 @@ export const ExpenseCategoriesModal: React.FC<Props> = ({ open, onClose, onCateg
         (a) => (a.type === 'EXPENSE' || a.type === 'COST') && a.allowsMovement && a.isActive,
       );
       setPucAccounts(expenseAccs);
-    } catch (err: any) {
-      setError(err?.message || 'Error al cargar las categorías o el catálogo de cuentas.');
+    } catch (err) {
+      setError(errorMessage(err, 'Error al cargar las categorías o el catálogo de cuentas.'));
     } finally {
       setLoading(false);
     }
@@ -150,8 +151,8 @@ export const ExpenseCategoriesModal: React.FC<Props> = ({ open, onClose, onCateg
     setSaving(true);
     try {
       await persist();
-    } catch (err: any) {
-      setError(err?.message || 'Error al guardar la categoría.');
+    } catch (err) {
+      setError(errorMessage(err, 'Error al guardar la categoría.'));
     } finally {
       setSaving(false);
     }

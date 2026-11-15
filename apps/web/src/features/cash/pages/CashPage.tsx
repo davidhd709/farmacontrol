@@ -34,6 +34,7 @@ import { SortByDateButton } from '../../../components/SortByDateButton';
 import { formatDateTime } from '../../../utils/date-format';
 import { FilterBar } from '../../../components/layout/FilterBar';
 import { DateField } from '../../../components/DateField';
+import { errorMessage } from '../../../utils/error-message';
 
 export const CashPage: React.FC = () => {
   const [balance, setBalance] = useState<CashBalanceDto>({
@@ -77,8 +78,8 @@ export const CashPage: React.FC = () => {
       setBalance(balanceRes);
       setMovements(movementsRes.items);
       setTotal(movementsRes.total);
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Error al cargar los datos de caja');
+    } catch (err) {
+      setErrorMsg(errorMessage(err, 'Error al cargar los datos de caja'));
     } finally {
       setLoading(false);
     }

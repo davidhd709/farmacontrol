@@ -43,6 +43,7 @@ import type { AuditEventDto, AuditMetadataDto } from '@farmacia/contracts';
 import { fetchAuditEvents, fetchAuditMetadata } from '../api/audit.api';
 import { formatDateTime } from '../../../utils/date-format';
 import { DateField } from '../../../components/DateField';
+import { errorMessage as messageOf } from '../../../utils/error-message';
 
 export const AuditLogsPage = () => {
   const [events, setEvents] = useState<AuditEventDto[]>([]);
@@ -71,7 +72,7 @@ export const AuditLogsPage = () => {
     try {
       const res = await fetchAuditMetadata();
       setMetadata(res);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error al cargar metadatos de auditoría:', err);
     }
   }, []);
@@ -92,8 +93,8 @@ export const AuditLogsPage = () => {
       });
       setEvents(res.items || []);
       setTotal(res.total || 0);
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Error al consultar logs de auditoría.');
+    } catch (err) {
+      setErrorMessage(messageOf(err, 'Error al consultar logs de auditoría.'));
     } finally {
       setLoading(false);
     }

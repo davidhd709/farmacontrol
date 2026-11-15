@@ -24,7 +24,13 @@ import {
   Typography,
 } from '@mui/material';
 import { Controller, useForm } from 'react-hook-form';
-import type { ProductDto, ProductPresentationDto, UnitOfMeasureDto } from '@farmacia/contracts';
+import type {
+  CreateProductPresentationPayload,
+  ProductDto,
+  ProductPresentationDto,
+  UnitOfMeasureDto,
+  UpdateProductPresentationPayload,
+} from '@farmacia/contracts';
 import { ApiError } from '../../../api/http-client';
 import { useUnitsOfMeasure } from '../hooks/useUnitsOfMeasure';
 import { useCreatePresentation, useUpdatePresentation } from '../hooks/usePresentations';
@@ -185,7 +191,7 @@ export function PresentationFormDialog({
 
     try {
       if (isEditing && presentation) {
-        const updatePayload: any = {
+        const updatePayload: UpdateProductPresentationPayload = {
           name: finalName,
           barcode: values.barcode?.trim() || null,
           price: values.price,
@@ -209,7 +215,7 @@ export function PresentationFormDialog({
           payload: updatePayload,
         });
       } else {
-        const createPayload: any = {
+        const createPayload: CreateProductPresentationPayload = {
           productId: product.id,
           name: finalName,
           barcode: values.barcode?.trim() || null,

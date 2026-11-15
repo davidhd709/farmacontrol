@@ -14,6 +14,7 @@ import type { LocationDto, ProductDto } from '@farmacia/contracts';
 import { createInventoryLot } from '../api/inventory.api';
 import { INVENTORY_CONTROL_MODE_INFO } from '../../catalog/utils/inventory-control';
 import { DateField } from '../../../components/DateField';
+import { errorMessage as messageOf } from '../../../utils/error-message';
 
 interface CreateLotDialogProps {
   open: boolean;
@@ -90,8 +91,8 @@ export const CreateLotDialog = ({
       setInitialQuantity(0);
       onSuccess();
       onClose();
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Error al registrar el lote de inventario.');
+    } catch (err) {
+      setErrorMessage(messageOf(err, 'Error al registrar el lote de inventario.'));
     } finally {
       setIsSubmitting(false);
     }

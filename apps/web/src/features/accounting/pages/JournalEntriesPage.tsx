@@ -49,6 +49,7 @@ import { DateField } from '../../../components/DateField';
 import PrintIcon from '@mui/icons-material/Print';
 import { JournalEntryPrintDialog } from '../../../components/documents/JournalEntryPrintDialog';
 import { journalSourceType } from '../journal-source-types';
+import { errorMessage } from '../../../utils/error-message';
 
 /** Cómo se nombra un asiento ante el usuario: su documento de origen o su consecutivo */
 const entryLabel = (entry: JournalEntryDto) =>
@@ -156,8 +157,8 @@ export const JournalEntriesPage = () => {
         queryClient.invalidateQueries({ queryKey: ['journal-entry-detail', selectedEntryId] });
       }
     },
-    onError: (err: any) => {
-      setActionError(err.message || 'No se pudo anular el asiento.');
+    onError: (err: unknown) => {
+      setActionError(errorMessage(err, 'No se pudo anular el asiento.'));
     },
   });
 

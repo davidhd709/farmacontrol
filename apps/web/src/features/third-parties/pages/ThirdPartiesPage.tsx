@@ -42,6 +42,7 @@ import { ThirdPartyFormDialog } from '../components/ThirdPartyFormDialog';
 import GavelIcon from '@mui/icons-material/Gavel';
 import { SupplierFiscalDialog } from '../../taxes/components/SupplierFiscalDialog';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
+import { errorMessage } from '../../../utils/error-message';
 
 type RoleTab = 'ALL' | 'CUSTOMER' | 'SUPPLIER' | 'EMPLOYEE' | 'OTHER';
 type ScopedRole = 'CUSTOMER' | 'SUPPLIER';
@@ -136,8 +137,8 @@ export const ThirdPartiesPage: React.FC = () => {
       setThirdParties(response.items);
       setTotalPages(response.totalPages);
       setTotalCount(response.total);
-    } catch (err: any) {
-      setError(err?.message || 'Error al cargar el directorio de terceros');
+    } catch (err) {
+      setError(errorMessage(err, 'Error al cargar el directorio de terceros'));
     } finally {
       setLoading(false);
     }

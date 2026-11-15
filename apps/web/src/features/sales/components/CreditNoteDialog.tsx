@@ -30,7 +30,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import type { CreditNoteDto, SaleDto } from '@farmacia/contracts';
+import type { CreditNoteDto, SaleDto, SaleLotAllocationDto } from '@farmacia/contracts';
 import {
   createSaleCreditNote,
   type CreateCreditNotePayload,
@@ -365,7 +365,13 @@ export const CreditNoteDialog: React.FC<Props> = ({
                               <Typography variant="caption" color="text.secondary" component="div">
                                 Lote:{' '}
                                 {line.lotAllocations
-                                  .map((a: any) => a.lotNumber || a.lot?.lotNumber)
+                                  .map(
+                                    (
+                                      a: SaleLotAllocationDto & {
+                                        lot?: { lotNumber?: string | null };
+                                      },
+                                    ) => a.lotNumber || a.lot?.lotNumber,
+                                  )
                                   .filter(Boolean)
                                   .join(', ') || 'N/A'}
                               </Typography>
