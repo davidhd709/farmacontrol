@@ -48,6 +48,7 @@ export const AdjustInventoryDialog = ({
     watch,
     setValue,
     resetField,
+    getValues,
     handleSubmit,
     formState: { isSubmitting },
   } = useForm<AdjustInventoryFormValues>({
@@ -63,6 +64,8 @@ export const AdjustInventoryDialog = ({
   });
   const { productId, lotId, adjustmentType, quantity, reason, notes } = watch();
   const submittingRef = useRef(false);
+  // Misma clave mientras se reintenta el mismo ajuste; una nueva tras el éxito o si cambian datos
+  const retryRef = useRef<{ fingerprint: string; key: string } | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -75,18 +78,27 @@ export const AdjustInventoryDialog = ({
     setConfirmOpen(true);
   });
 
-  const handleConfirmAdjust = handleSubmit(async (values) => {
+  // Lo ejecuta la confirmación con los valores ya validados al revisar: un error del servidor
+  // queda en ella para reintentar (con la misma clave) o cancelar
+  const handleConfirmAdjust = async () => {
     if (submittingRef.current) return;
     submittingRef.current = true;
+    const values = getValues();
+    const payload = {
+      productId: values.productId,
+      lotId: values.lotId,
+      adjustmentType: values.adjustmentType,
+      quantityBaseUnits: values.quantity,
+      reason: values.reason.trim(),
+      notes: values.notes.trim() || undefined,
+    };
+    const fingerprint = JSON.stringify(payload);
+    if (retryRef.current?.fingerprint !== fingerprint) {
+      retryRef.current = { fingerprint, key: crypto.randomUUID() };
+    }
     try {
-      await adjustInventory({
-        productId: values.productId,
-        lotId: values.lotId,
-        adjustmentType: values.adjustmentType,
-        quantityBaseUnits: values.quantity,
-        reason: values.reason.trim(),
-        notes: values.notes.trim() || undefined,
-      });
+      await adjustInventory(payload, retryRef.current.key);
+      retryRef.current = null;
 
       resetField('reason');
       resetField('notes');
@@ -95,14 +107,11 @@ export const AdjustInventoryDialog = ({
       onSuccess();
       onClose();
     } catch (err) {
-      setErrorMessage(
-        err instanceof Error ? err.message : 'Error al procesar el ajuste de inventario.',
-      );
-      setConfirmOpen(false);
+      throw err instanceof Error ? err : new Error('Error al procesar el ajuste de inventario.');
     } finally {
       submittingRef.current = false;
     }
-  });
+  };
 
   return (
     <Dialog
@@ -327,8 +336,7 @@ export const AdjustInventoryDialog = ({
         onClose={() => {
           if (!submittingRef.current) setConfirmOpen(false);
         }}
-        onConfirm={() => handleConfirmAdjust()}
-        isLoading={isSubmitting}
+        onConfirm={handleConfirmAdjust}
         title="Confirmar Ajuste en Kardex"
         description={
           <Stack spacing={1}>

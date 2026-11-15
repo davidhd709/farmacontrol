@@ -1,3 +1,4 @@
+import { IdempotencyService } from '../../../../common/idempotency/idempotency.service';
 import { Injectable, Inject } from '@nestjs/common';
 import {
   INVENTORY_MOVEMENT_REPOSITORY_PORT,
@@ -15,6 +16,8 @@ import type {
   PaginatedResponse,
 } from '@farmacia/contracts';
 
+const ADJUST_ENDPOINT = '/api/v1/inventory/movements/adjust';
+
 @Injectable()
 export class InventoryMovementService {
   constructor(
@@ -22,6 +25,7 @@ export class InventoryMovementService {
     private readonly movementRepository: IInventoryMovementRepository,
     private readonly auditService: AuditService,
     private readonly accountingEngine: AccountingEngineService,
+    private readonly idempotencyService: IdempotencyService = new IdempotencyService(),
   ) {}
 
   public async adjustInventory(
@@ -36,7 +40,13 @@ export class InventoryMovementService {
     userId?: string,
     ipAddress?: string,
     correlationId?: string,
+    /** Opcional: si llega, un reintento con la misma clave devuelve el ajuste original */
+    idempotencyKey?: string,
   ): Promise<InventoryMovementDto> {
+    const key = idempotencyKey?.trim() || null;
+    const requestHash = key
+      ? this.idempotencyService.computeHash(ADJUST_ENDPOINT, userId ?? '', payload)
+      : null;
     const isIncrement = payload.adjustmentType === 'INCREMENTO';
     const delta = isIncrement
       ? Math.abs(payload.quantityBaseUnits)
@@ -93,7 +103,31 @@ export class InventoryMovementService {
           },
           db,
         );
+        if (key && requestHash) {
+          await this.idempotencyService.saveRecord(
+            {
+              key,
+              userId: userId ?? '',
+              endpoint: ADJUST_ENDPOINT,
+              requestHash,
+              responseStatus: 201,
+              responseBody: movement,
+            },
+            db,
+          );
+        }
       },
+      key && requestHash
+        ? async (tx) => {
+            const cached = await this.idempotencyService.getRecord(
+              key,
+              requestHash,
+              tx as Prisma.TransactionClient,
+              'http',
+            );
+            return cached ? (cached.responseBody as InventoryMovementDto) : null;
+          }
+        : undefined,
     );
   }
 

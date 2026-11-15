@@ -161,14 +161,18 @@ describe('Formulario ajuste con RHF + Zod', () => {
     fireEvent.click(confirm);
     fireEvent.click(confirm);
     await waitFor(() =>
-      expect(api).toHaveBeenCalledExactlyOnceWith({
-        productId: 'prod-1',
-        lotId: 'lot-1',
-        adjustmentType: 'DECREMENTO',
-        quantityBaseUnits: 3,
-        reason: 'Frasco averiado',
-        notes: 'Acta 15',
-      }),
+      expect(api).toHaveBeenCalledExactlyOnceWith(
+        {
+          productId: 'prod-1',
+          lotId: 'lot-1',
+          adjustmentType: 'DECREMENTO',
+          quantityBaseUnits: 3,
+          reason: 'Frasco averiado',
+          notes: 'Acta 15',
+        },
+        // Clave de idempotencia: un reintento del mismo ajuste no lo repite en el servidor
+        expect.stringMatching(/^[0-9a-f-]{36}$/),
+      ),
     );
     expect(screen.getByRole('button', { name: /Procesando/ })).toBeDisabled();
   });

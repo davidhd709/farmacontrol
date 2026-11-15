@@ -11,6 +11,7 @@ import {
   HttpCode,
   HttpStatus,
   BadRequestException,
+  Headers,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { SessionAuthGuard } from '../../../identity/presentation/guards/session-auth.guard';
@@ -65,6 +66,7 @@ export class InventoryMovementController {
   @HttpCode(HttpStatus.CREATED)
   public async adjustInventory(
     @Body() body: any,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
     @Req() req: Request,
     @CurrentUser() user: AuthenticatedUserContext,
   ) {
@@ -119,6 +121,7 @@ export class InventoryMovementController {
       user.id,
       ipAddress,
       correlationId,
+      idempotencyKey,
     );
 
     return { success: true, data };

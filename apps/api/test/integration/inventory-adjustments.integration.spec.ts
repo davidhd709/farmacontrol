@@ -452,4 +452,60 @@ describe('Ajustes manuales de inventario (FARM-AUD-004 / FARM-AUD-012)', () => {
       expect(await lotQuantity(lotAId)).toBe(52);
     });
   });
+
+  describe('Idempotency-Key (rediseño fase 5)', () => {
+    const body = () => ({
+      productId: productAId,
+      lotId: lotAId,
+      adjustmentType: 'INCREMENTO',
+      quantityBaseUnits: 3,
+      reason: 'Sobrante hallado en conteo',
+    });
+    const adjustWithKey = (key: string, payload: Record<string, unknown>) =>
+      request(app.getHttpServer())
+        .post('/api/v1/inventory/movements/adjust')
+        .set('Cookie', supervisorCookie)
+        .set('Idempotency-Key', key)
+        .send(payload);
+
+    it('un reintento con la misma clave devuelve el ajuste original sin repetirlo', async () => {
+      const key = randomUUID();
+      const first = await adjustWithKey(key, body());
+      expect(first.status).toBe(201);
+      const before = await footprint();
+
+      const retry = await adjustWithKey(key, body());
+      expect(retry.status).toBe(201);
+      expect(retry.body.data.id).toBe(first.body.data.id);
+      expect(await footprint()).toEqual(before);
+      expect(before.lotA).toBe(53);
+      expect(
+        await prisma.journalEntry.count({ where: { sourceType: 'INVENTORY_ADJUSTMENT' } }),
+      ).toBe(1);
+    });
+
+    it('dos envíos simultáneos con la misma clave registran un solo ajuste', async () => {
+      const key = randomUUID();
+      const [a, b] = await Promise.all([adjustWithKey(key, body()), adjustWithKey(key, body())]);
+      expect([a.status, b.status]).toEqual([201, 201]);
+      expect(a.body.data.id).toBe(b.body.data.id);
+      expect(await lotQuantity(lotAId)).toBe(53);
+      expect(await prisma.inventoryMovement.count()).toBe(1);
+    });
+
+    it('la misma clave con otro contenido responde 409 sin efectos', async () => {
+      const key = randomUUID();
+      expect((await adjustWithKey(key, body())).status).toBe(201);
+      const before = await footprint();
+      const other = await adjustWithKey(key, { ...body(), quantityBaseUnits: 9 });
+      expect(other.status).toBe(409);
+      expect(await footprint()).toEqual(before);
+    });
+
+    it('sin clave cada envío es un ajuste distinto, como antes', async () => {
+      expect((await adjust(body())).status).toBe(201);
+      expect((await adjust(body())).status).toBe(201);
+      expect(await lotQuantity(lotAId)).toBe(56);
+    });
+  });
 });

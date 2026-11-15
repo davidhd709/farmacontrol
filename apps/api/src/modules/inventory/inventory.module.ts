@@ -12,9 +12,10 @@ import { InventoryMovementService } from './application/services/inventory-movem
 import { InventoryMovementController } from './presentation/controllers/inventory-movement.controller';
 import { InventoryLedger } from './application/inventory-ledger';
 import { AccountingModule } from '../accounting/accounting.module';
+import { IdempotencyModule } from '../../common/idempotency/idempotency.module';
 
 @Module({
-  imports: [IdentityModule, AuditModule, CatalogModule, AccountingModule],
+  imports: [IdentityModule, AuditModule, CatalogModule, AccountingModule, IdempotencyModule],
   controllers: [InventoryLotController, InventoryMovementController],
   providers: [
     {

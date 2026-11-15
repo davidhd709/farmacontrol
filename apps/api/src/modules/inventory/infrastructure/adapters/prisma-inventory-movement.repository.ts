@@ -4,6 +4,7 @@ import { prisma, Prisma } from '@farmacia/database';
 import {
   IInventoryMovementRepository,
   WithinMovementTransaction,
+  ReplayMovement,
 } from '../../application/ports/inventory-movement.repository.port';
 import { LotProductMismatchException } from '../../domain/exceptions/inventory.exceptions';
 import { InventoryValuation } from '../../application/inventory-valuation';
@@ -23,9 +24,14 @@ export class PrismaInventoryMovementRepository implements IInventoryMovementRepo
     payload: RecordInventoryMovementPayload,
     userId?: string,
     withinTransaction?: WithinMovementTransaction,
+    replay?: ReplayMovement,
   ): Promise<InventoryMovementDto> {
     // F8: SERIALIZABLE porque el ajuste publica su asiento en la misma transacción (ADR-004)
     return serializableTransaction(async (tx) => {
+      // 0. Solicitud repetida con la misma Idempotency-Key: se devuelve la respuesta original
+      const replayed = await replay?.(tx);
+      if (replayed) return replayed;
+
       // 1. Bloqueo pesimista del lote: serializa los cambios de saldo concurrentes
       const lockedLots = await tx.$queryRaw<
         Array<{

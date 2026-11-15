@@ -81,17 +81,22 @@ export async function fetchInventoryMovements(filters: any = {}): Promise<any> {
   });
 }
 
-export async function adjustInventory(payload: {
-  productId: string;
-  lotId: string;
-  adjustmentType: 'INCREMENTO' | 'DECREMENTO';
-  quantityBaseUnits: number;
-  reason: string;
-  notes?: string;
-}): Promise<any> {
+export async function adjustInventory(
+  payload: {
+    productId: string;
+    lotId: string;
+    adjustmentType: 'INCREMENTO' | 'DECREMENTO';
+    quantityBaseUnits: number;
+    reason: string;
+    notes?: string;
+  },
+  idempotencyKey: string,
+): Promise<any> {
+  // La clave hace seguro el reintento: si la respuesta se pierde, no se ajusta dos veces
   const res = await apiRequest<{ data: any }>('inventory/movements/adjust', {
     method: 'POST',
     body: JSON.stringify(payload),
+    headers: { 'Idempotency-Key': idempotencyKey },
   });
   return res.data;
 }
