@@ -74,7 +74,7 @@ describe('AlertsController (Integration with PostgreSQL real & Background Worker
       data: { userId: supUser.id, roleId: supervisorRole.id },
     });
 
-    const noPermUser = await prisma.user.create({
+    await prisma.user.create({
       data: {
         username: 'noperm_user',
         passwordHash: adminUser.passwordHash,

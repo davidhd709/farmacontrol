@@ -2,17 +2,11 @@ import { beforeAll, afterAll, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import { Test } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
-import {
-  prisma,
-  cleanTestDatabase,
-  seedRbac,
-  AccountingPurpose as DbPurpose,
-} from '@farmacia/database';
+import { prisma, cleanTestDatabase, seedRbac } from '@farmacia/database';
 import { AppModule } from '../../src/app.module';
 import { UserProvisioningService } from '../../src/modules/identity/application/services/user-provisioning.service';
 import { AuthService } from '../../src/modules/identity/application/services/auth.service';
 import { JournalService } from '../../src/modules/accounting/application/journal.service';
-import { FiscalPeriodsService } from '../../src/modules/accounting/application/fiscal-periods.service';
 import { SESSION_COOKIE_NAME } from '../../src/modules/identity/presentation/utils/session-cookie.util';
 
 describe('Fiscal Periods & Historical Locking Integration (PostgreSQL)', () => {
@@ -21,7 +15,6 @@ describe('Fiscal Periods & Historical Locking Integration (PostgreSQL)', () => {
   let cashierCookie: string;
   let adminUserId: string;
   let journalService: JournalService;
-  let fiscalPeriodsService: FiscalPeriodsService;
 
   let accountCash: any;
   let accountSales: any;
@@ -40,7 +33,6 @@ describe('Fiscal Periods & Historical Locking Integration (PostgreSQL)', () => {
     const provisioning = module.get(UserProvisioningService);
     const auth = module.get(AuthService);
     journalService = module.get(JournalService);
-    fiscalPeriodsService = module.get(FiscalPeriodsService);
 
     await cleanTestDatabase();
     await seedRbac(prisma);

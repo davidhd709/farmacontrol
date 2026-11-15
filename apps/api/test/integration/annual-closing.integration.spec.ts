@@ -716,7 +716,7 @@ describe('Cierre anual', () => {
       await closeMonth(2);
       await closeMonth(12);
 
-      const { lines } = await confirmClosing(2025, '6000000.00');
+      await confirmClosing(2025, '6000000.00');
       expect(await balance('resultado')).toBe('0.00');
       expect(await balance('utilidades')).toBe('-6000000.00');
     });

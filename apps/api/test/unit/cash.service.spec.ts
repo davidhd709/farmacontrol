@@ -11,9 +11,7 @@ import { CashMovement } from '../../src/modules/cash/domain/cash-movement.entity
 import {
   InvalidCashAmountException,
   InvalidCashMovementTypeException,
-  InsufficientCashBalanceException,
 } from '../../src/modules/cash/domain/cash.exceptions';
-import { BadRequestException } from '@nestjs/common';
 
 describe('CashService & Cash Entities (Unit)', () => {
   let repository: ICashMovementRepository;

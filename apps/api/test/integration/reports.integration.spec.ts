@@ -70,7 +70,7 @@ describe('ReportsController (Integration with PostgreSQL & CSV Exports — HU-02
       data: { userId: supUser.id, roleId: supervisorRole.id },
     });
 
-    const noPermUser = await prisma.user.create({
+    await prisma.user.create({
       data: {
         username: 'noperm_reports',
         passwordHash: adminUser.passwordHash,

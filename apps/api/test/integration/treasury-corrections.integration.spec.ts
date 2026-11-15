@@ -20,7 +20,6 @@ import { businessToday } from '../../src/common/utils/business-date';
 describe('Corrección atómica de recibos de caja y comprobantes de egreso', () => {
   let app: INestApplication;
   let adminCookie: string;
-  let cashierCookie: string;
   const roleCookies: Record<string, string> = {};
   let adminId: string;
   let customerId: string;
@@ -49,12 +48,6 @@ describe('Corrección atómica de recibos de caja y comprobantes de egreso', () 
     const adminRole = await prisma.role.findUniqueOrThrow({ where: { name: 'admin' } });
     await prisma.userRole.create({ data: { userId: adminId, roleId: adminRole.id } });
     adminCookie = `${SESSION_COOKIE_NAME}=${(await auth.login('correccion_admin', 'AdminPassword#2026')).rawToken}`;
-    const cashier = await prisma.user.create({
-      data: { username: 'correccion_cajero', passwordHash: admin.passwordHash },
-    });
-    const cashierRole = await prisma.role.findUniqueOrThrow({ where: { name: 'cajero' } });
-    await prisma.userRole.create({ data: { userId: cashier.id, roleId: cashierRole.id } });
-    cashierCookie = `${SESSION_COOKIE_NAME}=${(await auth.login('correccion_cajero', 'AdminPassword#2026')).rawToken}`;
     for (const roleName of ['cartera', 'compras', 'supervisor', 'inventario', 'tesoreria']) {
       const user = await prisma.user.create({
         data: { username: `correccion_${roleName}`, passwordHash: admin.passwordHash },

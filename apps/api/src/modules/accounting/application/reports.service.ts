@@ -383,7 +383,7 @@ export class AccountingReportsService {
    * Genera el Estado de Situación Financiera (Balance General) a una fecha de corte.
    */
   async getBalanceSheet(asOfDate: string): Promise<BalanceSheetReportDto> {
-    const asOf = parseJournalDate(asOfDate);
+    parseJournalDate(asOfDate); // valida el formato de la fecha de corte
     const asOfEnd = new Date(`${asOfDate}T23:59:59.999Z`);
 
     const lines = await prisma.journalEntryLine.findMany({

@@ -8,7 +8,6 @@ import { PasswordHasherPort } from '../../src/modules/identity/application/ports
 import { RbacRepositoryPort } from '../../src/modules/identity/application/ports/rbac.repository.port';
 import { SessionService } from '../../src/modules/identity/application/services/session.service';
 import { User } from '../../src/modules/identity/domain/entities/user.entity';
-import { Username } from '../../src/modules/identity/domain/value-objects/username.vo';
 import { InvalidCredentialsException } from '../../src/modules/identity/domain/exceptions/identity.exceptions';
 import { Argon2PasswordHasherAdapter } from '../../src/modules/identity/infrastructure/adapters/argon2-password-hasher.adapter';
 

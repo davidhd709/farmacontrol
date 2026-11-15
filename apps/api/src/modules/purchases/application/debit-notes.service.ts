@@ -1,10 +1,4 @@
-import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-  ConflictException,
-  Optional,
-} from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
 import { prisma, PrismaClient, Prisma } from '@farmacia/database';
 import { DebitNoteDto, DebitNoteLineDto, CreateDebitNotePayload } from '@farmacia/contracts';
 import { AccountingEngineService } from '../../accounting/application/accounting-engine.service';
@@ -15,8 +9,6 @@ import { parseMoneyToCents, centsToMoneyString } from '../../treasury/domain/tre
 import { accountingPolicyAt } from '../../company/application/accounting-policy.reader';
 import { businessToday } from '../../../common/utils/business-date';
 import { companyTaxStatusAt } from '../../taxes/application/tax-context.reader';
-
-type Tx = Parameters<Parameters<PrismaClient['$transaction']>[0]>[0];
 
 function isRetryableConcurrencyError(error: unknown): boolean {
   if (error instanceof Prisma.PrismaClientKnownRequestError) {

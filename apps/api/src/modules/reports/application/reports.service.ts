@@ -12,7 +12,6 @@ import {
   CashSummaryReportDto,
   ExpirationReportItemDto,
   ExpirationsReportDto,
-  ExpirationSeverity,
   InventoryValuationIssue,
   TopProductsFilter,
   TopProductItemDto,

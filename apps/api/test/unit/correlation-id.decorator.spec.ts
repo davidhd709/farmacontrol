@@ -5,7 +5,7 @@ import type { Request } from 'express';
 import { CorrelationId } from '../../src/common/decorators/correlation-id.decorator';
 
 describe('CorrelationId Decorator (Unit)', () => {
-  function getParamDecoratorFactory(decorator: Function) {
+  function getParamDecoratorFactory(decorator: () => ParameterDecorator) {
     class TestClass {
       public testMethod(@decorator() _param: string) {}
     }

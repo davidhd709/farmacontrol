@@ -1,6 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { Sale, SaleLine, SaleLotAllocation } from '../../src/modules/sales/domain/sale.entity';
-import { SaleAlreadyCancelledException } from '../../src/modules/sales/domain/sale.exceptions';
+import { describe, it, expect } from 'vitest';
+import { Sale, SaleLine } from '../../src/modules/sales/domain/sale.entity';
 
 describe('Sale Domain Entities & Business Rules (Unit)', () => {
   describe('SaleLine', () => {

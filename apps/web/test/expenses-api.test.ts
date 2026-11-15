@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createExpense, payExpense } from '../src/features/expenses/api/expenses.api';
+import { createExpense } from '../src/features/expenses/api/expenses.api';
 
 afterEach(() => vi.unstubAllGlobals());
 

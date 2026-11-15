@@ -1,4 +1,4 @@
-import { beforeAll, beforeEach, afterAll, describe, expect, it } from 'vitest';
+import { beforeAll, afterAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { Test } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
@@ -12,7 +12,6 @@ import { AppModule } from '../../src/app.module';
 import { UserProvisioningService } from '../../src/modules/identity/application/services/user-provisioning.service';
 import { AuthService } from '../../src/modules/identity/application/services/auth.service';
 import { JournalService } from '../../src/modules/accounting/application/journal.service';
-import { AccountingEngineService } from '../../src/modules/accounting/application/accounting-engine.service';
 import { AccountingReportsService } from '../../src/modules/accounting/application/reports.service';
 import { SESSION_COOKIE_NAME } from '../../src/modules/identity/presentation/utils/session-cookie.util';
 
@@ -22,7 +21,6 @@ describe('Financial Statements Integration (PostgreSQL): Income Statement & Bala
   let cashierCookie: string;
   let adminUserId: string;
   let journalService: JournalService;
-  let engineService: AccountingEngineService;
   let reportsService: AccountingReportsService;
 
   beforeAll(async () => {
@@ -35,7 +33,6 @@ describe('Financial Statements Integration (PostgreSQL): Income Statement & Bala
     const provisioning = module.get(UserProvisioningService);
     const auth = module.get(AuthService);
     journalService = module.get(JournalService);
-    engineService = module.get(AccountingEngineService);
     reportsService = module.get(AccountingReportsService);
 
     await cleanTestDatabase();

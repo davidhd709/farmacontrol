@@ -44,9 +44,8 @@ describe('Terceros: alcance por rol en la API', () => {
     role: string,
     body?: object,
   ) => {
-    const req = request(app.getHttpServer())
-      [method](`/api/v1/${path}`)
-      .set('Cookie', cookies[role]);
+    const agent = request(app.getHttpServer());
+    const req = agent[method](`/api/v1/${path}`).set('Cookie', cookies[role]);
     return body ? req.send(body) : req;
   };
 

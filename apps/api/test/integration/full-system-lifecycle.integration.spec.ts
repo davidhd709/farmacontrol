@@ -33,7 +33,6 @@ describe('Full System Multi-day Lifecycle Simulation (PostgreSQL Real)', () => {
   let app: INestApplication;
   let adminCookie: string;
   let cajeroCookie: string;
-  let carteraCookie: string;
   let adminUserId: string;
 
   let journalService: JournalService;
@@ -74,7 +73,6 @@ describe('Full System Multi-day Lifecycle Simulation (PostgreSQL Real)', () => {
   let payableId: string;
   let sale1CashId: string;
   let sale1InvoiceNumber: string;
-  let sale2BankId: string;
   let sale3CreditId: string;
   let receivableId: string;
 
@@ -116,14 +114,6 @@ describe('Full System Multi-day Lifecycle Simulation (PostgreSQL Real)', () => {
     await prisma.userRole.create({ data: { userId: cajeroUser.id, roleId: cajeroRole.id } });
     const cajeroLogin = await auth.login('lifecycle_cajero', 'AdminPassword#2026');
     cajeroCookie = `${SESSION_COOKIE_NAME}=${cajeroLogin.rawToken}`;
-
-    const carteraUser = await prisma.user.create({
-      data: { username: 'lifecycle_cartera', passwordHash: adminUser.passwordHash },
-    });
-    const carteraRole = await prisma.role.findUniqueOrThrow({ where: { name: 'cartera' } });
-    await prisma.userRole.create({ data: { userId: carteraUser.id, roleId: carteraRole.id } });
-    const carteraLogin = await auth.login('lifecycle_cartera', 'AdminPassword#2026');
-    carteraCookie = `${SESSION_COOKIE_NAME}=${carteraLogin.rawToken}`;
 
     // 2. PUC Estándar
     const accountsData: Array<{ code: string; name: string; type: any; purpose?: DbPurpose }> = [
@@ -581,7 +571,6 @@ describe('Full System Multi-day Lifecycle Simulation (PostgreSQL Real)', () => {
         });
 
       expect(res.status).toBe(201);
-      sale2BankId = res.body.id;
       expect(res.body.total).toBe(960000);
 
       // FEFO check: división entre dos lotes

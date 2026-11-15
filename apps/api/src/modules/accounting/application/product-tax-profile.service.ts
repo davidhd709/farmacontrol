@@ -8,7 +8,6 @@ import {
 } from '@farmacia/database';
 import {
   PRODUCT_TAX_OPERATIONS,
-  PRODUCT_TAX_TREATMENTS,
   type ProductTaxOperation,
   type ProductTaxProfileDto,
   type ProductTaxProfileInput,

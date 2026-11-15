@@ -197,7 +197,7 @@ describe('SaleController (Integration with PostgreSQL, FEFO & Idempotency)', () 
     const adminLogin = await authService.login('pos_admin', 'CajeroPassword#2026');
     supervisorCookie = `${SESSION_COOKIE_NAME}=${adminLogin.rawToken}`;
 
-    const unauth = await prisma.user.create({
+    await prisma.user.create({
       data: {
         username: 'pos_sin_permisos',
         passwordHash: cajeroUser.passwordHash,

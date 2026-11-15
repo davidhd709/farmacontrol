@@ -564,8 +564,6 @@ export async function confirmProductImport(
     catMap.set(normalizeHeader(c.name), c.id);
   }
 
-  const { rules } = await sectorProfileRules(client);
-
   return client.$transaction(async (tx) => {
     const createdProductIds: string[] = [];
     const createdProductCodes: string[] = [];

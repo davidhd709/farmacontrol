@@ -3,7 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { Test } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
-import { cleanTestDatabase, prisma, seedRbac, Prisma } from '@farmacia/database';
+import { cleanTestDatabase, prisma, seedRbac } from '@farmacia/database';
 import { AppModule } from '../../src/app.module';
 import { UserProvisioningService } from '../../src/modules/identity/application/services/user-provisioning.service';
 import { AuthService } from '../../src/modules/identity/application/services/auth.service';
@@ -18,10 +18,7 @@ describe('Asistente de configuración contable', () => {
   let app: INestApplication;
   let cookie: string;
   let adminId: string;
-  let supplierId: string;
   let categoryId: string;
-  let locationId: string;
-  let productId: string;
 
   beforeAll(async () => {
     const module = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -47,13 +44,9 @@ describe('Asistente de configuración contable', () => {
     await prisma.$executeRaw`TRUNCATE TABLE "company_accounting_policies", "branches", "companies", "inventory_valuation_movements", "inventory_cost_balances", "debit_note_lines", "debit_notes", "credit_note_lines", "credit_notes", "journal_entry_lines", "journal_entries", "company_accounting_mappings", "accounts", "payable_payments", "payables", "receivable_payments", "receivables", "idempotency_keys", "sale_lot_allocations", "sale_lines", "sales", "cash_movements", "customers", "purchase_lines", "purchases", "suppliers", "inventory_movements", "inventory_lots", "locations", "product_presentations", "products", "categories", "treasury_documents", "audit_events" CASCADE`;
     await prisma.$executeRaw`UPDATE "treasury_document_sequences" SET "last_value" = 0`;
 
-    supplierId = (
-      await prisma.supplier.create({ data: { taxId: '900123456-7', name: 'Droguería Mayorista' } })
-    ).id;
+    await prisma.supplier.create({ data: { taxId: '900123456-7', name: 'Droguería Mayorista' } });
     categoryId = (await prisma.category.create({ data: { name: 'Medicamentos' } })).id;
-    locationId = (
-      await prisma.location.create({ data: { code: 'BOD-1', name: 'Bodega', isDefault: true } })
-    ).id;
+    await prisma.location.create({ data: { code: 'BOD-1', name: 'Bodega', isDefault: true } });
     await prisma.customer.create({
       data: {
         documentType: 'CC',
@@ -62,7 +55,7 @@ describe('Asistente de configuración contable', () => {
         isDefault: true,
       },
     });
-    productId = await createProduct('ACE-500', 0);
+    await createProduct('ACE-500', 0);
   });
 
   afterAll(async () => {
@@ -82,76 +75,6 @@ describe('Asistente de configuración contable', () => {
       },
     });
     return product.id;
-  }
-
-  let invoiceSeq = 0;
-  /** Recibe una compra por la API: cada línea es un lote con su vencimiento y su costo. */
-  async function receive(
-    lines: Array<{ lot: string; quantity: number; unitCost: number; expires?: string }>,
-    product = productId,
-  ) {
-    const res = await request(app.getHttpServer())
-      .post('/api/v1/purchases/receive')
-      .set('Cookie', cookie)
-      .send({
-        supplierId,
-        invoiceNumber: `FAC-${++invoiceSeq}`,
-        purchaseDate: businessToday(),
-        lines: lines.map((l) => ({
-          productId: product,
-          lotNumber: l.lot,
-          expirationDate: l.expires ?? '2099-01-01',
-          quantityCommercial: l.quantity,
-          unitCost: l.unitCost,
-          locationId,
-        })),
-      });
-    expect(res.status, JSON.stringify(res.body)).toBe(201);
-    return res.body as { id: string; lines: Array<{ id: string }> };
-  }
-
-  function sell(quantity: number, product = productId) {
-    return request(app.getHttpServer())
-      .post('/api/v1/sales/confirm')
-      .set('Cookie', cookie)
-      .set('Idempotency-Key', randomUUID())
-      .send({
-        paymentMethod: 'EFECTIVO',
-        items: [{ productId: product, quantityCommercial: quantity }],
-      });
-  }
-
-  async function sold(quantity: number, product = productId) {
-    const res = await sell(quantity, product);
-    expect(res.status, JSON.stringify(res.body)).toBe(201);
-    return res.body as { id: string; lines: Array<{ id: string; lotAllocations: any[] }> };
-  }
-
-  async function balance(product = productId) {
-    const b = await prisma.inventoryCostBalance.findUnique({ where: { productId: product } });
-    return b ? { quantity: b.quantityBaseUnits, value: b.totalValue.toFixed(2) } : null;
-  }
-
-  async function physical(product = productId) {
-    const lots = await prisma.inventoryLot.findMany({ where: { productId: product } });
-    return lots.reduce((sum, lot) => sum + lot.currentQuantity, 0);
-  }
-
-  /** Débito menos crédito de las líneas de un propósito, opcionalmente en un asiento. */
-  async function posted(purpose: string, sourceType?: string, sourceId?: string) {
-    const lines = await prisma.journalEntryLine.findMany({
-      where: {
-        purpose: purpose as any,
-        journalEntry: {
-          status: 'POSTED',
-          ...(sourceType ? { sourceType } : {}),
-          ...(sourceId ? { sourceId } : {}),
-        },
-      },
-    });
-    return lines
-      .reduce((t, l) => t.plus(l.debit).minus(l.credit), new Prisma.Decimal(0))
-      .toFixed(2);
   }
 
   const api = () => request(app.getHttpServer());

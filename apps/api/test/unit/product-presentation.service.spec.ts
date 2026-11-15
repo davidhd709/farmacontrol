@@ -17,8 +17,6 @@ import {
   ProductPresentationCrossProductException,
   ProductPresentationCycleException,
   ProductPresentationNameAlreadyExistsException,
-  ProductPresentationNotFoundException,
-  ProductPresentationSelfReferenceException,
 } from '../../src/modules/catalog/domain/exceptions/product-presentation.exceptions';
 import type { AuditService } from '../../src/modules/audit/application/services/audit.service';
 

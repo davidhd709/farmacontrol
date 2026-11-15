@@ -122,7 +122,7 @@ async function main() {
   });
 
   // 4. Lotes con stock disponible para FEFO
-  const lot1 = await prisma.inventoryLot.upsert({
+  await prisma.inventoryLot.upsert({
     where: {
       productId_locationId_lotNumber: {
         productId: p1.id,
@@ -143,7 +143,7 @@ async function main() {
     },
   });
 
-  const lot2 = await prisma.inventoryLot.upsert({
+  await prisma.inventoryLot.upsert({
     where: {
       productId_locationId_lotNumber: {
         productId: p2.id,
@@ -164,7 +164,7 @@ async function main() {
     },
   });
 
-  const lot3 = await prisma.inventoryLot.upsert({
+  await prisma.inventoryLot.upsert({
     where: {
       productId_locationId_lotNumber: {
         productId: p3.id,

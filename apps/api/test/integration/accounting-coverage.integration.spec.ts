@@ -168,33 +168,6 @@ describe('Cobertura contable completa y reportes', () => {
     return res.body as { id: string; lines: Array<{ id: string; lotAllocations: any[] }> };
   }
 
-  async function balance(product = productId) {
-    const b = await prisma.inventoryCostBalance.findUnique({ where: { productId: product } });
-    return b ? { quantity: b.quantityBaseUnits, value: b.totalValue.toFixed(2) } : null;
-  }
-
-  async function physical(product = productId) {
-    const lots = await prisma.inventoryLot.findMany({ where: { productId: product } });
-    return lots.reduce((sum, lot) => sum + lot.currentQuantity, 0);
-  }
-
-  /** Débito menos crédito de las líneas de un propósito, opcionalmente en un asiento. */
-  async function posted(purpose: string, sourceType?: string, sourceId?: string) {
-    const lines = await prisma.journalEntryLine.findMany({
-      where: {
-        purpose: purpose as any,
-        journalEntry: {
-          status: 'POSTED',
-          ...(sourceType ? { sourceType } : {}),
-          ...(sourceId ? { sourceId } : {}),
-        },
-      },
-    });
-    return lines
-      .reduce((t, l) => t.plus(l.debit).minus(l.credit), new Prisma.Decimal(0))
-      .toFixed(2);
-  }
-
   const api = () => request(app.getHttpServer());
 
   async function setupCompany() {
