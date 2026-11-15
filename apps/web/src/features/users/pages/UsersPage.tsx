@@ -1,3 +1,4 @@
+import { roleLabel } from '../role-labels';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { HomeBackButton } from '../../../components/HomeBackButton';
@@ -416,11 +417,11 @@ export function UsersPage() {
                           u.roles.map((r) => (
                             <Chip
                               key={r}
-                              label={r}
+                              label={roleLabel(r)}
                               size="small"
                               variant={r === 'admin' ? 'filled' : 'outlined'}
                               color={r === 'admin' ? 'primary' : 'default'}
-                              sx={{ fontWeight: 600, textTransform: 'capitalize' }}
+                              sx={{ fontWeight: 600 }}
                             />
                           ))
                         ) : (
@@ -543,11 +544,8 @@ export function UsersPage() {
                         }
                         label={
                           <Box>
-                            <Typography
-                              variant="body2"
-                              sx={{ fontWeight: 700, textTransform: 'capitalize' }}
-                            >
-                              {r.name}
+                            <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                              {roleLabel(r.name)}
                             </Typography>
                             {r.description && (
                               <Typography variant="caption" color="text.secondary">
@@ -668,11 +666,8 @@ export function UsersPage() {
                       }
                       label={
                         <Box>
-                          <Typography
-                            variant="body2"
-                            sx={{ fontWeight: 700, textTransform: 'capitalize' }}
-                          >
-                            {r.name}
+                          <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                            {roleLabel(r.name)}
                           </Typography>
                           {r.description && (
                             <Typography variant="caption" color="text.secondary">

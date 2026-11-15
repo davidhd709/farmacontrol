@@ -1,3 +1,4 @@
+import { roleLabel } from '../../features/users/role-labels';
 import React, { useState } from 'react';
 import {
   AppBar,
@@ -68,7 +69,7 @@ export const AppNavbar: React.FC<AppNavbarProps> = ({
   const criticalCount = (alertsSummary.data?.vencidos ?? 0) + (alertsSummary.data?.criticos ?? 0);
 
   const initials = user?.username?.substring(0, 2).toUpperCase() || 'U';
-  const roleLabel = roles[0];
+  const currentRole = roles[0] ? roleLabel(roles[0]) : null;
 
   const handleLogout = async () => {
     setUserMenuAnchor(null);
@@ -231,13 +232,9 @@ export const AppNavbar: React.FC<AppNavbarProps> = ({
               <Typography variant="body2" sx={{ fontWeight: 700, lineHeight: 1.1 }}>
                 {user?.username}
               </Typography>
-              {roleLabel && (
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ textTransform: 'capitalize' }}
-                >
-                  {roleLabel}
+              {currentRole && (
+                <Typography variant="caption" color="text.secondary">
+                  {currentRole}
                 </Typography>
               )}
             </Box>
