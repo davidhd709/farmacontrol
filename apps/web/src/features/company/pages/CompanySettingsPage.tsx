@@ -69,11 +69,15 @@ const AGING_BASE_LABELS = {
   ISSUE_DATE: 'Desde la fecha de emisión',
 } as const;
 
+/** dd/mm/aaaa, como se muestran las fechas en la web */
+const shownDate = (iso: string | null) =>
+  iso ? iso.slice(0, 10).split('-').reverse().join('/') : '—';
+
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
 }
 
-function SetupForm({ onDone }: { onDone: () => Promise<void> }) {
+function SetupForm({ onDone }: { onDone: (notice: string) => Promise<void> }) {
   const [error, setError] = useState<string | null>(null);
   const { control, handleSubmit, formState } = useForm<CompanySetupFormData>({
     resolver: zodResolver(companySetupSchema),
@@ -109,7 +113,7 @@ function SetupForm({ onDone }: { onDone: () => Promise<void> }) {
           municipalityCode: data.municipalityCode || null,
         },
       });
-      await onDone();
+      await onDone(`Empresa configurada con la sede «${data.branchName}».`);
     } catch (err) {
       setError(errorMessage(err, 'No se pudo configurar la empresa.'));
     }
@@ -171,7 +175,7 @@ function SetupForm({ onDone }: { onDone: () => Promise<void> }) {
   );
 }
 
-function BranchForm({ onDone }: { onDone: () => Promise<void> }) {
+function BranchForm({ onDone }: { onDone: (notice: string) => Promise<void> }) {
   const [error, setError] = useState<string | null>(null);
   const { control, handleSubmit, reset, formState } = useForm<BranchFormData>({
     resolver: zodResolver(branchSchema),
@@ -186,7 +190,7 @@ function BranchForm({ onDone }: { onDone: () => Promise<void> }) {
         municipalityCode: data.municipalityCode || null,
       });
       reset();
-      await onDone();
+      await onDone(`Sucursal «${data.name}» agregada.`);
     } catch (err) {
       setError(errorMessage(err, 'No se pudo crear la sucursal.'));
     }
@@ -232,7 +236,7 @@ function PolicyForm({
 }: {
   current: AccountingPolicyDto;
   available: CostingMethod[];
-  onDone: () => Promise<void>;
+  onDone: (notice: string) => Promise<void>;
 }) {
   const [error, setError] = useState<string | null>(null);
   const {
@@ -271,7 +275,9 @@ function PolicyForm({
     try {
       await createAccountingPolicy(data);
       reset({ ...data, reason: '' });
-      await onDone();
+      await onDone(
+        `Política contable registrada, vigente desde el ${shownDate(data.effectiveFrom)}.`,
+      );
     } catch (err) {
       setError(errorMessage(err, 'No se pudo registrar la política.'));
     }
@@ -409,11 +415,13 @@ export const CompanySettingsPage = () => {
   const { hasPermission } = usePermissions();
   const queryClient = useQueryClient();
   const canManage = hasPermission(SYSTEM_PERMISSIONS.COMPANY_MANAGE);
-  const { data, isLoading, isError } = useQuery<CompanySettingsDto>({
+  const [notice, setNotice] = useState<string | null>(null);
+  const { data, isLoading, isError, refetch, isFetching } = useQuery<CompanySettingsDto>({
     queryKey: ['company-settings'],
     queryFn: fetchCompanySettings,
   });
-  const refresh = async () => {
+  const refresh = async (message: string) => {
+    setNotice(message);
     await queryClient.invalidateQueries({ queryKey: ['company-settings'] });
   };
 
@@ -438,7 +446,20 @@ export const CompanySettingsPage = () => {
     );
   }
   if (isError || !data) {
-    return <Alert severity="error">No se pudo cargar la configuración de la empresa.</Alert>;
+    return (
+      <Container component="main" sx={{ py: { xs: 1, md: 2 } }}>
+        <Alert
+          severity="error"
+          action={
+            <Button color="inherit" size="small" disabled={isFetching} onClick={() => refetch()}>
+              Reintentar
+            </Button>
+          }
+        >
+          No se pudo cargar la configuración de la empresa.
+        </Alert>
+      </Container>
+    );
   }
 
   const { company, currentPolicy, policyHistory, availableCostingMethods } = data;
@@ -448,6 +469,11 @@ export const CompanySettingsPage = () => {
         Empresa y política contable
       </Typography>
       <Stack spacing={3}>
+        {notice && (
+          <Alert severity="success" role="status" onClose={() => setNotice(null)}>
+            {notice}
+          </Alert>
+        )}
         {!company ? (
           canManage ? (
             <SetupForm onDone={refresh} />
@@ -510,7 +536,7 @@ export const CompanySettingsPage = () => {
               </Alert>
             ) : (
               <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                Vigente desde {currentPolicy.effectiveFrom}
+                Vigente desde el {shownDate(currentPolicy.effectiveFrom)}
               </Typography>
             )}
             <PolicySummary policy={currentPolicy} />
@@ -554,7 +580,7 @@ export const CompanySettingsPage = () => {
                   <TableBody>
                     {policyHistory.map((p) => (
                       <TableRow key={p.id}>
-                        <TableCell>{p.effectiveFrom}</TableCell>
+                        <TableCell>{shownDate(p.effectiveFrom)}</TableCell>
                         <TableCell>{COSTING_LABELS[p.costingMethod]}</TableCell>
                         <TableCell>{VARIANCE_LABELS[p.purchaseReturnVariancePurpose]}</TableCell>
                         <TableCell>{p.reason}</TableCell>
