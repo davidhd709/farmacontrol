@@ -119,6 +119,9 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   const [error, setError] = useState<string | null>(null);
   // Un segundo clic llega antes de que React vuelva a pintar el botón deshabilitado
   const inFlight = useRef(false);
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  const confirmRef = useRef<HTMLButtonElement>(null);
+  const reasonRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (open) {
@@ -184,7 +187,17 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       fullWidth
       aria-labelledby={titleId}
       aria-describedby={descriptionId}
-      slotProps={{ paper: { component: 'form', onSubmit: submit, noValidate: true } as never }}
+      slotProps={{
+        paper: { component: 'form', onSubmit: submit, noValidate: true } as never,
+        // Al terminar la entrada se fija el foco inicial: en el navegador la trampa de foco del
+        // diálogo puede tomarlo después de montar los botones
+        transition: {
+          onEntered: () =>
+            (reason ? reasonRef : !isDanger ? confirmRef : cancelRef).current?.focus({
+              preventScroll: true,
+            }),
+        },
+      }}
     >
       <DialogTitle id={titleId} sx={{ fontWeight: 700 }}>
         {resolvedTitle}
@@ -230,6 +243,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             multiline
             minRows={2}
             autoFocus
+            inputRef={reasonRef}
             disabled={busy}
             error={touched && Boolean(reasonError)}
             helperText={
@@ -249,6 +263,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2, gap: 1, flexWrap: 'wrap' }}>
         <Button
+          ref={cancelRef}
           onClick={cancel}
           disabled={busy}
           data-action="cancel"
@@ -258,6 +273,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
           {cancelText}
         </Button>
         <Button
+          ref={confirmRef}
           type="submit"
           variant="contained"
           color={color}
