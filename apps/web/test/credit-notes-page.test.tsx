@@ -223,9 +223,15 @@ describe('CreditNotesPage (REQ-005)', () => {
 
     expect(await screen.findByTestId('credit-note-detail-dialog')).toBeInTheDocument();
     expect(screen.getByText('Detalle de Nota Crédito NC-000001')).toBeInTheDocument();
-    expect(screen.getByText('Amoxicilina 500mg')).toBeInTheDocument();
-    expect(screen.getByText('LOTE-AMX-01')).toBeInTheDocument();
-    expect(screen.getByText('Producto defectuoso')).toBeInTheDocument();
+    // En pantalla la vista del sistema; la hoja formal repite los datos solo para imprimir
+    const [screenView, printSheet] = [
+      ...screen.getByRole('dialog').querySelectorAll<HTMLElement>('.no-print, .print-only'),
+    ].filter((node) => node.textContent?.includes('Amoxicilina 500mg'));
+    expect(screenView).toHaveClass('no-print');
+    expect(within(screenView).getByText('LOTE-AMX-01')).toBeInTheDocument();
+    expect(within(screenView).getByText('Producto defectuoso')).toBeInTheDocument();
+    expect(printSheet).toHaveClass('print-only');
+    expect(within(printSheet).getByText(/^SON:/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Cerrar' }));
     await waitFor(() => {

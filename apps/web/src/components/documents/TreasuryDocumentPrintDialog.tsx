@@ -8,10 +8,10 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Chip,
 } from '@mui/material';
 import type { TreasuryDocumentDto } from '@farmacia/contracts';
 import { PrintableDocumentLayout } from './PrintableDocumentLayout';
+import { AppliedChip, ScreenField, ScreenFields, ScreenTable } from './DocumentScreenParts';
 import { formatCurrencyCop } from '../../utils/print-document';
 import { numberToWordsCop } from '../../utils/number-to-words';
 import { treasuryOriginDescription } from '../../features/treasury/treasury-document-actions';
@@ -22,21 +22,6 @@ const ORIGIN_TEXT: Record<TreasuryDocumentDto['origin'], string> = {
   CARTERA: 'Abono a facturas de venta a crédito',
   PROVEEDOR: 'Pago de facturas de compra o causaciones',
 };
-
-const ScreenField: React.FC<{
-  label: string;
-  testId?: string;
-  children: React.ReactNode;
-}> = ({ label, testId, children }) => (
-  <Box data-testid={testId}>
-    <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
-      {label}
-    </Typography>
-    <Typography component="div" variant="body2" sx={{ fontWeight: 600, mt: 0.25 }}>
-      {children}
-    </Typography>
-  </Box>
-);
 
 interface Props {
   open: boolean;
@@ -87,14 +72,7 @@ export const TreasuryDocumentPrintDialog: React.FC<Props> = ({
     >
       {/* VISTA DEL SISTEMA (PANTALLA) */}
       <Box className="no-print">
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
-            gap: 2,
-            mb: 2.5,
-          }}
-        >
+        <ScreenFields>
           <ScreenField label={isReceipt ? 'Cliente o tercero' : 'Beneficiario'}>
             {thirdPartyName}
           </ScreenField>
@@ -117,40 +95,28 @@ export const TreasuryDocumentPrintDialog: React.FC<Props> = ({
               </Box>
             </ScreenField>
           )}
-        </Box>
+        </ScreenFields>
         {document.applications && document.applications.length > 0 && (
-          <>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-              {isReceipt ? 'Facturas de venta abonadas' : 'Facturas o causaciones pagadas'}
-            </Typography>
-            <TableContainer sx={{ border: 1, borderColor: 'divider', borderRadius: 1 }}>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Documento</TableCell>
-                    <TableCell align="right">Valor aplicado</TableCell>
-                    <TableCell>Estado</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {document.applications.map((app, idx) => (
-                    <TableRow key={idx}>
-                      <TableCell sx={{ fontWeight: 600 }}>{app.documentNumber}</TableCell>
-                      <TableCell align="right">{formatCurrencyCop(Number(app.amount))}</TableCell>
-                      <TableCell>
-                        <Chip
-                          size="small"
-                          variant="outlined"
-                          color={app.isReversed ? 'error' : 'success'}
-                          label={app.isReversed ? 'Revertido' : 'Aplicado'}
-                        />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </>
+          <ScreenTable
+            title={isReceipt ? 'Facturas de venta abonadas' : 'Facturas o causaciones pagadas'}
+            head={
+              <>
+                <TableCell>Documento</TableCell>
+                <TableCell align="right">Valor aplicado</TableCell>
+                <TableCell>Estado</TableCell>
+              </>
+            }
+          >
+            {document.applications.map((app, idx) => (
+              <TableRow key={idx}>
+                <TableCell sx={{ fontWeight: 600 }}>{app.documentNumber}</TableCell>
+                <TableCell align="right">{formatCurrencyCop(Number(app.amount))}</TableCell>
+                <TableCell>
+                  <AppliedChip reversed={app.isReversed} />
+                </TableCell>
+              </TableRow>
+            ))}
+          </ScreenTable>
         )}
       </Box>
 
