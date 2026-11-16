@@ -168,7 +168,11 @@ describe('Anulación de documentos en la web', () => {
         'Cliente equivocado',
       ),
     );
-    expect(await within(dialog).findByText(/Motivo: Cliente equivocado/)).toBeInTheDocument();
+    await waitFor(() =>
+      expect(within(dialog).getByTestId('document-screen-summary')).toHaveTextContent(
+        'Motivo: Cliente equivocado',
+      ),
+    );
   });
 
   it('un recibo automático no se anula desde tesorería', async () => {

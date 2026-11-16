@@ -175,6 +175,16 @@ describe('Recibos de caja y comprobantes de egreso', () => {
     expect(await screen.findByText('Comprobante de egreso CE-000001')).toBeInTheDocument();
     expect(screen.getByText(/Pagado a/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Imprimir' })).toBeInTheDocument();
+    // En pantalla, la vista del sistema; la hoja formal con firmas queda solo para imprimir
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText('Beneficiario').closest('.no-print')).not.toBeNull();
+    expect(
+      within(dialog)
+        .getByText(/Pagado a/)
+        .closest('.print-only'),
+    ).not.toBeNull();
+    expect(within(dialog).getByText('ELABORADO POR:').closest('.print-only')).not.toBeNull();
+    expect(within(dialog).getByText(/^SON:/).closest('.print-only')).not.toBeNull();
   });
 
   it('el recibo de caja abona facturas del cliente elegidas y confirma su impacto antes de registrar', async () => {
@@ -900,7 +910,9 @@ describe('Rediseño fase 4: acciones de cada documento y su motivo', () => {
     expect(await screen.findByTestId('treasury-actions-restriction')).toHaveTextContent(
       'Documento anulado: no admite cambios',
     );
-    expect(screen.getByText(/Corregido con RC-000501/)).toBeInTheDocument();
+    expect(screen.getByTestId('document-screen-summary')).toHaveTextContent(
+      'Motivo: Corregido con RC-000501',
+    );
     expect(screen.queryByRole('button', { name: 'Corregir Documento' })).toBeNull();
   });
 

@@ -34,7 +34,16 @@ body {
  * 1. Comprobantes de venta en formato tirilla térmica POS (80mm).
  * 2. Documentos contables y de tesorería en formato carta corporativo oficial.
  */
+/* Contenido de la hoja formal (membrete, firmas, pie): no se muestra en la vista del sistema */
+.print-only {
+  display: none !important;
+}
+
 @media print {
+  .print-only {
+    display: block !important;
+  }
+
   /* Ocultar la aplicación de fondo y el backdrop del modal */
   /* Solo el documento: ni la aplicación ni otros diálogos o avisos abiertos (rediseño, fase 4) */
   body:has(.print-document) > *:not(.MuiDialog-root:has(.print-document)),

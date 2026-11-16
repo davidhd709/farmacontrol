@@ -9,6 +9,8 @@ import {
   Box,
   Chip,
   Stack,
+  Alert,
+  AlertTitle,
 } from '@mui/material';
 import PrintIcon from '@mui/icons-material/Print';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
@@ -113,11 +115,6 @@ export const PrintableDocumentLayout: React.FC<PrintableDocumentLayoutProps> = (
           className: 'corporate-doc-print print-document',
           sx: {
             borderRadius: { xs: 1, sm: 2 },
-            bgcolor: '#f8fafc',
-            p: { xs: 1, sm: 2 },
-            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.04)',
-            position: 'relative',
-            overflow: 'visible',
             '@media print': {
               bgcolor: '#ffffff',
               p: 0,
@@ -155,377 +152,409 @@ export const PrintableDocumentLayout: React.FC<PrintableDocumentLayoutProps> = (
         </Stack>
       </DialogTitle>
 
-      {/* LIENZO DE LA HOJA DE DOCUMENTO OFICIAL (TIPO CARTA CONTABLE) */}
-      <DialogContent sx={{ p: { xs: 1, sm: 2 }, '@media print': { p: 0 } }}>
-        {notice && (
-          <Box className="no-print" sx={{ mb: 1.5 }}>
-            {notice}
-          </Box>
-        )}
+      {/* En pantalla, una vista de sistema; la hoja formal (membrete, firmas, pie) solo se imprime */}
+      <DialogContent sx={{ p: { xs: 1.5, sm: 2.5 }, '@media print': { p: 0 } }}>
+        <Box className="no-print" data-testid="document-screen-summary" sx={{ mb: 2 }}>
+          <Stack
+            direction="row"
+            sx={{ flexWrap: 'wrap', columnGap: 3, rowGap: 0.5, color: 'text.secondary' }}
+          >
+            <Typography variant="body2">
+              Fecha:{' '}
+              <Box component="span" sx={{ color: 'text.primary', fontWeight: 600 }}>
+                {formatDate(documentDate)}
+              </Box>
+            </Typography>
+            {createdByName && (
+              <Typography variant="body2">
+                Elaborado por:{' '}
+                <Box component="span" sx={{ color: 'text.primary', fontWeight: 600 }}>
+                  {createdByName}
+                </Box>
+              </Typography>
+            )}
+          </Stack>
+          {cancelled && (
+            <Alert severity="error" sx={{ mt: 1.5 }}>
+              <AlertTitle>Documento anulado</AlertTitle>
+              {[
+                cancelledAt ? `Anulado el ${formatDateTime(cancelledAt)}` : null,
+                cancelledByName ? `por ${cancelledByName}` : null,
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              {cancellationReason && (
+                <Box component="span" sx={{ display: 'block' }}>
+                  Motivo: {cancellationReason}
+                </Box>
+              )}
+            </Alert>
+          )}
+          {notice && <Box sx={{ mt: 1.5 }}>{notice}</Box>}
+        </Box>
         <Box
           className="document-sheet"
           sx={{
-            bgcolor: '#ffffff',
-            color: '#0f172a',
-            p: { xs: 2.5, sm: 4 },
-            borderRadius: 1,
-            border: '1px solid #cbd5e1',
-            boxShadow: { xs: 'none', sm: '0 4px 12px rgba(0,0,0,0.05)' },
-            '@media print': {
-              p: 0,
-              border: 'none',
-              boxShadow: 'none',
-              width: '100%',
-            },
+            color: 'text.primary',
+            '@media print': { color: '#0f172a', width: '100%' },
           }}
         >
-          {/* BANNER OFICIAL SI ESTÁ ANULADO */}
-          {cancelled && (
-            <Box
-              sx={{
-                mb: 2.5,
-                p: 1.5,
-                border: '2px dashed #b91c1c',
-                borderRadius: 1,
-                bgcolor: 'rgba(185, 28, 28, 0.06)',
-                textAlign: 'center',
-              }}
-            >
-              <Typography
-                variant="h6"
-                sx={{ fontWeight: 900, letterSpacing: 2, color: '#b91c1c', fontSize: '1rem' }}
-              >
-                *** DOCUMENTO ANULADO — SIN EFECTO FISCAL NI CONTABLE ***
-              </Typography>
-              <Typography variant="body2" sx={{ mt: 0.5, color: '#991b1b', fontSize: '0.85rem' }}>
-                {cancelledAt ? `Fecha de anulación: ${formatDateTime(cancelledAt)}` : ''}
-                {cancelledByName ? ` • Anulado por: ${cancelledByName}` : ''}
-              </Typography>
-              {cancellationReason && (
-                <Typography
-                  variant="caption"
-                  component="div"
-                  sx={{ mt: 0.5, color: '#7f1d1d', fontStyle: 'italic' }}
-                >
-                  Motivo: {cancellationReason}
-                </Typography>
-              )}
-            </Box>
-          )}
-
-          {/* ENCABEZADO MEMBRETADO CORPORATIVO COLOMBIANO */}
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', sm: '1.4fr 1fr' },
-              gap: 2,
-              pb: 2,
-              borderBottom: '2px solid #0f172a',
-              alignItems: 'stretch',
-            }}
-          >
-            {/* COLUMNA IZQUIERDA: DATOS FISCALES DE LA EMPRESA */}
-            <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-              <Typography
-                variant="h6"
-                sx={{
-                  fontWeight: 900,
-                  color: '#0f172a',
-                  lineHeight: 1.2,
-                  fontSize: { xs: '1.15rem', sm: '1.35rem' },
-                  letterSpacing: 0.5,
-                }}
-              >
-                {company?.legalName ?? (isLoading ? '' : 'Empresa sin configurar')}
-              </Typography>
-              {company?.tradeName && company.tradeName !== company.legalName && (
-                <Typography
-                  variant="subtitle2"
-                  sx={{ fontWeight: 700, color: '#334155', mt: 0.25 }}
-                >
-                  {company.tradeName}
-                </Typography>
-              )}
-              {taxId && (
-                <Typography
-                  variant="body2"
-                  sx={{ fontWeight: 700, color: '#0f172a', mt: 0.5, fontSize: '0.9rem' }}
-                >
-                  {taxId}
-                </Typography>
-              )}
-              {contact && (
-                <Typography
-                  variant="caption"
-                  sx={{ color: '#475569', mt: 0.25, fontSize: '0.8rem' }}
-                >
-                  {contact}
-                </Typography>
-              )}
-            </Box>
-
-            {/* COLUMNA DERECHA: RECUADRO OFICIAL DEL DOCUMENTO */}
-            <Box
-              sx={{
-                border: '2px solid #0f172a',
-                borderRadius: 1,
-                overflow: 'hidden',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                bgcolor: '#ffffff',
-              }}
-            >
-              {/* TÍTULO DEL DOCUMENTO */}
+          <Box className="print-only">
+            {/* BANNER OFICIAL SI ESTÁ ANULADO */}
+            {cancelled && (
               <Box
                 sx={{
-                  bgcolor: '#0f172a',
-                  color: '#ffffff',
-                  py: 0.75,
-                  px: 1.5,
+                  mb: 2.5,
+                  p: 1.5,
+                  border: '2px dashed #b91c1c',
+                  borderRadius: 1,
+                  bgcolor: 'rgba(185, 28, 28, 0.06)',
                   textAlign: 'center',
                 }}
               >
                 <Typography
-                  variant="subtitle2"
-                  sx={{
-                    fontWeight: 800,
-                    letterSpacing: 1.2,
-                    textTransform: 'uppercase',
-                    fontSize: '0.85rem',
-                  }}
+                  variant="h6"
+                  sx={{ fontWeight: 900, letterSpacing: 2, color: '#b91c1c', fontSize: '1rem' }}
                 >
-                  {documentType}
+                  *** DOCUMENTO ANULADO — SIN EFECTO FISCAL NI CONTABLE ***
                 </Typography>
+                <Typography variant="body2" sx={{ mt: 0.5, color: '#991b1b', fontSize: '0.85rem' }}>
+                  {cancelledAt ? `Fecha de anulación: ${formatDateTime(cancelledAt)}` : ''}
+                  {cancelledByName ? ` • Anulado por: ${cancelledByName}` : ''}
+                </Typography>
+                {cancellationReason && (
+                  <Typography
+                    variant="caption"
+                    component="div"
+                    sx={{ mt: 0.5, color: '#7f1d1d', fontStyle: 'italic' }}
+                  >
+                    Motivo: {cancellationReason}
+                  </Typography>
+                )}
               </Box>
+            )}
 
-              {/* NÚMERO CONSECUTIVO */}
-              <Box sx={{ py: 1, px: 1.5, textAlign: 'center', bgcolor: '#f8fafc' }}>
+            {/* ENCABEZADO MEMBRETADO CORPORATIVO COLOMBIANO */}
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: '1.4fr 1fr' },
+                gap: 2,
+                pb: 2,
+                borderBottom: '2px solid #0f172a',
+                alignItems: 'stretch',
+              }}
+            >
+              {/* COLUMNA IZQUIERDA: DATOS FISCALES DE LA EMPRESA */}
+              <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                 <Typography
-                  id="printable-doc-title"
-                  variant="h5"
+                  variant="h6"
                   sx={{
                     fontWeight: 900,
                     color: '#0f172a',
-                    fontFamily: 'monospace',
-                    letterSpacing: 1,
+                    lineHeight: 1.2,
+                    fontSize: { xs: '1.15rem', sm: '1.35rem' },
+                    letterSpacing: 0.5,
                   }}
                 >
-                  {documentNumber}
+                  {company?.legalName ?? (isLoading ? '' : 'Empresa sin configurar')}
                 </Typography>
+                {company?.tradeName && company.tradeName !== company.legalName && (
+                  <Typography
+                    variant="subtitle2"
+                    sx={{ fontWeight: 700, color: '#334155', mt: 0.25 }}
+                  >
+                    {company.tradeName}
+                  </Typography>
+                )}
+                {taxId && (
+                  <Typography
+                    variant="body2"
+                    sx={{ fontWeight: 700, color: '#0f172a', mt: 0.5, fontSize: '0.9rem' }}
+                  >
+                    {taxId}
+                  </Typography>
+                )}
+                {contact && (
+                  <Typography
+                    variant="caption"
+                    sx={{ color: '#475569', mt: 0.25, fontSize: '0.8rem' }}
+                  >
+                    {contact}
+                  </Typography>
+                )}
               </Box>
 
-              {/* FECHA Y ESTADO */}
+              {/* COLUMNA DERECHA: RECUADRO OFICIAL DEL DOCUMENTO */}
               <Box
                 sx={{
-                  borderTop: '1px solid #cbd5e1',
-                  px: 1.5,
-                  py: 0.5,
+                  border: '2px solid #0f172a',
+                  borderRadius: 1,
+                  overflow: 'hidden',
                   display: 'flex',
+                  flexDirection: 'column',
                   justifyContent: 'space-between',
-                  fontSize: '0.75rem',
                   bgcolor: '#ffffff',
                 }}
               >
-                <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>
-                  Fecha: {formatDate(documentDate)}
-                </Typography>
-                <Typography
-                  variant="caption"
+                {/* TÍTULO DEL DOCUMENTO */}
+                <Box
                   sx={{
-                    fontWeight: 700,
-                    color: cancelled ? '#b91c1c' : '#15803d',
+                    bgcolor: '#0f172a',
+                    color: '#ffffff',
+                    py: 0.75,
+                    px: 1.5,
+                    textAlign: 'center',
                   }}
                 >
-                  {statusLabel}
-                </Typography>
+                  <Typography
+                    variant="subtitle2"
+                    sx={{
+                      fontWeight: 800,
+                      letterSpacing: 1.2,
+                      textTransform: 'uppercase',
+                      fontSize: '0.85rem',
+                    }}
+                  >
+                    {documentType}
+                  </Typography>
+                </Box>
+
+                {/* NÚMERO CONSECUTIVO */}
+                <Box sx={{ py: 1, px: 1.5, textAlign: 'center', bgcolor: '#f8fafc' }}>
+                  <Typography
+                    id="printable-doc-title"
+                    variant="h5"
+                    sx={{
+                      fontWeight: 900,
+                      color: '#0f172a',
+                      fontFamily: 'monospace',
+                      letterSpacing: 1,
+                    }}
+                  >
+                    {documentNumber}
+                  </Typography>
+                </Box>
+
+                {/* FECHA Y ESTADO */}
+                <Box
+                  sx={{
+                    borderTop: '1px solid #cbd5e1',
+                    px: 1.5,
+                    py: 0.5,
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    fontSize: '0.75rem',
+                    bgcolor: '#ffffff',
+                  }}
+                >
+                  <Typography variant="caption" sx={{ color: '#475569', fontWeight: 600 }}>
+                    Fecha: {formatDate(documentDate)}
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontWeight: 700,
+                      color: cancelled ? '#b91c1c' : '#15803d',
+                    }}
+                  >
+                    {statusLabel}
+                  </Typography>
+                </Box>
               </Box>
             </Box>
           </Box>
 
           {/* CUERPO PRINCIPAL DEL DOCUMENTO */}
-          <Box sx={{ mt: 2.5 }}>{children}</Box>
+          <Box sx={{ '@media print': { mt: 2.5 } }}>{children}</Box>
 
-          {/* SECCIÓN FORMAL DE FIRMAS CONTABLES Y RESPONSABILIDAD */}
-          {showSignatures && (
-            <Box
-              sx={{
-                mt: 4,
-                pt: 2,
-                borderTop: '1px solid #e2e8f0',
-                pageBreakInside: 'avoid',
-              }}
-            >
-              <Typography
-                variant="caption"
-                sx={{
-                  display: 'block',
-                  mb: 1.5,
-                  color: '#64748b',
-                  fontWeight: 600,
-                  textTransform: 'uppercase',
-                  letterSpacing: 0.5,
-                  fontSize: '0.7rem',
-                }}
-              >
-                Control de Auditoría y Firmas Responsables
-              </Typography>
+          <Box className="print-only">
+            {/* SECCIÓN FORMAL DE FIRMAS CONTABLES Y RESPONSABILIDAD */}
+            {showSignatures && (
               <Box
                 sx={{
-                  display: 'grid',
-                  gridTemplateColumns: { xs: '1fr 1fr', sm: 'repeat(4, 1fr)' },
-                  gap: 1.5,
+                  mt: 4,
+                  pt: 2,
+                  borderTop: '1px solid #e2e8f0',
+                  pageBreakInside: 'avoid',
                 }}
               >
-                {/* 1. ELABORADO POR */}
-                <Box
+                <Typography
+                  variant="caption"
                   sx={{
-                    border: '1px solid #94a3b8',
-                    borderRadius: 1,
-                    p: 1,
-                    minHeight: '75px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between',
+                    display: 'block',
+                    mb: 1.5,
+                    color: '#64748b',
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    letterSpacing: 0.5,
+                    fontSize: '0.7rem',
                   }}
                 >
-                  <Typography
-                    variant="caption"
-                    sx={{ fontWeight: 700, color: '#334155', fontSize: '0.7rem' }}
+                  Control de Auditoría y Firmas Responsables
+                </Typography>
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: '1fr 1fr', sm: 'repeat(4, 1fr)' },
+                    gap: 1.5,
+                  }}
+                >
+                  {/* 1. ELABORADO POR */}
+                  <Box
+                    sx={{
+                      border: '1px solid #94a3b8',
+                      borderRadius: 1,
+                      p: 1,
+                      minHeight: '75px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                    }}
                   >
-                    ELABORADO POR:
-                  </Typography>
-                  <Box>
-                    <Box sx={{ borderBottom: '1px dotted #94a3b8', mb: 0.5 }} />
+                    <Typography
+                      variant="caption"
+                      sx={{ fontWeight: 700, color: '#334155', fontSize: '0.7rem' }}
+                    >
+                      ELABORADO POR:
+                    </Typography>
+                    <Box>
+                      <Box sx={{ borderBottom: '1px dotted #94a3b8', mb: 0.5 }} />
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          color: '#0f172a',
+                          fontWeight: 600,
+                          display: 'block',
+                          fontSize: '0.7rem',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {createdByName || 'Usuario Sistema'}
+                      </Typography>
+                    </Box>
+                  </Box>
+
+                  {/* 2. REVISADO POR */}
+                  <Box
+                    sx={{
+                      border: '1px solid #94a3b8',
+                      borderRadius: 1,
+                      p: 1,
+                      minHeight: '75px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                    }}
+                  >
+                    <Typography
+                      variant="caption"
+                      sx={{ fontWeight: 700, color: '#334155', fontSize: '0.7rem' }}
+                    >
+                      REVISADO POR:
+                    </Typography>
+                    <Box>
+                      <Box sx={{ borderBottom: '1px dotted #94a3b8', mb: 0.5 }} />
+                      <Typography
+                        variant="caption"
+                        sx={{ color: '#64748b', fontSize: '0.68rem', display: 'block' }}
+                      >
+                        Contabilidad / Auditoría
+                      </Typography>
+                    </Box>
+                  </Box>
+
+                  {/* 3. APROBADO POR */}
+                  <Box
+                    sx={{
+                      border: '1px solid #94a3b8',
+                      borderRadius: 1,
+                      p: 1,
+                      minHeight: '75px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                    }}
+                  >
+                    <Typography
+                      variant="caption"
+                      sx={{ fontWeight: 700, color: '#334155', fontSize: '0.7rem' }}
+                    >
+                      APROBADO POR:
+                    </Typography>
+                    <Box>
+                      <Box sx={{ borderBottom: '1px dotted #94a3b8', mb: 0.5 }} />
+                      <Typography
+                        variant="caption"
+                        sx={{ color: '#64748b', fontSize: '0.68rem', display: 'block' }}
+                      >
+                        Gerencia / Tesorería
+                      </Typography>
+                    </Box>
+                  </Box>
+
+                  {/* 4. BENEFICIARIO / RECIBÍ CONFORME */}
+                  <Box
+                    sx={{
+                      border: '1px solid #94a3b8',
+                      borderRadius: 1,
+                      p: 1,
+                      minHeight: '75px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                    }}
+                  >
                     <Typography
                       variant="caption"
                       sx={{
-                        color: '#0f172a',
-                        fontWeight: 600,
-                        display: 'block',
-                        fontSize: '0.7rem',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
+                        fontWeight: 700,
+                        color: '#334155',
+                        fontSize: '0.68rem',
+                        lineHeight: 1.1,
                       }}
                     >
-                      {createdByName || 'Usuario Sistema'}
+                      {recipientLabel}
                     </Typography>
-                  </Box>
-                </Box>
-
-                {/* 2. REVISADO POR */}
-                <Box
-                  sx={{
-                    border: '1px solid #94a3b8',
-                    borderRadius: 1,
-                    p: 1,
-                    minHeight: '75px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  <Typography
-                    variant="caption"
-                    sx={{ fontWeight: 700, color: '#334155', fontSize: '0.7rem' }}
-                  >
-                    REVISADO POR:
-                  </Typography>
-                  <Box>
-                    <Box sx={{ borderBottom: '1px dotted #94a3b8', mb: 0.5 }} />
-                    <Typography
-                      variant="caption"
-                      sx={{ color: '#64748b', fontSize: '0.68rem', display: 'block' }}
-                    >
-                      Contabilidad / Auditoría
-                    </Typography>
-                  </Box>
-                </Box>
-
-                {/* 3. APROBADO POR */}
-                <Box
-                  sx={{
-                    border: '1px solid #94a3b8',
-                    borderRadius: 1,
-                    p: 1,
-                    minHeight: '75px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  <Typography
-                    variant="caption"
-                    sx={{ fontWeight: 700, color: '#334155', fontSize: '0.7rem' }}
-                  >
-                    APROBADO POR:
-                  </Typography>
-                  <Box>
-                    <Box sx={{ borderBottom: '1px dotted #94a3b8', mb: 0.5 }} />
-                    <Typography
-                      variant="caption"
-                      sx={{ color: '#64748b', fontSize: '0.68rem', display: 'block' }}
-                    >
-                      Gerencia / Tesorería
-                    </Typography>
-                  </Box>
-                </Box>
-
-                {/* 4. BENEFICIARIO / RECIBÍ CONFORME */}
-                <Box
-                  sx={{
-                    border: '1px solid #94a3b8',
-                    borderRadius: 1,
-                    p: 1,
-                    minHeight: '75px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  <Typography
-                    variant="caption"
-                    sx={{ fontWeight: 700, color: '#334155', fontSize: '0.68rem', lineHeight: 1.1 }}
-                  >
-                    {recipientLabel}
-                  </Typography>
-                  <Box>
-                    <Box sx={{ borderBottom: '1px dotted #94a3b8', mb: 0.5 }} />
-                    <Typography
-                      variant="caption"
-                      sx={{ color: '#64748b', fontSize: '0.68rem', display: 'block' }}
-                    >
-                      C.C. / NIT:
-                    </Typography>
+                    <Box>
+                      <Box sx={{ borderBottom: '1px dotted #94a3b8', mb: 0.5 }} />
+                      <Typography
+                        variant="caption"
+                        sx={{ color: '#64748b', fontSize: '0.68rem', display: 'block' }}
+                      >
+                        C.C. / NIT:
+                      </Typography>
+                    </Box>
                   </Box>
                 </Box>
               </Box>
-            </Box>
-          )}
+            )}
 
-          {/* PIE DE PÁGINA INSTITUCIONAL DEL DOCUMENTO */}
-          <Box
-            sx={{
-              mt: 2.5,
-              pt: 1,
-              borderTop: '1px solid #cbd5e1',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              color: '#64748b',
-              fontSize: '0.7rem',
-            }}
-          >
-            <Typography variant="caption" sx={{ fontSize: 'inherit', color: 'inherit' }}>
-              Generado por FarmaControl
-            </Typography>
-            <Typography
-              variant="caption"
-              sx={{ fontSize: 'inherit', color: 'inherit', fontWeight: 600 }}
+            {/* PIE DE PÁGINA INSTITUCIONAL DEL DOCUMENTO */}
+            <Box
+              sx={{
+                mt: 2.5,
+                pt: 1,
+                borderTop: '1px solid #cbd5e1',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                color: '#64748b',
+                fontSize: '0.7rem',
+              }}
             >
-              {documentNumber}
-            </Typography>
+              <Typography variant="caption" sx={{ fontSize: 'inherit', color: 'inherit' }}>
+                Generado por FarmaControl
+              </Typography>
+              <Typography
+                variant="caption"
+                sx={{ fontSize: 'inherit', color: 'inherit', fontWeight: 600 }}
+              >
+                {documentNumber}
+              </Typography>
+            </Box>
           </Box>
         </Box>
       </DialogContent>
@@ -539,8 +568,8 @@ export const PrintableDocumentLayout: React.FC<PrintableDocumentLayoutProps> = (
           justifyContent: 'space-between',
           flexWrap: 'wrap',
           gap: 1,
-          bgcolor: 'action.hover',
-          borderTop: '1px solid #e2e8f0',
+          borderTop: 1,
+          borderColor: 'divider',
         }}
       >
         <Stack direction="row" spacing={1}>
