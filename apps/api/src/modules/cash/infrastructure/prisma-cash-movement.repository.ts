@@ -10,7 +10,12 @@ import {
   CreateCashMovementData,
 } from '../domain/cash-movement.repository';
 import { CashMovement } from '../domain/cash-movement.entity';
-import { CashMovementQueryFilters, CashBalanceDto, PaymentMethod } from '@farmacia/contracts';
+import {
+  CashMovementQueryFilters,
+  CashBalanceDto,
+  CashMovementType,
+  PaymentMethod,
+} from '@farmacia/contracts';
 import { InvalidCashPaymentMethodException } from '../domain/cash.exceptions';
 import {
   calculateNewCashBalanceCents,
@@ -26,11 +31,14 @@ export class PrismaCashMovementRepository implements ICashMovementRepository {
     this.client = customClient ?? prisma;
   }
 
-  async saveTransactional(data: CreateCashMovementData, externalTx?: any): Promise<CashMovement> {
+  async saveTransactional(
+    data: CreateCashMovementData,
+    externalTx?: unknown,
+  ): Promise<CashMovement> {
     if (data.paymentMethod !== 'EFECTIVO') {
       throw new InvalidCashPaymentMethodException();
     }
-    const executeInTransaction = async (tx: any) => {
+    const executeInTransaction = async (tx: Prisma.TransactionClient) => {
       // 0. Cerrojo transaccional determinista para serializar el cálculo del saldo de caja
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(742189321)`;
 
@@ -85,9 +93,9 @@ export class PrismaCashMovementRepository implements ICashMovementRepository {
 
       return new CashMovement({
         id: created.id,
-        movementType: created.movementType as any,
+        movementType: created.movementType as CashMovementType,
         amount: Number(created.amount),
-        paymentMethod: created.paymentMethod as any,
+        paymentMethod: created.paymentMethod as PaymentMethod,
         reason: created.reason,
         referenceDocumentType: created.referenceDocumentType,
         referenceDocumentId: created.referenceDocumentId,
@@ -99,7 +107,7 @@ export class PrismaCashMovementRepository implements ICashMovementRepository {
     };
 
     if (externalTx) {
-      return executeInTransaction(externalTx);
+      return executeInTransaction(externalTx as Prisma.TransactionClient);
     }
 
     return this.client.$transaction(async (tx) => {
@@ -164,8 +172,8 @@ export class PrismaCashMovementRepository implements ICashMovementRepository {
       where.paymentMethod = filters.paymentMethod;
     }
 
-    const startDate = filters.startDate || (filters as any).fromDate;
-    const endDate = filters.endDate || (filters as any).toDate;
+    const startDate = filters.startDate;
+    const endDate = filters.endDate;
 
     if (startDate || endDate) {
       where.createdAt = {};
@@ -209,9 +217,9 @@ export class PrismaCashMovementRepository implements ICashMovementRepository {
       (r) =>
         new CashMovement({
           id: r.id,
-          movementType: r.movementType as any,
+          movementType: r.movementType as CashMovementType,
           amount: Number(r.amount),
-          paymentMethod: r.paymentMethod as any,
+          paymentMethod: r.paymentMethod as PaymentMethod,
           reason: r.reason,
           referenceDocumentType: r.referenceDocumentType,
           referenceDocumentId: r.referenceDocumentId,
@@ -239,9 +247,9 @@ export class PrismaCashMovementRepository implements ICashMovementRepository {
 
     return new CashMovement({
       id: record.id,
-      movementType: record.movementType as any,
+      movementType: record.movementType as CashMovementType,
       amount: Number(record.amount),
-      paymentMethod: record.paymentMethod as any,
+      paymentMethod: record.paymentMethod as PaymentMethod,
       reason: record.reason,
       referenceDocumentType: record.referenceDocumentType,
       referenceDocumentId: record.referenceDocumentId,

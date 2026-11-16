@@ -22,6 +22,10 @@ import {
   PayableMovementsDto,
   PayableStatementDto,
   SYSTEM_PERMISSIONS,
+  AgingBreakdownDto,
+  PaginatedResponse,
+  PayableDto,
+  PayableStatus,
 } from '@farmacia/contracts';
 import {
   SessionAuthGuard,
@@ -57,10 +61,10 @@ export class PayablesController {
       }),
     )
     query: Record<string, string>,
-  ): Promise<ApiResponse<any>> {
+  ): Promise<ApiResponse<PaginatedResponse<PayableDto>>> {
     const data = await this.svc.findAll({
       supplierId: query['supplierId'],
-      status: query['status'] as any,
+      status: query['status'] as PayableStatus | undefined,
       fromDate: query['fromDate'],
       toDate: query['toDate'],
       overdueOnly: query['overdueOnly'] === 'true',
@@ -102,7 +106,7 @@ export class PayablesController {
    */
   @Get('aging-summary')
   @RequirePermissions(SYSTEM_PERMISSIONS.PAYABLES_READ)
-  async getAgingSummary(): Promise<ApiResponse<any>> {
+  async getAgingSummary(): Promise<ApiResponse<AgingBreakdownDto>> {
     const data = await this.svc.getAgingSummary();
     return { success: true, data };
   }
@@ -126,7 +130,7 @@ export class PayablesController {
    */
   @Get(':id')
   @RequirePermissions(SYSTEM_PERMISSIONS.PAYABLES_READ)
-  async findById(@Param('id', ParseUUIDPipe) id: string): Promise<ApiResponse<any>> {
+  async findById(@Param('id', ParseUUIDPipe) id: string): Promise<ApiResponse<PayableDto>> {
     const data = await this.svc.findById(id);
     return { success: true, data };
   }
@@ -151,7 +155,7 @@ export class PayablesController {
     @Param('paymentId', ParseUUIDPipe) paymentId: string,
     @Body('reason', new RequestFieldValidationPipe('reason', 'text')) reason: string,
     @CurrentUser() user: AuthenticatedUserContext,
-  ): Promise<ApiResponse<any>> {
+  ): Promise<ApiResponse<PayableDto>> {
     const data = await this.svc.revertPayment(id, paymentId, reason, user.id);
     return { success: true, data };
   }

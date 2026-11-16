@@ -8,7 +8,8 @@ export interface IPurchaseRepository {
     purchase: Purchase,
     defaultLocationId: string,
     actorUserId: string | null,
-    afterSaveTx?: (tx: any, savedPurchase: Purchase) => Promise<void>,
+    /** Recibe el cliente transaccional de la recepción; el dominio no conoce su tipo. */
+    afterSaveTx?: (tx: unknown, savedPurchase: Purchase) => Promise<void>,
   ): Promise<Purchase>;
   findById(id: string): Promise<Purchase | null>;
   findAll(filters: PurchaseQueryFilters): Promise<{ items: Purchase[]; total: number }>;

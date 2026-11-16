@@ -14,6 +14,15 @@ import {
 const toDateOnly = (date: Date | null) => date?.toISOString().slice(0, 10) ?? null;
 import { PurchaseQueryFilters } from '@farmacia/contracts';
 
+const PURCHASE_INCLUDE = {
+  supplier: true,
+  receivedByUser: true,
+  payable: true,
+  lines: { include: { product: true, presentation: true } },
+} satisfies Prisma.PurchaseInclude;
+
+type PurchaseRecord = Prisma.PurchaseGetPayload<{ include: typeof PURCHASE_INCLUDE }>;
+
 @Injectable()
 export class PrismaPurchaseRepository implements IPurchaseRepository {
   private readonly client: PrismaClient;
@@ -32,7 +41,7 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
     purchase: Purchase,
     defaultLocationId: string,
     actorUserId: string | null,
-    afterSaveTx?: (tx: any, savedPurchase: Purchase) => Promise<void>,
+    afterSaveTx?: (tx: unknown, savedPurchase: Purchase) => Promise<void>,
   ): Promise<Purchase> {
     try {
       // Dos recepciones simultáneas del mismo lote chocan en SERIALIZABLE (40001): se repite la
@@ -57,7 +66,7 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
     purchase: Purchase,
     defaultLocationId: string,
     actorUserId: string | null,
-    afterSaveTx?: (tx: any, savedPurchase: Purchase) => Promise<void>,
+    afterSaveTx?: (tx: unknown, savedPurchase: Purchase) => Promise<void>,
   ): Promise<Purchase> {
     return await this.client.$transaction(
       async (tx) => {
@@ -256,7 +265,7 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
     const pageSize = Math.min(100, Math.max(1, filters.pageSize ?? 20));
     const skip = (page - 1) * pageSize;
 
-    const where: any = {};
+    const where: Prisma.PurchaseWhereInput = {};
 
     if (filters.supplierId) {
       where.supplierId = filters.supplierId;
@@ -268,13 +277,10 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
       where.invoiceNumber = { contains: filters.invoiceNumber.trim(), mode: 'insensitive' };
     }
     if (filters.fromDate || filters.toDate) {
-      where.purchaseDate = {};
-      if (filters.fromDate) {
-        where.purchaseDate.gte = new Date(filters.fromDate);
-      }
-      if (filters.toDate) {
-        where.purchaseDate.lte = new Date(filters.toDate);
-      }
+      where.purchaseDate = {
+        ...(filters.fromDate && { gte: new Date(filters.fromDate) }),
+        ...(filters.toDate && { lte: new Date(filters.toDate) }),
+      };
     }
 
     const [rawItems, total] = await Promise.all([
@@ -283,23 +289,13 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
         skip,
         take: pageSize,
         orderBy: { purchaseDate: 'desc' },
-        include: {
-          supplier: true,
-          receivedByUser: true,
-          payable: true,
-          lines: {
-            include: {
-              product: true,
-              presentation: true,
-            },
-          },
-        },
+        include: PURCHASE_INCLUDE,
       }),
       this.client.purchase.count({ where }),
     ]);
 
     return {
-      items: rawItems.map((r: any) => this.mapToDomain(r)),
+      items: rawItems.map((r) => this.mapToDomain(r)),
       total,
     };
   }
@@ -310,25 +306,15 @@ export class PrismaPurchaseRepository implements IPurchaseRepository {
   ): Promise<Purchase | null> {
     const raw = await prismaClient.purchase.findUnique({
       where: { id },
-      include: {
-        supplier: true,
-        receivedByUser: true,
-        payable: true,
-        lines: {
-          include: {
-            product: true,
-            presentation: true,
-          },
-        },
-      },
+      include: PURCHASE_INCLUDE,
     });
 
     if (!raw) return null;
     return this.mapToDomain(raw);
   }
 
-  private mapToDomain(raw: any): Purchase {
-    const lines = (raw.lines || []).map((l: any) =>
+  private mapToDomain(raw: PurchaseRecord): Purchase {
+    const lines = raw.lines.map((l) =>
       PurchaseLine.reconstitute({
         id: l.id,
         purchaseId: l.purchaseId,

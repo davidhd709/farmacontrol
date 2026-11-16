@@ -1,7 +1,7 @@
 import { DomainError } from '../../../common/domain-error';
 import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { prisma as defaultPrisma, PrismaClient } from '@farmacia/database';
+import { prisma as defaultPrisma, PrismaClient, Prisma } from '@farmacia/database';
 import {
   AlertsQueryFilters,
   AlertsSummaryDto,
@@ -35,18 +35,17 @@ export class AlertsService {
     const pageSize = Math.max(1, Math.min(100, filters.pageSize || 20));
     const skip = (page - pageSize) * 0 + (page - 1) * pageSize;
 
-    const where: any = {
+    const where: Prisma.InventoryAlertWhereInput = {
       alertType: 'EXPIRATION',
       isResolved: filters.isResolved !== undefined ? filters.isResolved : false,
-      lot: { expirationDate: { not: null } },
+      lot: {
+        expirationDate: { not: null },
+        ...(filters.locationId && { locationId: filters.locationId }),
+      },
     };
 
     if (filters.severity) {
       where.severity = filters.severity;
-    }
-
-    if (filters.locationId) {
-      where.lot = { ...where.lot, locationId: filters.locationId };
     }
 
     if (filters.search && filters.search.trim()) {
@@ -80,7 +79,7 @@ export class AlertsService {
       }),
     ]);
 
-    const items: InventoryAlertDto[] = records.map((record: any) => ({
+    const items: InventoryAlertDto[] = records.map((record) => ({
       id: record.id,
       lotId: record.lotId,
       lotNumber: record.lot.lotNumber,
@@ -295,7 +294,7 @@ export class AlertsService {
     return {
       id: job.id,
       jobType: job.jobType,
-      status: job.status as any,
+      status: job.status as BackgroundJobDto['status'],
       priority: job.priority,
       attempts: job.attempts,
       maxAttempts: job.maxAttempts,
@@ -317,11 +316,11 @@ export class AlertsService {
       take: limit,
     });
 
-    return jobs.map((job: any) => ({
+    return jobs.map((job) => ({
       id: job.id,
       jobType: job.jobType,
       payload: job.payload,
-      status: job.status as any,
+      status: job.status as BackgroundJobDto['status'],
       priority: job.priority,
       attempts: job.attempts,
       maxAttempts: job.maxAttempts,

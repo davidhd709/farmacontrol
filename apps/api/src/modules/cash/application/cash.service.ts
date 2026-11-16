@@ -9,8 +9,10 @@ import {
   CashMovementDto,
   CashBalanceDto,
   CashMovementQueryFilters,
+  CashMovementType,
   PaginatedResponse,
 } from '@farmacia/contracts';
+import { Prisma } from '@farmacia/database';
 import {
   ICashMovementRepository,
   CASH_MOVEMENT_REPOSITORY,
@@ -72,7 +74,7 @@ export class CashService {
    * consistencia transaccional con otras operaciones.
    */
   async recordMovementInTransaction(
-    tx: any,
+    tx: Prisma.TransactionClient,
     payload: {
       movementType: string;
       amount: number | string;
@@ -89,7 +91,8 @@ export class CashService {
     }
     const saved = await this.cashRepository.saveTransactional(
       {
-        movementType: payload.movementType as any,
+        // El tipo no está restringido todavía (deuda: tipos de movimiento de caja)
+        movementType: payload.movementType as CashMovementType,
         amount: payload.amount,
         paymentMethod,
         reason: payload.reason,

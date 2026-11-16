@@ -4,7 +4,7 @@ import {
   BadRequestException,
   ConflictException,
 } from '@nestjs/common';
-import { prisma } from '@farmacia/database';
+import { prisma, Prisma } from '@farmacia/database';
 import {
   ExpenseCategoryDto,
   CreateExpenseCategoryPayload,
@@ -12,9 +12,14 @@ import {
 } from '@farmacia/contracts';
 import { validateUuid } from '../domain/expense-rules';
 
+/** Categoría con su cuenta, cuando la consulta la incluye. */
+type ExpenseCategoryRow = Prisma.ExpenseCategoryGetPayload<object> & {
+  account?: { code: string; name: string } | null;
+};
+
 @Injectable()
 export class ExpenseCategoriesService {
-  private toDto(row: any): ExpenseCategoryDto {
+  private toDto(row: ExpenseCategoryRow): ExpenseCategoryDto {
     return {
       id: row.id,
       name: row.name,
@@ -113,7 +118,7 @@ export class ExpenseCategoriesService {
       throw new NotFoundException(`Categoría de gasto con ID "${id}" no encontrada.`);
     }
 
-    const data: any = {};
+    const data: Prisma.ExpenseCategoryUncheckedUpdateInput = {};
 
     if (payload.name !== undefined) {
       const name = payload.name.trim();

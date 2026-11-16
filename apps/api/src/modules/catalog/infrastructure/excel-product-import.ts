@@ -200,7 +200,8 @@ async function extractRowsFromWorkbook(
 ): Promise<{ rows: ParsedRawRow[]; error?: string }> {
   preflightZip(buffer);
   const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(buffer as any);
+  // Los tipos de exceljs declaran su propio `Buffer` (un ArrayBuffer); en ejecución recibe el de Node
+  await workbook.xlsx.load(buffer as unknown as Parameters<ExcelJS.Xlsx['load']>[0]);
 
   const worksheet = workbook.worksheets[0];
   if (!worksheet || worksheet.rowCount < 2) {

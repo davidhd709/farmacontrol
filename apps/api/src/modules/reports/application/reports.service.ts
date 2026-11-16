@@ -4,7 +4,7 @@ import {
   businessToday,
 } from '../../../common/utils/business-date';
 import { Injectable, Logger } from '@nestjs/common';
-import { prisma as defaultPrisma, PrismaClient } from '@farmacia/database';
+import { prisma as defaultPrisma, PrismaClient, Prisma } from '@farmacia/database';
 import {
   SupplierReturnItemDto,
   SupplierReturnReportDto,
@@ -376,18 +376,15 @@ export class ReportsService {
   // ==========================================================================
 
   async getSalesReport(filter: ReportDateFilter = {}): Promise<SalesReportDto> {
-    const where: any = {
+    const where: Prisma.SaleWhereInput = {
       status: { not: 'CANCELLED' },
     };
 
     if (filter.fromDate || filter.toDate) {
-      where.createdAt = {};
-      if (filter.fromDate) {
-        where.createdAt.gte = businessDayStart(filter.fromDate);
-      }
-      if (filter.toDate) {
-        where.createdAt.lte = businessDayEnd(filter.toDate);
-      }
+      where.createdAt = {
+        ...(filter.fromDate && { gte: businessDayStart(filter.fromDate) }),
+        ...(filter.toDate && { lte: businessDayEnd(filter.toDate) }),
+      };
     }
 
     const sales = await this.prisma.sale.findMany({
@@ -515,16 +512,13 @@ export class ReportsService {
 
   async getCashSummaryReport(filter: ReportDateFilter = {}): Promise<CashSummaryReportDto> {
     // La base inicial se consulta en Caja; no es un flujo operativo del período.
-    const where: any = { movementType: { not: 'SALDO_APERTURA' } };
+    const where: Prisma.CashMovementWhereInput = { movementType: { not: 'SALDO_APERTURA' } };
 
     if (filter.fromDate || filter.toDate) {
-      where.createdAt = {};
-      if (filter.fromDate) {
-        where.createdAt.gte = businessDayStart(filter.fromDate);
-      }
-      if (filter.toDate) {
-        where.createdAt.lte = businessDayEnd(filter.toDate);
-      }
+      where.createdAt = {
+        ...(filter.fromDate && { gte: businessDayStart(filter.fromDate) }),
+        ...(filter.toDate && { lte: businessDayEnd(filter.toDate) }),
+      };
     }
 
     const movements = await this.prisma.cashMovement.findMany({

@@ -18,7 +18,12 @@ import {
   ParseUUIDPipe,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import { SYSTEM_PERMISSIONS, SupplierDto, PaginatedResponse } from '@farmacia/contracts';
+import {
+  SYSTEM_PERMISSIONS,
+  SupplierDto,
+  PaginatedResponse,
+  SupplierQueryFilters,
+} from '@farmacia/contracts';
 import { SupplierService } from '../../application/supplier.service';
 import { CreateSupplierDto, CreateSupplierValidationPipe } from '../dtos/create-supplier.dto';
 import { UpdateSupplierDto, UpdateSupplierValidationPipe } from '../dtos/update-supplier.dto';
@@ -71,7 +76,7 @@ export class SupplierController {
       new QueryShapeValidationPipe({ search: 'text?', isActive: 'booleanString?' }),
       SupplierQueryValidationPipe,
     )
-    query: any,
+    query: SupplierQueryFilters,
   ): Promise<PaginatedResponse<SupplierDto>> {
     return this.supplierService.getSuppliers(query);
   }

@@ -1172,7 +1172,8 @@ export class SaleService {
     if (sale.status === 'CANCELLED') {
       const cancelAudit = auditEvents.find((e) => e.action === 'sales:sale_cancelled');
       const cancelUser = cancelAudit?.user ? cancelAudit.user.username : 'Usuario';
-      const cancelReason = (cancelAudit?.details as any)?.reason || 'Venta anulada';
+      const cancelReason =
+        (cancelAudit?.details as { reason?: string } | null | undefined)?.reason || 'Venta anulada';
       const cancelTime = cancelAudit?.createdAt || sale.updatedAt;
 
       events.push({

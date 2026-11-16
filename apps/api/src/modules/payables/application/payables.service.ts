@@ -32,6 +32,25 @@ import { IdempotencyService } from '../../../common/idempotency/idempotency.serv
 import { AccountingEngineService } from '../../accounting/application/accounting-engine.service';
 import { recordAuditEvent } from '../../audit/infrastructure/record-audit-event';
 
+/** Fila de la cuenta con lo que muestra su DTO (tercero y documento origen, si se incluyeron). */
+type PayableRow = Prisma.PayableGetPayload<object> & {
+  supplier?: { name: string } | null;
+  purchase?: { invoiceNumber: string; notes?: string | null; purchaseDate?: Date } | null;
+};
+
+/** Columnas que lee la reversión de un abono al bloquear la cuenta (FOR UPDATE). */
+interface LockedPayableRow {
+  id: string;
+  purchaseId: string;
+  supplierId: string;
+  totalAmount: Prisma.Decimal;
+  amountPaid: Prisma.Decimal;
+  balance: Prisma.Decimal;
+  status: string;
+  dueDate: Date;
+  notes: string | null;
+}
+
 @Injectable()
 export class PayablesService {
   constructor(
@@ -44,7 +63,7 @@ export class PayablesService {
   //  Mapping
   // ------------------------------------------------------------------ //
 
-  private toDto(row: any, payments?: any[]): PayableDto {
+  private toDto(row: PayableRow, payments?: Prisma.PayablePaymentGetPayload<object>[]): PayableDto {
     const rawNotes = row.purchase?.notes || row.notes || '';
     let paymentCondition: string | null = null;
     if (rawNotes.includes('Condición: Contado')) {
@@ -72,7 +91,7 @@ export class PayablesService {
       totalAmount: row.totalAmount.toString(),
       amountPaid: row.amountPaid.toString(),
       balance: row.balance.toString(),
-      status: row.status,
+      status: row.status as PayableDto['status'],
       paymentCondition,
       dueDate:
         row.dueDate instanceof Date
@@ -107,7 +126,7 @@ export class PayablesService {
     const pageSize = Math.min(filters.pageSize ?? 20, 100);
     const skip = (page - 1) * pageSize;
 
-    const where: any = {};
+    const where: Prisma.PayableWhereInput = {};
     if (filters.supplierId) where.supplierId = filters.supplierId;
     if (filters.status) where.status = filters.status;
     if (filters.overdueOnly) {
@@ -115,11 +134,10 @@ export class PayablesService {
       where.status = 'PENDIENTE';
     }
     if (filters.fromDate || filters.toDate) {
-      where.createdAt = {};
-      if (filters.fromDate) where.createdAt.gte = businessDayStart(filters.fromDate);
-      if (filters.toDate) {
-        where.createdAt.lte = businessDayEnd(filters.toDate);
-      }
+      where.createdAt = {
+        ...(filters.fromDate && { gte: businessDayStart(filters.fromDate) }),
+        ...(filters.toDate && { lte: businessDayEnd(filters.toDate) }),
+      };
     }
 
     const [items, total] = await prisma.$transaction([
@@ -137,7 +155,7 @@ export class PayablesService {
     ]);
 
     return {
-      items: items.map((r: any) => this.toDto(r)),
+      items: items.map((r) => this.toDto(r)),
       total,
       page,
       pageSize,
@@ -402,7 +420,7 @@ export class PayablesService {
     }
 
     return prisma.$transaction(
-      async (tx: any) =>
+      async (tx) =>
         this.reversePaymentInTransaction(tx, {
           payableId,
           paymentId,
@@ -422,7 +440,7 @@ export class PayablesService {
    * comprobante de egreso lo devuelve con un único movimiento por el documento.
    */
   async reversePaymentInTransaction(
-    tx: any,
+    tx: Prisma.TransactionClient,
     input: {
       payableId: string;
       paymentId: string;
@@ -434,7 +452,7 @@ export class PayablesService {
     const { payableId, paymentId, userId, moveMoney } = input;
     const trimmedReason = input.reason;
     // 1. Bloqueo pesimista del payable
-    const rows = await tx.$queryRaw<any[]>`
+    const rows = await tx.$queryRaw<LockedPayableRow[]>`
     SELECT
       id,
       purchase_id  AS "purchaseId",

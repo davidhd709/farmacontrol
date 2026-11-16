@@ -84,6 +84,19 @@ async function executeWithRetry<T>(
   }
 }
 
+/** La nota con lo que necesita su DTO; al crearla aún no tiene cambio ni anulación. */
+type CreditNoteRecord = Prisma.CreditNoteGetPayload<{
+  include: {
+    customer: true;
+    sale: true;
+    createdByUser: { select: { id: true; username: true } };
+    lines: { include: { product: true; lot: true } };
+  };
+}> & {
+  exchangeSale?: { invoiceNumber: string } | null;
+  cancelledBy?: { username: string } | null;
+};
+
 @Injectable()
 export class CreditNotesService {
   private readonly client: PrismaClient;
@@ -744,7 +757,7 @@ export class CreditNotesService {
     return this.mapToDto(note);
   }
 
-  private mapToDto(raw: any): CreditNoteDto {
+  private mapToDto(raw: CreditNoteRecord): CreditNoteDto {
     return {
       id: raw.id,
       creditNoteNumber: raw.creditNoteNumber,
@@ -761,14 +774,14 @@ export class CreditNotesService {
       restock: raw.restock,
       exchangeSaleId: raw.exchangeSaleId ?? null,
       exchangeSaleInvoiceNumber: raw.exchangeSale?.invoiceNumber ?? null,
-      status: raw.status,
+      status: raw.status as CreditNoteDto['status'],
       cancelledAt: raw.cancelledAt ? raw.cancelledAt.toISOString() : null,
       cancelledByName: raw.cancelledBy?.username ?? null,
       cancellationReason: raw.cancellationReason ?? null,
       createdById: raw.createdById,
       createdByName: raw.createdByUser?.username,
       createdAt: raw.createdAt.toISOString(),
-      lines: (raw.lines || []).map((l: any): CreditNoteLineDto => ({
+      lines: raw.lines.map((l): CreditNoteLineDto => ({
         id: l.id,
         creditNoteId: l.creditNoteId,
         saleLineId: l.saleLineId,

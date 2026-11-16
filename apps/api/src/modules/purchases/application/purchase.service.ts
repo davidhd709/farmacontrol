@@ -6,7 +6,7 @@ import {
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
-import { prisma, PrismaClient } from '@farmacia/database';
+import { prisma, PrismaClient, Prisma } from '@farmacia/database';
 import {
   PurchaseDto,
   ReceivePurchasePayload,
@@ -305,7 +305,8 @@ export class PurchaseService {
       purchase,
       locationId,
       auditCtx?.userId ?? null,
-      async (tx, p) => {
+      async (repositoryTx, p) => {
+        const tx = repositoryTx as Prisma.TransactionClient;
         await this.accountingEngine.handlePurchaseReceived(
           {
             id: p.id,

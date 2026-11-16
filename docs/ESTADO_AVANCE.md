@@ -243,7 +243,7 @@ Ninguna se implementó por supuesto; las que se tocaron quedaron con la opción 
 - **Terceros:** las líneas de notas contables no llevan tercero. Inactivar un cliente o proveedor desde su módulo no inactiva el tercero (a propósito: puede tener el otro rol).
 - **Límites entre módulos:** desde el 16 de noviembre ningún módulo escribe `audit_events` directamente: usan el contrato transaccional `recordAuditEvent` del módulo de auditoría (o `AuditService`) y la prueba de límites lo vigila. Los perfiles tributarios de producto los gestiona contabilidad y no están en la prueba. Terceros instancia `CustomersLedger`/`SuppliersLedger` directamente porque clientes y proveedores ya importan su módulo (un import de vuelta sería circular).
 - **Notas crédito y descuentos:** la devolución se registra neta del descuento en `SALES_RETURNS`; no se revierte la parte proporcional en `SALES_DISCOUNTS`. No es un error técnico sino la pregunta A3.9 de `PREGUNTAS_CONTADORA.md`; según ADR-006 debe resolverse como una política contable por empresa con valor por defecto.
-- 91 advertencias de lint en el API, todas `no-explicit-any` (sobre todo al mapear filas de Prisma en repositorios), a reducir cuando se toque cada archivo.
+- **Lint del API:** sin advertencias desde el 16 de noviembre. Los repositorios mapean filas tipadas con `Prisma.*GetPayload`; los puertos de dominio reciben la transacción como `unknown`. Quedan conversiones explícitas del estado guardado como texto al tipo del contrato (ventas, notas, cartera, CxP, gastos, caja) mientras esas columnas no sean enums en la base. Cuentas por pagar valida su filtro `status` como texto libre, a diferencia de cartera (FARM-AUD-003): un estado desconocido devuelve lista vacía.
 
 ## 7. Siguiente paso recomendado
 

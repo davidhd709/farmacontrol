@@ -20,6 +20,13 @@ import { PermissionsGuard } from '../../identity/presentation/guards/permissions
 import { RequirePermissions } from '../../identity/presentation/decorators/require-permissions.decorator';
 import { businessDayStart } from '../../../common/utils/business-date';
 
+/** Lo que devuelve cada operación del servicio, sin repetir sus tipos en el controlador. */
+type ServiceResult<K extends keyof AlertsService> = AlertsService[K] extends (
+  ...args: never[]
+) => Promise<infer R>
+  ? R
+  : never;
+
 @Controller('alerts')
 @UseGuards(SessionAuthGuard)
 export class AlertsController {
@@ -41,7 +48,7 @@ export class AlertsController {
     isResolved?: string,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
-  ): Promise<ApiResponse<any>> {
+  ): Promise<ApiResponse<ServiceResult<'getExpirationAlerts'>>> {
     const data = await this.alertsService.getExpirationAlerts({
       severity,
       search,
@@ -59,7 +66,7 @@ export class AlertsController {
    * Accesible para todos los usuarios con sesión activa.
    */
   @Get('summary')
-  async getSummary(): Promise<ApiResponse<any>> {
+  async getSummary(): Promise<ApiResponse<ServiceResult<'getAlertsSummary'>>> {
     const data = await this.alertsService.getAlertsSummary();
     return { success: true, data };
   }
@@ -75,7 +82,7 @@ export class AlertsController {
   async triggerEvaluation(
     @Body('referenceDate', new RequestFieldValidationPipe('referenceDate', 'date?'))
     referenceDateStr?: string,
-  ): Promise<ApiResponse<any>> {
+  ): Promise<ApiResponse<ServiceResult<'evaluateLotsExpirations'>>> {
     // Un día calendario se evalúa como ese día en Bogotá, no como medianoche UTC.
     const refDate = referenceDateStr ? businessDayStart(referenceDateStr) : new Date();
     const data = await this.alertsService.evaluateLotsExpirations(refDate);
@@ -91,7 +98,7 @@ export class AlertsController {
   @RequirePermissions(SYSTEM_PERMISSIONS.ALERTS_MANAGE)
   async enqueueJob(
     @Body('priority', new RequestFieldValidationPipe('priority', 'integer?')) priority?: number,
-  ): Promise<ApiResponse<any>> {
+  ): Promise<ApiResponse<ServiceResult<'enqueueEvaluationJob'>>> {
     const data = await this.alertsService.enqueueEvaluationJob(priority || 0);
     return { success: true, data };
   }
@@ -103,7 +110,9 @@ export class AlertsController {
   @Get('jobs')
   @UseGuards(PermissionsGuard)
   @RequirePermissions(SYSTEM_PERMISSIONS.ALERTS_MANAGE)
-  async getJobs(@Query('limit') limit?: string): Promise<ApiResponse<any>> {
+  async getJobs(
+    @Query('limit') limit?: string,
+  ): Promise<ApiResponse<ServiceResult<'getBackgroundJobs'>>> {
     const data = await this.alertsService.getBackgroundJobs(
       parsePaginationValue(limit, 'limit', 20),
     );

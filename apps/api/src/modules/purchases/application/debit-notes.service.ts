@@ -63,6 +63,15 @@ async function executeWithRetry<T>(
   }
 }
 
+type DebitNoteRecord = Prisma.DebitNoteGetPayload<{
+  include: {
+    supplier: true;
+    purchase: true;
+    createdByUser: { select: { id: true; username: true } };
+    lines: { include: { product: true; lot: true } };
+  };
+}>;
+
 @Injectable()
 export class DebitNotesService {
   private readonly client: PrismaClient;
@@ -462,7 +471,7 @@ export class DebitNotesService {
     return this.mapToDto(note);
   }
 
-  private mapToDto(raw: any): DebitNoteDto {
+  private mapToDto(raw: DebitNoteRecord): DebitNoteDto {
     return {
       id: raw.id,
       debitNoteNumber: raw.debitNoteNumber,
@@ -478,7 +487,7 @@ export class DebitNotesService {
       createdById: raw.createdById,
       createdByName: raw.createdByUser?.username,
       createdAt: raw.createdAt.toISOString(),
-      lines: (raw.lines || []).map((l: any): DebitNoteLineDto => ({
+      lines: raw.lines.map((l): DebitNoteLineDto => ({
         id: l.id,
         purchaseLineId: l.purchaseLineId,
         productId: l.productId,

@@ -4,6 +4,8 @@ import { ISupplierRepository } from '../domain/supplier.repository';
 import { Supplier } from '../domain/supplier.entity';
 import { SupplierQueryFilters } from '@farmacia/contracts';
 
+type SupplierRecord = Prisma.SupplierGetPayload<object>;
+
 @Injectable()
 export class PrismaSupplierRepository implements ISupplierRepository {
   private readonly client: PrismaClient;
@@ -66,7 +68,7 @@ export class PrismaSupplierRepository implements ISupplierRepository {
     const pageSize = Math.min(100, Math.max(1, filters.pageSize ?? 20));
     const skip = (page - 1) * pageSize;
 
-    const where: any = {};
+    const where: Prisma.SupplierWhereInput = {};
 
     if (filters.isActive !== undefined) {
       where.isActive = filters.isActive;
@@ -92,7 +94,7 @@ export class PrismaSupplierRepository implements ISupplierRepository {
     ]);
 
     return {
-      items: rawItems.map((r: any) => this.mapToDomain(r)),
+      items: rawItems.map((r) => this.mapToDomain(r)),
       total,
     };
   }
@@ -103,7 +105,7 @@ export class PrismaSupplierRepository implements ISupplierRepository {
     });
   }
 
-  private mapToDomain(raw: any): Supplier {
+  private mapToDomain(raw: SupplierRecord): Supplier {
     return Supplier.reconstitute({
       id: raw.id,
       taxId: raw.taxId,

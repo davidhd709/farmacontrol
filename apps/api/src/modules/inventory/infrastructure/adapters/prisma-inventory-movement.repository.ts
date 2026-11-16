@@ -132,7 +132,7 @@ export class PrismaInventoryMovementRepository implements IInventoryMovementRepo
 
       const result: InventoryMovementDto = {
         id: movement.id,
-        movementType: movement.movementType as any,
+        movementType: movement.movementType as InventoryMovementDto['movementType'],
         productId: movement.productId,
         lotId: movement.lotId,
         presentationId: movement.presentationId,
@@ -232,7 +232,7 @@ export class PrismaInventoryMovementRepository implements IInventoryMovementRepo
     return {
       items: items.map((m) => ({
         id: m.id,
-        movementType: m.movementType as any,
+        movementType: m.movementType as InventoryMovementDto['movementType'],
         productId: m.productId,
         lotId: m.lotId,
         presentationId: m.presentationId,

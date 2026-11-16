@@ -21,6 +21,10 @@ import {
   SYSTEM_PERMISSIONS,
   RECEIVABLE_STATUSES,
   ReceivableStatus,
+  AgingBreakdownDto,
+  PaginatedResponse,
+  ReceivableDto,
+  ReceivableMovementsDto,
 } from '@farmacia/contracts';
 import {
   SessionAuthGuard,
@@ -54,7 +58,7 @@ export class ReceivablesController {
       }),
     )
     query: Record<string, string>,
-  ): Promise<ApiResponse<any>> {
+  ): Promise<ApiResponse<PaginatedResponse<ReceivableDto>>> {
     const data = await this.svc.findAll({
       customerId: query['customerId'],
       status: query['status'] as ReceivableStatus | undefined,
@@ -73,7 +77,7 @@ export class ReceivablesController {
    */
   @Get('aging-summary')
   @RequirePermissions(SYSTEM_PERMISSIONS.RECEIVABLES_READ)
-  async getAgingSummary(): Promise<ApiResponse<any>> {
+  async getAgingSummary(): Promise<ApiResponse<AgingBreakdownDto>> {
     const data = await this.svc.getAgingSummary();
     return { success: true, data };
   }
@@ -84,7 +88,9 @@ export class ReceivablesController {
    */
   @Get(':id/movements')
   @RequirePermissions(SYSTEM_PERMISSIONS.RECEIVABLES_READ)
-  async getMovements(@Param('id', ParseUUIDPipe) id: string): Promise<ApiResponse<any>> {
+  async getMovements(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<ApiResponse<ReceivableMovementsDto>> {
     const data = await this.svc.getMovements(id);
     return { success: true, data };
   }
@@ -95,7 +101,7 @@ export class ReceivablesController {
    */
   @Get(':id')
   @RequirePermissions(SYSTEM_PERMISSIONS.RECEIVABLES_READ)
-  async findById(@Param('id', ParseUUIDPipe) id: string): Promise<ApiResponse<any>> {
+  async findById(@Param('id', ParseUUIDPipe) id: string): Promise<ApiResponse<ReceivableDto>> {
     const data = await this.svc.findById(id);
     return { success: true, data };
   }
@@ -121,7 +127,7 @@ export class ReceivablesController {
     @Param('paymentId', ParseUUIDPipe) paymentId: string,
     @Body('reason', new RequestFieldValidationPipe('reason', 'text')) reason: string,
     @CurrentUser() user: AuthenticatedUserContext,
-  ): Promise<ApiResponse<any>> {
+  ): Promise<ApiResponse<ReceivableDto>> {
     const data = await this.svc.revertPayment(id, paymentId, reason, user.id);
     return { success: true, data };
   }

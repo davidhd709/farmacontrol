@@ -153,7 +153,7 @@ export class PrismaThirdPartyRepository implements IThirdPartyRepository {
     };
   }
 
-  private mapToDomain(raw: any): ThirdParty {
+  private mapToDomain(raw: Prisma.ThirdPartyGetPayload<object>): ThirdParty {
     return ThirdParty.reconstitute({
       id: raw.id,
       personType: raw.personType,

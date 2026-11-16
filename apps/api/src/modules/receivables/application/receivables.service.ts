@@ -38,6 +38,25 @@ import { IdempotencyService } from '../../../common/idempotency/idempotency.serv
 import { AccountingEngineService } from '../../accounting/application/accounting-engine.service';
 import { recordAuditEvent } from '../../audit/infrastructure/record-audit-event';
 
+/** Fila de la cuenta con lo que muestra su DTO (tercero y documento origen, si se incluyeron). */
+type ReceivableRow = Prisma.ReceivableGetPayload<object> & {
+  customer?: { name: string } | null;
+  sale?: { invoiceNumber: string } | null;
+};
+
+/** Columnas que lee la reversión de un abono al bloquear la cuenta (FOR UPDATE). */
+interface LockedReceivableRow {
+  id: string;
+  saleId: string;
+  customerId: string;
+  totalAmount: Prisma.Decimal;
+  amountPaid: Prisma.Decimal;
+  balance: Prisma.Decimal;
+  status: string;
+  dueDate: Date;
+  notes: string | null;
+}
+
 @Injectable()
 export class ReceivablesService {
   constructor(
@@ -50,7 +69,10 @@ export class ReceivablesService {
   //  Mapping
   // ------------------------------------------------------------------ //
 
-  private toDto(row: any, payments?: any[]): ReceivableDto {
+  private toDto(
+    row: ReceivableRow,
+    payments?: Prisma.ReceivablePaymentGetPayload<object>[],
+  ): ReceivableDto {
     return {
       id: row.id,
       saleId: row.saleId,
@@ -60,7 +82,7 @@ export class ReceivablesService {
       totalAmount: row.totalAmount.toString(),
       amountPaid: row.amountPaid.toString(),
       balance: row.balance.toString(),
-      status: row.status,
+      status: row.status as ReceivableDto['status'],
       dueDate:
         row.dueDate instanceof Date
           ? row.dueDate.toISOString().split('T')[0]
@@ -94,7 +116,7 @@ export class ReceivablesService {
     const pageSize = Math.min(filters.pageSize ?? 20, 100);
     const skip = (page - 1) * pageSize;
 
-    const where: any = {};
+    const where: Prisma.ReceivableWhereInput = {};
     if (filters.customerId) where.customerId = filters.customerId;
     if (filters.status) where.status = filters.status;
     if (filters.overdueOnly) {
@@ -102,11 +124,10 @@ export class ReceivablesService {
       where.status = 'PENDIENTE';
     }
     if (filters.fromDate || filters.toDate) {
-      where.createdAt = {};
-      if (filters.fromDate) where.createdAt.gte = businessDayStart(filters.fromDate);
-      if (filters.toDate) {
-        where.createdAt.lte = businessDayEnd(filters.toDate);
-      }
+      where.createdAt = {
+        ...(filters.fromDate && { gte: businessDayStart(filters.fromDate) }),
+        ...(filters.toDate && { lte: businessDayEnd(filters.toDate) }),
+      };
     }
 
     const [items, total] = await prisma.$transaction([
@@ -124,7 +145,7 @@ export class ReceivablesService {
     ]);
 
     return {
-      items: items.map((r: any) => this.toDto(r)),
+      items: items.map((r) => this.toDto(r)),
       total,
       page,
       pageSize,
@@ -403,7 +424,7 @@ export class ReceivablesService {
     }
 
     return prisma.$transaction(
-      async (tx: any) =>
+      async (tx) =>
         this.reversePaymentInTransaction(tx, {
           receivableId,
           paymentId,
@@ -423,7 +444,7 @@ export class ReceivablesService {
    * recibo de caja lo devuelve con un único movimiento por el documento.
    */
   async reversePaymentInTransaction(
-    tx: any,
+    tx: Prisma.TransactionClient,
     input: {
       receivableId: string;
       paymentId: string;
@@ -435,7 +456,7 @@ export class ReceivablesService {
     const { receivableId, paymentId, userId, moveMoney } = input;
     const trimmedReason = input.reason;
     // 1. Bloqueo pesimista del receivable
-    const rows = await tx.$queryRaw<any[]>`
+    const rows = await tx.$queryRaw<LockedReceivableRow[]>`
     SELECT
       id,
       sale_id    AS "saleId",

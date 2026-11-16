@@ -83,7 +83,7 @@ export class ExpensesService {
     private readonly accountingEngine: AccountingEngineService,
   ) {}
 
-  private toPaymentDto(p: any): ExpensePaymentDto {
+  private toPaymentDto(p: FullExpense['payments'][number]): ExpensePaymentDto {
     return {
       id: p.id,
       expenseId: p.expenseId,
@@ -92,7 +92,7 @@ export class ExpensesService {
         p.paymentDate instanceof Date
           ? p.paymentDate.toISOString().slice(0, 10)
           : String(p.paymentDate).slice(0, 10),
-      paymentMethod: p.paymentMethod,
+      paymentMethod: p.paymentMethod as ExpensePaymentDto['paymentMethod'],
       bankAccountId: p.bankAccountId ?? null,
       bankAccountName: p.bankAccount
         ? `${p.bankAccount.bankName} - ${p.bankAccount.accountNumber}`
@@ -131,8 +131,8 @@ export class ExpensesService {
           ? e.dueDate.toISOString().slice(0, 10)
           : String(e.dueDate).slice(0, 10)
         : null,
-      paymentMethod: e.paymentMethod as any,
-      status: e.status as any,
+      paymentMethod: e.paymentMethod as ExpenseDto['paymentMethod'],
+      status: e.status as ExpenseDto['status'],
       supplierId: e.supplierId ?? null,
       supplierName: e.supplier?.name ?? null,
       bankAccountId: e.bankAccountId ?? null,

@@ -67,24 +67,29 @@ export class InventoryMovementController {
   @RequirePermissions(SYSTEM_PERMISSIONS.INVENTORY_ADJUST)
   @HttpCode(HttpStatus.CREATED)
   public async adjustInventory(
-    @Body() body: any,
+    @Body() rawBody: unknown,
     @Headers('idempotency-key') idempotencyKey: string | undefined,
     @Req() req: Request,
     @CurrentUser() user: AuthenticatedUserContext,
   ) {
-    if (!body || typeof body !== 'object') {
+    if (!rawBody || typeof rawBody !== 'object') {
       throw new BadRequestException('El cuerpo de la solicitud no es válido.');
     }
-    if (!body.productId || !UUID_REGEX.test(body.productId)) {
+    const body = rawBody as Record<string, unknown>;
+    if (typeof body.productId !== 'string' || !UUID_REGEX.test(body.productId)) {
       throw new BadRequestException('productId inválido.');
     }
-    if (!body.lotId || !UUID_REGEX.test(body.lotId)) {
+    if (typeof body.lotId !== 'string' || !UUID_REGEX.test(body.lotId)) {
       throw new BadRequestException('lotId inválido.');
     }
     if (body.adjustmentType !== 'INCREMENTO' && body.adjustmentType !== 'DECREMENTO') {
       throw new BadRequestException('adjustmentType debe ser INCREMENTO o DECREMENTO.');
     }
-    if (!Number.isSafeInteger(body.quantityBaseUnits) || body.quantityBaseUnits <= 0) {
+    if (
+      typeof body.quantityBaseUnits !== 'number' ||
+      !Number.isSafeInteger(body.quantityBaseUnits) ||
+      body.quantityBaseUnits <= 0
+    ) {
       throw new BadRequestException('quantityBaseUnits debe ser un entero positivo mayor a 0.');
     }
     if (!body.reason || typeof body.reason !== 'string' || body.reason.trim().length === 0) {

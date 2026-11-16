@@ -18,7 +18,12 @@ import {
   ParseUUIDPipe,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import { SYSTEM_PERMISSIONS, PurchaseDto, PaginatedResponse } from '@farmacia/contracts';
+import {
+  SYSTEM_PERMISSIONS,
+  PurchaseDto,
+  PaginatedResponse,
+  PurchaseQueryFilters,
+} from '@farmacia/contracts';
 import { PurchaseService } from '../../application/purchase.service';
 import {
   AccountingConflictError,
@@ -108,7 +113,7 @@ export class PurchaseController {
       }),
       PurchaseQueryValidationPipe,
     )
-    query: any,
+    query: PurchaseQueryFilters,
   ): Promise<PaginatedResponse<PurchaseDto>> {
     return this.purchaseService.getPurchases(query);
   }

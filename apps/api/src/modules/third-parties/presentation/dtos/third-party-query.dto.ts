@@ -2,6 +2,14 @@ import { parsePaginationValue } from '../../../../common/pagination/pagination';
 import { PipeTransform, Injectable } from '@nestjs/common';
 import { ThirdPartyQueryFilters } from '@farmacia/contracts';
 
+const ROLE_FILTERS = ['CUSTOMER', 'SUPPLIER', 'EMPLOYEE', 'OTHER', 'ALL'] as const;
+
+function isThirdPartyRoleFilter(
+  value: string,
+): value is NonNullable<ThirdPartyQueryFilters['role']> {
+  return (ROLE_FILTERS as readonly string[]).includes(value);
+}
+
 @Injectable()
 export class ThirdPartyQueryValidationPipe implements PipeTransform {
   public transform(value: unknown): ThirdPartyQueryFilters {
@@ -18,8 +26,8 @@ export class ThirdPartyQueryValidationPipe implements PipeTransform {
 
     if (typeof query.role === 'string') {
       const r = query.role.trim().toUpperCase();
-      if (['CUSTOMER', 'SUPPLIER', 'EMPLOYEE', 'OTHER', 'ALL'].includes(r)) {
-        filters.role = r as any;
+      if (isThirdPartyRoleFilter(r)) {
+        filters.role = r;
       }
     }
 

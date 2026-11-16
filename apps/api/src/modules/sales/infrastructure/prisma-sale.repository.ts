@@ -3,7 +3,21 @@ import { Injectable, Optional } from '@nestjs/common';
 import { prisma, PrismaClient, Prisma } from '@farmacia/database';
 import { ISaleRepository } from '../domain/sale.repository';
 import { Sale, SaleLine, SaleLotAllocation } from '../domain/sale.entity';
-import { SaleQueryFilters } from '@farmacia/contracts';
+import { SaleQueryFilters, SalePaymentMethod, SaleStatus } from '@farmacia/contracts';
+
+const SALE_INCLUDE = {
+  customer: true,
+  createdByUser: true,
+  lines: {
+    include: {
+      product: true,
+      presentation: true,
+      lotAllocations: { include: { lot: true } },
+    },
+  },
+} satisfies Prisma.SaleInclude;
+
+type SaleRecord = Prisma.SaleGetPayload<{ include: typeof SALE_INCLUDE }>;
 
 @Injectable()
 export class PrismaSaleRepository implements ISaleRepository {
@@ -13,8 +27,12 @@ export class PrismaSaleRepository implements ISaleRepository {
     this.client = customClient ?? prisma;
   }
 
-  async save(sale: Sale, tx?: any): Promise<void> {
-    const db = tx ?? this.client;
+  private db(tx?: unknown): Prisma.TransactionClient | PrismaClient {
+    return (tx as Prisma.TransactionClient | undefined) ?? this.client;
+  }
+
+  async save(sale: Sale, tx?: unknown): Promise<void> {
+    const db = this.db(tx);
 
     const existing = await db.sale.findUnique({
       where: { id: sale.id },
@@ -96,49 +114,21 @@ export class PrismaSaleRepository implements ISaleRepository {
     }
   }
 
-  async findById(id: string, tx?: any): Promise<Sale | null> {
-    const db = tx ?? this.client;
+  async findById(id: string, tx?: unknown): Promise<Sale | null> {
+    const db = this.db(tx);
     const raw = await db.sale.findUnique({
       where: { id },
-      include: {
-        customer: true,
-        createdByUser: true,
-        lines: {
-          include: {
-            product: true,
-            presentation: true,
-            lotAllocations: {
-              include: {
-                lot: true,
-              },
-            },
-          },
-        },
-      },
+      include: SALE_INCLUDE,
     });
     if (!raw) return null;
     return this.mapToDomain(raw);
   }
 
-  async findByInvoiceNumber(invoiceNumber: string, tx?: any): Promise<Sale | null> {
-    const db = tx ?? this.client;
+  async findByInvoiceNumber(invoiceNumber: string, tx?: unknown): Promise<Sale | null> {
+    const db = this.db(tx);
     const raw = await db.sale.findUnique({
       where: { invoiceNumber: invoiceNumber.trim().toUpperCase() },
-      include: {
-        customer: true,
-        createdByUser: true,
-        lines: {
-          include: {
-            product: true,
-            presentation: true,
-            lotAllocations: {
-              include: {
-                lot: true,
-              },
-            },
-          },
-        },
-      },
+      include: SALE_INCLUDE,
     });
     if (!raw) return null;
     return this.mapToDomain(raw);
@@ -192,41 +182,27 @@ export class PrismaSaleRepository implements ISaleRepository {
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
-        include: {
-          customer: true,
-          createdByUser: true,
-          lines: {
-            include: {
-              product: true,
-              presentation: true,
-              lotAllocations: {
-                include: {
-                  lot: true,
-                },
-              },
-            },
-          },
-        },
+        include: SALE_INCLUDE,
       }),
       this.client.sale.count({ where }),
     ]);
 
     return {
-      items: rawItems.map((r: any) => this.mapToDomain(r)),
+      items: rawItems.map((r) => this.mapToDomain(r)),
       total,
     };
   }
 
-  async generateNextInvoiceNumber(tx?: any): Promise<string> {
-    const db = tx ?? this.client;
+  async generateNextInvoiceNumber(tx?: unknown): Promise<string> {
+    const db = this.db(tx);
     const count = await db.sale.count();
     const nextNumber = count + 1;
     return `FAC-${String(nextNumber).padStart(6, '0')}`;
   }
 
-  private mapToDomain(raw: any): Sale {
-    const lines = raw.lines.map((l: any) => {
-      const lotAllocations = (l.lotAllocations || []).map((a: any) =>
+  private mapToDomain(raw: SaleRecord): Sale {
+    const lines = raw.lines.map((l) => {
+      const lotAllocations = l.lotAllocations.map((a) =>
         SaleLotAllocation.create({
           id: a.id,
           saleId: a.saleId,
@@ -274,8 +250,8 @@ export class PrismaSaleRepository implements ISaleRepository {
       customerId: raw.customerId,
       customerName: raw.customer?.name,
       customerDocument: raw.customer?.documentNumber,
-      status: raw.status as any,
-      paymentMethod: raw.paymentMethod as any,
+      status: raw.status as SaleStatus,
+      paymentMethod: raw.paymentMethod as SalePaymentMethod,
       bankAccountId: raw.bankAccountId,
       subtotal: Number(raw.subtotal),
       taxTotal: Number(raw.taxTotal),

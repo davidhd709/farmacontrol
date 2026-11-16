@@ -19,7 +19,8 @@ export interface CreateCashMovementData {
 export const CASH_MOVEMENT_REPOSITORY = Symbol('CASH_MOVEMENT_REPOSITORY');
 
 export interface ICashMovementRepository {
-  saveTransactional(data: CreateCashMovementData, tx?: any): Promise<CashMovement>;
+  /** `tx`: cliente transaccional del caso de uso; el dominio no conoce su tipo. */
+  saveTransactional(data: CreateCashMovementData, tx?: unknown): Promise<CashMovement>;
   getCurrentBalance(paymentMethod?: PaymentMethod): Promise<CashBalanceDto>;
   findAll(filters: CashMovementQueryFilters): Promise<{ items: CashMovement[]; total: number }>;
   findById(id: string): Promise<CashMovement | null>;
