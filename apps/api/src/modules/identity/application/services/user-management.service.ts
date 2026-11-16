@@ -13,6 +13,7 @@ import type {
 } from '@farmacia/contracts';
 import { PasswordService } from './password.service';
 import { Username } from '../../domain/value-objects/username.vo';
+import { recordAuditEvent } from '../../../audit/infrastructure/record-audit-event';
 
 @Injectable()
 export class UserManagementService {
@@ -222,14 +223,12 @@ export class UserManagementService {
         where: { userId: targetId, revokedAt: null },
         data: { revokedAt: new Date() },
       });
-      await tx.auditEvent.create({
-        data: {
-          userId: actorId,
-          action: 'auth:password_reset_by_manager',
-          entity: 'User',
-          entityId: targetId,
-          details: { targetUsername: target.username },
-        },
+      await recordAuditEvent(tx, {
+        userId: actorId,
+        action: 'auth:password_reset_by_manager',
+        entity: 'User',
+        entityId: targetId,
+        details: { targetUsername: target.username },
       });
     });
   }
@@ -272,14 +271,12 @@ export class UserManagementService {
         where: { userId, revokedAt: null },
         data: { revokedAt: new Date() },
       });
-      await tx.auditEvent.create({
-        data: {
-          userId,
-          action: 'auth:password_changed_by_user',
-          entity: 'User',
-          entityId: userId,
-          details: { method: 'self_service' },
-        },
+      await recordAuditEvent(tx, {
+        userId,
+        action: 'auth:password_changed_by_user',
+        entity: 'User',
+        entityId: userId,
+        details: { method: 'self_service' },
       });
     });
   }

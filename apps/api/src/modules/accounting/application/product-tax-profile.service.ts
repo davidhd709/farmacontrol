@@ -20,6 +20,7 @@ import {
   AccountingNotFoundError,
   AccountingValidationError,
 } from '../domain/accounting-rules';
+import { recordAuditEvent } from '../../audit/infrastructure/record-audit-event';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 type Tx = Prisma.TransactionClient;
@@ -159,14 +160,12 @@ export class ProductTaxProfileService {
         },
         include: { taxRule: { select: { code: true } } },
       });
-      await tx.auditEvent.create({
-        data: {
-          action: 'accounting:tax_profile_created',
-          entity: 'ProductTaxProfile',
-          entityId: created.id,
-          userId,
-          details: { after: toDto(created) } as unknown as Prisma.InputJsonValue,
-        },
+      await recordAuditEvent(tx, {
+        action: 'accounting:tax_profile_created',
+        entity: 'ProductTaxProfile',
+        entityId: created.id,
+        userId,
+        details: { after: toDto(created) },
       });
       return toDto(created);
     });
@@ -251,16 +250,14 @@ export class ProductTaxProfileService {
         where: { id },
         include: { taxRule: { select: { code: true } } },
       });
-      await tx.auditEvent.create({
-        data: {
-          action: 'accounting:tax_profile_updated',
-          entity: 'ProductTaxProfile',
-          entityId: id,
-          userId,
-          details: {
-            before: toDto(current),
-            after: toDto(updated),
-          } as unknown as Prisma.InputJsonValue,
+      await recordAuditEvent(tx, {
+        action: 'accounting:tax_profile_updated',
+        entity: 'ProductTaxProfile',
+        entityId: id,
+        userId,
+        details: {
+          before: toDto(current),
+          after: toDto(updated),
         },
       });
       return toDto(updated);
@@ -309,19 +306,17 @@ export class ProductTaxProfileService {
               where: { id },
               include: { taxRule: { select: { code: true } } },
             });
-            await tx.auditEvent.create({
-              data: {
-                action: 'accounting:tax_profile_activated',
-                entity: 'ProductTaxProfile',
-                entityId: id,
-                userId,
-                details: {
-                  productId: active.productId,
-                  operation: active.operation,
-                  effectiveFrom: dateText(active.effectiveFrom),
-                  effectiveTo: active.effectiveTo ? dateText(active.effectiveTo) : null,
-                  documentReference: active.documentReference,
-                } as Prisma.InputJsonValue,
+            await recordAuditEvent(tx, {
+              action: 'accounting:tax_profile_activated',
+              entity: 'ProductTaxProfile',
+              entityId: id,
+              userId,
+              details: {
+                productId: active.productId,
+                operation: active.operation,
+                effectiveFrom: dateText(active.effectiveFrom),
+                effectiveTo: active.effectiveTo ? dateText(active.effectiveTo) : null,
+                documentReference: active.documentReference,
               },
             });
             return toDto(active);

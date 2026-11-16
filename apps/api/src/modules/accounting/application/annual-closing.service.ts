@@ -11,6 +11,7 @@ import { normalizeJournalAmount } from '../domain/journal-rules';
 import type { JournalLineInput } from '../domain/journal-rules';
 import { IdempotencyService } from '../../../common/idempotency/idempotency.service';
 import { businessToday } from '../../../common/utils/business-date';
+import { recordAuditEvent } from '../../audit/infrastructure/record-audit-event';
 
 export const ANNUAL_CLOSING_SOURCE = 'ANNUAL_CLOSING';
 const ENDPOINT = '/api/v1/accounting/annual-closings';
@@ -236,14 +237,12 @@ export class AnnualClosingService {
               },
               tx,
             );
-            await tx.auditEvent.create({
-              data: {
-                userId,
-                action: 'accounting:annual_closing',
-                entity: 'JournalEntry',
-                entityId: entry.id,
-                details: { year, netResult: result.netResult },
-              },
+            await recordAuditEvent(tx, {
+              userId,
+              action: 'accounting:annual_closing',
+              entity: 'JournalEntry',
+              entityId: entry.id,
+              details: { year, netResult: result.netResult },
             });
             return result;
           },

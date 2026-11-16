@@ -34,6 +34,7 @@ import {
   centsToMoneyString,
   parseMoneyToCents,
 } from '../domain/expense-rules';
+import { recordAuditEvent } from '../../audit/infrastructure/record-audit-event';
 
 const fullExpenseInclude = {
   category: {
@@ -263,19 +264,17 @@ export class ExpensesService {
               tx,
             );
 
-            await tx.auditEvent.create({
-              data: {
-                userId,
-                action: 'expenses:expense_created',
-                entity: 'Expense',
-                entityId: expense.id,
-                details: {
-                  amount: amountStr,
-                  paymentMethod: method,
-                  categoryId: category.id,
-                  beneficiary,
-                  supplierId: payload.supplierId ?? null,
-                },
+            await recordAuditEvent(tx, {
+              userId,
+              action: 'expenses:expense_created',
+              entity: 'Expense',
+              entityId: expense.id,
+              details: {
+                amount: amountStr,
+                paymentMethod: method,
+                categoryId: category.id,
+                beneficiary,
+                supplierId: payload.supplierId ?? null,
               },
             });
 
@@ -424,20 +423,18 @@ export class ExpensesService {
       },
       tx,
     );
-    await tx.auditEvent.create({
-      data: {
-        userId: input.userId,
-        action: 'expenses:expense_payment_registered',
-        entity: 'ExpensePayment',
-        entityId: payment.id,
-        details: {
-          expenseId: input.expenseId,
-          amount: payStr,
-          paymentMethod: input.paymentMethod,
-          balanceBefore: exp.balance.toFixed(2),
-          balanceAfter: centsToMoneyString(newBalanceCents),
-          treasuryDocumentId: input.treasuryDocumentId ?? null,
-        },
+    await recordAuditEvent(tx, {
+      userId: input.userId,
+      action: 'expenses:expense_payment_registered',
+      entity: 'ExpensePayment',
+      entityId: payment.id,
+      details: {
+        expenseId: input.expenseId,
+        amount: payStr,
+        paymentMethod: input.paymentMethod,
+        balanceBefore: exp.balance.toFixed(2),
+        balanceAfter: centsToMoneyString(newBalanceCents),
+        treasuryDocumentId: input.treasuryDocumentId ?? null,
       },
     });
     return {
@@ -530,14 +527,12 @@ export class ExpensesService {
 
         // Reversar asiento contable
         await this.accountingEngine.handleExpenseCancelled(expenseId, reason, userId, tx);
-        await tx.auditEvent.create({
-          data: {
-            userId,
-            action: 'expenses:expense_cancelled',
-            entity: 'Expense',
-            entityId: expenseId,
-            details: { reason, amount: exp.amount.toFixed(2) },
-          },
+        await recordAuditEvent(tx, {
+          userId,
+          action: 'expenses:expense_cancelled',
+          entity: 'Expense',
+          entityId: expenseId,
+          details: { reason, amount: exp.amount.toFixed(2) },
         });
       },
       {
@@ -650,18 +645,16 @@ export class ExpensesService {
 
     // Reversar asiento contable del pago
     await this.accountingEngine.handleExpensePaymentReversed(paymentId, reason, userId, tx);
-    await tx.auditEvent.create({
-      data: {
-        userId,
-        action: 'expenses:expense_payment_reversed',
-        entity: 'ExpensePayment',
-        entityId: paymentId,
-        details: {
-          expenseId,
-          amount: payment.amount.toFixed(2),
-          paymentMethod: payment.paymentMethod,
-          reason,
-        },
+    await recordAuditEvent(tx, {
+      userId,
+      action: 'expenses:expense_payment_reversed',
+      entity: 'ExpensePayment',
+      entityId: paymentId,
+      details: {
+        expenseId,
+        amount: payment.amount.toFixed(2),
+        paymentMethod: payment.paymentMethod,
+        reason,
       },
     });
     return expenseId;
@@ -741,17 +734,15 @@ export class ExpensesService {
         });
         if (!supplier) throw new NotFoundException('El proveedor no existe.');
         await tx.expense.update({ where: { id: expenseId }, data: { supplierId } });
-        await tx.auditEvent.create({
-          data: {
-            userId,
-            action: 'expenses:supplier_assigned',
-            entity: 'Expense',
-            entityId: expenseId,
-            details: {
-              supplierId,
-              supplierName: supplier.name,
-              previousBeneficiary: rows[0].beneficiary,
-            },
+        await recordAuditEvent(tx, {
+          userId,
+          action: 'expenses:supplier_assigned',
+          entity: 'Expense',
+          entityId: expenseId,
+          details: {
+            supplierId,
+            supplierName: supplier.name,
+            previousBeneficiary: rows[0].beneficiary,
           },
         });
       },

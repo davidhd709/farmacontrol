@@ -8,6 +8,7 @@ import {
   AccountingValidationError,
 } from '../../accounting/domain/accounting-rules';
 import { PrismaCashMovementRepository } from '../infrastructure/prisma-cash-movement.repository';
+import { recordAuditEvent } from '../../audit/infrastructure/record-audit-event';
 
 /** Solo incorpora efectivo ya contabilizado. Nunca llama al motor ni crea un recibo. */
 @Injectable()
@@ -142,22 +143,20 @@ export class CashOpeningService {
         createdById: userId,
       },
     });
-    await tx.auditEvent.create({
-      data: {
-        userId,
-        action: 'cash:opening_incorporated',
-        entity: 'CashOpening',
-        entityId: opening.id,
-        details: {
-          companyId: company.id,
-          journalEntryId: entry.id,
-          accountId,
-          cashMovementId: movement.id,
-          amount: amount.toFixed(2),
-          effectiveDate: entry.entryDate.toISOString().slice(0, 10),
-          mode: expected ? 'EXISTING_OPENING' : 'NEW_OPENING',
-          reason: expected?.reason ?? entry.description,
-        },
+    await recordAuditEvent(tx, {
+      userId,
+      action: 'cash:opening_incorporated',
+      entity: 'CashOpening',
+      entityId: opening.id,
+      details: {
+        companyId: company.id,
+        journalEntryId: entry.id,
+        accountId,
+        cashMovementId: movement.id,
+        amount: amount.toFixed(2),
+        effectiveDate: entry.entryDate.toISOString().slice(0, 10),
+        mode: expected ? 'EXISTING_OPENING' : 'NEW_OPENING',
+        reason: expected?.reason ?? entry.description,
       },
     });
     return {

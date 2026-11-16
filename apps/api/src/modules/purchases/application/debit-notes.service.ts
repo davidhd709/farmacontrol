@@ -9,6 +9,7 @@ import { parseMoneyToCents, centsToMoneyString } from '../../treasury/domain/tre
 import { accountingPolicyAt } from '../../company/application/accounting-policy.reader';
 import { businessToday } from '../../../common/utils/business-date';
 import { companyTaxStatusAt } from '../../taxes/application/tax-context.reader';
+import { recordAuditEvent } from '../../audit/infrastructure/record-audit-event';
 
 function isRetryableConcurrencyError(error: unknown): boolean {
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
@@ -400,18 +401,16 @@ export class DebitNotesService {
             },
             tx,
           );
-          await tx.auditEvent.create({
-            data: {
-              userId,
-              action: 'purchases:debit_note_confirmed',
-              entity: 'DebitNote',
-              entityId: debitNote.id,
-              details: {
-                debitNoteNumber: debitNote.debitNoteNumber,
-                purchaseId: purchase.id,
-                total: debitNote.total,
-                reason: debitNote.reason,
-              },
+          await recordAuditEvent(tx, {
+            userId,
+            action: 'purchases:debit_note_confirmed',
+            entity: 'DebitNote',
+            entityId: debitNote.id,
+            details: {
+              debitNoteNumber: debitNote.debitNoteNumber,
+              purchaseId: purchase.id,
+              total: debitNote.total,
+              reason: debitNote.reason,
             },
           });
           return dto;

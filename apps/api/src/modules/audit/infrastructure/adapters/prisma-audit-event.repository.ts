@@ -6,6 +6,7 @@ import {
   AuditFindFilters,
 } from '../../application/ports/audit-event.repository.port';
 import { AuditEvent } from '../../domain/entities/audit-event.entity';
+import { persistAuditEvent } from '../record-audit-event';
 import {
   AuditEventDto,
   AuditMetadataDto,
@@ -22,21 +23,7 @@ export class PrismaAuditEventRepository implements AuditEventRepositoryPort {
   }
 
   public async save(event: AuditEvent, tx?: unknown): Promise<void> {
-    const db = (tx as Prisma.TransactionClient) ?? this.client;
-
-    await db.auditEvent.create({
-      data: {
-        id: event.id,
-        userId: event.userId,
-        action: event.action,
-        entity: event.entity,
-        entityId: event.entityId,
-        details: (event.details as Prisma.InputJsonValue) ?? Prisma.JsonNull,
-        ipAddress: event.ipAddress,
-        correlationId: event.correlationId,
-        createdAt: event.createdAt,
-      },
-    });
+    await persistAuditEvent((tx as Prisma.TransactionClient) ?? this.client, event);
   }
 
   public async findById(id: string): Promise<AuditEvent | null> {

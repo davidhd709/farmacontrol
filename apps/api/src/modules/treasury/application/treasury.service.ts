@@ -22,6 +22,7 @@ import {
   validateBankName,
   validateUuid,
 } from '../domain/treasury-rules';
+import { recordAuditEvent } from '../../audit/infrastructure/record-audit-event';
 
 export interface MovementFilter {
   fromDate?: string;
@@ -195,20 +196,18 @@ export class TreasuryService {
         });
       }
 
-      await tx.auditEvent.create({
-        data: {
-          action: 'treasury:bank_account_created',
-          entity: 'BankAccount',
-          entityId: created.id,
-          userId,
-          details: {
-            bankName,
-            accountType,
-            accountNumber,
-            name,
-            ledgerAccountId,
-            initialBalance: centsToMoneyString(initialBalanceCents),
-          } as unknown as Prisma.InputJsonValue,
+      await recordAuditEvent(tx, {
+        action: 'treasury:bank_account_created',
+        entity: 'BankAccount',
+        entityId: created.id,
+        userId,
+        details: {
+          bankName,
+          accountType,
+          accountNumber,
+          name,
+          ledgerAccountId,
+          initialBalance: centsToMoneyString(initialBalanceCents),
         },
       });
 
@@ -280,26 +279,24 @@ export class TreasuryService {
         include: LEDGER_INCLUDE,
       });
 
-      await tx.auditEvent.create({
-        data: {
-          action: 'treasury:bank_account_updated',
-          entity: 'BankAccount',
-          entityId: id,
-          userId,
-          details: {
-            before: {
-              name: current.name,
-              isActive: current.isActive,
-              notes: current.notes,
-              ledgerAccountId: current.ledgerAccountId,
-            },
-            after: {
-              name: updated.name,
-              isActive: updated.isActive,
-              notes: updated.notes,
-              ledgerAccountId: updated.ledgerAccountId,
-            },
-          } as unknown as Prisma.InputJsonValue,
+      await recordAuditEvent(tx, {
+        action: 'treasury:bank_account_updated',
+        entity: 'BankAccount',
+        entityId: id,
+        userId,
+        details: {
+          before: {
+            name: current.name,
+            isActive: current.isActive,
+            notes: current.notes,
+            ledgerAccountId: current.ledgerAccountId,
+          },
+          after: {
+            name: updated.name,
+            isActive: updated.isActive,
+            notes: updated.notes,
+            ledgerAccountId: updated.ledgerAccountId,
+          },
         },
       });
 

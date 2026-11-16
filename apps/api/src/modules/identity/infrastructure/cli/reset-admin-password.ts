@@ -3,6 +3,7 @@ import { SYSTEM_ROLES } from '@farmacia/contracts';
 import { PasswordService } from '../../application/services/password.service';
 import { Username } from '../../domain/value-objects/username.vo';
 import { Argon2PasswordHasherAdapter } from '../adapters/argon2-password-hasher.adapter';
+import { recordAuditEvent } from '../../../audit/infrastructure/record-audit-event';
 
 export async function resetAdminPassword(
   newPassword: string,
@@ -38,14 +39,12 @@ export async function resetAdminPassword(
       where: { userId: admin.id, revokedAt: null },
       data: { revokedAt: new Date() },
     });
-    await tx.auditEvent.create({
-      data: {
-        userId: admin.id,
-        action: 'auth:admin_password_reset_cli',
-        entity: 'User',
-        entityId: admin.id,
-        details: { method: 'local_cli' },
-      },
+    await recordAuditEvent(tx, {
+      userId: admin.id,
+      action: 'auth:admin_password_reset_cli',
+      entity: 'User',
+      entityId: admin.id,
+      details: { method: 'local_cli' },
     });
   });
 }

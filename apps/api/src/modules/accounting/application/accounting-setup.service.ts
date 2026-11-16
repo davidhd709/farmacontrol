@@ -262,7 +262,7 @@ export class AccountingSetupService {
           accountsCreated: result.accountsCreated.length,
           purposesMapped: result.purposesMapped,
           conflicts: result.conflicts,
-        } as unknown as Prisma.InputJsonValue,
+        },
       );
       return result;
     });

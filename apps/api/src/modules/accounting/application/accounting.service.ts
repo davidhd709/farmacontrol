@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@farmacia/database';
 import {
   AccountInput,
   AccountDto,
@@ -265,7 +264,7 @@ export class AccountingService {
         'AccountImport',
         parsed.hash,
         userId,
-        { count: rows.length, sha256: parsed.hash } as Prisma.InputJsonValue,
+        { count: rows.length, sha256: parsed.hash },
       );
       return { importedCount: rows.length };
     });

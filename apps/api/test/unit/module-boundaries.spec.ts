@@ -7,8 +7,8 @@
  * ReceivablesLedger, PayablesLedger, CustomersLedger, SuppliersLedger, ThirdPartyService,
  * recordSourceBankMovement, JournalService…). Leer tablas ajenas está permitido.
  *
- * Fuera de la lista: audit_events, que varios módulos escriben todavía sin AuditService
- * (deuda registrada en docs/ESTADO_AVANCE.md), y los perfiles tributarios de producto, que hoy
+ * La auditoría también: los módulos registran sus eventos con `recordAuditEvent` o
+ * `AuditService`. Fuera de la lista quedan los perfiles tributarios de producto, que hoy
  * gestiona contabilidad.
  */
 
@@ -66,6 +66,7 @@ const OWNED_TABLES: Array<{ delegate: string; table: string; owner: string }> = 
   { delegate: 'expensePayment', table: 'expense_payments', owner: 'expenses' },
   { delegate: 'company', table: 'companies', owner: 'company' },
   { delegate: 'branch', table: 'branches', owner: 'company' },
+  { delegate: 'auditEvent', table: 'audit_events', owner: 'audit' },
 ];
 
 const WRITE_METHODS = 'create|createMany|update|updateMany|upsert|delete|deleteMany';

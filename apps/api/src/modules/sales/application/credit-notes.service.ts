@@ -26,6 +26,7 @@ import {
   sortAllocationsFefo,
   splitReturnAcrossLots,
 } from '../domain/credit-note-rules';
+import { recordAuditEvent } from '../../audit/infrastructure/record-audit-event';
 
 function toCents(value: Prisma.Decimal | string | number, label: string): bigint {
   return parseMoneyToCents(new Prisma.Decimal(value).toFixed(2), label);
@@ -490,19 +491,17 @@ export class CreditNotesService {
             },
             tx,
           );
-          await tx.auditEvent.create({
-            data: {
-              userId,
-              action: 'sales:credit_note_confirmed',
-              entity: 'CreditNote',
-              entityId: creditNote.id,
-              details: {
-                creditNoteNumber: creditNote.creditNoteNumber,
-                saleId: sale.id,
-                total: creditNote.total,
-                refundMethod: creditNote.refundMethod,
-                restock: creditNote.restock,
-              },
+          await recordAuditEvent(tx, {
+            userId,
+            action: 'sales:credit_note_confirmed',
+            entity: 'CreditNote',
+            entityId: creditNote.id,
+            details: {
+              creditNoteNumber: creditNote.creditNoteNumber,
+              saleId: sale.id,
+              total: creditNote.total,
+              refundMethod: creditNote.refundMethod,
+              restock: creditNote.restock,
             },
           });
           return dto;
@@ -680,20 +679,18 @@ export class CreditNotesService {
             },
             tx,
           );
-          await tx.auditEvent.create({
-            data: {
-              userId,
-              action: 'sales:credit_note_cancelled',
-              entity: 'CreditNote',
-              entityId: note.id,
-              details: {
-                creditNoteNumber: note.creditNoteNumber,
-                saleId: note.saleId,
-                total: note.total,
-                refundMethod: note.refundMethod,
-                restock: note.restock,
-                reason,
-              },
+          await recordAuditEvent(tx, {
+            userId,
+            action: 'sales:credit_note_cancelled',
+            entity: 'CreditNote',
+            entityId: note.id,
+            details: {
+              creditNoteNumber: note.creditNoteNumber,
+              saleId: note.saleId,
+              total: note.total,
+              refundMethod: note.refundMethod,
+              restock: note.restock,
+              reason,
             },
           });
         },

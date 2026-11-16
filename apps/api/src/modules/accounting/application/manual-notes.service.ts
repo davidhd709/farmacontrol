@@ -4,6 +4,7 @@ import type { CreateManualNotePayload, ManualNoteCreatedDto } from '@farmacia/co
 import { JournalService } from './journal.service';
 import { AccountingConflictError, AccountingValidationError } from '../domain/accounting-rules';
 import { IdempotencyService } from '../../../common/idempotency/idempotency.service';
+import { recordAuditEvent } from '../../audit/infrastructure/record-audit-event';
 
 export const MANUAL_NOTE_SOURCE = 'MANUAL_NOTE';
 const ENDPOINT = '/api/v1/accounting/manual-notes';
@@ -80,14 +81,12 @@ export class ManualNotesService {
               },
               tx,
             );
-            await tx.auditEvent.create({
-              data: {
-                userId,
-                action: 'accounting:manual_note_created',
-                entity: 'JournalEntry',
-                entityId: entry.id,
-                details: { noteNumber, entryDate: input.entryDate },
-              },
+            await recordAuditEvent(tx, {
+              userId,
+              action: 'accounting:manual_note_created',
+              entity: 'JournalEntry',
+              entityId: entry.id,
+              details: { noteNumber, entryDate: input.entryDate },
             });
             return result;
           },

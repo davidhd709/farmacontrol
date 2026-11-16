@@ -8,6 +8,7 @@ import type {
 import { AccountingValidationError } from '../domain/accounting-rules';
 import { parseJournalDate } from '../domain/journal-rules';
 import { businessToday } from '../../../common/utils/business-date';
+import { recordAuditEvent } from '../../audit/infrastructure/record-audit-event';
 
 type LockRecord = Prisma.DocumentLockGetPayload<{
   include: { createdBy: { select: { username: true } } };
@@ -70,14 +71,12 @@ export class DocumentLockService {
           data: { lockedThrough, reason, createdById: userId },
           include: { createdBy: { select: { username: true } } },
         });
-        await tx.auditEvent.create({
-          data: {
-            userId,
-            action: lockedThrough ? 'accounting:documents_locked' : 'accounting:documents_unlocked',
-            entity: 'DocumentLock',
-            entityId: created.id,
-            details: { lockedThrough: payload.lockedThrough, reason },
-          },
+        await recordAuditEvent(tx, {
+          userId,
+          action: lockedThrough ? 'accounting:documents_locked' : 'accounting:documents_unlocked',
+          entity: 'DocumentLock',
+          entityId: created.id,
+          details: { lockedThrough: payload.lockedThrough, reason },
         });
         return created;
       },

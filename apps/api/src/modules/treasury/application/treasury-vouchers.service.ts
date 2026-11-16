@@ -38,6 +38,7 @@ import {
   TreasuryValidationError,
   validateUuid,
 } from '../domain/treasury-rules';
+import { recordAuditEvent } from '../../audit/infrastructure/record-audit-event';
 
 type Tx = Prisma.TransactionClient;
 
@@ -391,18 +392,16 @@ export class TreasuryVouchersService {
         );
       },
       after: async (tx, replacementId, replacementNumber) => {
-        await tx.auditEvent.create({
-          data: {
-            userId: user.id,
-            action: 'treasury:document_corrected',
-            entity: 'TreasuryDocument',
-            entityId: id,
-            details: {
-              documentNumber: original.documentNumber,
-              replacementId,
-              replacementNumber,
-              reason,
-            },
+        await recordAuditEvent(tx, {
+          userId: user.id,
+          action: 'treasury:document_corrected',
+          entity: 'TreasuryDocument',
+          entityId: id,
+          details: {
+            documentNumber: original.documentNumber,
+            replacementId,
+            replacementNumber,
+            reason,
           },
         });
       },
@@ -551,19 +550,17 @@ export class TreasuryVouchersService {
         cancellationReason: reason,
       },
     });
-    await tx.auditEvent.create({
-      data: {
-        userId: user.id,
-        action: 'treasury:document_cancelled',
-        entity: 'TreasuryDocument',
-        entityId: doc.id,
-        details: {
-          documentNumber: doc.documentNumber,
-          origin,
-          amount: doc.amount.toFixed(2),
-          returnedAmount: centsToMoneyString(pendingCents),
-          reason,
-        },
+    await recordAuditEvent(tx, {
+      userId: user.id,
+      action: 'treasury:document_cancelled',
+      entity: 'TreasuryDocument',
+      entityId: doc.id,
+      details: {
+        documentNumber: doc.documentNumber,
+        origin,
+        amount: doc.amount.toFixed(2),
+        returnedAmount: centsToMoneyString(pendingCents),
+        reason,
       },
     });
     return doc;
@@ -755,22 +752,20 @@ export class TreasuryVouchersService {
             });
             await plan.apply(tx, documentId, movement);
             if (plan.after) await plan.after(tx, documentId, number);
-            await tx.auditEvent.create({
-              data: {
-                userId: user.id,
-                action:
-                  voucher.documentType === 'RECIBO_CAJA'
-                    ? 'treasury:cash_receipt_created'
-                    : 'treasury:disbursement_created',
-                entity: 'TreasuryDocument',
-                entityId: documentId,
-                details: {
-                  documentNumber: number,
-                  origin: voucher.origin,
-                  amount,
-                  paymentMethod: voucher.paymentMethod,
-                  bankAccountId: voucher.bankAccountId,
-                },
+            await recordAuditEvent(tx, {
+              userId: user.id,
+              action:
+                voucher.documentType === 'RECIBO_CAJA'
+                  ? 'treasury:cash_receipt_created'
+                  : 'treasury:disbursement_created',
+              entity: 'TreasuryDocument',
+              entityId: documentId,
+              details: {
+                documentNumber: number,
+                origin: voucher.origin,
+                amount,
+                paymentMethod: voucher.paymentMethod,
+                bankAccountId: voucher.bankAccountId,
               },
             });
 

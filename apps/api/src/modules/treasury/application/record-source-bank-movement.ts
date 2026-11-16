@@ -6,6 +6,7 @@ import {
   parseMoneyToCents,
   validateUuid,
 } from '../domain/treasury-rules';
+import { recordAuditEvent } from '../../audit/infrastructure/record-audit-event';
 
 /**
  * Registers the source document and its bank balance change in the caller's transaction and
@@ -60,19 +61,17 @@ export async function recordSourceBankMovement(
         createdById: input.createdById,
       },
     });
-    await tx.auditEvent.create({
-      data: {
-        action: 'treasury:source_bank_movement_created',
-        entity: 'BankMovement',
-        entityId: movement.id,
-        userId: input.createdById,
-        details: {
-          bankAccountId: input.bankAccountId,
-          movementType: input.movementType,
-          amount: centsToMoneyString(amountCents),
-          referenceDocumentType: input.referenceDocumentType,
-          referenceDocumentId: input.referenceDocumentId,
-        },
+    await recordAuditEvent(tx, {
+      action: 'treasury:source_bank_movement_created',
+      entity: 'BankMovement',
+      entityId: movement.id,
+      userId: input.createdById,
+      details: {
+        bankAccountId: input.bankAccountId,
+        movementType: input.movementType,
+        amount: centsToMoneyString(amountCents),
+        referenceDocumentType: input.referenceDocumentType,
+        referenceDocumentId: input.referenceDocumentId,
       },
     });
     return movement.id;

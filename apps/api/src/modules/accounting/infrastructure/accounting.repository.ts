@@ -21,6 +21,7 @@ import {
   validateParent,
   validatePurposeAccountType,
 } from '../domain/accounting-rules';
+import { recordAuditEvent } from '../../audit/infrastructure/record-audit-event';
 
 type Tx = Prisma.TransactionClient;
 type AccountRecord = NonNullable<Awaited<ReturnType<typeof prisma.account.findFirst>>>;
@@ -167,7 +168,7 @@ export class AccountingRepository {
     await this.audit(tx, 'accounting:account_updated', 'Account', id, userId, {
       before: dto(current),
       after: dto(updated),
-    } as unknown as Prisma.InputJsonValue);
+    });
     return dto(updated);
   }
 
@@ -286,8 +287,8 @@ export class AccountingRepository {
     entity: string,
     entityId: string,
     userId: string,
-    details: Prisma.InputJsonValue,
+    details: Record<string, unknown>,
   ): Promise<void> {
-    await tx.auditEvent.create({ data: { action, entity, entityId, userId, details } });
+    await recordAuditEvent(tx, { action, entity, entityId, userId, details });
   }
 }

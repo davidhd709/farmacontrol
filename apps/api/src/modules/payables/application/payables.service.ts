@@ -30,6 +30,7 @@ import { accountingPolicyAt } from '../../company/application/accounting-policy.
 
 import { IdempotencyService } from '../../../common/idempotency/idempotency.service';
 import { AccountingEngineService } from '../../accounting/application/accounting-engine.service';
+import { recordAuditEvent } from '../../audit/infrastructure/record-audit-event';
 
 @Injectable()
 export class PayablesService {
@@ -547,22 +548,20 @@ export class PayablesService {
     );
 
     // 6. Auditoría
-    await tx.auditEvent.create({
-      data: {
-        userId,
-        action: 'REVERSE_PAYABLE_PAYMENT',
-        entity: 'payable_payments',
-        entityId: paymentId,
-        details: {
-          payableId,
-          paymentId,
-          amount: amountStr,
-          paymentMethod: payment.paymentMethod,
-          bankAccountId: payment.bankAccountId,
-          reason: trimmedReason,
-          balanceBefore: centsToMoneyString(balanceCents),
-          balanceAfter: centsToMoneyString(newBalanceCents),
-        } as unknown as Prisma.InputJsonValue,
+    await recordAuditEvent(tx, {
+      userId,
+      action: 'REVERSE_PAYABLE_PAYMENT',
+      entity: 'payable_payments',
+      entityId: paymentId,
+      details: {
+        payableId,
+        paymentId,
+        amount: amountStr,
+        paymentMethod: payment.paymentMethod,
+        bankAccountId: payment.bankAccountId,
+        reason: trimmedReason,
+        balanceBefore: centsToMoneyString(balanceCents),
+        balanceAfter: centsToMoneyString(newBalanceCents),
       },
     });
 
